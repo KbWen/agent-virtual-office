@@ -37,3 +37,7 @@ docs/context/private/
 
 # End AgentCortex Template - Downstream Ignore Defaults
 
+
+# App Build
+node_modules/
+dist/
