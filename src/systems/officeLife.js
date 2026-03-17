@@ -185,7 +185,7 @@ const EVENT_HANDLERS = {
     s.setAgentGroupEvent('ops', {
       behavior: 'deploy-button',
       expression: 'happy',
-      bubble: getEventName('deploy-success') + '! 🚀',
+      bubble: eventBubble('deploy-success'),
       groupTarget: null,
     })
     setTimeout(() => {

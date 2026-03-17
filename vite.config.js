@@ -71,11 +71,23 @@ function officeStatusPlugin() {
           return
         }
 
-        // POST → update status
+        // POST → update status (16KB limit to prevent abuse)
         if (req.method === 'POST') {
           let body = ''
-          req.on('data', chunk => { body += chunk })
+          let aborted = false
+          const MAX_BODY = 16 * 1024
+          req.on('data', chunk => {
+            if (aborted) return
+            body += chunk
+            if (body.length > MAX_BODY) {
+              aborted = true
+              res.statusCode = 413
+              res.end(JSON.stringify({ ok: false, error: 'Body too large' }))
+              req.destroy()
+            }
+          })
           req.on('end', () => {
+            if (aborted) return
             try {
               const parsed = JSON.parse(body)
               const normalized = normalizePost(parsed)

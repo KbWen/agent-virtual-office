@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore } from '../systems/store'
 import { getNextBehavior } from '../systems/behaviorEngine'
 import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange } from '../systems/movementSystem'
+import { eventBubble } from '../i18n'
 import BehaviorBubble from './BehaviorBubble'
 
 // ═══ PIXEL ART SPRITE SYSTEM ═══
@@ -787,7 +788,7 @@ export default function AgentCharacter({ agent }) {
           store.addHandoff(id, targetId)
           setTimeout(() => {
             const s = useOfficeStore.getState()
-            s.setAgentBehavior(targetId, 'reading-screen', 'normal', '收到!')
+            s.setAgentBehavior(targetId, 'reading-screen', 'normal', eventBubble('handoff-received'))
             setTimeout(() => s.clearBubble(targetId), 3000)
           }, 1500)
         }

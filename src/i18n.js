@@ -17,9 +17,9 @@ function detectLang() {
     if (param && LOCALES[param]) return param
     const saved = localStorage.getItem('office-lang')
     if (saved && LOCALES[saved]) return saved
-    // Check browser language
+    // Check browser language — only map Traditional Chinese variants
     const nav = navigator.language
-    if (nav?.startsWith('zh')) return 'zh-TW'
+    if (nav === 'zh-TW' || nav === 'zh-Hant' || nav?.startsWith('zh-Hant')) return 'zh-TW'
   }
   return 'en'
 }

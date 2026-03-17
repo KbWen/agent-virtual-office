@@ -1,136 +1,202 @@
-# AgentCortex Virtual Office
+# Agent Virtual Office
 
-> 你的 AI Agent 團隊不只是在跑 code — 他們在**上班**。
+> Your AI agents aren't just running code — they're **at the office**.
 
 ![Virtual Office Screenshot](docs/screenshot.png)
 
-一群像素小人在 2.5D 等距辦公室裡認真工作、偷喝咖啡、吵架、開會、上廁所。
-他們不知道你在看，但你看了會嘴角上揚。
+A pixel-art isometric office where AI agent characters work, grab coffee, argue about code reviews, and hold stand-ups. They don't know you're watching, but you'll smile anyway.
 
-**這不是監控面板，是氛圍工具。**
-
----
-
-## 他們在幹嘛？
-
-| 小人 | 個性 | 你可能會看到他... |
-|------|------|-----------------|
-| **PM** | 愛開會、桌上整齊 | 在甘特圖前沈思人生 |
-| **建築師** | 戴貝雷帽的哲學家 | 突然衝到白板大喊「有了！」 |
-| **開發者** | 雙馬尾、咖啡成癮 | 桌上 5 杯咖啡，還在倒第 6 杯 |
-| **QA** | 拿放大鏡的完美主義者 | 跟 Dev 面對面爭論 bug 存不存在 |
-| **DevOps** | 戴安全帽的行動派 | 深呼吸，然後按下那個大紅按鈕 |
-| **研究員** | 長髮書蟲 | 書堆越疊越高，偶爾恍然大悟 |
-| **門神** | 刺蝟頭守門員 | 舉著盾牌說「前置條件不夠」 |
+**This isn't a monitoring dashboard — it's a vibe tool.**
 
 ---
 
-## 辦公室日常
+## Meet the Team
 
-每隔 1-3 分鐘，辦公室會隨機發生群體事件：
-
-- **茶歇時間** — 幾個人溜去咖啡機旁聊八卦
-- **站立會議** — 全員被 PM 拉到白板前報告進度
-- **外送到了** — 有人舉著紙袋進場，全場歡呼
-- **打翻咖啡** — 桌上冒驚嘆號，鄰座英勇救援
-- **Review 爭論** — Dev 和 QA 的經典三幕劇：「沒 bug！」→「你看這裡」→「好吧修了」
-- **部署成功** — Ops 按下按鈕，全場放煙火慶祝
-- **靈感時刻** — 建築師突然頓悟，衝去白板畫架構
-- **小組會議** — 幾個人走進會議室，開始「嗯嗯同意」
-
-偶爾還會出現稀有事件：有人帶狗來上班、空調壞了全場搧風、老闆巡視所有人假裝認真...
+| Character | Personality | You might catch them... |
+|-----------|------------|------------------------|
+| **PM** | Meeting-lover, tidy desk | Staring at a Gantt chart, pondering life |
+| **Architect** | Beret-wearing philosopher | Sprinting to the whiteboard yelling "Eureka!" |
+| **Developer** | Twin-tails, coffee addict | 5 cups on desk, pouring #6 |
+| **QA** | Magnifying-glass perfectionist | Arguing with Dev about whether a bug exists |
+| **DevOps** | Hard-hat action hero | Taking a deep breath, then pressing the big red button |
+| **Researcher** | Long-haired bookworm | Book pile growing taller, occasional epiphany |
+| **Gatekeeper** | Spiky-haired bouncer | Holding up a shield: "Prerequisites not met" |
 
 ---
 
-## 快速開始
+## Office Life
+
+Every 1–3 minutes, a random group event fires:
+
+- **Tea Break** — A few people sneak to the coffee machine to gossip
+- **Stand-up Meeting** — PM drags everyone to the whiteboard for status
+- **Food Delivery** — Someone walks in with a bag, everyone cheers
+- **Coffee Spill** — Desk alarm! Neighbor rushes to help
+- **Review Debate** — Dev vs QA classic: "No bug!" → "Look here" → "Fine, fixed"
+- **Deploy Success** — Ops hits the button, office erupts in celebration
+- **Eureka Moment** — Architect has a flash of insight, bolts to the whiteboard
+- **Meeting Room** — A few people file in, start nodding "mm-hmm, agreed"
+
+Rare events include: someone brings a dog, AC breaks and everyone fans themselves, boss walkthrough where everyone pretends to be busy...
+
+---
+
+## Quick Start
+
+### Option 1: npx (recommended)
 
 ```bash
+npx agent-virtual-office
+```
+
+Options:
+```
+--port=PORT    Port number (default: 5174)
+--lang=LANG    Language: en, zh-TW (default: auto-detect)
+--no-open      Don't open browser automatically
+```
+
+### Option 2: Clone & dev
+
+```bash
+git clone https://github.com/anthropics/agent-virtual-office.git
+cd agent-virtual-office
 npm install
 npm run dev
 ```
 
-打開瀏覽器，看你的小人們上班。就這樣。不需要後端、不需要資料庫、不需要 WebSocket。
+Open your browser and watch your agents work. That's it. No backend, no database, no WebSocket.
 
 ---
 
-## 技術亮點
+## Status API
 
-- **純 SVG 像素藝術** — 16x20 像素格手繪角色，7 種髮型 + 7 種表情 + 2 種性別
-- **25 種行為動畫圖標** — 每個行為旁邊都有對應的小圖標（鍵盤、咖啡杯、放大鏡...）
-- **RAF 移動系統** — requestAnimationFrame 驅動的 80px/s 平滑走路，不用 CSS transition
-- **走廊路由** — 角色走路會經過門口和走廊，不會穿牆穿桌
-- **行為引擎** — 權重隨機系統：工作 65% / 日常 12% / 社交 13% / 離席 10%
-- **狀態感知對話** — working 時說「衝衝衝!」，blocked 時說「救命啊」
-- **真實時間連動** — 中午趴桌午休、晚上只剩 Dev 和一盞燈
-- **永不卡死** — try/catch + 看門狗計時器，行為排程鏈永遠不會斷
+Any tool can push real-time status to the office via HTTP:
+
+```bash
+# Simple: set agent statuses directly
+curl -X POST http://localhost:5174/api/status \
+  -H "Content-Type: application/json" \
+  -d '{"dev":"working","qa":"testing","workflow":"Sprint 42"}'
+
+# Full format: explicit agent list
+curl -X POST http://localhost:5174/api/status \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "office-status",
+    "agents": [
+      {"role":"dev","task":"implement-auth","status":"working","label":"Coding auth module..."}
+    ],
+    "workflow": "Build Feature"
+  }'
+```
+
+### Supported Roles
+`pm`, `arch`, `dev`, `qa`, `ops`, `res`, `gate`
+
+### Supported Statuses
+`idle`, `working`, `blocked`, `done`
+
+### Platform Integration
+
+| Platform | How to integrate |
+|----------|-----------------|
+| **Claude Code** | `curl POST` from hooks or scripts |
+| **Gemini CLI** | `curl POST` from shell hooks |
+| **Codex CLI** | `curl POST` from task runners |
+| **Any CI/CD** | `curl POST` from pipeline steps |
+| **Browser** | `postMessage` or `BroadcastChannel('agent-office')` |
 
 ---
 
-## 搭配 AgentCortex
+## Embedding
 
-辦公室會讀取 `current_state.md` 推斷誰在忙：
-
-- `/implement` 進行中 → 開發者打字頻率暴增、咖啡杯 +3
-- `/review` 進行中 → QA 拿放大鏡皺眉的時間變長
-- 什麼都沒在跑 → 所有人正常上班，隨機摸魚
-
-**AgentCortex 不需要改任何一行 code。辦公室是唯讀觀察者。**
+```
+http://localhost:5174?mode=panel    # Compact panel for IDE sidebars
+http://localhost:5174?lang=zh-TW   # Force Chinese
+```
 
 ---
 
-## 架構
+## i18n
+
+Default language is English. Chinese (Traditional) is available:
+
+- URL param: `?lang=zh-TW`
+- In-app toggle: EN/中 button in the control panel
+- CLI flag: `--lang=zh-TW`
+- Auto-detect: respects browser language for `zh-TW` / `zh-Hant`
+
+---
+
+## Tech Highlights
+
+- **Pure SVG pixel art** — 16×20 hand-drawn characters, 7 hairstyles + 7 expressions + 2 genders
+- **25 behavior animations** — Each behavior has a matching icon (keyboard, coffee cup, magnifier...)
+- **RAF movement** — requestAnimationFrame-driven smooth walking at 80px/s
+- **Corridor routing** — Characters walk through doorways and corridors, no clipping
+- **Behavior engine** — Weighted random: work 65% / daily 12% / social 13% / away 10%
+- **Status-aware speech** — "Let's go!" when working, "Help..." when blocked
+- **Real-time clock** — Nap at noon, only Dev stays late with one lamp on
+- **Never-stuck guarantee** — try/catch + watchdog timer, behavior chain never breaks
+
+---
+
+## Architecture
 
 ```
 .
+├── bin/
+│   └── cli.js                  # npx entry point
 ├── src/
 │   ├── components/
-│   │   ├── AgentCharacter.jsx    # 角色精靈 + 行為排程 + RAF 移動
-│   │   ├── PixelOffice.jsx       # 主場景（SVG 辦公室 + 家具）
-│   │   ├── BehaviorBubble.jsx    # 對話氣泡
-│   │   └── ControlPanel.jsx      # 底部狀態面板
+│   │   ├── AgentCharacter.jsx  # Character sprite + behavior scheduler + RAF movement
+│   │   ├── PixelOffice.jsx     # Main scene (SVG office + furniture)
+│   │   ├── BehaviorBubble.jsx  # Speech bubbles
+│   │   └── ControlPanel.jsx    # Bottom status panel + language toggle
 │   ├── systems/
-│   │   ├── behaviorEngine.js     # 權重隨機行為引擎
-│   │   ├── movementSystem.js     # 地板區域 + 障礙物 + 路由
-│   │   ├── officeLife.js         # 群體事件系統（8 種事件）
-│   │   └── store.js              # Zustand 狀態管理
+│   │   ├── behaviorEngine.js   # Weighted random behavior engine
+│   │   ├── movementSystem.js   # Floor areas + obstacles + pathfinding
+│   │   ├── officeLife.js       # Group event system (8+ events)
+│   │   └── store.js            # Zustand state management
+│   ├── inference/
+│   │   └── inferStatus.js      # External status integration
+│   ├── i18n.js                 # Lightweight i18n (~90 lines)
+│   ├── locales/
+│   │   ├── en.json             # English strings
+│   │   └── zh-TW.json          # Traditional Chinese strings
 │   └── config/
-│       ├── characters.json       # 角色定義
-│       └── officeEvents.json     # 事件池 + 對話訊息庫
-├── DESIGN_SPEC.md                # 視覺 + 行為完整規格
-└── ARCHITECTURE.md               # 技術架構文檔
+│       ├── characters.json     # Character definitions
+│       └── officeEvents.json   # Event pool + message library
+├── vite.config.js              # Vite + status API middleware
+└── package.json
 ```
 
 ---
 
-## 設計哲學
+## Tech Stack
 
-> 好的體驗：Dev 小人在打字，旁邊放著一杯冒煙的咖啡，QA 走過來拍他肩膀遞了一張紙。
->
-> 壞的體驗：Dev 小人頭上寫著「/implement 進度 67%」。
+| Using | Why |
+|-------|-----|
+| React + Vite | Fast dev, fast builds |
+| SVG | Lightweight, no GPU needed |
+| requestAnimationFrame | Smooth movement, no jank |
+| Zustand | 100× lighter than Redux |
+| Tailwind CSS | Rapid UI iteration |
+| `new Date()` | Time-of-day effects, no server needed |
 
-先做好玩的，再做有用的。
-
----
-
-## 技術選型
-
-| 用了 | 為什麼 |
-|------|--------|
-| React + Vite | 快速開發 |
-| SVG | 輕量、不需 GPU |
-| requestAnimationFrame | 平滑移動、無跳躍 |
-| Zustand | 比 Redux 輕 100 倍 |
-| Tailwind CSS | 面板 UI 快速迭代 |
-| `new Date()` | 時間連動，不需要伺服器 |
-
-| 沒用 | 為什麼 |
-|------|--------|
-| Canvas / WebGL | 太重 |
-| WebSocket | 不需要 |
-| 後端 / 資料庫 | 不需要 |
-| Three.js | 打包太大 |
+| Not Using | Why |
+|-----------|-----|
+| Canvas / WebGL | Too heavy |
+| WebSocket | Not needed |
+| Backend / Database | Not needed |
+| Three.js | Bundle too large |
 
 ---
+
+## Language
+
+- [中文版 README](README.zh-TW.md)
 
 ## License
 

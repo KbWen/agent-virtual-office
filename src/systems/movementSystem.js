@@ -433,9 +433,14 @@ export function calcFacing(fromX, fromY, toX, toY) {
   return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')
 }
 
-// BEHAVIOR_LABELS now sourced from i18n locale files (src/locales/*.json)
-// Kept as re-export for backward compatibility
+// BEHAVIOR_LABELS: re-exported from i18n for backward compatibility
+// Use behaviorLabel(id) from i18n.js directly for new code
 import { behaviorLabel as _bl } from '../i18n'
-export const BEHAVIOR_LABELS = new Proxy({}, {
-  get: (_, key) => _bl(key),
-})
+const _ALL_KEYS = [
+  'typing','reading-screen','writing-notes','whiteboard','research','gantt-chart',
+  'magnifier','deploy-button','shield-verify','drink-coffee','drink-water','stretch',
+  'look-window','check-phone','eat-snack','chat','pass-document','thumbs-up',
+  'goto-coffee-machine','toilet','nap','phone-call','scratch-head','sigh','desk-slam',
+  'idle','meeting','print',
+]
+export const BEHAVIOR_LABELS = Object.fromEntries(_ALL_KEYS.map(k => [k, _bl(k)]))

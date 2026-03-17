@@ -88,9 +88,11 @@
     "review-qa-2": "你看這裡",
     "review-dev-3": "好吧修了",
     "review-qa-3": "讚",
+    "deploy-success": "部署成功！🚀",
     "deploy-celebrate": ["🎉 耶！", "太好了！", "終於...", "慶祝！", "下班！", "完美~"],
     "meeting-start": ["開會囉", "來了來了", "又開會..."],
     "meeting-lead": "所以方向是...",
-    "meeting-agree": "嗯嗯同意"
+    "meeting-agree": "嗯嗯同意",
+    "handoff-received": "收到!"
   }
 }

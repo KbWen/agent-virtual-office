@@ -88,9 +88,11 @@
     "review-qa-2": "look here",
     "review-dev-3": "fine, I'll fix it",
     "review-qa-3": "nice",
+    "deploy-success": "Deploy Success! 🚀",
     "deploy-celebrate": ["🎉 yay!", "awesome!", "finally...", "celebrate!", "time to go!", "perfect~"],
     "meeting-start": ["meeting time", "coming!", "another meeting..."],
     "meeting-lead": "so the direction is...",
-    "meeting-agree": "mm agreed"
+    "meeting-agree": "mm agreed",
+    "handoff-received": "got it!"
   }
 }
