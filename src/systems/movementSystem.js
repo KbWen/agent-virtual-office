@@ -125,6 +125,8 @@ export const WAYPOINTS = {
   phone:        { x: 755, y: 480 },
   toilet:       { x: 380, y: 510 },  // below WC area
   printer:      { x: 600, y: 510 },
+  window:       { x: 340, y: 100 },  // hallway near windows
+  snackArea:    { x: 30,  y: 520 },  // near vending machine
 }
 
 // Meeting chair positions AROUND the table (not on it)
@@ -302,6 +304,7 @@ export function calculatePath(from, to) {
 // ─── Behavior → destination mapping ─────────────────────────────────
 const BEHAVIOR_LOCATIONS = {
   'goto-coffee-machine': 'coffeeArea',
+  'drink-coffee':        'coffeeArea',
   'drink-water':         'waterCooler',
   'whiteboard':          'whiteboard',
   'nap':                 'lounge',
@@ -310,9 +313,21 @@ const BEHAVIOR_LOCATIONS = {
   'research':            'researchLib',
   'meeting':             null,  // handled specially with MEETING_CHAIRS
   'print':               'printer',
+  'look-window':         'window',
+  'eat-snack':           'snackArea',
+  'stretch':             'lounge',
+  'check-phone':         'lounge',
 }
 
 const SOCIAL_BEHAVIORS = new Set(['chat', 'thumbs-up', 'pass-document'])
+
+// Returns true if this behavior requires the character to walk to a specific location
+// (not their desk). Used to defer behavior labels until arrival.
+export function needsLocationChange(behaviorId) {
+  if (SOCIAL_BEHAVIORS.has(behaviorId)) return true
+  const key = BEHAVIOR_LOCATIONS[behaviorId]
+  return key !== undefined  // has an entry (even null for meeting)
+}
 
 // ─── Anti-overlap system ──────────────────────────────────────────────
 const MIN_AGENT_DIST = 35  // minimum px between any two agents

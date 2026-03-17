@@ -109,6 +109,32 @@ function startPolling(callback, intervalMs = 2000) {
   return () => clearInterval(timer)
 }
 
+// ─── File polling via /api/status (CLI hook writes ~/.claude/office-status.json)
+// This is the primary channel for real CLI integration
+
+function startFilePolling(callback, intervalMs = 2000) {
+  let lastSeq = null
+  let consecutive404 = 0
+  const timer = setInterval(async () => {
+    try {
+      const resp = await fetch('/api/status')
+      if (!resp.ok) { consecutive404++; return }
+      consecutive404 = 0
+      const data = await resp.json()
+      if (!data) return
+      if (data._seq === lastSeq) return
+      lastSeq = data._seq
+      const msg = normalizeStatusMessage(data)
+      if (msg) callback(msg)
+    } catch {
+      consecutive404++
+    }
+    // Stop polling if server seems down
+    if (consecutive404 > 15) clearInterval(timer)
+  }, intervalMs)
+  return () => clearInterval(timer)
+}
+
 // ─── URL hash monitoring (passive, no platform cooperation needed) ──────
 // Platforms or users can set: #dev=working&workflow=Build+Feature&qa=testing
 // This works in artifacts, iframes, and direct browser — no postMessage required
@@ -277,6 +303,7 @@ export function startStatusIntegration(store) {
     listenForStatusUpdates(handleIncoming),   // postMessage (artifact/embedded)
     listenBroadcastChannel(handleIncoming),   // cross-tab (CLI opens browser)
     startPolling(handleIncoming),             // window global (CLI injection)
+    startFilePolling(handleIncoming),         // /api/status (CLI hook → file → vite)
     listenHashChanges(handleIncoming),        // URL hash (passive, any platform)
     listenTitleChanges(handleIncoming),       // title monitoring (heuristic)
   ]

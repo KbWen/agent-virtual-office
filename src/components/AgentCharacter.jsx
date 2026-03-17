@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore } from '../systems/store'
 import { getNextBehavior } from '../systems/behaviorEngine'
-import { getTargetForBehavior, calcFacing, calculatePath } from '../systems/movementSystem'
+import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange } from '../systems/movementSystem'
 import BehaviorBubble from './BehaviorBubble'
 
 // ═══ PIXEL ART SPRITE SYSTEM ═══
@@ -565,6 +565,7 @@ export default function AgentCharacter({ agent }) {
   const pathRef = useRef([])
   const movingRef = useRef(false)
   const movingStuckRef = useRef(0)
+  const pendingBehaviorRef = useRef(null) // deferred behavior for location-based actions
   const [walkFrame, setWalkFrame] = useState(0)
 
   // RAF-based smooth movement — only runs while walking
@@ -673,6 +674,17 @@ export default function AgentCharacter({ agent }) {
     } else {
       movingRef.current = false
       setIsWalking(false)
+      // Apply deferred behavior now that character has arrived at destination
+      const pending = pendingBehaviorRef.current
+      if (pending) {
+        pendingBehaviorRef.current = null
+        store.setAgentBehavior(id, pending.behaviorId, pending.expression, pending.bubble)
+        if (pending.effect === 'coffee') store.incrementDeskItem(id, 'coffee')
+        // Clear bubble after a while
+        if (pending.bubble) {
+          setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(pending.duration * 0.5, 4000))
+        }
+      }
     }
   }, [id, startRaf])
 
@@ -720,6 +732,7 @@ export default function AgentCharacter({ agent }) {
         if (movingStuckRef.current > 15) {
           movingRef.current = false
           movingStuckRef.current = 0
+          pendingBehaviorRef.current = null
           setIsWalking(false)
           if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         } else {
@@ -732,9 +745,39 @@ export default function AgentCharacter({ agent }) {
       const next = getNextBehavior(id, agent.status || 'idle')
       nextDelay = next.duration
 
-      // Set behavior state
-      store.setAgentBehavior(id, next.behaviorId, next.expression, next.bubble)
-      if (next.effect === 'coffee') store.incrementDeskItem(id, 'coffee')
+      // Walk to behavior location
+      const destination = getTargetForBehavior(id, next.behaviorId, store.agents)
+      let willWalk = false
+      if (destination && visualPosRef.current) {
+        const current = visualPosRef.current
+        const sameSpot = Math.abs(current.x - destination.x) < 5 && Math.abs(current.y - destination.y) < 5
+        if (!sameSpot) {
+          const path = calculatePath(current, destination)
+          if (path.length > 0) {
+            willWalk = true
+            movingRef.current = true
+            pathRef.current = path.slice(1)
+            startWalkTo(path[0])
+          }
+        }
+      }
+
+      // For location-based behaviors (coffee, whiteboard, toilet, etc.),
+      // defer the behavior label until the character arrives at the destination.
+      // This prevents "去泡咖啡" showing while still sitting at desk.
+      if (willWalk && needsLocationChange(next.behaviorId)) {
+        pendingBehaviorRef.current = next
+        // Don't change the displayed behavior yet — keep current one while walking
+      } else {
+        pendingBehaviorRef.current = null
+        // Desk behavior or already at location — apply immediately
+        store.setAgentBehavior(id, next.behaviorId, next.expression, next.bubble)
+        if (next.effect === 'coffee') store.incrementDeskItem(id, 'coffee')
+        // Clear bubble after a while
+        if (next.bubble) {
+          setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(next.duration * 0.5, 4000))
+        }
+      }
 
       // Trigger handoff animation for pass-document
       if (next.behaviorId === 'pass-document') {
@@ -748,26 +791,6 @@ export default function AgentCharacter({ agent }) {
             setTimeout(() => s.clearBubble(targetId), 3000)
           }, 1500)
         }
-      }
-
-      // Walk to behavior location
-      const destination = getTargetForBehavior(id, next.behaviorId, store.agents)
-      if (destination && visualPosRef.current) {
-        const current = visualPosRef.current
-        const sameSpot = Math.abs(current.x - destination.x) < 5 && Math.abs(current.y - destination.y) < 5
-        if (!sameSpot) {
-          const path = calculatePath(current, destination)
-          if (path.length > 0) {
-            movingRef.current = true
-            pathRef.current = path.slice(1)
-            startWalkTo(path[0])
-          }
-        }
-      }
-
-      // Clear bubble after a while
-      if (next.bubble) {
-        setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(next.duration * 0.5, 4000))
       }
     } catch (err) {
       console.error(`[${id}] doSchedule error:`, err)
@@ -816,6 +839,7 @@ export default function AgentCharacter({ agent }) {
         clearTimeout(timerRef.current)
         movingRef.current = false
         movingStuckRef.current = 0
+        pendingBehaviorRef.current = null
         if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         setIsWalking(false)
         timerRef.current = setTimeout(doSchedule, 500)
