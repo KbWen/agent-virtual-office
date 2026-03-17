@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { useOfficeStore } from '../systems/store'
 import { startOfficeLife } from '../systems/officeLife'
+import { inferFromParams, listenForVibeUpdates } from '../inference/inferStatus'
 import AgentCharacter from './AgentCharacter'
 import {
   Desk, Bookshelf, Plant, Couch, RoundTable, MeetingTable,
@@ -206,6 +207,27 @@ export default function PixelOffice({ animationQuality = 'full' }) {
   useEffect(() => {
     const cleanup = startOfficeLife(useOfficeStore)
     return cleanup
+  }, [])
+
+  // Wire AgentCortex status inference (URL params + postMessage)
+  useEffect(() => {
+    const applyInference = (info) => {
+      if (!info) return
+      if (info.activeAgent) {
+        useOfficeStore.setState((s) => {
+          if (!s.agents[info.activeAgent]) return s
+          return {
+            agents: {
+              ...s.agents,
+              [info.activeAgent]: { ...s.agents[info.activeAgent], status: 'working' },
+            },
+          }
+        })
+      }
+    }
+    applyInference(inferFromParams())
+    const unlisten = listenForVibeUpdates(applyInference)
+    return unlisten
   }, [])
 
   const agentList = sortByY(Object.values(agents))
@@ -431,8 +453,8 @@ export default function PixelOffice({ animationQuality = 'full' }) {
         <AgentCharacter key={agent.id} agent={agent} />
       ))}
 
-      {/* ═══ FLYING DOCUMENTS (handoff animation) ═══ */}
-      <FlyingDocuments />
+      {/* ═══ FLYING DOCUMENTS (handoff animation) — skip on light quality ═══ */}
+      {animationQuality !== 'light' && <FlyingDocuments />}
 
       {/* ═══ LIGHTING ═══ */}
       {lightOverlay.opacity > 0 && (
@@ -440,8 +462,8 @@ export default function PixelOffice({ animationQuality = 'full' }) {
           fill={lightOverlay.fill} opacity={lightOverlay.opacity} pointerEvents="none" />
       )}
 
-      {/* Night screen glow */}
-      {hour >= 19 && deskData.map((d) => (
+      {/* Night screen glow — only on full quality (radialGradient is GPU-heavy) */}
+      {animationQuality === 'full' && hour >= 19 && deskData.map((d) => (
         <g key={`glow-${d.id}`}>
           <radialGradient id={`glow-${d.id}`} cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="#4af" stopOpacity="0.08" />

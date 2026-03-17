@@ -744,8 +744,11 @@ export default function AgentCharacter({ agent }) {
           store.addHandoff(id, targetId)
           setTimeout(() => {
             const s = useOfficeStore.getState()
-            s.setAgentBehavior(targetId, 'reading-screen', 'normal', '收到!')
-            setTimeout(() => s.clearBubble(targetId), 3000)
+            // Only set behavior if target is not locked in a group event
+            if (!s.agents[targetId]?.inGroupEvent) {
+              s.setAgentBehavior(targetId, 'reading-screen', 'normal', '收到!')
+              setTimeout(() => s.clearBubble(targetId), 3000)
+            }
           }, 1500)
         }
       }

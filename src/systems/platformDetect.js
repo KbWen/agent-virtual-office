@@ -27,7 +27,8 @@ export function detectPlatform() {
     // Check if we're in an iframe (artifact mode)
     try {
       if (window.parent !== window && window.parent.document) {
-        // Same-origin iframe — likely dev
+        // Same-origin iframe (e.g. dev preview) — treat as embedded
+        return 'embedded'
       }
     } catch {
       // Cross-origin iframe — likely artifact or embedded
