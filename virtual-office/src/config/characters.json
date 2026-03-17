@@ -1,0 +1,106 @@
+{
+  "agentcortex": [
+    {
+      "id": "pm",
+      "name": "PM",
+      "color": "#378ADD",
+      "accessory": "neat-hair",
+      "commands": ["/bootstrap", "/plan", "/spec"],
+      "personality": "愛開會、桌上整齊、常看甘特圖",
+      "deskItems": ["monitor", "gantt-chart", "sticky-notes"],
+      "position": { "x": 160, "y": 180 }
+    },
+    {
+      "id": "arch",
+      "name": "建築師",
+      "color": "#7F77DD",
+      "accessory": "square-hat",
+      "commands": ["/brainstorm", "/decide"],
+      "personality": "戴帽子、愛畫白板、常陷入沉思",
+      "deskItems": ["monitor", "blueprint"],
+      "position": { "x": 310, "y": 140 }
+    },
+    {
+      "id": "dev",
+      "name": "開發者",
+      "color": "#1D9E75",
+      "accessory": "twin-tails",
+      "commands": ["/implement"],
+      "personality": "雙馬尾、打字飛快、桌上全是咖啡杯",
+      "deskItems": ["monitor", "coffee-cup", "coffee-cup", "coffee-cup"],
+      "position": { "x": 460, "y": 180 }
+    },
+    {
+      "id": "qa",
+      "name": "QA",
+      "color": "#BA7517",
+      "accessory": "magnifier",
+      "commands": ["/test", "/review", "/test-classify"],
+      "personality": "拿放大鏡、常皺眉、注重細節",
+      "deskItems": ["monitor", "magnifier", "checklist"],
+      "position": { "x": 160, "y": 310 }
+    },
+    {
+      "id": "ops",
+      "name": "DevOps",
+      "color": "#D85A30",
+      "accessory": "hard-hat",
+      "commands": ["/ship", "/handoff", "/retro"],
+      "personality": "戴安全帽、做事果斷、愛按大按鈕",
+      "deskItems": ["monitor", "deploy-button"],
+      "position": { "x": 310, "y": 350 }
+    },
+    {
+      "id": "res",
+      "name": "研究員",
+      "color": "#5DCAA5",
+      "accessory": "bangs",
+      "commands": ["/research"],
+      "personality": "桌上書堆、常翻書、偶爾恍然大悟",
+      "deskItems": ["monitor", "book-stack"],
+      "position": { "x": 460, "y": 310 }
+    },
+    {
+      "id": "gate",
+      "name": "門神",
+      "color": "#E24B4A",
+      "accessory": "shield",
+      "commands": ["gate-engine"],
+      "personality": "站安全亭、驗證舉盾牌、很嚴肅",
+      "deskItems": ["gate-booth"],
+      "position": { "x": 80, "y": 420 }
+    }
+  ],
+  "lightweight": [
+    {
+      "id": "planner",
+      "name": "規劃師",
+      "color": "#378ADD",
+      "accessory": "neat-hair",
+      "commands": [],
+      "personality": "愛寫便利貼、常跟人討論",
+      "deskItems": ["monitor", "sticky-notes"],
+      "position": { "x": 200, "y": 200 }
+    },
+    {
+      "id": "worker",
+      "name": "執行者",
+      "color": "#1D9E75",
+      "accessory": "headphones",
+      "commands": [],
+      "personality": "戴耳機、專注打字、偶爾抓頭",
+      "deskItems": ["monitor", "coffee-cup"],
+      "position": { "x": 350, "y": 200 }
+    },
+    {
+      "id": "checker",
+      "name": "檢查員",
+      "color": "#BA7517",
+      "accessory": "glasses",
+      "commands": [],
+      "personality": "戴眼鏡、仔細對比、常打勾",
+      "deskItems": ["monitor", "checklist"],
+      "position": { "x": 500, "y": 200 }
+    }
+  ]
+}

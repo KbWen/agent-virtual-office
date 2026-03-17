@@ -1,0 +1,102 @@
+{
+  "daily": [
+    {
+      "id": "tea-break",
+      "name": "茶歇時間",
+      "participants": "random-2-3",
+      "duration": 18000,
+      "description": "同時走到咖啡機，站著聊天"
+    },
+    {
+      "id": "standup",
+      "name": "站立會議",
+      "participants": "all",
+      "duration": 25000,
+      "description": "所有人聚到白板前，PM 在寫字"
+    },
+    {
+      "id": "food-delivery",
+      "name": "外送到了",
+      "participants": "all",
+      "duration": 10000,
+      "description": "一人舉紙袋進場，其他人冒出開心表情"
+    },
+    {
+      "id": "coffee-spill",
+      "name": "打翻咖啡",
+      "participants": "random-1-neighbor",
+      "duration": 8000,
+      "description": "桌上冒驚嘆號，鄰座跑來幫忙"
+    },
+    {
+      "id": "eureka",
+      "name": "靈感時刻",
+      "participants": ["arch"],
+      "duration": 8000,
+      "description": "突然站起來衝到白板，頭上燈泡"
+    },
+    {
+      "id": "review-debate",
+      "name": "Review 爭論",
+      "participants": ["dev", "qa"],
+      "duration": 18000,
+      "description": "面對面，氣泡來回交替"
+    },
+    {
+      "id": "deploy-success",
+      "name": "部署成功",
+      "participants": "all",
+      "duration": 10000,
+      "description": "Ops 按按鈕，全場慶祝"
+    },
+    {
+      "id": "group-meeting",
+      "name": "小組會議",
+      "participants": "random-2-3",
+      "duration": 20000,
+      "description": "2-3人走到會議室開會"
+    }
+  ],
+  "rare": [
+    {
+      "id": "dog-visit",
+      "name": "有人帶狗",
+      "duration": 20000,
+      "description": "小狗在辦公室跑來跑去"
+    },
+    {
+      "id": "ac-broken",
+      "name": "空調壞了",
+      "duration": 15000,
+      "description": "所有人搧風動作，冒汗滴"
+    },
+    {
+      "id": "boss-visit",
+      "name": "老闆巡視",
+      "duration": 10000,
+      "description": "所有人回座位坐好假裝忙"
+    },
+    {
+      "id": "group-stretch",
+      "name": "集體伸懶腰",
+      "duration": 8000,
+      "description": "所有人同時伸懶腰"
+    }
+  ],
+  "bubbleMessages": {
+    "typing": ["嗯嗯嗯...", "這段好醜...", "快好了!", "忘了分號", "SO 救我"],
+    "coffee": ["☕ 續命", "第3杯了", "美式加大", "豆子不錯"],
+    "chat": ["欸你看這bug", "午餐吃啥?", "需求好怪", "haha"],
+    "gate-block": ["為啥不讓過!", "再檢查...", "嗚嗚", "行行好"],
+    "done": ["搞定!", "終於...", "還有誰!", "收工~"],
+    "toilet-return": ["舒服~", "回來了", "差點掉手機"],
+    "gate-verify": ["讓我看看...", "條件不夠", "通過!", "安全第一"],
+    "thinking": ["嗯...", "想想看", "有了!", "等等..."],
+    "frustrated": ["...", "唉", "看看時間", "算了趴著", "卡住了", "誰來幫忙", "debug中..."],
+    "stretch": ["好累~", "肩膀好痠", "深呼吸~"],
+    "phone": ["喂?", "好好好", "知道了", "掰掰~"],
+    "working-status": ["衝衝衝!", "專注!", "別打擾我", "在忙!", "快好了!", "全力中~"],
+    "done-status": ["收工啦!", "搞定!", "今天很productive", "下班!", "完美~", "終於..."],
+    "blocked-status": ["卡住了...", "救命啊", "為什麼不動", "崩潰中", "誰來看看"]
+  }
+}
