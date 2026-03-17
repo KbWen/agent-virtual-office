@@ -216,6 +216,92 @@ const EVENT_HANDLERS = {
       if (active.length > 1) s.setAgentBehavior(active[1], 'meeting', 'normal', eventBubble('meeting-agree'))
     }, 8000)
   },
+
+  // ─── Rare events ─────────────────────────────────────────────────
+
+  'boss-visit': (store, participants) => {
+    // Everyone rushes back to their desk and pretends to be busy
+    participants.forEach((id) => {
+      const home = HOME_POSITIONS[id]
+      if (!home) return
+      store.getState().setAgentGroupEvent(id, {
+        behavior: 'typing',
+        expression: 'focused',
+        bubble: eventBubble('boss-visit'),
+        groupTarget: jitter(home, 6),
+      })
+    })
+    // After a beat, everyone relaxes
+    setTimeout(() => {
+      const s = store.getState()
+      participants.forEach((id) => {
+        if (s.agents[id]?.inGroupEvent) {
+          s.setAgentBehavior(id, 'typing', 'normal', null)
+        }
+      })
+    }, 7000)
+  },
+
+  'dog-visit': (store, participants) => {
+    // Everyone reacts to a dog, then some gather in lounge
+    participants.forEach((id, i) => {
+      setTimeout(() => {
+        store.getState().setAgentGroupEvent(id, {
+          behavior: i === 0 ? 'stretch' : 'chat',
+          expression: 'happy',
+          bubble: eventBubble('dog-visit'),
+          groupTarget: null,
+        })
+      }, i * 800)
+    })
+    setTimeout(() => {
+      const s = store.getState()
+      participants.slice(0, 3).forEach((id) => {
+        if (s.agents[id]?.inGroupEvent) {
+          s.setAgentGroupEvent(id, {
+            behavior: 'chat',
+            expression: 'happy',
+            bubble: eventBubble('dog-woof'),
+            groupTarget: jitter({ x: 175, y: 490 }, 30),
+          })
+        }
+      })
+    }, 5000)
+  },
+
+  'ac-broken': (store, participants) => {
+    // Everyone fans themselves and complains
+    participants.forEach((id) => {
+      store.getState().setAgentGroupEvent(id, {
+        behavior: 'stretch',
+        expression: 'confused',
+        bubble: eventBubble('ac-broken'),
+        groupTarget: null,
+      })
+    })
+    setTimeout(() => {
+      const s = store.getState()
+      participants.forEach((id) => {
+        if (s.agents[id]?.inGroupEvent) {
+          s.setAgentBehavior(id, 'stretch', 'confused', eventBubble('ac-fan'))
+        }
+      })
+    }, 6000)
+  },
+
+  'group-stretch': (store, participants) => {
+    // Everyone stretches at the same time
+    participants.forEach((id, i) => {
+      setTimeout(() => {
+        store.getState().setAgentGroupEvent(id, {
+          behavior: 'stretch',
+          expression: 'happy',
+          bubble: eventBubble('group-stretch'),
+          groupTarget: null,
+        })
+      }, i * 300)
+    })
+  },
 }
 
 function executeEvent(store, event, participants) {

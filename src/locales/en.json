@@ -93,6 +93,13 @@
     "meeting-start": ["meeting time", "coming!", "another meeting..."],
     "meeting-lead": "so the direction is...",
     "meeting-agree": "mm agreed",
-    "handoff-received": "got it!"
+    "handoff-received": "got it!",
+    "boss-visit": ["look busy!", "shh boss is here", "act natural!", "typing intensely..."],
+    "boss-walking": "hmm...",
+    "dog-visit": ["puppy! 🐕", "so cute!", "come here boy!", "who brought a dog?"],
+    "dog-woof": "woof! 🐾",
+    "ac-broken": ["so hot...", "fan me please", "who broke the AC?", "melting..."],
+    "ac-fan": "💨 ahhh~",
+    "group-stretch": ["stretch~", "my back...", "ahh feels good", "deep breath~"]
   }
 }

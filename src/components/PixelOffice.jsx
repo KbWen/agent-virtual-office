@@ -95,6 +95,131 @@ function getLightingOverlay(hour) {
   return { fill: '#050510', opacity: 0.45 }
 }
 
+// ─── Boss character that walks through during boss-visit event ─────────
+function WalkingBoss() {
+  const [pos, setPos] = React.useState({ x: 100, y: 150 })
+  const rafRef = React.useRef(null)
+  const startRef = React.useRef(null)
+  const DURATION = 9000
+
+  // Boss walks: entrance → across main office → back out
+  const PATH = [
+    { x: 100, y: 150 }, // entrance
+    { x: 200, y: 280 }, // main office left
+    { x: 400, y: 290 }, // center
+    { x: 550, y: 280 }, // right
+    { x: 400, y: 350 }, // loop back
+    { x: 200, y: 300 }, // heading out
+    { x: 100, y: 150 }, // exit
+  ]
+
+  React.useEffect(() => {
+    const animate = (timestamp) => {
+      if (!startRef.current) startRef.current = timestamp
+      const t = Math.min(1, (timestamp - startRef.current) / DURATION)
+      // Interpolate along path
+      const totalSegs = PATH.length - 1
+      const segFloat = t * totalSegs
+      const seg = Math.min(Math.floor(segFloat), totalSegs - 1)
+      const segT = segFloat - seg
+      const from = PATH[seg]
+      const to = PATH[seg + 1]
+      setPos({
+        x: from.x + (to.x - from.x) * segT,
+        y: from.y + (to.y - from.y) * segT,
+      })
+      if (t < 1) rafRef.current = requestAnimationFrame(animate)
+    }
+    rafRef.current = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [])
+
+  return (
+    <g transform={`translate(${pos.x}, ${pos.y})`}>
+      {/* Boss shadow */}
+      <ellipse cx={0} cy={12} rx={8} ry={3} fill="rgba(0,0,0,0.15)" />
+      {/* Boss body — suit */}
+      <rect x={-6} y={-4} width={12} height={14} rx={2} fill="#2C3E50" />
+      {/* Tie */}
+      <line x1={0} y1={-2} x2={0} y2={6} stroke="#C0392B" strokeWidth="1.5" />
+      {/* Head */}
+      <circle cx={0} cy={-10} r={6} fill="#F5D0A9" />
+      {/* Hair (slicked back) */}
+      <path d="M-6,-12 Q0,-18 6,-12" fill="#333" />
+      {/* Glasses */}
+      <line x1={-5} y1={-11} x2={5} y2={-11} stroke="#333" strokeWidth="0.8" />
+      <circle cx={-3} cy={-11} r={2.5} fill="none" stroke="#333" strokeWidth="0.8" />
+      <circle cx={3} cy={-11} r={2.5} fill="none" stroke="#333" strokeWidth="0.8" />
+      {/* Serious expression */}
+      <line x1={-2} y1={-8} x2={2} y2={-8} stroke="#8B6548" strokeWidth="0.8" />
+      {/* Clipboard */}
+      <rect x={6} y={-2} width={6} height={8} rx={1} fill="#C8A060" stroke="#A08040" strokeWidth="0.5" />
+      <line x1={7} y1={1} x2={11} y2={1} stroke="#666" strokeWidth="0.5" />
+      <line x1={7} y1={3} x2={10} y2={3} stroke="#666" strokeWidth="0.5" />
+    </g>
+  )
+}
+
+// ─── Dog that runs around during dog-visit event ──────────────────────
+function OfficeDog() {
+  const [pos, setPos] = React.useState({ x: 100, y: 150 })
+  const rafRef = React.useRef(null)
+  const startRef = React.useRef(null)
+  const DURATION = 18000
+
+  const PATH = [
+    { x: 100, y: 150 }, { x: 300, y: 290 }, { x: 500, y: 270 },
+    { x: 400, y: 380 }, { x: 175, y: 490 }, { x: 250, y: 470 },
+    { x: 175, y: 490 }, { x: 300, y: 350 }, { x: 100, y: 150 },
+  ]
+
+  React.useEffect(() => {
+    const animate = (timestamp) => {
+      if (!startRef.current) startRef.current = timestamp
+      const t = Math.min(1, (timestamp - startRef.current) / DURATION)
+      const totalSegs = PATH.length - 1
+      const segFloat = t * totalSegs
+      const seg = Math.min(Math.floor(segFloat), totalSegs - 1)
+      const segT = segFloat - seg
+      setPos({
+        x: PATH[seg].x + (PATH[seg + 1].x - PATH[seg].x) * segT,
+        y: PATH[seg].y + (PATH[seg + 1].y - PATH[seg].y) * segT,
+      })
+      if (t < 1) rafRef.current = requestAnimationFrame(animate)
+    }
+    rafRef.current = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [])
+
+  return (
+    <g transform={`translate(${pos.x}, ${pos.y})`}>
+      <ellipse cx={0} cy={6} rx={5} ry={2} fill="rgba(0,0,0,0.1)" />
+      {/* Body */}
+      <ellipse cx={0} cy={0} rx={8} ry={5} fill="#C8964E" />
+      {/* Head */}
+      <circle cx={8} cy={-3} r={4.5} fill="#D4A860" />
+      {/* Ear */}
+      <ellipse cx={10} cy={-7} rx={2.5} ry={3} fill="#A07838" />
+      {/* Eye */}
+      <circle cx={10} cy={-4} r={1} fill="#333" />
+      {/* Nose */}
+      <circle cx={12} cy={-2} r={1} fill="#333" />
+      {/* Tail (wagging) */}
+      <line x1={-7} y1={-2} x2={-12} y2={-6} stroke="#C8964E" strokeWidth="2" strokeLinecap="round">
+        <animateTransform attributeName="transform" type="rotate"
+          values="-10 -7 -2;10 -7 -2;-10 -7 -2" dur="0.4s" repeatCount="indefinite" />
+      </line>
+      {/* Legs (bouncing) */}
+      <line x1={-4} y1={4} x2={-5} y2={8} stroke="#A07838" strokeWidth="1.5" strokeLinecap="round">
+        <animate attributeName="y2" values="8;6;8" dur="0.3s" repeatCount="indefinite" />
+      </line>
+      <line x1={4} y1={4} x2={5} y2={8} stroke="#A07838" strokeWidth="1.5" strokeLinecap="round">
+        <animate attributeName="y2" values="6;8;6" dur="0.3s" repeatCount="indefinite" />
+      </line>
+    </g>
+  )
+}
+
 function sortByY(agents) {
   return [...agents].sort((a, b) => {
     const ay = (a.targetPosition || a.position || {}).y || 0
@@ -477,6 +602,10 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {agentList.map((agent) => (
         <AgentCharacter key={agent.id} agent={agent} />
       ))}
+
+      {/* ═══ SPECIAL EVENT CHARACTERS ═══ */}
+      {activeEvent?.id === 'boss-visit' && <WalkingBoss />}
+      {activeEvent?.id === 'dog-visit' && <OfficeDog />}
 
       {/* ═══ FLYING DOCUMENTS (handoff animation) ═══ */}
       <FlyingDocuments />
