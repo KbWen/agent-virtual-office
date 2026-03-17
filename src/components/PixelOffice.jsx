@@ -202,6 +202,7 @@ export default function PixelOffice({ animationQuality = 'full' }) {
   const agents = useOfficeStore((s) => s.agents)
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
+  const activeEvent = useOfficeStore((s) => s.activeEvent)
 
   useEffect(() => {
     const cleanup = startOfficeLife(useOfficeStore)
@@ -450,6 +451,23 @@ export default function PixelOffice({ animationQuality = 'full' }) {
           <ellipse cx={d.x} cy={d.y - 5} rx={30} ry={20} fill={`url(#glow-${d.id})`} pointerEvents="none" />
         </g>
       ))}
+
+      {/* ═══ EVENT BANNER ═══ */}
+      {activeEvent && (
+        <g pointerEvents="none">
+          <rect x={280} y={4} width={240} height={22} rx={11} fill="#FFF8E1" stroke="#F5C842" strokeWidth="1" opacity="0.95">
+            <animate attributeName="opacity" values="0;0.95" dur="0.4s" fill="freeze" />
+          </rect>
+          <circle cx={296} cy={15} r={4} fill="#F5C842">
+            <animate attributeName="r" values="3;5;3" dur="1.5s" repeatCount="indefinite" />
+          </circle>
+          <text x={400} y={16} textAnchor="middle" dominantBaseline="middle"
+            fontSize="9" fontFamily="monospace" fontWeight="bold" fill="#8B6914"
+          >
+            {activeEvent.name}
+          </text>
+        </g>
+      )}
     </svg>
   )
 }

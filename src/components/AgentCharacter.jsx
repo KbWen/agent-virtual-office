@@ -833,7 +833,7 @@ export default function AgentCharacter({ agent }) {
   const pos = renderPos || state.position || { x: 0, y: 0 }
 
   return (
-    <g transform={`translate(${pos.x}, ${pos.y})`}>
+    <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}>
       {/* Working glow ring */}
       {state.status === 'working' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke="#EF9F27" strokeWidth="2" opacity="0.5">
@@ -858,47 +858,49 @@ export default function AgentCharacter({ agent }) {
       {/* Behavior-specific indicator icon */}
       {!isWalking && <BehaviorIndicator behavior={state.behavior} />}
 
-      {/* Name tag */}
-      <g transform="translate(0, -46)">
-        <rect
-          x={-name.length * 3.5 - 8}
-          y={-9}
-          width={name.length * 7 + 16}
-          height={16}
-          rx={8}
-          fill={
-            state.status === 'working' ? '#EF9F27' :
-            state.status === 'done' ? '#5CB88A' :
-            state.status === 'blocked' ? '#E24B4A' : color
-          }
-          opacity="0.92"
-        />
-        <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"
-          fontSize="8" fontFamily="monospace" fontWeight="bold" fill="white"
-        >
-          {name}
-        </text>
-        {state.status === 'working' && (
-          <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
-            <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
-            <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#EF9F27">⚡</text>
-          </g>
-        )}
-        {state.status === 'blocked' && (
-          <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
-            <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
-            <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#E24B4A">✕</text>
-          </g>
-        )}
-        {state.status === 'done' && (
-          <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
-            <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
-            <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#5CB88A">✓</text>
-          </g>
-        )}
-      </g>
+      {/* Name tag + bubble: inverse-scale to keep text at original size despite character scale */}
+      <g transform={`scale(${1/1.35})`}>
+        <g transform="translate(0, -46)">
+          <rect
+            x={-name.length * 3.5 - 8}
+            y={-9}
+            width={name.length * 7 + 16}
+            height={16}
+            rx={8}
+            fill={
+              state.status === 'working' ? '#EF9F27' :
+              state.status === 'done' ? '#5CB88A' :
+              state.status === 'blocked' ? '#E24B4A' : color
+            }
+            opacity="0.92"
+          />
+          <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"
+            fontSize="8" fontFamily="monospace" fontWeight="bold" fill="white"
+          >
+            {name}
+          </text>
+          {state.status === 'working' && (
+            <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
+              <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#EF9F27">⚡</text>
+            </g>
+          )}
+          {state.status === 'blocked' && (
+            <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
+              <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#E24B4A">✕</text>
+            </g>
+          )}
+          {state.status === 'done' && (
+            <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
+              <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#5CB88A">✓</text>
+            </g>
+          )}
+        </g>
 
-      <BehaviorBubble x={0} y={-62} message={state.bubble} />
+        <BehaviorBubble x={0} y={-62} message={state.bubble} />
+      </g>
     </g>
   )
 }
