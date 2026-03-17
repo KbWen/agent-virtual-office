@@ -572,6 +572,7 @@ export default function AgentCharacter({ agent }) {
   const targetPosRef = useRef(null)
   const rafRef = useRef(null)
   const lastTimeRef = useRef(null)
+  const isUnmountedRef = useRef(false)
   const [renderPos, setRenderPos] = useState(null)
   const [isWalking, setIsWalking] = useState(false)
   // Use refs for callbacks accessed inside RAF to avoid stale closures
@@ -601,7 +602,7 @@ export default function AgentCharacter({ agent }) {
     lastTimeRef.current = null
 
     const animate = (timestamp) => {
-      if (!visualPosRef.current || !targetPosRef.current) {
+      if (isUnmountedRef.current || !visualPosRef.current || !targetPosRef.current) {
         rafRef.current = null
         return
       }
@@ -645,8 +646,13 @@ export default function AgentCharacter({ agent }) {
 
   // Cleanup RAF on unmount
   useEffect(() => {
+    isUnmountedRef.current = false
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      isUnmountedRef.current = true
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
     }
   }, [])
 

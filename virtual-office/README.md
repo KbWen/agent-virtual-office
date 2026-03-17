@@ -97,7 +97,6 @@ virtual-office/
 │   └── config/
 │       ├── characters.json       # 角色定義
 │       └── officeEvents.json     # 事件池 + 對話訊息庫
-├── CLAUDE.md                     # Claude Code 專案指引
 ├── DESIGN_SPEC.md                # 視覺 + 行為完整規格
 └── ARCHITECTURE.md               # 技術架構文檔
 ```

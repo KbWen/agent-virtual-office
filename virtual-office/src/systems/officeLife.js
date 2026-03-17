@@ -130,7 +130,9 @@ const EVENT_HANDLERS = {
 
   'eureka': (store, participants) => {
     // Architect has a eureka moment, runs to whiteboard
-    store.getState().setAgentGroupEvent('arch', {
+    const s = store.getState()
+    if (!s.agents['arch']) return
+    s.setAgentGroupEvent('arch', {
       behavior: 'whiteboard',
       expression: 'surprised',
       bubble: '有了！💡',
@@ -140,17 +142,19 @@ const EVENT_HANDLERS = {
 
   'review-debate': (store, participants) => {
     // Dev and QA face off
+    const s = store.getState()
+    if (!s.agents['dev'] || !s.agents['qa']) return
     const devPos = HOME_POSITIONS.dev || { x: 340, y: 364 }
     const qaPos = HOME_POSITIONS.qa || { x: 400, y: 244 }
     const meetPoint = { x: (devPos.x + qaPos.x) / 2, y: (devPos.y + qaPos.y) / 2 }
 
-    store.getState().setAgentGroupEvent('dev', {
+    s.setAgentGroupEvent('dev', {
       behavior: 'chat',
       expression: 'focused',
       bubble: '這沒bug啊！',
       groupTarget: jitter({ x: meetPoint.x - 20, y: meetPoint.y }, 8),
     })
-    store.getState().setAgentGroupEvent('qa', {
+    s.setAgentGroupEvent('qa', {
       behavior: 'chat',
       expression: 'confused',
       bubble: '明明就有！',
@@ -171,7 +175,9 @@ const EVENT_HANDLERS = {
 
   'deploy-success': (store, participants) => {
     // Ops presses the button, everyone celebrates
-    store.getState().setAgentGroupEvent('ops', {
+    const s = store.getState()
+    if (!s.agents['ops']) return
+    s.setAgentGroupEvent('ops', {
       behavior: 'deploy-button',
       expression: 'happy',
       bubble: '部署成功！🚀',
