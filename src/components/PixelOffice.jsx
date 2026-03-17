@@ -7,7 +7,7 @@ import AgentCharacter from './AgentCharacter'
 import {
   Desk, Bookshelf, Plant, Couch, RoundTable, MeetingTable,
   CoffeeMachine, WaterCooler, GateBooth, WallWindow, Whiteboard,
-  ServerRack, Clock, Printer, Rug, CoffeeCup
+  ServerRack, Clock, Printer, Rug, CoffeeCup, DeskLamp
 } from './TopDownFurniture'
 
 // ─── Flying Document Animation ──────────────────────────────────────────
@@ -84,12 +84,15 @@ function FlyingDocuments() {
 }
 
 function getLightingOverlay(hour) {
+  if (hour >= 22) return { fill: '#050510', opacity: 0.45 }
   if (hour >= 20) return { fill: '#0a0a2e', opacity: 0.38 }
-  if (hour >= 18) return { fill: '#1a1040', opacity: 0.22 }
+  if (hour >= 19) return { fill: '#0f1040', opacity: 0.30 }
+  if (hour >= 18) return { fill: '#1a1040', opacity: 0.18 }
   if (hour >= 17) return { fill: '#ff6622', opacity: 0.08 }
   if (hour >= 9 && hour < 17) return { fill: '#fff', opacity: 0.0 }
   if (hour >= 7) return { fill: '#ffd080', opacity: 0.07 }
-  return { fill: '#000', opacity: 0.5 }
+  if (hour >= 6) return { fill: '#FFD093', opacity: 0.05 }
+  return { fill: '#050510', opacity: 0.45 }
 }
 
 function sortByY(agents) {
@@ -484,16 +487,38 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           fill={lightOverlay.fill} opacity={lightOverlay.opacity} pointerEvents="none" />
       )}
 
-      {/* Night screen glow */}
-      {hour >= 19 && deskData.map((d) => (
-        <g key={`glow-${d.id}`}>
-          <radialGradient id={`glow-${d.id}`} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#4af" stopOpacity="0.08" />
-            <stop offset="100%" stopColor="#4af" stopOpacity="0" />
+      {/* ═══ NIGHT EFFECTS ═══ */}
+      {hour >= 19 && (
+        <g pointerEvents="none">
+          {/* Monitor screen glow on desks */}
+          {deskData.map((d) => (
+            <g key={`glow-${d.id}`}>
+              <radialGradient id={`scr-${d.id}`} cx="50%" cy="30%" r="60%">
+                <stop offset="0%" stopColor="#4af" stopOpacity="0.10" />
+                <stop offset="60%" stopColor="#4af" stopOpacity="0.03" />
+                <stop offset="100%" stopColor="#4af" stopOpacity="0" />
+              </radialGradient>
+              <ellipse cx={d.x} cy={d.y - 8} rx={32} ry={22} fill={`url(#scr-${d.id})`} />
+            </g>
+          ))}
+          {/* Desk lamps (warm glow) */}
+          {deskData.map((d) => (
+            <DeskLamp key={`lamp-${d.id}`} x={d.x + 22} y={d.y - 14} on />
+          ))}
+          {/* Meeting room ceiling light */}
+          <radialGradient id="mtg-light" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#FFE8B0" stopOpacity="0.10" />
+            <stop offset="100%" stopColor="#FFE8B0" stopOpacity="0" />
           </radialGradient>
-          <ellipse cx={d.x} cy={d.y - 5} rx={30} ry={20} fill={`url(#glow-${d.id})`} pointerEvents="none" />
+          <ellipse cx={705} cy={162} rx={60} ry={45} fill="url(#mtg-light)" />
+          {/* Lounge ambient warm light */}
+          <radialGradient id="lounge-light" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#FFD090" stopOpacity="0.07" />
+            <stop offset="100%" stopColor="#FFD090" stopOpacity="0" />
+          </radialGradient>
+          <ellipse cx={120} cy={480} rx={80} ry={50} fill="url(#lounge-light)" />
         </g>
-      ))}
+      )}
 
       {/* ═══ EVENT / WORKFLOW BANNER ═══ */}
       {(activeEvent || activeWorkflow) && (
