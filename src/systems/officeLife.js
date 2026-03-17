@@ -1,5 +1,6 @@
 import eventsData from '../config/officeEvents.json'
 import { WAYPOINTS, MEETING_CHAIRS, HOME_POSITIONS } from './movementSystem'
+import { eventBubble, eventName as getEventName } from '../i18n'
 
 const DAILY_INTERVAL = [60000, 180000]   // 1-3 min (group events happen often enough to see)
 const RARE_INTERVAL = [300000, 600000]   // 5-10 min
@@ -59,12 +60,11 @@ const EVENT_HANDLERS = {
     const coffeeSpots = [
       { x: 80, y: 475 }, { x: 110, y: 485 }, { x: 140, y: 470 },
     ]
-    const bubbles = ['☕ 休息~', '喝一杯', '聊聊天', '好累啊']
     participants.forEach((id, i) => {
       store.getState().setAgentGroupEvent(id, {
         behavior: i === 0 ? 'drink-coffee' : 'chat',
         expression: 'happy',
-        bubble: bubbles[i % bubbles.length],
+        bubble: eventBubble('tea-break'),
         groupTarget: jitter(coffeeSpots[i % coffeeSpots.length], 12),
       })
     })
@@ -77,40 +77,36 @@ const EVENT_HANDLERS = {
       { x: 530, y: 385 }, { x: 550, y: 385 }, { x: 570, y: 370 },
       { x: 540, y: 365 },
     ]
-    const bubbles = ['今天進度...', '來報告', '嗯嗯', '站立會議！', '快快講']
     participants.forEach((id, i) => {
       store.getState().setAgentGroupEvent(id, {
         behavior: i === 0 ? 'whiteboard' : 'meeting',
         expression: 'normal',
-        bubble: i < 2 ? bubbles[i] : null,
+        bubble: i < 2 ? eventBubble('standup') : null,
         groupTarget: jitter(whiteboardSpots[i % whiteboardSpots.length], 8),
       })
     })
-    // After a few seconds, more bubbles appear
     setTimeout(() => {
       const s = store.getState()
       const ids = participants.filter(id => s.agents[id]?.inGroupEvent)
       if (ids.length >= 2) {
-        s.setAgentBehavior(ids[1], 'meeting', 'normal', '報告完畢')
+        s.setAgentBehavior(ids[1], 'meeting', 'normal', eventBubble('standup-done'))
       }
     }, 8000)
   },
 
   'food-delivery': (store, participants) => {
-    // Everyone gets happy, one person "brings food"
     const bringer = participants[0]
     store.getState().setAgentGroupEvent(bringer, {
       behavior: 'pass-document',
       expression: 'happy',
-      bubble: '外送到了！🍱',
+      bubble: eventBubble('food-delivery'),
       groupTarget: { x: 300, y: 290 },
     })
-    // Others react with happy expressions at their desks
     setTimeout(() => {
       participants.slice(1).forEach((id) => {
         const s = store.getState()
         if (s.agents[id]) {
-          s.setAgentBehavior(id, 'eat-snack', 'happy', '讚！吃飯！')
+          s.setAgentBehavior(id, 'eat-snack', 'happy', eventBubble('food-react'))
           setTimeout(() => s.clearBubble(id), 4000)
         }
       })
@@ -118,13 +114,12 @@ const EVENT_HANDLERS = {
   },
 
   'coffee-spill': (store, participants) => {
-    // One person spills, neighbor helps
     const spiller = participants[0]
     store.getState().setAgentGroupEvent(spiller, {
       behavior: 'scratch-head',
       expression: 'confused',
-      bubble: '啊！打翻了！',
-      groupTarget: null, // stay at desk
+      bubble: eventBubble('coffee-spill'),
+      groupTarget: null,
     })
     if (participants[1]) {
       setTimeout(() => {
@@ -134,7 +129,7 @@ const EVENT_HANDLERS = {
           s.setAgentGroupEvent(participants[1], {
             behavior: 'pass-document',
             expression: 'normal',
-            bubble: '我來幫忙！',
+            bubble: eventBubble('coffee-help'),
             groupTarget: jitter(spillerPos, 30),
           })
         }
@@ -143,19 +138,17 @@ const EVENT_HANDLERS = {
   },
 
   'eureka': (store, participants) => {
-    // Architect has a eureka moment, runs to whiteboard
     const s = store.getState()
     if (!s.agents['arch']) return
     s.setAgentGroupEvent('arch', {
       behavior: 'whiteboard',
       expression: 'surprised',
-      bubble: '有了！💡',
+      bubble: eventBubble('eureka'),
       groupTarget: jitter(WAYPOINTS.whiteboard, 10),
     })
   },
 
   'review-debate': (store, participants) => {
-    // Dev and QA face off
     const s = store.getState()
     if (!s.agents['dev'] || !s.agents['qa']) return
     const devPos = HOME_POSITIONS.dev || { x: 340, y: 364 }
@@ -165,68 +158,62 @@ const EVENT_HANDLERS = {
     s.setAgentGroupEvent('dev', {
       behavior: 'chat',
       expression: 'focused',
-      bubble: '這沒bug啊！',
+      bubble: eventBubble('review-dev-1'),
       groupTarget: jitter({ x: meetPoint.x - 20, y: meetPoint.y }, 8),
     })
     s.setAgentGroupEvent('qa', {
       behavior: 'chat',
       expression: 'confused',
-      bubble: '明明就有！',
+      bubble: eventBubble('review-qa-1'),
       groupTarget: jitter({ x: meetPoint.x + 20, y: meetPoint.y }, 8),
     })
-    // Back and forth
     setTimeout(() => {
       const s = store.getState()
-      if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'chat', 'confused', '...讓我看看')
-      if (s.agents.qa?.inGroupEvent) s.setAgentBehavior('qa', 'magnifier', 'focused', '你看這裡')
+      if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'chat', 'confused', eventBubble('review-dev-2'))
+      if (s.agents.qa?.inGroupEvent) s.setAgentBehavior('qa', 'magnifier', 'focused', eventBubble('review-qa-2'))
     }, 6000)
     setTimeout(() => {
       const s = store.getState()
-      if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'typing', 'normal', '好吧修了')
-      if (s.agents.qa?.inGroupEvent) s.setAgentBehavior('qa', 'thumbs-up', 'happy', '讚')
+      if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'typing', 'normal', eventBubble('review-dev-3'))
+      if (s.agents.qa?.inGroupEvent) s.setAgentBehavior('qa', 'thumbs-up', 'happy', eventBubble('review-qa-3'))
     }, 12000)
   },
 
   'deploy-success': (store, participants) => {
-    // Ops presses the button, everyone celebrates
     const s = store.getState()
     if (!s.agents['ops']) return
     s.setAgentGroupEvent('ops', {
       behavior: 'deploy-button',
       expression: 'happy',
-      bubble: '部署成功！🚀',
+      bubble: getEventName('deploy-success') + '! 🚀',
       groupTarget: null,
     })
     setTimeout(() => {
-      participants.filter(id => id !== 'ops').forEach((id, i) => {
+      participants.filter(id => id !== 'ops').forEach((id) => {
         const s = store.getState()
         if (s.agents[id]) {
-          const celebBubbles = ['🎉 耶！', '太好了！', '終於...', '慶祝！', '下班！', '完美~']
-          s.setAgentBehavior(id, 'thumbs-up', 'happy', celebBubbles[i % celebBubbles.length])
+          s.setAgentBehavior(id, 'thumbs-up', 'happy', eventBubble('deploy-celebrate'))
           setTimeout(() => s.clearBubble(id), 5000)
         }
       })
     }, 2000)
   },
 
-  // Group meeting — 3 people go to meeting room
   'group-meeting': (store, participants) => {
     const chairs = [...MEETING_CHAIRS].sort(() => Math.random() - 0.5)
-    const bubbles = ['開會囉', '來了來了', '又開會...']
     participants.forEach((id, i) => {
       store.getState().setAgentGroupEvent(id, {
         behavior: 'meeting',
-        expression: i === 0 ? 'normal' : 'normal',
-        bubble: bubbles[i % bubbles.length],
+        expression: 'normal',
+        bubble: eventBubble('meeting-start'),
         groupTarget: jitter(chairs[i % chairs.length], 6),
       })
     })
-    // Discussion bubbles mid-meeting
     setTimeout(() => {
       const s = store.getState()
       const active = participants.filter(id => s.agents[id]?.inGroupEvent)
-      if (active.length > 0) s.setAgentBehavior(active[0], 'meeting', 'focused', '所以方向是...')
-      if (active.length > 1) s.setAgentBehavior(active[1], 'meeting', 'normal', '嗯嗯同意')
+      if (active.length > 0) s.setAgentBehavior(active[0], 'meeting', 'focused', eventBubble('meeting-lead'))
+      if (active.length > 1) s.setAgentBehavior(active[1], 'meeting', 'normal', eventBubble('meeting-agree'))
     }, 8000)
   },
 }

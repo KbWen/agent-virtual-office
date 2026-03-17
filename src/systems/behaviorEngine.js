@@ -1,4 +1,5 @@
 import eventsData from '../config/officeEvents.json'
+import { randomBubble } from '../i18n'
 
 // 70-80% desk time like Stardew Valley NPCs / Pixel-Agents
 // Characters stay at desks 30-120s, walk only occasionally
@@ -71,6 +72,9 @@ function pickBehavior(agentId, category) {
 
 function pickMessage(msgKey) {
   if (!msgKey) return null
+  // Try i18n locale first, fall back to officeEvents.json
+  const localized = randomBubble(msgKey)
+  if (localized) return localized
   const pool = eventsData.bubbleMessages[msgKey]
   if (!pool || pool.length === 0) return null
   return pool[Math.floor(Math.random() * pool.length)]

@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useOfficeStore } from '../systems/store'
-import { BEHAVIOR_LABELS } from '../systems/movementSystem'
+import { behaviorLabel, locale, setLocale, availableLocales, onLocaleChange } from '../i18n'
 
 const statusColors = {
   idle: '#888',
@@ -34,8 +34,11 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const statusSource = useOfficeStore((s) => s.statusSource)
 
   const [showTest, setShowTest] = useState(false)
+  const [lang, setLang] = useState(locale())
   const agentList = Object.values(agents)
   const isPanel = mode === 'panel'
+
+  useEffect(() => onLocaleChange(setLang), [])
 
   const setStatus = (id, status) => {
     const agent = agents[id]
@@ -108,7 +111,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             const ext = externalStatus[agent.id]
             const label = ext?.task
               ? ext.task.replace(/^\//, '')
-              : (BEHAVIOR_LABELS[agent.behavior] || agent.behavior)
+              : behaviorLabel(agent.behavior)
             return (
               <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${agent.name}: ${ext?.task || agent.behavior}`}>
                 <span
@@ -157,6 +160,20 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
 
         {/* Controls */}
         <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => {
+              const locales = availableLocales()
+              const idx = locales.indexOf(lang)
+              const next = locales[(idx + 1) % locales.length]
+              setLocale(next)
+              // Reload character names
+              window.location.reload()
+            }}
+            className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 text-[10px]"
+            title="Switch language"
+          >
+            {lang === 'zh-TW' ? 'EN' : '中'}
+          </button>
           <button
             onClick={togglePause}
             className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"

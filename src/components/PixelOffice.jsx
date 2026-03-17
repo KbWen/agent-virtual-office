@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { useOfficeStore } from '../systems/store'
 import { startOfficeLife } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
+import { eventName } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import {
   Desk, Bookshelf, Plant, Couch, RoundTable, MeetingTable,
@@ -511,7 +512,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
             fontSize="9" fontFamily="monospace" fontWeight="bold"
             fill={activeWorkflow ? '#2E7D32' : '#8B6914'}
           >
-            {activeWorkflow || activeEvent?.name}
+            {activeWorkflow || (activeEvent?.id ? eventName(activeEvent.id) : activeEvent?.name)}
           </text>
         </g>
       )}

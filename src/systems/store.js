@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
 import { HOME_POSITIONS } from './movementSystem'
+import { charName } from '../i18n'
 
 const detectMode = () => 'agentcortex'
 
@@ -11,6 +12,7 @@ const initAgents = (mode) => {
     const home = HOME_POSITIONS[c.id] || { x: 300, y: 250 }
     agents[c.id] = {
       ...c,
+      name: charName(c.id),
       behavior: 'idle',
       expression: 'normal',
       bubble: null,

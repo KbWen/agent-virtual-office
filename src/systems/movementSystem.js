@@ -433,14 +433,9 @@ export function calcFacing(fromX, fromY, toX, toY) {
   return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')
 }
 
-export const BEHAVIOR_LABELS = {
-  'typing':'打字中','reading-screen':'看螢幕','writing-notes':'寫筆記',
-  'whiteboard':'畫白板','research':'查資料','gantt-chart':'看甘特圖',
-  'magnifier':'拿放大鏡','deploy-button':'按部署鈕','shield-verify':'驗證中',
-  'drink-coffee':'喝咖啡','drink-water':'喝水','stretch':'伸懶腰',
-  'look-window':'看窗外','check-phone':'滑手機','eat-snack':'吃零食',
-  'chat':'聊天','pass-document':'遞文件','thumbs-up':'比讚',
-  'goto-coffee-machine':'去泡咖啡','toilet':'上廁所','nap':'午休',
-  'phone-call':'講電話','scratch-head':'搔頭','sigh':'嘆氣','desk-slam':'拍桌','idle':'發呆',
-  'meeting':'開會','print':'印東西',
-}
+// BEHAVIOR_LABELS now sourced from i18n locale files (src/locales/*.json)
+// Kept as re-export for backward compatibility
+import { behaviorLabel as _bl } from '../i18n'
+export const BEHAVIOR_LABELS = new Proxy({}, {
+  get: (_, key) => _bl(key),
+})
