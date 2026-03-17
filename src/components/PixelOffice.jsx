@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { useOfficeStore } from '../systems/store'
 import { startOfficeLife } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
@@ -199,7 +199,7 @@ function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0 }) {
   )
 }
 
-export default function PixelOffice({ animationQuality = 'full' }) {
+export default function PixelOffice({ animationQuality = 'full', mode = 'full' }) {
   const agents = useOfficeStore((s) => s.agents)
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
@@ -229,12 +229,47 @@ export default function PixelOffice({ animationQuality = 'full' }) {
     { id: 'ops',  x: 460, y: 340, label: 'Ops',     color: '#D85A30', variant: 'ops' },
   ]
 
-  return (
+  // Panel mode: auto-adapt viewBox to container shape
+  const isPanel = mode === 'panel'
+  const containerRef = useRef(null)
+  const [panelViewBox, setPanelViewBox] = useState('60 155 540 260')
+
+  const updatePanelViewBox = useCallback(() => {
+    if (!isPanel || !containerRef.current) return
+    const { clientWidth: w, clientHeight: h } = containerRef.current
+    if (w === 0 || h === 0) return
+    const ratio = w / h
+    if (ratio < 1) {
+      // Portrait (sidebar): show taller crop centered on desks
+      setPanelViewBox('100 130 400 400')
+    } else if (ratio < 1.6) {
+      // Squarish: balanced crop
+      setPanelViewBox('60 140 540 340')
+    } else {
+      // Landscape (bottom panel): wide, short crop
+      setPanelViewBox('60 155 540 260')
+    }
+  }, [isPanel])
+
+  useEffect(() => {
+    if (!isPanel || !containerRef.current) return
+    updatePanelViewBox()
+    const ro = new ResizeObserver(updatePanelViewBox)
+    ro.observe(containerRef.current)
+    // Backup: window resize for iframe/webview embedding
+    window.addEventListener('resize', updatePanelViewBox)
+    return () => { ro.disconnect(); window.removeEventListener('resize', updatePanelViewBox) }
+  }, [isPanel, updatePanelViewBox])
+
+  const viewBox = isPanel ? panelViewBox : '0 0 800 560'
+
+  const svgElement = (
     <svg
-      viewBox="0 0 800 560"
+      viewBox={viewBox}
       xmlns="http://www.w3.org/2000/svg"
       className="w-full h-full"
-      style={{ maxHeight: 'calc(100vh - 44px)' }}
+      style={isPanel ? {} : { maxHeight: 'calc(100vh - 44px)' }}
+      preserveAspectRatio="xMidYMid meet"
     >
       <defs>
         <filter id="bubble-shadow" x="-20%" y="-20%" width="140%" height="140%">
@@ -482,4 +517,14 @@ export default function PixelOffice({ animationQuality = 'full' }) {
       )}
     </svg>
   )
+
+  if (isPanel) {
+    return (
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {svgElement}
+      </div>
+    )
+  }
+
+  return svgElement
 }

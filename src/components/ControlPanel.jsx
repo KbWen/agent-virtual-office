@@ -21,7 +21,7 @@ const platformLabels = {
   embedded: 'Embedded',
 }
 
-export default function ControlPanel({ platform = 'browser' }) {
+export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const agents = useOfficeStore((s) => s.agents)
   const isPaused = useOfficeStore((s) => s.isPaused)
   const togglePause = useOfficeStore((s) => s.togglePause)
@@ -35,11 +35,11 @@ export default function ControlPanel({ platform = 'browser' }) {
 
   const [showTest, setShowTest] = useState(false)
   const agentList = Object.values(agents)
+  const isPanel = mode === 'panel'
 
   const setStatus = (id, status) => {
     const agent = agents[id]
     if (!agent) return
-    // Update the agent's status via weightOverride simulation
     useOfficeStore.setState((s) => ({
       agents: {
         ...s.agents,
@@ -48,6 +48,51 @@ export default function ControlPanel({ platform = 'browser' }) {
     }))
   }
 
+  // ─── Panel mode: compact single-line status bar ───
+  if (isPanel) {
+    return (
+      <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t border-gray-200 dark:border-gray-700 px-2 py-1 text-[10px] select-none shrink-0">
+        <div className="flex items-center gap-2">
+          {/* Agent dots with status colors */}
+          <div className="flex items-center gap-1.5 flex-1 overflow-x-auto">
+            {agentList.map((agent) => {
+              const ext = externalStatus[agent.id]
+              return (
+                <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${agent.name}: ${ext?.task || agent.behavior}`}>
+                  <span
+                    className="inline-block w-2 h-2 rounded-full"
+                    style={{ backgroundColor: agent.color }}
+                  />
+                  <span
+                    className="inline-block w-1 h-1 rounded-full"
+                    style={{ backgroundColor: statusColors[agent.status] || '#888' }}
+                  />
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Live indicator */}
+          {statusSource === 'external' && (
+            <div className="flex items-center gap-0.5 shrink-0">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-emerald-600 dark:text-emerald-400 font-medium">Live</span>
+            </div>
+          )}
+
+          {/* Pause toggle */}
+          <button
+            onClick={togglePause}
+            className="px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            {isPaused ? '▶' : '⏸'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Full mode: standard control panel ───
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t border-gray-200 dark:border-gray-700 px-3 py-1.5 text-xs select-none z-50">
       {/* Main row */}
