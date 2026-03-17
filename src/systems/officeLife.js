@@ -18,23 +18,37 @@ function jitter(pos, amount = 20) {
   }
 }
 
-function pickParticipants(event, agents) {
+function pickParticipants(event, agents, externalStatus) {
+  const ext = externalStatus || {}
+  // Exclude agents that are externally busy (working/blocked)
+  const isAvailable = (id) => {
+    const es = ext[id]
+    return !es || es.status === 'done' || es.status === 'idle'
+  }
   const agentIds = Object.keys(agents)
-  if (event.participants === 'all') return agentIds
+  const available = agentIds.filter(isAvailable)
+
+  // For 'all' events, use everyone available (skip if too few)
+  if (event.participants === 'all') {
+    return available.length >= 2 ? available : agentIds
+  }
   if (event.participants === 'random-2-3') {
+    const pool = available.length >= 2 ? available : agentIds
     const count = 2 + Math.floor(Math.random() * 2)
-    return [...agentIds].sort(() => Math.random() - 0.5).slice(0, count)
+    return [...pool].sort(() => Math.random() - 0.5).slice(0, count)
   }
   if (event.participants === 'random-1-neighbor') {
-    const idx = Math.floor(Math.random() * agentIds.length)
-    const result = [agentIds[idx]]
-    if (idx + 1 < agentIds.length) result.push(agentIds[idx + 1])
+    const pool = available.length >= 2 ? available : agentIds
+    const idx = Math.floor(Math.random() * pool.length)
+    const result = [pool[idx]]
+    if (idx + 1 < pool.length) result.push(pool[idx + 1])
     return result
   }
   if (Array.isArray(event.participants)) {
-    return event.participants.filter((p) => agents[p])
+    return event.participants.filter((p) => agents[p] && isAvailable(p))
   }
-  return agentIds.slice(0, 3)
+  const pool = available.length >= 2 ? available : agentIds
+  return pool.slice(0, 3)
 }
 
 // ─── Event handlers: each sets visual states for participants ────────
@@ -243,7 +257,7 @@ export function startOfficeLife(store) {
       if (!state.isPaused && !state.activeEvent) {
         const pool = eventsData.daily
         const event = pool[Math.floor(Math.random() * pool.length)]
-        const participants = pickParticipants(event, state.agents)
+        const participants = pickParticipants(event, state.agents, state.externalStatus)
 
         store.getState().setActiveEvent(event)
         executeEvent(store, event, participants)
@@ -258,7 +272,7 @@ export function startOfficeLife(store) {
       if (!state.isPaused && !state.activeEvent) {
         const pool = eventsData.rare
         const event = pool[Math.floor(Math.random() * pool.length)]
-        const participants = pickParticipants(event, state.agents)
+        const participants = pickParticipants(event, state.agents, state.externalStatus)
 
         store.getState().setActiveEvent(event)
         executeEvent(store, event, participants)

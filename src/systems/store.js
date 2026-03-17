@@ -107,6 +107,50 @@ export const useOfficeStore = create((set) => ({
   triggerWorkflow: () => set({ showWorkflow: true }),
   endWorkflow: () => set({ showWorkflow: false }),
 
+  // ─── External status integration ───
+  externalStatus: {},          // { [agentId]: { status, task, label, expiresAt } }
+  statusSource: 'organic',     // 'organic' | 'external' | 'fallback'
+  activeWorkflow: null,        // workflow name for banner display
+
+  applyExternalStatus: (updates) =>
+    set((s) => {
+      const now = Date.now()
+      const ext = { ...s.externalStatus }
+      const agents = { ...s.agents }
+      for (const u of updates) {
+        if (!agents[u.agentId]) continue
+        ext[u.agentId] = {
+          status: u.status,
+          task: u.task,
+          label: u.label,
+          expiresAt: u.status === 'done' ? now + 15000 : now + 120000,
+        }
+        agents[u.agentId] = { ...agents[u.agentId], status: u.status }
+        if (u.label) agents[u.agentId] = { ...agents[u.agentId], bubble: u.label }
+      }
+      return { externalStatus: ext, agents }
+    }),
+
+  clearExternalStatus: (agentId) =>
+    set((s) => {
+      if (agentId) {
+        const ext = { ...s.externalStatus }
+        delete ext[agentId]
+        const agents = { ...s.agents }
+        if (agents[agentId]) agents[agentId] = { ...agents[agentId], status: 'idle' }
+        return { externalStatus: ext, agents }
+      }
+      // Clear all
+      const agents = { ...s.agents }
+      for (const id of Object.keys(s.externalStatus)) {
+        if (agents[id]) agents[id] = { ...agents[id], status: 'idle' }
+      }
+      return { externalStatus: {}, agents, statusSource: 'organic', activeWorkflow: null }
+    }),
+
+  setStatusSource: (source) => set({ statusSource: source }),
+  setActiveWorkflow: (name) => set({ activeWorkflow: name }),
+
   // Handoff animation state
   handoffs: [],
   addHandoff: (from, to) =>

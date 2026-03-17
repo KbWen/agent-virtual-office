@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { useOfficeStore } from '../systems/store'
 import { startOfficeLife } from '../systems/officeLife'
+import { startStatusIntegration } from '../inference/inferStatus'
 import AgentCharacter from './AgentCharacter'
 import {
   Desk, Bookshelf, Plant, Couch, RoundTable, MeetingTable,
@@ -203,9 +204,15 @@ export default function PixelOffice({ animationQuality = 'full' }) {
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
   const activeEvent = useOfficeStore((s) => s.activeEvent)
+  const activeWorkflow = useOfficeStore((s) => s.activeWorkflow)
 
   useEffect(() => {
     const cleanup = startOfficeLife(useOfficeStore)
+    return cleanup
+  }, [])
+
+  useEffect(() => {
+    const cleanup = startStatusIntegration(useOfficeStore)
     return cleanup
   }, [])
 
@@ -452,19 +459,24 @@ export default function PixelOffice({ animationQuality = 'full' }) {
         </g>
       ))}
 
-      {/* ═══ EVENT BANNER ═══ */}
-      {activeEvent && (
+      {/* ═══ EVENT / WORKFLOW BANNER ═══ */}
+      {(activeEvent || activeWorkflow) && (
         <g pointerEvents="none">
-          <rect x={280} y={4} width={240} height={22} rx={11} fill="#FFF8E1" stroke="#F5C842" strokeWidth="1" opacity="0.95">
+          <rect x={280} y={4} width={240} height={22} rx={11}
+            fill={activeWorkflow ? '#E8F5E9' : '#FFF8E1'}
+            stroke={activeWorkflow ? '#4CAF50' : '#F5C842'}
+            strokeWidth="1" opacity="0.95"
+          >
             <animate attributeName="opacity" values="0;0.95" dur="0.4s" fill="freeze" />
           </rect>
-          <circle cx={296} cy={15} r={4} fill="#F5C842">
+          <circle cx={296} cy={15} r={4} fill={activeWorkflow ? '#4CAF50' : '#F5C842'}>
             <animate attributeName="r" values="3;5;3" dur="1.5s" repeatCount="indefinite" />
           </circle>
           <text x={400} y={16} textAnchor="middle" dominantBaseline="middle"
-            fontSize="9" fontFamily="monospace" fontWeight="bold" fill="#8B6914"
+            fontSize="9" fontFamily="monospace" fontWeight="bold"
+            fill={activeWorkflow ? '#2E7D32' : '#8B6914'}
           >
-            {activeEvent.name}
+            {activeWorkflow || activeEvent?.name}
           </text>
         </g>
       )}

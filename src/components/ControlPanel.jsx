@@ -30,6 +30,8 @@ export default function ControlPanel({ platform = 'browser' }) {
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
   const setAgentBehavior = useOfficeStore((s) => s.setAgentBehavior)
+  const externalStatus = useOfficeStore((s) => s.externalStatus)
+  const statusSource = useOfficeStore((s) => s.statusSource)
 
   const [showTest, setShowTest] = useState(false)
   const agentList = Object.values(agents)
@@ -58,16 +60,19 @@ export default function ControlPanel({ platform = 'browser' }) {
         {/* Agent status with behavior labels */}
         <div className="flex items-center gap-3 flex-1 overflow-x-auto">
           {agentList.map((agent) => {
-            const label = BEHAVIOR_LABELS[agent.behavior] || agent.behavior
+            const ext = externalStatus[agent.id]
+            const label = ext?.task
+              ? ext.task.replace(/^\//, '')
+              : (BEHAVIOR_LABELS[agent.behavior] || agent.behavior)
             return (
-              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${agent.name}: ${agent.behavior}`}>
+              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${agent.name}: ${ext?.task || agent.behavior}`}>
                 <span
                   className="inline-block w-2.5 h-2.5 rounded-full border border-white/50"
                   style={{ backgroundColor: agent.color }}
                 />
                 <span className="text-gray-700 dark:text-gray-200 font-medium">{agent.name}</span>
                 <span className="text-gray-400 dark:text-gray-500">·</span>
-                <span className="text-gray-500 dark:text-gray-400">{label}</span>
+                <span className={ext ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-gray-500 dark:text-gray-400'}>{label}</span>
                 <span
                   className="inline-block w-1.5 h-1.5 rounded-full ml-0.5"
                   style={{ backgroundColor: statusColors[agent.status] || '#888' }}
@@ -81,6 +86,22 @@ export default function ControlPanel({ platform = 'browser' }) {
         {activeEvent && (
           <div className="text-yellow-600 dark:text-yellow-400 animate-pulse shrink-0">
             {activeEvent.name}
+          </div>
+        )}
+
+        {/* Status source indicator */}
+        {statusSource === 'external' && (
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Live</span>
+          </div>
+        )}
+        {statusSource === 'fallback' && (
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+            <span className="text-[10px] text-yellow-600 dark:text-yellow-400 font-medium">
+              {Object.keys(externalStatus).length} agents
+            </span>
           </div>
         )}
 
