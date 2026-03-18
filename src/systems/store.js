@@ -2,8 +2,12 @@ import { create } from 'zustand'
 import characters from '../config/characters.json'
 import { HOME_POSITIONS } from './movementSystem'
 import { charName, randomBubble } from '../i18n'
+import { detectProjectMode } from './platformDetect'
 
-const detectMode = () => 'agentcortex'
+const detectMode = () => {
+  if (typeof window === 'undefined') return 'agentcortex'
+  return detectProjectMode()
+}
 
 const initAgents = (mode) => {
   const roster = characters[mode] || characters.agentcortex
