@@ -70,7 +70,7 @@ const EVENT_HANDLERS = {
     })
   },
 
-  'standup': (store, participants) => {
+  'standup': (store, participants, cancelled) => {
     // Everyone gathers at whiteboard area
     const whiteboardSpots = [
       { x: 530, y: 355 }, { x: 550, y: 370 }, { x: 570, y: 355 },
@@ -86,6 +86,7 @@ const EVENT_HANDLERS = {
       })
     })
     setTimeout(() => {
+      if (cancelled?.value) return
       const s = store.getState()
       const ids = participants.filter(id => s.agents[id]?.inGroupEvent)
       if (ids.length >= 2) {
@@ -94,7 +95,7 @@ const EVENT_HANDLERS = {
     }, 8000)
   },
 
-  'food-delivery': (store, participants) => {
+  'food-delivery': (store, participants, cancelled) => {
     const bringer = participants[0]
     store.getState().setAgentGroupEvent(bringer, {
       behavior: 'pass-document',
@@ -103,17 +104,18 @@ const EVENT_HANDLERS = {
       groupTarget: { x: 300, y: 290 },
     })
     setTimeout(() => {
+      if (cancelled?.value) return
       participants.slice(1).forEach((id) => {
         const s = store.getState()
         if (s.agents[id]) {
           s.setAgentBehavior(id, 'eat-snack', 'happy', eventBubble('food-react'))
-          setTimeout(() => s.clearBubble(id), 4000)
+          setTimeout(() => { if (!cancelled?.value) s.clearBubble(id) }, 4000)
         }
       })
     }, 2000)
   },
 
-  'coffee-spill': (store, participants) => {
+  'coffee-spill': (store, participants, cancelled) => {
     const spiller = participants[0]
     store.getState().setAgentGroupEvent(spiller, {
       behavior: 'scratch-head',
@@ -123,6 +125,7 @@ const EVENT_HANDLERS = {
     })
     if (participants[1]) {
       setTimeout(() => {
+        if (cancelled?.value) return
         const s = store.getState()
         const spillerPos = s.agents[spiller]?.position
         if (spillerPos) {
@@ -148,7 +151,7 @@ const EVENT_HANDLERS = {
     })
   },
 
-  'review-debate': (store, participants) => {
+  'review-debate': (store, participants, cancelled) => {
     const s = store.getState()
     if (!s.agents['dev'] || !s.agents['qa']) return
     const devPos = HOME_POSITIONS.dev || { x: 340, y: 364 }
@@ -168,18 +171,20 @@ const EVENT_HANDLERS = {
       groupTarget: jitter({ x: meetPoint.x + 20, y: meetPoint.y }, 8),
     })
     setTimeout(() => {
+      if (cancelled?.value) return
       const s = store.getState()
       if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'chat', 'confused', eventBubble('review-dev-2'))
       if (s.agents.qa?.inGroupEvent) s.setAgentBehavior('qa', 'magnifier', 'focused', eventBubble('review-qa-2'))
     }, 6000)
     setTimeout(() => {
+      if (cancelled?.value) return
       const s = store.getState()
       if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'typing', 'normal', eventBubble('review-dev-3'))
       if (s.agents.qa?.inGroupEvent) s.setAgentBehavior('qa', 'thumbs-up', 'happy', eventBubble('review-qa-3'))
     }, 12000)
   },
 
-  'deploy-success': (store, participants) => {
+  'deploy-success': (store, participants, cancelled) => {
     const s = store.getState()
     if (!s.agents['ops']) return
     s.setAgentGroupEvent('ops', {
@@ -189,17 +194,18 @@ const EVENT_HANDLERS = {
       groupTarget: null,
     })
     setTimeout(() => {
+      if (cancelled?.value) return
       participants.filter(id => id !== 'ops').forEach((id) => {
         const s = store.getState()
         if (s.agents[id]) {
           s.setAgentBehavior(id, 'thumbs-up', 'happy', eventBubble('deploy-celebrate'))
-          setTimeout(() => s.clearBubble(id), 5000)
+          setTimeout(() => { if (!cancelled?.value) s.clearBubble(id) }, 5000)
         }
       })
     }, 2000)
   },
 
-  'group-meeting': (store, participants) => {
+  'group-meeting': (store, participants, cancelled) => {
     const chairs = [...MEETING_CHAIRS].sort(() => Math.random() - 0.5)
     participants.forEach((id, i) => {
       store.getState().setAgentGroupEvent(id, {
@@ -210,6 +216,7 @@ const EVENT_HANDLERS = {
       })
     })
     setTimeout(() => {
+      if (cancelled?.value) return
       const s = store.getState()
       const active = participants.filter(id => s.agents[id]?.inGroupEvent)
       if (active.length > 0) s.setAgentBehavior(active[0], 'meeting', 'focused', eventBubble('meeting-lead'))
@@ -219,7 +226,7 @@ const EVENT_HANDLERS = {
 
   // ─── Rare events ─────────────────────────────────────────────────
 
-  'boss-visit': (store, participants) => {
+  'boss-visit': (store, participants, cancelled) => {
     // Everyone rushes back to their desk and pretends to be busy
     participants.forEach((id) => {
       const home = HOME_POSITIONS[id]
@@ -233,6 +240,7 @@ const EVENT_HANDLERS = {
     })
     // After a beat, everyone relaxes
     setTimeout(() => {
+      if (cancelled?.value) return
       const s = store.getState()
       participants.forEach((id) => {
         if (s.agents[id]?.inGroupEvent) {
@@ -242,10 +250,11 @@ const EVENT_HANDLERS = {
     }, 7000)
   },
 
-  'dog-visit': (store, participants) => {
+  'dog-visit': (store, participants, cancelled) => {
     // Everyone reacts to a dog, then some gather in lounge
     participants.forEach((id, i) => {
       setTimeout(() => {
+        if (cancelled?.value) return
         store.getState().setAgentGroupEvent(id, {
           behavior: i === 0 ? 'stretch' : 'chat',
           expression: 'happy',
@@ -255,6 +264,7 @@ const EVENT_HANDLERS = {
       }, i * 800)
     })
     setTimeout(() => {
+      if (cancelled?.value) return
       const s = store.getState()
       participants.slice(0, 3).forEach((id) => {
         if (s.agents[id]?.inGroupEvent) {
@@ -269,7 +279,7 @@ const EVENT_HANDLERS = {
     }, 5000)
   },
 
-  'ac-broken': (store, participants) => {
+  'ac-broken': (store, participants, cancelled) => {
     // Everyone fans themselves and complains
     participants.forEach((id) => {
       store.getState().setAgentGroupEvent(id, {
@@ -280,6 +290,7 @@ const EVENT_HANDLERS = {
       })
     })
     setTimeout(() => {
+      if (cancelled?.value) return
       const s = store.getState()
       participants.forEach((id) => {
         if (s.agents[id]?.inGroupEvent) {
@@ -289,10 +300,11 @@ const EVENT_HANDLERS = {
     }, 6000)
   },
 
-  'group-stretch': (store, participants) => {
+  'group-stretch': (store, participants, cancelled) => {
     // Everyone stretches at the same time
     participants.forEach((id, i) => {
       setTimeout(() => {
+        if (cancelled?.value) return
         store.getState().setAgentGroupEvent(id, {
           behavior: 'stretch',
           expression: 'happy',
@@ -304,13 +316,14 @@ const EVENT_HANDLERS = {
   },
 }
 
-function executeEvent(store, event, participants) {
+function executeEvent(store, event, participants, cancelled) {
   const handler = EVENT_HANDLERS[event.id]
   if (handler) {
-    handler(store, participants)
+    handler(store, participants, cancelled)
 
     // Clean up after event duration — release all participants
     setTimeout(() => {
+      if (cancelled.value) return
       const s = store.getState()
       participants.forEach((id) => {
         if (s.agents[id]?.inGroupEvent) {
@@ -332,8 +345,12 @@ export function startOfficeLife(store) {
     rareTimer = null
   }
 
+  // Shared cancellation flag — prevents stale event callbacks from firing after stop()
+  const cancelled = { value: false }
+
   const scheduleDaily = () => {
     dailyTimer = setTimeout(() => {
+      if (cancelled.value) return
       const state = store.getState()
       if (!state.isPaused && !state.activeEvent) {
         const pool = eventsData.daily
@@ -341,7 +358,7 @@ export function startOfficeLife(store) {
         const participants = pickParticipants(event, state.agents, state.externalStatus)
 
         store.getState().setActiveEvent(event)
-        executeEvent(store, event, participants)
+        executeEvent(store, event, participants, cancelled)
       }
       scheduleDaily()
     }, randomInterval(DAILY_INTERVAL))
@@ -349,6 +366,7 @@ export function startOfficeLife(store) {
 
   const scheduleRare = () => {
     rareTimer = setTimeout(() => {
+      if (cancelled.value) return
       const state = store.getState()
       if (!state.isPaused && !state.activeEvent) {
         const pool = eventsData.rare
@@ -356,7 +374,7 @@ export function startOfficeLife(store) {
         const participants = pickParticipants(event, state.agents, state.externalStatus)
 
         store.getState().setActiveEvent(event)
-        executeEvent(store, event, participants)
+        executeEvent(store, event, participants, cancelled)
       }
       scheduleRare()
     }, randomInterval(RARE_INTERVAL))
@@ -374,6 +392,7 @@ export function startOfficeLife(store) {
   // Check every minute for time-specific behaviors
   let lastTriggeredHour = -1
   const timeEventInterval = setInterval(() => {
+    if (cancelled.value) return
     const state = store.getState()
     if (state.isPaused || state.activeEvent) return
     const hour = state.hour
@@ -394,6 +413,7 @@ export function startOfficeLife(store) {
         })
       })
       setTimeout(() => {
+        if (cancelled.value) return
         const s = store.getState()
         nappers.forEach((id) => {
           if (s.agents[id]?.inGroupEvent) {
@@ -409,6 +429,7 @@ export function startOfficeLife(store) {
         store.getState().setAgentBehavior(id, store.getState().agents[id]?.behavior || 'typing', 'tired', null)
       })
       setTimeout(() => {
+        if (cancelled.value) return
         agentIds.forEach((id) => {
           const s = store.getState()
           if (s.agents[id]?.expression === 'tired') {
@@ -424,7 +445,7 @@ export function startOfficeLife(store) {
       if (teaEvent) {
         const participants = pickParticipants(teaEvent, state.agents, state.externalStatus)
         store.getState().setActiveEvent(teaEvent)
-        executeEvent(store, teaEvent, participants)
+        executeEvent(store, teaEvent, participants, cancelled)
       }
     }
 
@@ -435,12 +456,13 @@ export function startOfficeLife(store) {
       if (meetEvent) {
         const participants = pickParticipants(meetEvent, state.agents, state.externalStatus)
         store.getState().setActiveEvent(meetEvent)
-        executeEvent(store, meetEvent, participants)
+        executeEvent(store, meetEvent, participants, cancelled)
       }
     }
   }, 60000)
 
   return () => {
+    cancelled.value = true
     clearTimeout(dailyTimer)
     clearTimeout(rareTimer)
     clearInterval(timeInterval)

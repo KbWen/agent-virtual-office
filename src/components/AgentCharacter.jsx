@@ -789,8 +789,10 @@ export default function AgentCharacter({ agent }) {
           store.addHandoff(id, targetId)
           setTimeout(() => {
             const s = useOfficeStore.getState()
-            s.setAgentBehavior(targetId, 'reading-screen', 'normal', eventBubble('handoff-received'))
-            setTimeout(() => s.clearBubble(targetId), 3000)
+            if (!s.agents[targetId]?.inGroupEvent) {
+              s.setAgentBehavior(targetId, 'reading-screen', 'normal', eventBubble('handoff-received'))
+              setTimeout(() => s.clearBubble(targetId), 3000)
+            }
           }, 1500)
         }
       }
