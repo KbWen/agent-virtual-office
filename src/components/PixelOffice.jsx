@@ -330,6 +330,28 @@ function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0 }) {
   )
 }
 
+// Static desk positions matching WAYPOINTS — defined outside component to avoid re-creation
+const DESK_DATA = [
+  { id: 'pm',   x: 140, y: 240, label: 'PM',     color: '#378ADD', variant: 'pm' },
+  { id: 'arch', x: 260, y: 240, label: 'Arch',    color: '#7F77DD', variant: 'arch' },
+  { id: 'qa',   x: 400, y: 220, label: 'QA',      color: '#BA7517', variant: 'qa' },
+  { id: 'res',  x: 520, y: 220, label: 'Research', color: '#5DCAA5', variant: 'res' },
+  { id: 'dev',  x: 340, y: 340, label: 'Dev',     color: '#1D9E75', variant: 'dev' },
+  { id: 'ops',  x: 460, y: 340, label: 'Ops',     color: '#D85A30', variant: 'ops' },
+]
+
+// Static SVG grid lines — pre-built once to avoid re-creating 103 elements per render
+const GRID_LINES = (() => {
+  const lines = []
+  for (let i = 0; i < 29; i++) {
+    lines.push(<line key={`h${i}`} x1="10" y1={163 + i * 8} x2="598" y2={163 + i * 8} stroke="#000" strokeWidth="0.5" />)
+  }
+  for (let i = 0; i < 74; i++) {
+    lines.push(<line key={`v${i}`} x1={10 + i * 8} y1="163" x2={10 + i * 8} y2="399" stroke="#000" strokeWidth="0.5" />)
+  }
+  return lines
+})()
+
 export default function PixelOffice({ animationQuality = 'full', mode = 'full' }) {
   // Only re-render PixelOffice when agent IDs change, not on every property update.
   // AgentCharacter subscribes to its own agent state independently.
@@ -356,16 +378,6 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   // Memoize agent list — only re-sort when IDs change (not on every property update)
   const agentList = useMemo(() => sortByY(Object.values(agents)), [agentIds])
   const lightOverlay = getLightingOverlay(hour)
-
-  // Individual desk positions matching WAYPOINTS
-  const deskData = [
-    { id: 'pm',   x: 140, y: 240, label: 'PM',     color: '#378ADD', variant: 'pm' },
-    { id: 'arch', x: 260, y: 240, label: 'Arch',    color: '#7F77DD', variant: 'arch' },
-    { id: 'qa',   x: 400, y: 220, label: 'QA',      color: '#BA7517', variant: 'qa' },
-    { id: 'res',  x: 520, y: 220, label: 'Research', color: '#5DCAA5', variant: 'res' },
-    { id: 'dev',  x: 340, y: 340, label: 'Dev',     color: '#1D9E75', variant: 'dev' },
-    { id: 'ops',  x: 460, y: 340, label: 'Ops',     color: '#D85A30', variant: 'ops' },
-  ]
 
   // Panel mode: auto-adapt viewBox to container shape
   const isPanel = mode === 'panel'
@@ -416,7 +428,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000" floodOpacity="0.12" />
         </filter>
         {/* Night-time gradients (defined once, referenced by id) */}
-        {deskData.map((d) => (
+        {DESK_DATA.map((d) => (
           <radialGradient key={`scr-${d.id}`} id={`scr-${d.id}`} cx="50%" cy="30%" r="60%">
             <stop offset="0%" stopColor="#4af" stopOpacity="0.10" />
             <stop offset="60%" stopColor="#4af" stopOpacity="0.03" />
@@ -494,10 +506,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
         <rect x="540" y="163" width="20" height="236" fill="#8a7a5a" />
       </g>
 
-      {/* Floor grid */}
+      {/* Floor grid (static, pre-built outside component) */}
       <g opacity="0.03">
-        {[...Array(29)].map((_, i) => <line key={`h${i}`} x1="10" y1={163 + i * 8} x2="598" y2={163 + i * 8} stroke="#000" strokeWidth="0.5" />)}
-        {[...Array(74)].map((_, i) => <line key={`v${i}`} x1={10 + i * 8} y1="163" x2={10 + i * 8} y2="399" stroke="#000" strokeWidth="0.5" />)}
+        {GRID_LINES}
       </g>
 
       {/* Outer walls */}
@@ -546,7 +557,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <text x={400} y={310} textAnchor="middle" fontSize="7" fill="#1D9E75" fontFamily="monospace" opacity="0.4">ENGINEERING</text>
 
       {/* Personalized desks */}
-      {deskData.map((d) => (
+      {DESK_DATA.map((d) => (
         <PersonalDesk
           key={d.id}
           x={d.x} y={d.y}
@@ -647,11 +658,11 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {hour >= 19 && (
         <g pointerEvents="none">
           {/* Monitor screen glow on desks (gradients defined in <defs>) */}
-          {deskData.map((d) => (
+          {DESK_DATA.map((d) => (
             <ellipse key={`glow-${d.id}`} cx={d.x} cy={d.y - 8} rx={32} ry={22} fill={`url(#scr-${d.id})`} />
           ))}
           {/* Desk lamps (warm glow) */}
-          {deskData.map((d) => (
+          {DESK_DATA.map((d) => (
             <DeskLamp key={`lamp-${d.id}`} x={d.x + 22} y={d.y - 14} on />
           ))}
           {/* Meeting room ceiling light */}

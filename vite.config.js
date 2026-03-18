@@ -90,6 +90,8 @@ function officeStatusPlugin() {
       server.middlewares.use('/api/status', (req, res) => {
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Cache-Control', 'no-cache')
+        // Dev-only: allow any origin so local tools (CLI, curl, etc.) can POST status
+        // This middleware does NOT exist in production builds
         res.setHeader('Access-Control-Allow-Origin', '*')
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match')
