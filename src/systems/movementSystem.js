@@ -70,10 +70,10 @@ function pushOutOfObstacle(x, y) {
       const toLeft = x - r.x1, toRight = r.x2 - x
       const toTop = y - r.y1, toBottom = r.y2 - y
       const min = Math.min(toLeft, toRight, toTop, toBottom)
-      if (min === toLeft) x = r.x1 - 6
-      else if (min === toRight) x = r.x2 + 6
-      else if (min === toTop) y = r.y1 - 6
-      else y = r.y2 + 6
+      if (min === toLeft) x = r.x1 - OBSTACLE_PUSH_PX
+      else if (min === toRight) x = r.x2 + OBSTACLE_PUSH_PX
+      else if (min === toTop) y = r.y1 - OBSTACLE_PUSH_PX
+      else y = r.y2 + OBSTACLE_PUSH_PX
     }
   }
   return { x, y }
@@ -221,7 +221,7 @@ function findBestCorridor(from, to) {
     if (d < bestDist) { bestDist = d; best = c }
   }
   // Add jitter so multiple agents don't stack on the same corridor pixel
-  if (best) return { x: best.x + (Math.random() - 0.5) * 30, y: best.y + (Math.random() - 0.5) * 12 }
+  if (best) return { x: best.x + (Math.random() - 0.5) * CORRIDOR_JITTER, y: best.y + (Math.random() - 0.5) * 12 }
   return best
 }
 
@@ -254,7 +254,7 @@ export function calculatePath(from, to) {
 
   if (exitDoor) {
     const d = DOORS[exitDoor]
-    const doorPt = { x: d.x + (Math.random() - 0.5) * 20, y: d.y + (Math.random() - 0.5) * 8 }
+    const doorPt = { x: d.x + (Math.random() - 0.5) * DOOR_JITTER, y: d.y + (Math.random() - 0.5) * 8 }
 
     // If leaving from mainOffice and far from door, add corridor waypoint first
     // This prevents visual straight-line crossing through desks/walls
@@ -286,7 +286,7 @@ export function calculatePath(from, to) {
     const entryDoor = ROUTE.mainOffice?.[toZone]
     if (entryDoor && entryDoor !== exitDoor) {
       const d = DOORS[entryDoor]
-      const doorPt = { x: d.x + (Math.random() - 0.5) * 20, y: d.y + (Math.random() - 0.5) * 8 }
+      const doorPt = { x: d.x + (Math.random() - 0.5) * DOOR_JITTER, y: d.y + (Math.random() - 0.5) * 8 }
       // Add corridor between the two doors if they're far apart
       const prevPt = path[path.length - 1] || from
       if (lineHitsAnyDesk(prevPt.x, prevPt.y, doorPt.x, doorPt.y)) {
@@ -330,7 +330,7 @@ export function needsLocationChange(behaviorId) {
 }
 
 // ─── Anti-overlap system ──────────────────────────────────────────────
-const MIN_AGENT_DIST = 35  // minimum px between any two agents
+import { MIN_AGENT_DIST, OBSTACLE_PUSH_PX, CORRIDOR_JITTER, DOOR_JITTER } from './constants'
 
 // Get all other agents' current and target positions
 function getOccupiedPositions(agentId, allAgents) {

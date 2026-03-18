@@ -4,6 +4,7 @@
 //   t('bubbles.typing')         → ["hmm...", ...] (array)
 //   locale()                    → "en" | "zh-TW"
 
+import { useState, useEffect } from 'react'
 import en from './locales/en.json'
 import zhTW from './locales/zh-TW.json'
 
@@ -37,6 +38,7 @@ export function setLocale(lang) {
   currentLocale = LOCALES[lang]
   if (typeof window !== 'undefined') {
     localStorage.setItem('office-lang', lang)
+    document.documentElement.lang = lang
   }
   listeners.forEach(fn => fn(lang))
 }
@@ -44,6 +46,13 @@ export function setLocale(lang) {
 export function onLocaleChange(fn) {
   listeners.push(fn)
   return () => { listeners = listeners.filter(f => f !== fn) }
+}
+
+// React hook: re-renders component when locale changes
+export function useLocale() {
+  const [lang, setLang] = useState(currentLang)
+  useEffect(() => onLocaleChange(setLang), [])
+  return lang
 }
 
 // Get a nested value by dot path: t('bubbles.typing') → array

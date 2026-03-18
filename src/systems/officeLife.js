@@ -1,9 +1,7 @@
 import eventsData from '../config/officeEvents.json'
 import { WAYPOINTS, MEETING_CHAIRS, HOME_POSITIONS } from './movementSystem'
 import { eventBubble, eventName as getEventName } from '../i18n'
-
-const DAILY_INTERVAL = [60000, 180000]   // 1-3 min (group events happen often enough to see)
-const RARE_INTERVAL = [300000, 600000]   // 5-10 min
+import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL } from './constants'
 
 let dailyTimer = null
 let rareTimer = null
@@ -361,7 +359,7 @@ export function startOfficeLife(store) {
         executeEvent(store, event, participants, cancelled)
       }
       scheduleDaily()
-    }, randomInterval(DAILY_INTERVAL))
+    }, randomInterval(DAILY_EVENT_INTERVAL))
   }
 
   const scheduleRare = () => {
@@ -377,7 +375,7 @@ export function startOfficeLife(store) {
         executeEvent(store, event, participants, cancelled)
       }
       scheduleRare()
-    }, randomInterval(RARE_INTERVAL))
+    }, randomInterval(RARE_EVENT_INTERVAL))
   }
 
   scheduleDaily()
@@ -386,7 +384,7 @@ export function startOfficeLife(store) {
   // Update time every minute
   const timeInterval = setInterval(() => {
     store.getState().updateTime()
-  }, 60000)
+  }, TIME_CHECK_INTERVAL)
 
   // ─── Time-linked events ──────────────────────────────────────────────
   // Check every minute for time-specific behaviors
@@ -459,7 +457,7 @@ export function startOfficeLife(store) {
         executeEvent(store, meetEvent, participants, cancelled)
       }
     }
-  }, 60000)
+  }, TIME_CHECK_INTERVAL)
 
   return () => {
     cancelled.value = true

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useOfficeStore } from '../systems/store'
-import { behaviorLabel, t, locale, setLocale, availableLocales, onLocaleChange, eventName } from '../i18n'
+import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName } from '../i18n'
 
 const statusColors = {
   idle: '#888',
@@ -29,16 +29,13 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const activeEvent = useOfficeStore((s) => s.activeEvent)
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
-  const setAgentBehavior = useOfficeStore((s) => s.setAgentBehavior)
   const externalStatus = useOfficeStore((s) => s.externalStatus)
   const statusSource = useOfficeStore((s) => s.statusSource)
 
   const [showTest, setShowTest] = useState(false)
-  const [lang, setLang] = useState(locale())
+  const lang = useLocale()
   const agentList = Object.values(agents)
   const isPanel = mode === 'panel'
-
-  useEffect(() => onLocaleChange(setLang), [])
 
   const setStatus = (id, status) => {
     const agent = agents[id]
@@ -51,43 +48,43 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
     }))
   }
 
+  const cycleLang = () => {
+    const locales = availableLocales()
+    const idx = locales.indexOf(lang)
+    setLocale(locales[(idx + 1) % locales.length])
+  }
+
+  const nextLangLabel = (() => {
+    const locales = availableLocales()
+    const idx = locales.indexOf(lang)
+    const next = locales[(idx + 1) % locales.length]
+    const labels = { en: 'EN', 'zh-TW': '中' }
+    return labels[next] || next.toUpperCase()
+  })()
+
   // ─── Panel mode: compact single-line status bar ───
   if (isPanel) {
     return (
       <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t border-gray-200 dark:border-gray-700 px-2 py-1 text-[10px] select-none shrink-0">
         <div className="flex items-center gap-2">
-          {/* Agent dots with status colors */}
           <div className="flex items-center gap-1.5 flex-1 overflow-x-auto">
             {agentList.map((agent) => {
               const ext = externalStatus[agent.id]
               return (
-                <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${agent.name}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
-                  <span
-                    className="inline-block w-2 h-2 rounded-full"
-                    style={{ backgroundColor: agent.color }}
-                  />
-                  <span
-                    className="inline-block w-1 h-1 rounded-full"
-                    style={{ backgroundColor: statusColors[agent.status] || '#888' }}
-                  />
+                <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${charName(agent.id)}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
+                  <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: agent.color }} />
+                  <span className="inline-block w-1 h-1 rounded-full" style={{ backgroundColor: statusColors[agent.status] || '#888' }} />
                 </div>
               )
             })}
           </div>
-
-          {/* Live indicator */}
           {statusSource === 'external' && (
             <div className="flex items-center gap-0.5 shrink-0">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-emerald-600 dark:text-emerald-400 font-medium">Live</span>
             </div>
           )}
-
-          {/* Pause toggle */}
-          <button
-            onClick={togglePause}
-            className="px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
-          >
+          <button onClick={togglePause} className="px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
             {isPaused ? '▶' : '⏸'}
           </button>
         </div>
@@ -98,46 +95,36 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   // ─── Full mode: standard control panel ───
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t border-gray-200 dark:border-gray-700 px-3 py-1.5 text-xs select-none z-50">
-      {/* Main row */}
       <div className="flex items-center gap-3">
-        {/* Time */}
         <div className="text-gray-500 dark:text-gray-400 font-mono min-w-[42px]">
           {String(hour).padStart(2, '0')}:{String(minute).padStart(2, '0')}
         </div>
 
-        {/* Agent status with behavior labels */}
         <div className="flex items-center gap-3 flex-1 overflow-x-auto">
           {agentList.map((agent) => {
             const ext = externalStatus[agent.id]
+            const name = charName(agent.id)
             const label = ext
               ? (ext.task ? ext.task.replace(/^\//, '') : t(`statusLabels.${ext.status}`, ext.status))
               : behaviorLabel(agent.behavior)
             return (
-              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${agent.name}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
-                <span
-                  className="inline-block w-2.5 h-2.5 rounded-full border border-white/50"
-                  style={{ backgroundColor: agent.color }}
-                />
-                <span className="text-gray-700 dark:text-gray-200 font-medium">{agent.name}</span>
+              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${name}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
+                <span className="inline-block w-2.5 h-2.5 rounded-full border border-white/50" style={{ backgroundColor: agent.color }} />
+                <span className="text-gray-700 dark:text-gray-200 font-medium">{name}</span>
                 <span className="text-gray-400 dark:text-gray-500">·</span>
                 <span className={ext ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-gray-500 dark:text-gray-400'}>{label}</span>
-                <span
-                  className="inline-block w-1.5 h-1.5 rounded-full ml-0.5"
-                  style={{ backgroundColor: statusColors[agent.status] || '#888' }}
-                />
+                <span className="inline-block w-1.5 h-1.5 rounded-full ml-0.5" style={{ backgroundColor: statusColors[agent.status] || '#888' }} />
               </div>
             )
           })}
         </div>
 
-        {/* Active event */}
         {activeEvent && (
           <div className="text-yellow-600 dark:text-yellow-400 animate-pulse shrink-0">
             {activeEvent.id ? eventName(activeEvent.id) : activeEvent.name}
           </div>
         )}
 
-        {/* Status source indicator */}
         {statusSource === 'external' && (
           <div className="flex items-center gap-1 shrink-0">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -153,45 +140,18 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
           </div>
         )}
 
-        {/* Platform badge */}
         <div className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded shrink-0">
           {platformLabels[platform] || platform}
         </div>
 
-        {/* Controls */}
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={() => {
-              const locales = availableLocales()
-              const idx = locales.indexOf(lang)
-              const next = locales[(idx + 1) % locales.length]
-              setLocale(next)
-              // Reload character names
-              window.location.reload()
-            }}
-            className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 text-[10px]"
-            title="Switch language"
-          >
-            {/* Show next locale's short name — supports N locales */}
-            {(() => {
-              const locales = availableLocales()
-              const idx = locales.indexOf(lang)
-              const next = locales[(idx + 1) % locales.length]
-              const labels = { en: 'EN', 'zh-TW': '中' }
-              return labels[next] || next.toUpperCase()
-            })()}
+          <button onClick={cycleLang} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 text-[10px]" title="Switch language (L)">
+            {nextLangLabel}
           </button>
-          <button
-            onClick={togglePause}
-            className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
-          >
+          <button onClick={togglePause} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300" title="Pause (Space)">
             {isPaused ? '▶' : '⏸'}
           </button>
-          <button
-            onClick={triggerWorkflow}
-            className="px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-            title="Run workflow animation"
-          >
+          <button onClick={triggerWorkflow} className="px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors" title="Run workflow animation">
             Run
           </button>
           <button
@@ -204,14 +164,13 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         </div>
       </div>
 
-      {/* Test panel (collapsible) */}
       {showTest && (
         <div className="mt-1.5 pt-1.5 border-t border-gray-200 dark:border-gray-700">
           <div className="flex flex-wrap gap-2">
             {agentList.map((agent) => (
               <div key={agent.id} className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
                 <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: agent.color }} />
-                <span className="font-medium text-gray-700 dark:text-gray-200 mr-1">{agent.name}</span>
+                <span className="font-medium text-gray-700 dark:text-gray-200 mr-1">{charName(agent.id)}</span>
                 {statusOptions.map((st) => (
                   <button
                     key={st}
