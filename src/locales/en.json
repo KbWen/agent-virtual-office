@@ -100,7 +100,8 @@
     "dog-woof": "woof! 🐾",
     "ac-broken": ["so hot...", "fan me please", "who broke the AC?", "melting..."],
     "ac-fan": "💨 ahhh~",
-    "group-stretch": ["stretch~", "my back...", "ahh feels good", "deep breath~"]
+    "group-stretch": ["stretch~", "my back...", "ahh feels good", "deep breath~"],
+    "lunch-nap": ["zzz...", "food coma~", "nap time", "so sleepy after lunch"]
   },
   "statusLabels": {
     "working": "Working",

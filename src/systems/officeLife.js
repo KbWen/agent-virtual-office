@@ -389,7 +389,7 @@ export function startOfficeLife(store) {
         store.getState().setAgentGroupEvent(id, {
           behavior: 'nap',
           expression: 'sleepy',
-          bubble: eventBubble('group-stretch'),
+          bubble: eventBubble('lunch-nap'),
           groupTarget: null,
         })
       })
