@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Office Bridge — Platform Launcher</title>
+  <script src="/bridge.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    .subtitle { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+    .section { background: #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .section h2 { font-size: 14px; color: #94a3b8; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .agents-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 12px; }
+    .agent-card { background: #0f172a; border-radius: 6px; padding: 10px; text-align: center; }
+    .agent-name { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+    .agent-btns { display: flex; gap: 3px; justify-content: center; flex-wrap: wrap; }
+    .agent-btns button { font-size: 10px; padding: 3px 6px; border: 1px solid #334155; border-radius: 4px; background: transparent; color: #94a3b8; cursor: pointer; transition: all .15s; }
+    .agent-btns button:hover { background: #334155; color: #e2e8f0; }
+    .agent-btns button.active-working { background: #f59e0b; color: #000; border-color: #f59e0b; }
+    .agent-btns button.active-blocked { background: #ef4444; color: #fff; border-color: #ef4444; }
+    .agent-btns button.active-done { background: #22c55e; color: #000; border-color: #22c55e; }
+    .workflow-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .workflow-row input { flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 8px 12px; color: #e2e8f0; font-size: 13px; }
+    .workflow-row input::placeholder { color: #475569; }
+    .btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; transition: all .15s; }
+    .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-ghost { background: transparent; border: 1px solid #334155; color: #94a3b8; }
+    .btn-ghost:hover { background: #1e293b; color: #e2e8f0; }
+    .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .log { background: #0f172a; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 11px; color: #64748b; max-height: 120px; overflow-y: auto; margin-top: 12px; }
+    .log .entry { margin-bottom: 2px; }
+    .log .entry .time { color: #475569; }
+    .platforms { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+    .platform-card { background: #0f172a; border-radius: 6px; padding: 12px; }
+    .platform-card h3 { font-size: 13px; margin-bottom: 4px; }
+    .platform-card p { font-size: 11px; color: #64748b; margin-bottom: 8px; line-height: 1.4; }
+    .platform-card code { font-size: 10px; background: #1e293b; padding: 6px 8px; border-radius: 4px; display: block; color: #94a3b8; overflow-x: auto; white-space: pre; word-break: break-all; }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+    .dot-connected { background: #22c55e; animation: pulse 2s infinite; }
+    .dot-disconnected { background: #64748b; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .connection-status { font-size: 12px; margin-bottom: 16px; display: flex; align-items: center; gap: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Office Bridge <span style="font-size:11px;color:#64748b;font-weight:normal">— Debug & Test Tool</span></h1>
+  <p class="subtitle">Send status to the Virtual Office running in another tab. Open office at <a href="/?mode=panel" style="color:#3b82f6" target="_blank">panel mode</a> or <a href="/" style="color:#3b82f6" target="_blank">full mode</a></p>
+
+  <div class="connection-status">
+    <span class="status-dot dot-connected" id="statusDot"></span>
+    <span id="statusText">Connected via BroadcastChannel</span>
+  </div>
+
+  <!-- Agent Controls -->
+  <div class="section">
+    <h2>Agent Status</h2>
+    <div class="agents-grid" id="agentsGrid"></div>
+    <div class="workflow-row">
+      <input type="text" id="workflowInput" placeholder="Workflow name (e.g. Build Feature, Sprint 42)" />
+      <button class="btn btn-primary" onclick="sendCurrent()">Send</button>
+      <button class="btn btn-danger" onclick="clearAll()">Clear</button>
+    </div>
+  </div>
+
+  <!-- Presets -->
+  <div class="section">
+    <h2>Quick Presets</h2>
+    <div class="presets">
+      <button class="btn btn-ghost" onclick="preset('solo-dev')">Solo Dev</button>
+      <button class="btn btn-ghost" onclick="preset('full-sprint')">Full Sprint</button>
+      <button class="btn btn-ghost" onclick="preset('code-review')">Code Review</button>
+      <button class="btn btn-ghost" onclick="preset('deploy')">Deploying</button>
+      <button class="btn btn-ghost" onclick="preset('blocked')">Dev Blocked</button>
+      <button class="btn btn-ghost" onclick="preset('research')">Research Mode</button>
+      <button class="btn btn-ghost" onclick="preset('done')">All Done</button>
+    </div>
+  </div>
+
+  <!-- Platform Launch Guide -->
+  <div class="section">
+    <h2>Platform Launch Guide</h2>
+    <div class="platforms">
+      <div class="platform-card">
+        <h3>Browser (Direct)</h3>
+        <p>Full view or panel mode for embedding</p>
+        <code>http://localhost:5174
+http://localhost:5174?mode=panel</code>
+      </div>
+      <div class="platform-card">
+        <h3>Claude Code CLI</h3>
+        <p>Open panel mode + URL params for initial state</p>
+        <code>open "http://localhost:5174?mode=panel&amp;command=/implement&amp;active=dev"</code>
+      </div>
+      <div class="platform-card">
+        <h3>Claude Desktop</h3>
+        <p>Embed as iframe. Passive title detection, no setup</p>
+        <code>&lt;iframe src="http://localhost:5174?mode=panel"&gt;</code>
+      </div>
+      <div class="platform-card">
+        <h3>Gemini CLI / Codex CLI</h3>
+        <p>Panel mode + hash params for status</p>
+        <code>open "http://localhost:5174?mode=panel#dev=working&amp;workflow=Task"</code>
+      </div>
+      <div class="platform-card">
+        <h3>Antigravity Panel</h3>
+        <p>Embed panel mode, push via global variable</p>
+        <code>&lt;iframe src="?mode=panel"&gt;
+window.__office_status__ = {
+  _seq: Date.now(),
+  type: 'office-status',
+  agents: [{role:'dev', status:'working'}]
+}</code>
+      </div>
+      <div class="platform-card">
+        <h3>Any iframe / Artifact</h3>
+        <p>postMessage from parent frame</p>
+        <code>iframe.contentWindow.postMessage({
+  type: 'office-status',
+  agents: [{role:'dev', status:'working'}]
+}, '*')</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="section">
+    <h2>Message Log</h2>
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    const AGENTS = [
+      { id: 'pm',   name: 'PM',         color: '#5B8CFF' },
+      { id: 'arch', name: 'Architect',   color: '#8B5CF6' },
+      { id: 'dev',  name: 'Developer',   color: '#F97316' },
+      { id: 'qa',   name: 'QA',          color: '#22C55E' },
+      { id: 'ops',  name: 'DevOps',      color: '#EC4899' },
+      { id: 'res',  name: 'Researcher',  color: '#06B6D4' },
+      { id: 'gate', name: 'Gatekeeper',  color: '#EAB308' },
+    ]
+
+    const state = {}
+    AGENTS.forEach(a => { state[a.id] = null }) // null = not active
+
+    // Build agent cards
+    const grid = document.getElementById('agentsGrid')
+    AGENTS.forEach(agent => {
+      const card = document.createElement('div')
+      card.className = 'agent-card'
+      card.innerHTML = `
+        <div class="agent-name" style="color:${agent.color}">${agent.name}</div>
+        <div class="agent-btns">
+          <button data-agent="${agent.id}" data-status="working" onclick="toggle('${agent.id}','working',this)">work</button>
+          <button data-agent="${agent.id}" data-status="blocked" onclick="toggle('${agent.id}','blocked',this)">block</button>
+          <button data-agent="${agent.id}" data-status="done" onclick="toggle('${agent.id}','done',this)">done</button>
+        </div>
+      `
+      grid.appendChild(card)
+    })
+
+    function toggle(agentId, status, btn) {
+      // Toggle off if already active
+      if (state[agentId] === status) {
+        state[agentId] = null
+        btn.className = btn.className.replace(/active-\w+/, '').trim()
+      } else {
+        state[agentId] = status
+        // Clear sibling active states
+        const siblings = btn.parentElement.querySelectorAll('button')
+        siblings.forEach(b => b.className = b.className.replace(/active-\w+/, '').trim())
+        btn.classList.add('active-' + status)
+      }
+      sendCurrent()
+    }
+
+    function sendCurrent() {
+      const agents = []
+      for (const [id, status] of Object.entries(state)) {
+        if (status) agents.push({ role: id, task: null, status, label: null })
+      }
+      const workflow = document.getElementById('workflowInput').value || null
+      const msg = { type: 'office-status', agents, workflow, activeCount: agents.length }
+      officeBridge.send(msg)
+      logMessage(msg)
+    }
+
+    function clearAll() {
+      for (const id of Object.keys(state)) state[id] = null
+      document.querySelectorAll('.agent-btns button').forEach(b => {
+        b.className = b.className.replace(/active-\w+/, '').trim()
+      })
+      document.getElementById('workflowInput').value = ''
+      officeBridge.stop()
+      // Reopen channel after stop
+      setTimeout(() => { window.location.reload() }, 100)
+    }
+
+    function preset(name) {
+      // Clear all first
+      for (const id of Object.keys(state)) state[id] = null
+      document.querySelectorAll('.agent-btns button').forEach(b => {
+        b.className = b.className.replace(/active-\w+/, '').trim()
+      })
+
+      const presets = {
+        'solo-dev': { dev: 'working', workflow: 'Solo Development' },
+        'full-sprint': { pm: 'working', arch: 'working', dev: 'working', qa: 'working', ops: 'working', workflow: 'Full Sprint' },
+        'code-review': { dev: 'done', qa: 'working', gate: 'working', workflow: 'Code Review' },
+        'deploy': { dev: 'done', qa: 'done', ops: 'working', gate: 'working', workflow: 'Deployment' },
+        'blocked': { dev: 'blocked', pm: 'working', workflow: 'Bug Investigation' },
+        'research': { res: 'working', arch: 'working', workflow: 'Research Phase' },
+        'done': { pm: 'done', arch: 'done', dev: 'done', qa: 'done', ops: 'done', res: 'done', gate: 'done', workflow: 'Sprint Complete!' },
+      }
+
+      const p = presets[name]
+      if (!p) return
+
+      document.getElementById('workflowInput').value = p.workflow || ''
+      for (const [id, status] of Object.entries(p)) {
+        if (id === 'workflow') continue
+        state[id] = status
+        const btn = document.querySelector(`button[data-agent="${id}"][data-status="${status}"]`)
+        if (btn) btn.classList.add('active-' + status)
+      }
+      sendCurrent()
+    }
+
+    function logMessage(msg) {
+      const log = document.getElementById('log')
+      const time = new Date().toLocaleTimeString()
+      const agents = (msg.agents || []).map(a => `${a.role}=${a.status}`).join(', ')
+      const entry = document.createElement('div')
+      entry.className = 'entry'
+      entry.innerHTML = `<span class="time">${time}</span> ${agents}${msg.workflow ? ' | ' + msg.workflow : ''}`
+      log.prepend(entry)
+      // Keep log manageable
+      while (log.children.length > 50) log.removeChild(log.lastChild)
+    }
+
+    // Auto-apply URL params on load
+    if (window.location.search) {
+      const params = new URLSearchParams(window.location.search)
+      for (const [k, v] of params.entries()) {
+        if (AGENTS.find(a => a.id === k)) {
+          state[k] = v
+          const isStatus = ['working', 'blocked', 'done'].includes(v)
+          const btn = document.querySelector(`button[data-agent="${k}"][data-status="${isStatus ? v : 'working'}"]`)
+          if (btn) btn.classList.add('active-' + (isStatus ? v : 'working'))
+        }
+        if (k === 'workflow') document.getElementById('workflowInput').value = v
+      }
+    }
+  </script>
+</body>
+</html>

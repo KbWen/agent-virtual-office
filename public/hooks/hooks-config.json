@@ -1,0 +1,46 @@
+{
+  "_comment": "Add this 'hooks' section to your ~/.claude/settings.json or .claude/settings.json",
+  "_usage": "Update HOOK_PATH below to the actual path of office-status-hook.sh",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /path/to/office-status-hook.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /path/to/office-status-hook.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /path/to/office-status-hook.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /path/to/office-status-hook.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

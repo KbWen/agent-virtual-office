@@ -223,12 +223,66 @@ export function GateBooth({ x, y }) {
 
 // ─── Wall Window ─────────────────────────────────────────────────────────
 export function WallWindow({ x, y, w = 42, h = 26, hour = 12 }) {
-  const sky = hour >= 20 ? '#0a0a2a' : hour >= 17 ? '#FF8844' : hour >= 7 ? '#87CEEB' : '#1a1a3a'
+  const isNight = hour >= 19 || hour < 6
+  const sky = hour >= 20 ? '#0a0a2a' : hour >= 19 ? '#0f1535' : hour >= 17 ? '#FF8844' : hour >= 7 ? '#87CEEB' : '#0a0a2a'
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} rx={2} fill={sky} stroke="#AAA" strokeWidth="1.5" />
+      {/* Stars at night */}
+      {isNight && (
+        <g>
+          <circle cx={x + 8} cy={y + 5} r={0.8} fill="#fff" opacity="0.7">
+            <animate attributeName="opacity" values="0.4;0.9;0.4" dur="3s" repeatCount="indefinite" />
+          </circle>
+          <circle cx={x + w - 10} cy={y + 8} r={0.6} fill="#fff" opacity="0.5">
+            <animate attributeName="opacity" values="0.3;0.7;0.3" dur="2.5s" repeatCount="indefinite" />
+          </circle>
+          <circle cx={x + w / 2 + 5} cy={y + 4} r={0.5} fill="#fff" opacity="0.4" />
+          <circle cx={x + 14} cy={y + h - 8} r={0.6} fill="#fff" opacity="0.6">
+            <animate attributeName="opacity" values="0.5;0.8;0.5" dur="4s" repeatCount="indefinite" />
+          </circle>
+          {/* Moon (only in some windows to avoid repetition) */}
+          {(Math.round(x) % 200 < 100) && (
+            <g>
+              <circle cx={x + w - 8} cy={y + 6} r={4} fill="#F0E8C0" opacity="0.9" />
+              <circle cx={x + w - 6} cy={y + 5} r={3.5} fill={sky} />
+            </g>
+          )}
+        </g>
+      )}
+      {/* Window cross */}
       <line x1={x + w / 2} y1={y} x2={x + w / 2} y2={y + h} stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
       <line x1={x} y1={y + h / 2} x2={x + w} y2={y + h / 2} stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+      {/* Moonlight spill on floor at night */}
+      {isNight && (
+        <polygon
+          points={`${x + 3},${y + h + 2} ${x + w - 3},${y + h + 2} ${x + w + 6},${y + h + 18} ${x - 6},${y + h + 18}`}
+          fill="#8090C0" opacity="0.04"
+        />
+      )}
+    </g>
+  )
+}
+
+// ─── Desk Lamp (visible at night) ────────────────────────────────────────
+export function DeskLamp({ x, y, on = true }) {
+  if (!on) return null
+  return (
+    <g>
+      {/* Warm glow cone */}
+      <polygon
+        points={`${x},${y} ${x - 18},${y + 22} ${x + 18},${y + 22}`}
+        fill="#FFE4A0" opacity="0.12"
+      />
+      <ellipse cx={x} cy={y + 22} rx={18} ry={6} fill="#FFE4A0" opacity="0.06" />
+      {/* Lamp arm */}
+      <line x1={x + 8} y1={y + 8} x2={x + 3} y2={y - 2} stroke="#888" strokeWidth="1.2" strokeLinecap="round" />
+      {/* Lamp shade */}
+      <path d={`M${x - 4},${y} Q${x},${y - 3} ${x + 4},${y}`} fill="#555" stroke="#444" strokeWidth="0.5" />
+      {/* Bulb glow */}
+      <circle cx={x} cy={y + 1} r={2} fill="#FFD060" opacity="0.9">
+        <animate attributeName="opacity" values="0.8;1;0.8" dur="4s" repeatCount="indefinite" />
+      </circle>
     </g>
   )
 }

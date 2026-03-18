@@ -1,18 +1,41 @@
 {
-  "name": "virtual-office",
+  "name": "agent-virtual-office",
   "version": "1.0.0",
-  "description": "",
+  "description": "Pixel-art virtual office that visualizes AI agent activity in real-time. Works with Claude Code, Gemini CLI, Codex, and any tool that can POST status.",
   "main": "index.js",
+  "bin": {
+    "agent-virtual-office": "./bin/cli.js"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "start": "vite",
     "build:single": "vite build --outDir dist-single"
   },
-  "keywords": [],
+  "keywords": [
+    "virtual-office",
+    "agent",
+    "ai",
+    "pixel-art",
+    "claude",
+    "gemini",
+    "codex",
+    "visualization",
+    "status"
+  ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
+  "files": [
+    "bin/",
+    "dist/",
+    "public/",
+    "src/",
+    "index.html",
+    "vite.config.js",
+    "package.json"
+  ],
   "dependencies": {
     "framer-motion": "^12.37.0",
     "react": "^19.2.4",

@@ -1,4 +1,5 @@
 import eventsData from '../config/officeEvents.json'
+import { randomBubble } from '../i18n'
 
 // 70-80% desk time like Stardew Valley NPCs / Pixel-Agents
 // Characters stay at desks 30-120s, walk only occasionally
@@ -13,41 +14,41 @@ const statusOverrides = {
 
 const behaviors = {
   work: [
-    { id: 'typing', expr: 'focused', msgs: 'typing', duration: [12000, 35000] },
-    { id: 'reading-screen', expr: 'focused', msgs: 'thinking', duration: [10000, 30000] },
-    { id: 'writing-notes', expr: 'normal', msgs: 'thinking', duration: [10000, 25000] },
-    { id: 'whiteboard', expr: 'normal', msgs: 'thinking', duration: [15000, 35000], only: ['arch', 'pm'] },
-    { id: 'research', expr: 'focused', msgs: 'thinking', duration: [15000, 35000], only: ['res', 'arch'] },
-    { id: 'gantt-chart', expr: 'normal', msgs: 'thinking', duration: [12000, 25000], only: ['pm'] },
-    { id: 'magnifier', expr: 'focused', msgs: 'thinking', duration: [12000, 25000], only: ['qa'] },
-    { id: 'deploy-button', expr: 'happy', msgs: 'done', duration: [6000, 15000], only: ['ops'] },
-    { id: 'shield-verify', expr: 'normal', msgs: 'gate-verify', duration: [10000, 20000], only: ['gate'] },
-    { id: 'meeting', expr: 'normal', msgs: 'thinking', duration: [20000, 40000] },
+    { id: 'typing', expr: 'focused', msgs: 'typing', duration: [18000, 45000] },
+    { id: 'reading-screen', expr: 'focused', msgs: 'thinking', duration: [15000, 40000] },
+    { id: 'writing-notes', expr: 'normal', msgs: 'thinking', duration: [15000, 35000] },
+    { id: 'whiteboard', expr: 'normal', msgs: 'thinking', duration: [20000, 45000], only: ['arch', 'pm'] },
+    { id: 'research', expr: 'focused', msgs: 'thinking', duration: [20000, 45000], only: ['res', 'arch'] },
+    { id: 'gantt-chart', expr: 'normal', msgs: 'thinking', duration: [15000, 35000], only: ['pm'] },
+    { id: 'magnifier', expr: 'focused', msgs: 'thinking', duration: [15000, 35000], only: ['qa'] },
+    { id: 'deploy-button', expr: 'happy', msgs: 'done', duration: [10000, 20000], only: ['ops'] },
+    { id: 'shield-verify', expr: 'normal', msgs: 'gate-verify', duration: [15000, 30000], only: ['gate'] },
+    { id: 'meeting', expr: 'normal', msgs: 'thinking', duration: [25000, 50000] },
   ],
   daily: [
-    { id: 'drink-coffee', expr: 'happy', msgs: 'coffee', duration: [8000, 18000], effect: 'coffee' },
-    { id: 'drink-water', expr: 'normal', msgs: null, duration: [6000, 14000] },
-    { id: 'stretch', expr: 'happy', msgs: 'stretch', duration: [5000, 10000] },
-    { id: 'look-window', expr: 'normal', msgs: null, duration: [10000, 20000] },
-    { id: 'check-phone', expr: 'happy', msgs: null, duration: [8000, 18000] },
-    { id: 'eat-snack', expr: 'happy', msgs: null, duration: [8000, 15000] },
-    { id: 'print', expr: 'normal', msgs: null, duration: [8000, 18000] },
+    { id: 'drink-coffee', expr: 'happy', msgs: 'coffee', duration: [12000, 25000], effect: 'coffee' },
+    { id: 'drink-water', expr: 'normal', msgs: null, duration: [10000, 20000] },
+    { id: 'stretch', expr: 'happy', msgs: 'stretch', duration: [8000, 15000] },
+    { id: 'look-window', expr: 'normal', msgs: null, duration: [15000, 28000] },
+    { id: 'check-phone', expr: 'happy', msgs: null, duration: [12000, 22000] },
+    { id: 'eat-snack', expr: 'happy', msgs: null, duration: [12000, 22000] },
+    { id: 'print', expr: 'normal', msgs: null, duration: [10000, 20000] },
   ],
   social: [
-    { id: 'chat', expr: 'happy', msgs: 'chat', duration: [10000, 22000] },
-    { id: 'pass-document', expr: 'normal', msgs: null, duration: [8000, 15000] },
-    { id: 'thumbs-up', expr: 'happy', msgs: 'done', duration: [5000, 10000] },
+    { id: 'chat', expr: 'happy', msgs: 'chat', duration: [15000, 30000] },
+    { id: 'pass-document', expr: 'normal', msgs: null, duration: [12000, 22000] },
+    { id: 'thumbs-up', expr: 'happy', msgs: 'done', duration: [8000, 15000] },
   ],
   away: [
-    { id: 'goto-coffee-machine', expr: 'normal', msgs: 'coffee', duration: [12000, 22000] },
-    { id: 'toilet', expr: 'normal', msgs: null, duration: [15000, 30000] },
-    { id: 'nap', expr: 'sleepy', msgs: null, duration: [18000, 35000] },
-    { id: 'phone-call', expr: 'normal', msgs: 'phone', duration: [10000, 20000] },
+    { id: 'goto-coffee-machine', expr: 'normal', msgs: 'coffee', duration: [15000, 28000] },
+    { id: 'toilet', expr: 'normal', msgs: null, duration: [20000, 40000] },
+    { id: 'nap', expr: 'sleepy', msgs: null, duration: [25000, 45000] },
+    { id: 'phone-call', expr: 'normal', msgs: 'phone', duration: [15000, 28000] },
   ],
   frustrated: [
-    { id: 'scratch-head', expr: 'confused', msgs: 'frustrated', duration: [3000, 6000] },
-    { id: 'sigh', expr: 'tired', msgs: 'frustrated', duration: [3000, 6000] },
-    { id: 'desk-slam', expr: 'confused', msgs: 'frustrated', duration: [2000, 4000] },
+    { id: 'scratch-head', expr: 'confused', msgs: 'frustrated', duration: [6000, 12000] },
+    { id: 'sigh', expr: 'tired', msgs: 'frustrated', duration: [6000, 12000] },
+    { id: 'desk-slam', expr: 'confused', msgs: 'frustrated', duration: [4000, 8000] },
   ],
 }
 
@@ -71,6 +72,9 @@ function pickBehavior(agentId, category) {
 
 function pickMessage(msgKey) {
   if (!msgKey) return null
+  // Try i18n locale first, fall back to officeEvents.json
+  const localized = randomBubble(msgKey)
+  if (localized) return localized
   const pool = eventsData.bubbleMessages[msgKey]
   if (!pool || pool.length === 0) return null
   return pool[Math.floor(Math.random() * pool.length)]

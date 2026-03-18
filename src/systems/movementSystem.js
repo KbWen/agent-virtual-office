@@ -125,6 +125,8 @@ export const WAYPOINTS = {
   phone:        { x: 755, y: 480 },
   toilet:       { x: 380, y: 510 },  // below WC area
   printer:      { x: 600, y: 510 },
+  window:       { x: 340, y: 100 },  // hallway near windows
+  snackArea:    { x: 30,  y: 520 },  // near vending machine
 }
 
 // Meeting chair positions AROUND the table (not on it)
@@ -302,6 +304,7 @@ export function calculatePath(from, to) {
 // ─── Behavior → destination mapping ─────────────────────────────────
 const BEHAVIOR_LOCATIONS = {
   'goto-coffee-machine': 'coffeeArea',
+  'drink-coffee':        'coffeeArea',
   'drink-water':         'waterCooler',
   'whiteboard':          'whiteboard',
   'nap':                 'lounge',
@@ -310,9 +313,21 @@ const BEHAVIOR_LOCATIONS = {
   'research':            'researchLib',
   'meeting':             null,  // handled specially with MEETING_CHAIRS
   'print':               'printer',
+  'look-window':         'window',
+  'eat-snack':           'snackArea',
+  'stretch':             'lounge',
+  'check-phone':         'lounge',
 }
 
 const SOCIAL_BEHAVIORS = new Set(['chat', 'thumbs-up', 'pass-document'])
+
+// Returns true if this behavior requires the character to walk to a specific location
+// (not their desk). Used to defer behavior labels until arrival.
+export function needsLocationChange(behaviorId) {
+  if (SOCIAL_BEHAVIORS.has(behaviorId)) return true
+  const key = BEHAVIOR_LOCATIONS[behaviorId]
+  return key !== undefined  // has an entry (even null for meeting)
+}
 
 // ─── Anti-overlap system ──────────────────────────────────────────────
 const MIN_AGENT_DIST = 35  // minimum px between any two agents
@@ -418,14 +433,14 @@ export function calcFacing(fromX, fromY, toX, toY) {
   return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')
 }
 
-export const BEHAVIOR_LABELS = {
-  'typing':'打字中','reading-screen':'看螢幕','writing-notes':'寫筆記',
-  'whiteboard':'畫白板','research':'查資料','gantt-chart':'看甘特圖',
-  'magnifier':'拿放大鏡','deploy-button':'按部署鈕','shield-verify':'驗證中',
-  'drink-coffee':'喝咖啡','drink-water':'喝水','stretch':'伸懶腰',
-  'look-window':'看窗外','check-phone':'滑手機','eat-snack':'吃零食',
-  'chat':'聊天','pass-document':'遞文件','thumbs-up':'比讚',
-  'goto-coffee-machine':'去泡咖啡','toilet':'上廁所','nap':'午休',
-  'phone-call':'講電話','scratch-head':'搔頭','sigh':'嘆氣','desk-slam':'拍桌','idle':'發呆',
-  'meeting':'開會','print':'印東西',
-}
+// BEHAVIOR_LABELS: re-exported from i18n for backward compatibility
+// Use behaviorLabel(id) from i18n.js directly for new code
+import { behaviorLabel as _bl } from '../i18n'
+const _ALL_KEYS = [
+  'typing','reading-screen','writing-notes','whiteboard','research','gantt-chart',
+  'magnifier','deploy-button','shield-verify','drink-coffee','drink-water','stretch',
+  'look-window','check-phone','eat-snack','chat','pass-document','thumbs-up',
+  'goto-coffee-machine','toilet','nap','phone-call','scratch-head','sigh','desk-slam',
+  'idle','meeting','print',
+]
+export const BEHAVIOR_LABELS = Object.fromEntries(_ALL_KEYS.map(k => [k, _bl(k)]))

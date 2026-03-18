@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useOfficeStore } from '../systems/store'
-import { BEHAVIOR_LABELS } from '../systems/movementSystem'
+import { behaviorLabel, t, locale, setLocale, availableLocales, onLocaleChange } from '../i18n'
 
 const statusColors = {
   idle: '#888',
@@ -21,7 +21,7 @@ const platformLabels = {
   embedded: 'Embedded',
 }
 
-export default function ControlPanel({ platform = 'browser' }) {
+export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const agents = useOfficeStore((s) => s.agents)
   const isPaused = useOfficeStore((s) => s.isPaused)
   const togglePause = useOfficeStore((s) => s.togglePause)
@@ -30,14 +30,19 @@ export default function ControlPanel({ platform = 'browser' }) {
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
   const setAgentBehavior = useOfficeStore((s) => s.setAgentBehavior)
+  const externalStatus = useOfficeStore((s) => s.externalStatus)
+  const statusSource = useOfficeStore((s) => s.statusSource)
 
   const [showTest, setShowTest] = useState(false)
+  const [lang, setLang] = useState(locale())
   const agentList = Object.values(agents)
+  const isPanel = mode === 'panel'
+
+  useEffect(() => onLocaleChange(setLang), [])
 
   const setStatus = (id, status) => {
     const agent = agents[id]
     if (!agent) return
-    // Update the agent's status via weightOverride simulation
     useOfficeStore.setState((s) => ({
       agents: {
         ...s.agents,
@@ -46,6 +51,51 @@ export default function ControlPanel({ platform = 'browser' }) {
     }))
   }
 
+  // ─── Panel mode: compact single-line status bar ───
+  if (isPanel) {
+    return (
+      <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t border-gray-200 dark:border-gray-700 px-2 py-1 text-[10px] select-none shrink-0">
+        <div className="flex items-center gap-2">
+          {/* Agent dots with status colors */}
+          <div className="flex items-center gap-1.5 flex-1 overflow-x-auto">
+            {agentList.map((agent) => {
+              const ext = externalStatus[agent.id]
+              return (
+                <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${agent.name}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
+                  <span
+                    className="inline-block w-2 h-2 rounded-full"
+                    style={{ backgroundColor: agent.color }}
+                  />
+                  <span
+                    className="inline-block w-1 h-1 rounded-full"
+                    style={{ backgroundColor: statusColors[agent.status] || '#888' }}
+                  />
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Live indicator */}
+          {statusSource === 'external' && (
+            <div className="flex items-center gap-0.5 shrink-0">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-emerald-600 dark:text-emerald-400 font-medium">Live</span>
+            </div>
+          )}
+
+          {/* Pause toggle */}
+          <button
+            onClick={togglePause}
+            className="px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            {isPaused ? '▶' : '⏸'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Full mode: standard control panel ───
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t border-gray-200 dark:border-gray-700 px-3 py-1.5 text-xs select-none z-50">
       {/* Main row */}
@@ -58,16 +108,19 @@ export default function ControlPanel({ platform = 'browser' }) {
         {/* Agent status with behavior labels */}
         <div className="flex items-center gap-3 flex-1 overflow-x-auto">
           {agentList.map((agent) => {
-            const label = BEHAVIOR_LABELS[agent.behavior] || agent.behavior
+            const ext = externalStatus[agent.id]
+            const label = ext
+              ? (ext.task ? ext.task.replace(/^\//, '') : t(`statusLabels.${ext.status}`, ext.status))
+              : behaviorLabel(agent.behavior)
             return (
-              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${agent.name}: ${agent.behavior}`}>
+              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${agent.name}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
                 <span
                   className="inline-block w-2.5 h-2.5 rounded-full border border-white/50"
                   style={{ backgroundColor: agent.color }}
                 />
                 <span className="text-gray-700 dark:text-gray-200 font-medium">{agent.name}</span>
                 <span className="text-gray-400 dark:text-gray-500">·</span>
-                <span className="text-gray-500 dark:text-gray-400">{label}</span>
+                <span className={ext ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-gray-500 dark:text-gray-400'}>{label}</span>
                 <span
                   className="inline-block w-1.5 h-1.5 rounded-full ml-0.5"
                   style={{ backgroundColor: statusColors[agent.status] || '#888' }}
@@ -84,6 +137,22 @@ export default function ControlPanel({ platform = 'browser' }) {
           </div>
         )}
 
+        {/* Status source indicator */}
+        {statusSource === 'external' && (
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Live</span>
+          </div>
+        )}
+        {statusSource === 'fallback' && (
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+            <span className="text-[10px] text-yellow-600 dark:text-yellow-400 font-medium">
+              {Object.keys(externalStatus).length} agents
+            </span>
+          </div>
+        )}
+
         {/* Platform badge */}
         <div className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded shrink-0">
           {platformLabels[platform] || platform}
@@ -91,6 +160,20 @@ export default function ControlPanel({ platform = 'browser' }) {
 
         {/* Controls */}
         <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => {
+              const locales = availableLocales()
+              const idx = locales.indexOf(lang)
+              const next = locales[(idx + 1) % locales.length]
+              setLocale(next)
+              // Reload character names
+              window.location.reload()
+            }}
+            className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 text-[10px]"
+            title="Switch language"
+          >
+            {lang === 'zh-TW' ? 'EN' : '中'}
+          </button>
           <button
             onClick={togglePause}
             className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"

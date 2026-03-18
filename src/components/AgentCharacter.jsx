@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore } from '../systems/store'
 import { getNextBehavior } from '../systems/behaviorEngine'
-import { getTargetForBehavior, calcFacing, calculatePath } from '../systems/movementSystem'
+import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange } from '../systems/movementSystem'
+import { eventBubble } from '../i18n'
 import BehaviorBubble from './BehaviorBubble'
 
 // ═══ PIXEL ART SPRITE SYSTEM ═══
@@ -565,6 +566,7 @@ export default function AgentCharacter({ agent }) {
   const pathRef = useRef([])
   const movingRef = useRef(false)
   const movingStuckRef = useRef(0)
+  const pendingBehaviorRef = useRef(null) // deferred behavior for location-based actions
   const [walkFrame, setWalkFrame] = useState(0)
 
   // RAF-based smooth movement — only runs while walking
@@ -673,6 +675,17 @@ export default function AgentCharacter({ agent }) {
     } else {
       movingRef.current = false
       setIsWalking(false)
+      // Apply deferred behavior now that character has arrived at destination
+      const pending = pendingBehaviorRef.current
+      if (pending) {
+        pendingBehaviorRef.current = null
+        store.setAgentBehavior(id, pending.behaviorId, pending.expression, pending.bubble)
+        if (pending.effect === 'coffee') store.incrementDeskItem(id, 'coffee')
+        // Clear bubble after a while
+        if (pending.bubble) {
+          setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(pending.duration * 0.5, 4000))
+        }
+      }
     }
   }, [id, startRaf])
 
@@ -720,6 +733,7 @@ export default function AgentCharacter({ agent }) {
         if (movingStuckRef.current > 15) {
           movingRef.current = false
           movingStuckRef.current = 0
+          pendingBehaviorRef.current = null
           setIsWalking(false)
           if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         } else {
@@ -732,9 +746,39 @@ export default function AgentCharacter({ agent }) {
       const next = getNextBehavior(id, agent.status || 'idle')
       nextDelay = next.duration
 
-      // Set behavior state
-      store.setAgentBehavior(id, next.behaviorId, next.expression, next.bubble)
-      if (next.effect === 'coffee') store.incrementDeskItem(id, 'coffee')
+      // Walk to behavior location
+      const destination = getTargetForBehavior(id, next.behaviorId, store.agents)
+      let willWalk = false
+      if (destination && visualPosRef.current) {
+        const current = visualPosRef.current
+        const sameSpot = Math.abs(current.x - destination.x) < 5 && Math.abs(current.y - destination.y) < 5
+        if (!sameSpot) {
+          const path = calculatePath(current, destination)
+          if (path.length > 0) {
+            willWalk = true
+            movingRef.current = true
+            pathRef.current = path.slice(1)
+            startWalkTo(path[0])
+          }
+        }
+      }
+
+      // For location-based behaviors (coffee, whiteboard, toilet, etc.),
+      // defer the behavior label until the character arrives at the destination.
+      // This prevents "去泡咖啡" showing while still sitting at desk.
+      if (willWalk && needsLocationChange(next.behaviorId)) {
+        pendingBehaviorRef.current = next
+        // Don't change the displayed behavior yet — keep current one while walking
+      } else {
+        pendingBehaviorRef.current = null
+        // Desk behavior or already at location — apply immediately
+        store.setAgentBehavior(id, next.behaviorId, next.expression, next.bubble)
+        if (next.effect === 'coffee') store.incrementDeskItem(id, 'coffee')
+        // Clear bubble after a while
+        if (next.bubble) {
+          setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(next.duration * 0.5, 4000))
+        }
+      }
 
       // Trigger handoff animation for pass-document
       if (next.behaviorId === 'pass-document') {
@@ -744,30 +788,10 @@ export default function AgentCharacter({ agent }) {
           store.addHandoff(id, targetId)
           setTimeout(() => {
             const s = useOfficeStore.getState()
-            s.setAgentBehavior(targetId, 'reading-screen', 'normal', '收到!')
+            s.setAgentBehavior(targetId, 'reading-screen', 'normal', eventBubble('handoff-received'))
             setTimeout(() => s.clearBubble(targetId), 3000)
           }, 1500)
         }
-      }
-
-      // Walk to behavior location
-      const destination = getTargetForBehavior(id, next.behaviorId, store.agents)
-      if (destination && visualPosRef.current) {
-        const current = visualPosRef.current
-        const sameSpot = Math.abs(current.x - destination.x) < 5 && Math.abs(current.y - destination.y) < 5
-        if (!sameSpot) {
-          const path = calculatePath(current, destination)
-          if (path.length > 0) {
-            movingRef.current = true
-            pathRef.current = path.slice(1)
-            startWalkTo(path[0])
-          }
-        }
-      }
-
-      // Clear bubble after a while
-      if (next.bubble) {
-        setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(next.duration * 0.5, 4000))
       }
     } catch (err) {
       console.error(`[${id}] doSchedule error:`, err)
@@ -816,6 +840,7 @@ export default function AgentCharacter({ agent }) {
         clearTimeout(timerRef.current)
         movingRef.current = false
         movingStuckRef.current = 0
+        pendingBehaviorRef.current = null
         if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         setIsWalking(false)
         timerRef.current = setTimeout(doSchedule, 500)
@@ -833,7 +858,7 @@ export default function AgentCharacter({ agent }) {
   const pos = renderPos || state.position || { x: 0, y: 0 }
 
   return (
-    <g transform={`translate(${pos.x}, ${pos.y})`}>
+    <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}>
       {/* Working glow ring */}
       {state.status === 'working' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke="#EF9F27" strokeWidth="2" opacity="0.5">
@@ -858,47 +883,49 @@ export default function AgentCharacter({ agent }) {
       {/* Behavior-specific indicator icon */}
       {!isWalking && <BehaviorIndicator behavior={state.behavior} />}
 
-      {/* Name tag */}
-      <g transform="translate(0, -46)">
-        <rect
-          x={-name.length * 3.5 - 8}
-          y={-9}
-          width={name.length * 7 + 16}
-          height={16}
-          rx={8}
-          fill={
-            state.status === 'working' ? '#EF9F27' :
-            state.status === 'done' ? '#5CB88A' :
-            state.status === 'blocked' ? '#E24B4A' : color
-          }
-          opacity="0.92"
-        />
-        <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"
-          fontSize="8" fontFamily="monospace" fontWeight="bold" fill="white"
-        >
-          {name}
-        </text>
-        {state.status === 'working' && (
-          <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
-            <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
-            <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#EF9F27">⚡</text>
-          </g>
-        )}
-        {state.status === 'blocked' && (
-          <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
-            <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
-            <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#E24B4A">✕</text>
-          </g>
-        )}
-        {state.status === 'done' && (
-          <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
-            <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
-            <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#5CB88A">✓</text>
-          </g>
-        )}
-      </g>
+      {/* Name tag + bubble: inverse-scale to keep text at original size despite character scale */}
+      <g transform={`scale(${1/1.35})`}>
+        <g transform="translate(0, -46)">
+          <rect
+            x={-name.length * 3.5 - 8}
+            y={-9}
+            width={name.length * 7 + 16}
+            height={16}
+            rx={8}
+            fill={
+              state.status === 'working' ? '#EF9F27' :
+              state.status === 'done' ? '#5CB88A' :
+              state.status === 'blocked' ? '#E24B4A' : color
+            }
+            opacity="0.92"
+          />
+          <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"
+            fontSize="8" fontFamily="monospace" fontWeight="bold" fill="white"
+          >
+            {name}
+          </text>
+          {state.status === 'working' && (
+            <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
+              <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#EF9F27">⚡</text>
+            </g>
+          )}
+          {state.status === 'blocked' && (
+            <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
+              <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#E24B4A">✕</text>
+            </g>
+          )}
+          {state.status === 'done' && (
+            <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
+              <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#5CB88A">✓</text>
+            </g>
+          )}
+        </g>
 
-      <BehaviorBubble x={0} y={-62} message={state.bubble} />
+        <BehaviorBubble x={0} y={-62} message={state.bubble} />
+      </g>
     </g>
   )
 }
