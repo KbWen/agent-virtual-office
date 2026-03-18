@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
 import { HOME_POSITIONS } from './movementSystem'
-import { charName } from '../i18n'
+import { charName, randomBubble } from '../i18n'
 
 const detectMode = () => 'agentcortex'
 
@@ -128,7 +128,10 @@ export const useOfficeStore = create((set) => ({
           expiresAt: u.status === 'done' ? now + 15000 : now + 120000,
         }
         agents[u.agentId] = { ...agents[u.agentId], status: u.status }
-        if (u.label) agents[u.agentId] = { ...agents[u.agentId], bubble: u.label }
+        // Set bubble: explicit label > auto-generated from status pool
+        const bubble = u.label
+          || randomBubble(u.status === 'blocked' ? 'blocked-status' : u.status === 'done' ? 'done-status' : 'working-status')
+        if (bubble) agents[u.agentId] = { ...agents[u.agentId], bubble }
       }
       return { externalStatus: ext, agents }
     }),

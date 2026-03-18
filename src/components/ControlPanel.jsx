@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useOfficeStore } from '../systems/store'
-import { behaviorLabel, locale, setLocale, availableLocales, onLocaleChange } from '../i18n'
+import { behaviorLabel, t, locale, setLocale, availableLocales, onLocaleChange } from '../i18n'
 
 const statusColors = {
   idle: '#888',
@@ -61,7 +61,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             {agentList.map((agent) => {
               const ext = externalStatus[agent.id]
               return (
-                <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${agent.name}: ${ext?.task || agent.behavior}`}>
+                <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${agent.name}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
                   <span
                     className="inline-block w-2 h-2 rounded-full"
                     style={{ backgroundColor: agent.color }}
@@ -109,11 +109,11 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         <div className="flex items-center gap-3 flex-1 overflow-x-auto">
           {agentList.map((agent) => {
             const ext = externalStatus[agent.id]
-            const label = ext?.task
-              ? ext.task.replace(/^\//, '')
+            const label = ext
+              ? (ext.task ? ext.task.replace(/^\//, '') : t(`statusLabels.${ext.status}`, ext.status))
               : behaviorLabel(agent.behavior)
             return (
-              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${agent.name}: ${ext?.task || agent.behavior}`}>
+              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${agent.name}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
                 <span
                   className="inline-block w-2.5 h-2.5 rounded-full border border-white/50"
                   style={{ backgroundColor: agent.color }}

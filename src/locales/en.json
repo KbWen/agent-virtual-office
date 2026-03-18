@@ -101,5 +101,11 @@
     "ac-broken": ["so hot...", "fan me please", "who broke the AC?", "melting..."],
     "ac-fan": "💨 ahhh~",
     "group-stretch": ["stretch~", "my back...", "ahh feels good", "deep breath~"]
+  },
+  "statusLabels": {
+    "working": "Working",
+    "blocked": "Blocked",
+    "done": "Done",
+    "idle": "Idle"
   }
 }
