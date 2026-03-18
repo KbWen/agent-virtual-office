@@ -135,7 +135,7 @@ function WalkingBoss() {
   }, [])
 
   return (
-    <g transform={`translate(${pos.x}, ${pos.y})`}>
+    <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}>
       {/* Boss shadow */}
       <ellipse cx={0} cy={12} rx={8} ry={3} fill="rgba(0,0,0,0.15)" />
       {/* Boss body — suit */}
@@ -192,7 +192,7 @@ function OfficeDog() {
   }, [])
 
   return (
-    <g transform={`translate(${pos.x}, ${pos.y})`}>
+    <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}>
       <ellipse cx={0} cy={6} rx={5} ry={2} fill="rgba(0,0,0,0.1)" />
       {/* Body */}
       <ellipse cx={0} cy={0} rx={8} ry={5} fill="#C8964E" />
