@@ -1,16 +1,21 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 
 export default function BehaviorBubble({ x, y, message }) {
   const [visible, setVisible] = useState(false)
   const [currentMsg, setCurrentMsg] = useState(message)
+  const fadeTimerRef = useRef(null)
 
   useEffect(() => {
+    if (fadeTimerRef.current) { clearTimeout(fadeTimerRef.current); fadeTimerRef.current = null }
     if (message) {
       setCurrentMsg(message)
       setVisible(true)
     } else {
       setVisible(false)
+      // SVG <g> doesn't fire transitionend — use timeout matching transition duration
+      fadeTimerRef.current = setTimeout(() => setCurrentMsg(null), 350)
     }
+    return () => { if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current) }
   }, [message])
 
   if (!currentMsg) return null
@@ -27,9 +32,6 @@ export default function BehaviorBubble({ x, y, message }) {
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0)' : 'translateY(-5px)',
         transition: 'opacity 0.3s, transform 0.3s',
-      }}
-      onTransitionEnd={() => {
-        if (!visible) setCurrentMsg(null)
       }}
     >
       {/* Bubble body */}
