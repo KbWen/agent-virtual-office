@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore } from '../systems/store'
 import { getNextBehavior } from '../systems/behaviorEngine'
 import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange } from '../systems/movementSystem'
-import { eventBubble } from '../i18n'
+import { eventBubble, charName, useLocale } from '../i18n'
+import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT } from '../systems/constants'
 import BehaviorBubble from './BehaviorBubble'
 
 // ═══ PIXEL ART SPRITE SYSTEM ═══
@@ -557,10 +558,11 @@ function BehaviorIndicator({ behavior }) {
 }
 
 // ═══ AGENT CHARACTER WITH RAF-BASED MOVEMENT ═══
-const WALK_SPEED = 80 // pixels per second
 
 export default function AgentCharacter({ agent }) {
-  const { id, color, name } = agent
+  const { id, color } = agent
+  useLocale() // re-render on language change
+  const name = charName(id)
   const agentState = useOfficeStore((s) => s.agents[id])
 
   const timerRef = useRef(null)
@@ -595,7 +597,7 @@ export default function AgentCharacter({ agent }) {
   // Walk animation timer (leg alternation)
   useEffect(() => {
     if (!isWalking) return
-    const iv = setInterval(() => setWalkFrame((f) => 1 - f), 250)
+    const iv = setInterval(() => setWalkFrame((f) => 1 - f), WALK_FRAME_INTERVAL)
     return () => clearInterval(iv)
   }, [isWalking])
 
@@ -730,15 +732,15 @@ export default function AgentCharacter({ agent }) {
       // If still walking, wait and retry (with stuck detection)
       if (movingRef.current) {
         movingStuckRef.current = (movingStuckRef.current || 0) + 1
-        // If stuck moving for >15 retries (~22s), force unstick
-        if (movingStuckRef.current > 15) {
+        // If stuck moving for too many retries, force unstick
+        if (movingStuckRef.current > BEHAVIOR_STUCK_RETRIES) {
           movingRef.current = false
           movingStuckRef.current = 0
           pendingBehaviorRef.current = null
           setIsWalking(false)
           if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         } else {
-          timerRef.current = setTimeout(doSchedule, 1500)
+          timerRef.current = setTimeout(doSchedule, BEHAVIOR_STUCK_RETRY_MS)
           return
         }
       }
@@ -838,7 +840,7 @@ export default function AgentCharacter({ agent }) {
       if (agent.behavior !== lastBehaviorRef.behavior) {
         lastBehaviorRef.behavior = agent.behavior
         lastBehaviorRef.since = Date.now()
-      } else if (Date.now() - lastBehaviorRef.since > 45000) {
+      } else if (Date.now() - lastBehaviorRef.since > WATCHDOG_TIMEOUT) {
         // Stuck — force restart
         clearTimeout(timerRef.current)
         movingRef.current = false
@@ -849,7 +851,7 @@ export default function AgentCharacter({ agent }) {
         timerRef.current = setTimeout(doSchedule, 500)
         lastBehaviorRef.since = Date.now()
       }
-    }, 10000)
+    }, WATCHDOG_INTERVAL)
 
     return () => {
       clearTimeout(timerRef.current)

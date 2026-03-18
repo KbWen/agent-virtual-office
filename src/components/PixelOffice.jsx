@@ -370,15 +370,17 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     const { clientWidth: w, clientHeight: h } = containerRef.current
     if (w === 0 || h === 0) return
     const ratio = w / h
+    // Add margin (M) to prevent edge clipping of agents
+    const M = 20
     if (ratio < 1) {
       // Portrait (sidebar): show taller crop centered on desks
-      setPanelViewBox('100 130 400 400')
+      setPanelViewBox(`${100 - M} ${130 - M} ${400 + M * 2} ${400 + M * 2}`)
     } else if (ratio < 1.6) {
       // Squarish: balanced crop
-      setPanelViewBox('60 140 540 340')
+      setPanelViewBox(`${60 - M} ${140 - M} ${540 + M * 2} ${340 + M * 2}`)
     } else {
       // Landscape (bottom panel): wide, short crop
-      setPanelViewBox('60 155 540 260')
+      setPanelViewBox(`${60 - M} ${155 - M} ${540 + M * 2} ${260 + M * 2}`)
     }
   }, [isPanel])
 

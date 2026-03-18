@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import fs from 'fs'
-import path from 'path'
-import os from 'os'
+import { createHash } from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
 
 // Middleware: Universal status API
 //   GET  /api/status → read current status (browser polls this)
@@ -24,7 +25,15 @@ function officeStatusPlugin() {
 
   // Convert shorthand { dev: "working", qa: "testing" } to full format
   function normalizePost(body) {
-    if (body.type === 'office-status') return body
+    if (body.type === 'office-status') {
+      // Validate statuses in full format too
+      if (Array.isArray(body.agents)) {
+        body.agents = body.agents.filter(a =>
+          VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status)
+        )
+      }
+      return body
+    }
     const agents = []
     for (const key of VALID_ROLES) {
       const val = body[key]
@@ -65,6 +74,10 @@ function officeStatusPlugin() {
     return entry.count <= RATE_LIMIT
   }
 
+  // ETag tracking for GET 304 responses
+  let lastEtag = null
+  let lastData = null
+
   return {
     name: 'office-status-api',
     configureServer(server) {
@@ -73,7 +86,7 @@ function officeStatusPlugin() {
         res.setHeader('Cache-Control', 'no-cache')
         res.setHeader('Access-Control-Allow-Origin', '*')
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match')
 
         // CORS preflight
         if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return }
@@ -85,10 +98,22 @@ function officeStatusPlugin() {
           return
         }
 
-        // GET → read current status
+        // GET → read current status (with ETag support)
         if (req.method === 'GET') {
           try {
             const data = fs.readFileSync(statusPath, 'utf-8')
+            const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
+
+            // 304 Not Modified if ETag matches
+            if (req.headers['if-none-match'] === etag) {
+              res.statusCode = 304
+              res.end()
+              return
+            }
+
+            res.setHeader('ETag', etag)
+            lastEtag = etag
+            lastData = data
             res.end(data)
           } catch {
             res.end('null')
@@ -119,7 +144,11 @@ function officeStatusPlugin() {
               // Ensure directory exists
               const dir = path.dirname(statusPath)
               if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-              fs.writeFileSync(statusPath, JSON.stringify(normalized, null, 2))
+              const json = JSON.stringify(normalized, null, 2)
+              fs.writeFileSync(statusPath, json)
+              // Invalidate ETag cache
+              lastEtag = null
+              lastData = null
               res.end(JSON.stringify({ ok: true, agents: normalized.agents.length }))
             } catch (err) {
               res.statusCode = 400

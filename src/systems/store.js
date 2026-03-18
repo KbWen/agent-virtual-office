@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
 import { HOME_POSITIONS } from './movementSystem'
-import { charName, randomBubble } from '../i18n'
+import { randomBubble } from '../i18n'
 import { detectProjectMode } from './platformDetect'
 
 const detectMode = () => {
@@ -16,7 +16,6 @@ const initAgents = (mode) => {
     const home = HOME_POSITIONS[c.id] || { x: 300, y: 250 }
     agents[c.id] = {
       ...c,
-      name: charName(c.id),
       behavior: 'idle',
       expression: 'normal',
       bubble: null,
@@ -40,7 +39,7 @@ export const useOfficeStore = create((set) => ({
   hour: new Date().getHours(),
   minute: new Date().getMinutes(),
   activeEvent: null,
-  isPaused: false,
+  isPaused: typeof window !== 'undefined' && localStorage.getItem('office-paused') === 'true',
   showWorkflow: false,
 
   setAgentBehavior: (id, behavior, expression, bubble) =>
@@ -128,7 +127,11 @@ export const useOfficeStore = create((set) => ({
 
   setActiveEvent: (event) => set({ activeEvent: event }),
   clearActiveEvent: () => set({ activeEvent: null }),
-  togglePause: () => set((s) => ({ isPaused: !s.isPaused })),
+  togglePause: () => set((s) => {
+    const next = !s.isPaused
+    if (typeof window !== 'undefined') localStorage.setItem('office-paused', String(next))
+    return { isPaused: next }
+  }),
   triggerWorkflow: () => set({ showWorkflow: true }),
   endWorkflow: () => set({ showWorkflow: false }),
 
