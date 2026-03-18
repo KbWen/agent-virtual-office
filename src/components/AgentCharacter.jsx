@@ -196,11 +196,16 @@ function clearRow(grid, row) {
   for (let i = 0; i < grid[row].length; i++) grid[row][i] = null
 }
 
+const _darkenCache = new Map()
 function darken(hex, amount) {
+  const key = `${hex}:${amount}`
+  if (_darkenCache.has(key)) return _darkenCache.get(key)
   const r = Math.max(0, parseInt(hex.slice(1, 3), 16) - amount)
   const g = Math.max(0, parseInt(hex.slice(3, 5), 16) - amount)
   const b = Math.max(0, parseInt(hex.slice(5, 7), 16) - amount)
-  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`
+  const result = `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`
+  _darkenCache.set(key, result)
+  return result
 }
 
 // ─── Character configs ──────────────────────────────────────────────────
@@ -559,7 +564,7 @@ function BehaviorIndicator({ behavior }) {
 
 // ═══ AGENT CHARACTER WITH RAF-BASED MOVEMENT ═══
 
-export default function AgentCharacter({ agent }) {
+function AgentCharacter({ agent }) {
   const { id, color } = agent
   useLocale() // re-render on language change
   const name = charName(id)
@@ -602,6 +607,8 @@ export default function AgentCharacter({ agent }) {
   }, [isWalking])
 
   // RAF animation loop — only active while walking, stops when arrived
+  // Throttled to ~30fps React updates (physics still runs at 60fps for smooth position)
+  const frameSkipRef = useRef(false)
   const startRaf = useCallback(() => {
     if (rafRef.current) return // already running
     lastTimeRef.current = null
@@ -631,7 +638,11 @@ export default function AgentCharacter({ agent }) {
           vp.x += (dx / dist) * step
           vp.y += (dy / dist) * step
         }
-        setRenderPos({ x: Math.round(vp.x * 10) / 10, y: Math.round(vp.y * 10) / 10 })
+        // Throttle React state updates to every other frame (~30fps)
+        frameSkipRef.current = !frameSkipRef.current
+        if (frameSkipRef.current) {
+          setRenderPos({ x: Math.round(vp.x * 10) / 10, y: Math.round(vp.y * 10) / 10 })
+        }
         rafRef.current = requestAnimationFrame(animate)
       } else {
         // Arrived — snap and stop RAF
@@ -746,7 +757,7 @@ export default function AgentCharacter({ agent }) {
       }
       movingStuckRef.current = 0
 
-      const next = getNextBehavior(id, agent.status || 'idle')
+      const next = getNextBehavior(id, agent.status || 'idle', new Date().getHours(), store.mood || 'normal')
       nextDelay = next.duration
 
       // Walk to behavior location
@@ -890,13 +901,13 @@ export default function AgentCharacter({ agent }) {
 
       {/* Name tag + bubble: inverse-scale to keep text at original size despite character scale */}
       <g transform={`scale(${1/1.35})`}>
-        <g transform="translate(0, -46)">
+        <g transform="translate(0, -48)">
           <rect
-            x={-name.length * 3.5 - 8}
-            y={-9}
-            width={name.length * 7 + 16}
-            height={16}
-            rx={8}
+            x={-name.length * 5 - 10}
+            y={-11}
+            width={name.length * 10 + 20}
+            height={20}
+            rx={10}
             fill={
               state.status === 'working' ? '#EF9F27' :
               state.status === 'done' ? '#5CB88A' :
@@ -905,32 +916,35 @@ export default function AgentCharacter({ agent }) {
             opacity="0.92"
           />
           <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"
-            fontSize="8" fontFamily="monospace" fontWeight="bold" fill="white"
+            fontSize="12" fontFamily="monospace" fontWeight="bold" fill="white"
           >
             {name}
           </text>
           {state.status === 'working' && (
-            <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
-              <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
-              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#EF9F27">⚡</text>
+            <g transform={`translate(${name.length * 5 + 6}, -2)`}>
+              <rect x={-4} y={-4} width={8} height={8} rx={2} fill="white" opacity="0.9" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="7" fill="#EF9F27">⚡</text>
             </g>
           )}
           {state.status === 'blocked' && (
-            <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
-              <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
-              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#E24B4A">✕</text>
+            <g transform={`translate(${name.length * 5 + 6}, -2)`}>
+              <rect x={-4} y={-4} width={8} height={8} rx={2} fill="white" opacity="0.9" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="7" fill="#E24B4A">✕</text>
             </g>
           )}
           {state.status === 'done' && (
-            <g transform={`translate(${name.length * 3.5 + 5}, -2)`}>
-              <rect x={-3} y={-3} width={6} height={6} rx={1} fill="white" opacity="0.9" />
-              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="#5CB88A">✓</text>
+            <g transform={`translate(${name.length * 5 + 6}, -2)`}>
+              <rect x={-4} y={-4} width={8} height={8} rx={2} fill="white" opacity="0.9" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="7" fill="#5CB88A">✓</text>
             </g>
           )}
         </g>
 
-        <BehaviorBubble x={0} y={-62} message={state.bubble} />
+        <BehaviorBubble x={0} y={-68} message={state.bubble} />
       </g>
     </g>
   )
 }
+
+// Prevent parent re-renders from cascading — AgentCharacter reads its own state from store
+export default React.memo(AgentCharacter, (prev, next) => prev.agent.id === next.agent.id)
