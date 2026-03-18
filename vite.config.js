@@ -30,8 +30,11 @@ function officeStatusPlugin() {
       if (Array.isArray(body.agents)) {
         body.agents = body.agents.filter(a =>
           VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status)
-        )
+        ).map(a => ({ ...a, hint: a.hint || null }))
       }
+      // Preserve mood and hint fields
+      if (body.mood) body.mood = String(body.mood)
+      if (body.moodDuration) body.moodDuration = Number(body.moodDuration) || 60000
       return body
     }
     const agents = []
@@ -44,6 +47,7 @@ function officeStatusPlugin() {
         task: isStatus ? null : val,
         status: isStatus ? val : 'working',
         label: body.label || null,
+        hint: body.hint || null,
       })
     }
     return {
@@ -53,6 +57,8 @@ function officeStatusPlugin() {
       activeCount: agents.filter(a => a.status !== 'done').length,
       workflow: body.workflow || null,
       source: body.source || 'api',
+      mood: body.mood || null,
+      moodDuration: body.moodDuration || null,
     }
   }
 

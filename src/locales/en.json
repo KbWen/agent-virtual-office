@@ -69,7 +69,13 @@
     "phone": ["hello?", "yeah yeah", "got it", "bye~"],
     "working-status": ["let's go!", "focusing!", "do not disturb", "busy!", "almost there!", "full speed~"],
     "done-status": ["done for today!", "finished!", "productive day", "heading out!", "perfect~", "finally..."],
-    "blocked-status": ["stuck...", "help!", "why won't it work", "crashing", "anyone?"]
+    "blocked-status": ["stuck...", "help!", "why won't it work", "crashing", "anyone?"],
+    "mood-rushing": ["go go go!", "no time!", "deadline!!", "faster!", "hurry up!", "can't stop!"],
+    "mood-frustrated": ["ugh...", "again?!", "why me", "this is broken", "I give up", "need a break"],
+    "mood-stuck": ["same thing again...", "going in circles", "hmm still stuck", "tried everything", "what am I missing"],
+    "mood-smooth": ["nice flow~", "everything works!", "great day", "on a roll!", "smooth sailing~", "feels good"],
+    "mood-intense": ["all hands!", "crunch time", "everyone's busy", "full throttle", "intense session"],
+    "mood-idle": ["so quiet...", "anyone here?", "peaceful~", "bored...", "taking it easy", "nothing to do"]
   },
   "eventBubbles": {
     "tea-break": ["☕ break~", "grab a cup", "let's chat", "so tired"],
@@ -107,6 +113,87 @@
     "working": "Working",
     "blocked": "Blocked",
     "done": "Done",
+    "idle": "Idle"
+  },
+  "contextBubbles": {
+    "dev-edit": ["tweaking {ctx}...", "hmm {ctx} needs work", "{ctx} again, let's go", "refactoring {ctx}~", "one sec, fixing {ctx}", "{ctx} could be cleaner..."],
+    "dev-write": ["writing {ctx} from scratch!", "new file {ctx}, here we go", "{ctx} coming right up"],
+    "dev-read": ["let me check {ctx}...", "who wrote {ctx}?!", "reading {ctx}, interesting...", "digging into {ctx}"],
+    "dev-bash": ["running {ctx}...fingers crossed", "{ctx} please don't fail", "executing {ctx}...", "{ctx} go go go!"],
+    "dev-search": ["where is {ctx}...", "{ctx} must be around here", "hunting for {ctx}", "searching {ctx}..."],
+    "dev-delegate": ["passing this to the expert", "teamwork makes the dream work", "delegating~"],
+    "dev-working": ["in the zone~", "keyboard goes brr", "I know this part", "got it! ...wait no", "code first, think later!"],
+    "dev-done": ["{ctx} done! next~", "finished {ctx}, nailed it", "perfect~ shipping it", "{ctx} looking good now", "another one bites the dust!"],
+    "dev-error": ["{ctx} is broken...why", "ugh {ctx} crashed", "{ctx} throwing errors again...", "help me {ctx} please", "not {ctx} again..."],
+
+    "qa-edit": ["fixing test for {ctx}", "{ctx} test case needs adjusting"],
+    "qa-search": ["checking {ctx} for issues", "inspecting {ctx} closely...", "hmm {ctx} looks sus"],
+    "qa-bash": ["running {ctx}...please be green", "{ctx} testing, nervous...", "{ctx} should pass...right?"],
+    "qa-working": ["let me take a closer look...", "something's off here", "hmm...checking one more time", "quality first!", "I smell a bug..."],
+    "qa-done": ["{ctx} verified!", "OK {ctx} looks clean", "passed! next~", "{ctx} approved~"],
+    "qa-error": ["{ctx} tests failed!", "knew it...{ctx} has issues", "told you so, {ctx}", "{ctx} broke...paging Dev"],
+
+    "ops-bash": ["{ctx} deploying...3..2..1", "running {ctx}, big red button!", "{ctx} executing...exciting", "here goes {ctx}!"],
+    "ops-working": ["prepping deployment...", "environment check OK", "containers spinning up", "monitoring...all clear"],
+    "ops-done": ["{ctx} is live!", "deployed! everyone breathe", "{ctx} running smooth~perfect", "successfully shipped!"],
+    "ops-error": ["{ctx} deploy failed!", "oh no {ctx} is down", "rollback! {ctx} broke", "alert alert {ctx}!"],
+
+    "res-read": ["studying {ctx}...", "{ctx} is quite interesting", "hmm let me dig into {ctx}", "deep in {ctx}..."],
+    "res-search": ["looking up {ctx}", "researching {ctx}, what did others do", "{ctx} related papers..."],
+    "res-web": ["googling {ctx}", "{ctx} let me check Stack Overflow", "searching online for {ctx}..."],
+    "res-working": ["hmm...found something", "deeper and deeper...", "wait, this is important", "halfway through the docs..."],
+    "res-done": ["research complete! writing summary", "found the answer~", "report ready", "all the data is here"],
+    "res-error": ["can't find the data...", "source is broken", "that site is down"],
+
+    "pm-delegate": ["assigning tasks~", "distributing work...", "Dev takes this, QA reviews that", "let's sync up on priorities"],
+    "pm-working": ["checking the roadmap...", "adjusting timeline", "confirming requirements", "prioritizing backlog", "Gantt chart needs updating"],
+    "pm-done": ["progress updated!", "schedule is set~", "team notified"],
+    "pm-error": ["plans change again...", "schedule needs revision", "requirements shifted..."],
+
+    "arch-working": ["drawing architecture...", "this pattern works better", "thinking about scalability...", "hmm...microservices?", "writing design doc"],
+    "arch-done": ["architecture finalized!", "design done, over to dev", "direction is clear~"],
+    "arch-error": ["architecture has issues...", "need to rethink this", "won't scale this way..."],
+
+    "gate-working": ["security scanning...", "checking permissions", "compliance review...no shortcuts", "every line matters", "vulnerability scan running"],
+    "gate-done": ["security check passed!", "no vulnerabilities~clear to go", "compliance OK"],
+    "gate-error": ["found a vulnerability!", "non-compliant! rejected!", "can't ship this"],
+
+    "any-done": ["done!", "OK finished~", "next one!", "nice~"],
+    "any-error": ["uh oh...", "something broke", "what now...", "not good..."],
+
+    "react-colleague-blocked": ["someone's stuck...need help?", "who's calling for help?", "another blocker over there", "let me see what's wrong"],
+    "react-colleague-done": ["oh nice, they finished", "someone's done already~", "good pace!", "that was quick~"],
+
+    "gossip": [
+      "heard the other team changed their API again",
+      "what should we eat for lunch...",
+      "who wrote that bug yesterday",
+      "it's Friday...want to leave early",
+      "AI is getting crazy good",
+      "who drank my coffee!?",
+      "the AC is freezing...",
+      "today's standup was so long",
+      "heard we're adding a new feature",
+      "that keyboard next to me is so loud...",
+      "craving bubble tea",
+      "git conflicts again...",
+      "docker ate all my RAM again",
+      "this PR review is taking forever...",
+      "we should get an office cat",
+      "my hands shake before every deploy",
+      "heard the new hire is really good",
+      "time to write the weekly report...",
+      "new coffee shop opened downstairs",
+      "anyone want to order delivery together"
+    ]
+  },
+  "moodLabels": {
+    "normal": "Normal",
+    "rushing": "Rushing",
+    "frustrated": "Frustrated",
+    "stuck": "Stuck",
+    "smooth": "Smooth",
+    "intense": "Intense",
     "idle": "Idle"
   }
 }

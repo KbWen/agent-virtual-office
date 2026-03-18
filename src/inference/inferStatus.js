@@ -12,6 +12,7 @@
  */
 
 import { routeExternalAgents, distributeFallbackCount, routeTaskToAgent } from './agentRouter'
+import { pushEvent, setMoodOverride, resetMood } from '../systems/moodEngine'
 
 // ─── Message normalization ─────────────────────────────────────────────
 
@@ -115,17 +116,19 @@ function startPolling(callback, intervalMs = 2000) {
 // This is the primary channel for real CLI integration
 
 function startFilePolling(callback, intervalMs = 2000) {
-  let lastSeq = null
+  let lastEtag = null
   let consecutive404 = 0
   const timer = setInterval(async () => {
     try {
-      const resp = await fetch('/api/status')
+      const headers = {}
+      if (lastEtag) headers['If-None-Match'] = lastEtag
+      const resp = await fetch('/api/status', { headers })
+      if (resp.status === 304) return // Not modified — skip processing
       if (!resp.ok) { consecutive404++; return }
       consecutive404 = 0
+      lastEtag = resp.headers.get('ETag')
       const data = await resp.json()
       if (!data) return
-      if (data._seq === lastSeq) return
-      lastSeq = data._seq
       const msg = normalizeStatusMessage(data)
       if (msg) callback(msg)
     } catch {
@@ -247,10 +250,25 @@ export function startStatusIntegration(store) {
     if (updates.length > 0) {
       s.applyExternalStatus(updates)
       s.setStatusSource('external')
+
+      // Feed mood engine with each agent update
+      for (const u of updates) {
+        pushEvent({
+          role: u.agentId,
+          status: u.status,
+          task: u.task,
+          hint: u.hint || null,
+        })
+      }
     } else if (msg.activeCount > 0) {
       const ids = distributeFallbackCount(msg.activeCount)
       s.applyExternalStatus(ids.map(id => ({ agentId: id, status: 'working', task: null, label: null })))
       s.setStatusSource('fallback')
+    }
+
+    // Handle explicit mood override from API
+    if (msg.mood) {
+      setMoodOverride(msg.mood, msg.moodDuration || 60000)
     }
 
     if (msg.workflow) s.setActiveWorkflow(msg.workflow)
@@ -315,5 +333,6 @@ export function startStatusIntegration(store) {
     if (debounceTimer) clearTimeout(debounceTimer)
     if (stalenessTimer) clearTimeout(stalenessTimer)
     clearInterval(expiryInterval)
+    resetMood()
   }
 }

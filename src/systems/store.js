@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import characters from '../config/characters.json'
 import { HOME_POSITIONS } from './movementSystem'
 import { randomBubble } from '../i18n'
+import { generateContextBubble } from './contextBubble'
 import { detectProjectMode } from './platformDetect'
 
 const detectMode = () => {
@@ -151,11 +152,24 @@ export const useOfficeStore = create((set) => ({
           status: u.status,
           task: u.task,
           label: u.label,
+          hint: u.hint || null,
           expiresAt: u.status === 'done' ? now + 15000 : now + 120000,
         }
-        agents[u.agentId] = { ...agents[u.agentId], status: u.status }
-        // Set bubble: explicit label > auto-generated from status pool
-        const bubble = u.label
+        // Immediately set behavior + expression to match work status
+        const behaviorMap = {
+          working: { behavior: u.task === 'Bash' ? 'typing' : u.task === 'Read' ? 'reading-screen' : u.task === 'Grep' || u.task === 'Glob' ? 'research' : 'typing', expression: 'focused' },
+          blocked: { behavior: 'scratch-head', expression: 'confused' },
+          done:    { behavior: 'thumbs-up', expression: 'happy' },
+        }
+        const bm = behaviorMap[u.status] || {}
+        agents[u.agentId] = {
+          ...agents[u.agentId],
+          status: u.status,
+          behavior: bm.behavior || agents[u.agentId].behavior,
+          expression: bm.expression || agents[u.agentId].expression,
+        }
+        // Context-aware bubble > status pool fallback
+        const bubble = generateContextBubble(u.agentId, u, ext)
           || randomBubble(u.status === 'blocked' ? 'blocked-status' : u.status === 'done' ? 'done-status' : 'working-status')
         if (bubble) agents[u.agentId] = { ...agents[u.agentId], bubble }
       }
@@ -178,6 +192,10 @@ export const useOfficeStore = create((set) => ({
       }
       return { externalStatus: {}, agents, statusSource: 'organic', activeWorkflow: null }
     }),
+
+  // ─── Mood system ───
+  mood: 'normal',                // normal | rushing | frustrated | stuck | smooth | intense | idle
+  setMood: (mood) => set({ mood }),
 
   setStatusSource: (source) => set({ statusSource: source }),
   setActiveWorkflow: (name) => set({ activeWorkflow: name }),

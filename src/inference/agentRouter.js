@@ -96,6 +96,7 @@ export function routeExternalAgents(agents) {
         status: entry.status || 'working',
         task: entry.task || null,
         label: entry.label || null,
+        hint: entry.hint || null,
       })
     }
   }

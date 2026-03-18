@@ -331,6 +331,12 @@ function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0 }) {
 }
 
 export default function PixelOffice({ animationQuality = 'full', mode = 'full' }) {
+  // Only re-render PixelOffice when agent IDs change, not on every property update.
+  // AgentCharacter subscribes to its own agent state independently.
+  const agentIds = useOfficeStore((s) => {
+    const ids = Object.keys(s.agents)
+    return ids.join(',')  // primitive string → stable reference
+  })
   const agents = useOfficeStore((s) => s.agents)
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
@@ -347,7 +353,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     return cleanup
   }, [])
 
-  const agentList = useMemo(() => sortByY(Object.values(agents)), [agents])
+  // Memoize agent list — only re-sort when IDs change (not on every property update)
+  const agentList = useMemo(() => sortByY(Object.values(agents)), [agentIds])
   const lightOverlay = getLightingOverlay(hour)
 
   // Individual desk positions matching WAYPOINTS

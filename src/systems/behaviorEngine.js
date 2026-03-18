@@ -91,7 +91,27 @@ const STATUS_BUBBLE = {
   done:    { chance: 0.65, pool: 'done-status' },
 }
 
-export function getNextBehavior(agentId, status = 'idle', hour = new Date().getHours()) {
+// Mood-specific bubble pools (i18n keys under "bubbles")
+const MOOD_BUBBLE = {
+  rushing:    { chance: 0.4, pool: 'mood-rushing' },
+  frustrated: { chance: 0.6, pool: 'mood-frustrated' },
+  stuck:      { chance: 0.5, pool: 'mood-stuck' },
+  smooth:     { chance: 0.5, pool: 'mood-smooth' },
+  intense:    { chance: 0.3, pool: 'mood-intense' },
+  idle:       { chance: 0.4, pool: 'mood-idle' },
+}
+
+// Mood-specific weight modifiers — blended 30% into the current weights
+const moodModifiers = {
+  rushing:    { work: 85, daily: 5,  social: 5,  away: 5 },
+  frustrated: { work: 15, daily: 10, social: 10, away: 5, frustrated: 60 },
+  stuck:      { work: 30, daily: 10, social: 10, away: 10, frustrated: 40 },
+  smooth:     { work: 30, daily: 20, social: 35, away: 15 },
+  intense:    { work: 80, daily: 8,  social: 7,  away: 5 },
+  idle:       { work: 20, daily: 30, social: 20, away: 30 },
+}
+
+export function getNextBehavior(agentId, status = 'idle', hour = new Date().getHours(), mood = 'normal') {
   // Start with status-based weights, then apply hour modifiers
   let weights = { ...(statusOverrides[status] || baseWeights) }
   const hourMod = getHourModifiers(hour)
@@ -103,19 +123,35 @@ export function getNextBehavior(agentId, status = 'idle', hour = new Date().getH
       }
     }
   }
+
+  // Mood modifiers: blend 30% mood weights into current weights
+  const mm = moodModifiers[mood]
+  if (mm) {
+    for (const key of Object.keys(mm)) {
+      weights[key] = Math.round((weights[key] || 0) * 0.7 + mm[key] * 0.3)
+    }
+  }
+
   const category = weightedRandom(weights)
   const behavior = pickBehavior(agentId, category)
 
-  // Status-specific messages override behavior messages
-  const statusBubble = STATUS_BUBBLE[status]
+  // Mood-specific messages get first priority
   let message = null
-  if (statusBubble && Math.random() < statusBubble.chance) {
-    // Mix: 60% status-specific, 40% behavior-specific
-    message = Math.random() < 0.6
-      ? pickMessage(statusBubble.pool)
-      : pickMessage(behavior.msgs)
-  } else {
-    message = Math.random() < 0.5 ? pickMessage(behavior.msgs) : null
+  const moodBubble = MOOD_BUBBLE[mood]
+  if (moodBubble && Math.random() < moodBubble.chance) {
+    message = pickMessage(moodBubble.pool)
+  }
+
+  // Then status-specific messages
+  if (!message) {
+    const statusBubble = STATUS_BUBBLE[status]
+    if (statusBubble && Math.random() < statusBubble.chance) {
+      message = Math.random() < 0.6
+        ? pickMessage(statusBubble.pool)
+        : pickMessage(behavior.msgs)
+    } else {
+      message = Math.random() < 0.5 ? pickMessage(behavior.msgs) : null
+    }
   }
 
   const duration = randomDuration(behavior.duration)

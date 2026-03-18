@@ -170,7 +170,7 @@ function processEvent(event) {
   const agentType = event.agent_type || ''
   const toolInput = event.tool_input || null
 
-  let role, task, status, label
+  let role, task, status, label, hint = null
 
   switch (hookEvent) {
     case 'PreToolUse': {
@@ -184,9 +184,13 @@ function processEvent(event) {
     case 'PostToolUse': {
       role = toolToRole(tool)
       task = tool
-      status = 'done'
+      // Detect errors from tool result
+      const toolResult = event.tool_result || ''
+      const isError = event.is_error || (typeof toolResult === 'string' && /error|failed|exception|ENOENT/i.test(toolResult.slice(0, 200)))
+      status = isError ? 'blocked' : 'done'
+      hint = isError ? 'error' : null
       const ctx = extractContext(tool, toolInput)
-      label = toolLabel(tool, ctx, true)
+      label = isError ? `❌ ${ctx || tool} 失敗了` : toolLabel(tool, ctx, true)
       break
     }
     case 'SubagentStart':
@@ -215,7 +219,7 @@ function processEvent(event) {
   // Replace agent with same role, or add new
   const newAgents = [
     ...existing.filter(a => a.role !== role),
-    { role, task, status, label },
+    { role, task, status, label, hint },
   ]
 
   const activeCount = newAgents.filter(a => a.status !== 'done').length
