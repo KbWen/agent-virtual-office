@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useOfficeStore } from '../systems/store'
-import { behaviorLabel, t, locale, setLocale, availableLocales, onLocaleChange } from '../i18n'
+import { behaviorLabel, t, locale, setLocale, availableLocales, onLocaleChange, eventName } from '../i18n'
 
 const statusColors = {
   idle: '#888',
@@ -133,7 +133,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         {/* Active event */}
         {activeEvent && (
           <div className="text-yellow-600 dark:text-yellow-400 animate-pulse shrink-0">
-            {activeEvent.name}
+            {activeEvent.id ? eventName(activeEvent.id) : activeEvent.name}
           </div>
         )}
 
@@ -172,7 +172,14 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 text-[10px]"
             title="Switch language"
           >
-            {lang === 'zh-TW' ? 'EN' : '中'}
+            {/* Show next locale's short name — supports N locales */}
+            {(() => {
+              const locales = availableLocales()
+              const idx = locales.indexOf(lang)
+              const next = locales[(idx + 1) % locales.length]
+              const labels = { en: 'EN', 'zh-TW': '中' }
+              return labels[next] || next.toUpperCase()
+            })()}
           </button>
           <button
             onClick={togglePause}

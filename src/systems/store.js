@@ -40,59 +40,78 @@ export const useOfficeStore = create((set) => ({
   showWorkflow: false,
 
   setAgentBehavior: (id, behavior, expression, bubble) =>
-    set((s) => ({
-      agents: {
-        ...s.agents,
-        [id]: { ...s.agents[id], behavior, expression: expression || s.agents[id].expression, bubble: bubble || null },
-      },
-    })),
+    set((s) => {
+      if (!s.agents[id]) return s
+      return {
+        agents: {
+          ...s.agents,
+          [id]: { ...s.agents[id], behavior, expression: expression || s.agents[id].expression, bubble: bubble || null },
+        },
+      }
+    }),
 
   // Group event: lock agent into event behavior + set movement target
   setAgentGroupEvent: (id, { behavior, expression, bubble, groupTarget }) =>
-    set((s) => ({
-      agents: {
-        ...s.agents,
-        [id]: {
-          ...s.agents[id],
-          behavior, expression, bubble: bubble || null,
-          inGroupEvent: true,
-          groupTarget: groupTarget || null,
+    set((s) => {
+      if (!s.agents[id]) return s
+      return {
+        agents: {
+          ...s.agents,
+          [id]: {
+            ...s.agents[id],
+            behavior, expression, bubble: bubble || null,
+            inGroupEvent: true,
+            groupTarget: groupTarget || null,
+          },
         },
-      },
-    })),
+      }
+    }),
 
   clearAgentGroupEvent: (id) =>
-    set((s) => ({
-      agents: {
-        ...s.agents,
-        [id]: { ...s.agents[id], inGroupEvent: false, groupTarget: null },
-      },
-    })),
+    set((s) => {
+      if (!s.agents[id]) return s
+      return {
+        agents: {
+          ...s.agents,
+          [id]: { ...s.agents[id], inGroupEvent: false, groupTarget: null },
+        },
+      }
+    }),
 
   clearBubble: (id) =>
-    set((s) => ({
-      agents: { ...s.agents, [id]: { ...s.agents[id], bubble: null } },
-    })),
+    set((s) => {
+      if (!s.agents[id]) return s
+      return {
+        agents: { ...s.agents, [id]: { ...s.agents[id], bubble: null } },
+      }
+    }),
 
   setAgentTarget: (id, targetPosition, facing) =>
-    set((s) => ({
-      agents: {
-        ...s.agents,
-        [id]: { ...s.agents[id], targetPosition, isMoving: true, facing: facing || s.agents[id].facing },
-      },
-    })),
+    set((s) => {
+      if (!s.agents[id]) return s
+      return {
+        agents: {
+          ...s.agents,
+          [id]: { ...s.agents[id], targetPosition, isMoving: true, facing: facing || s.agents[id].facing },
+        },
+      }
+    }),
 
   setAgentArrived: (id) =>
-    set((s) => ({
-      agents: {
-        ...s.agents,
-        [id]: { ...s.agents[id], isMoving: false, position: { ...s.agents[id].targetPosition } },
-      },
-    })),
+    set((s) => {
+      if (!s.agents[id]) return s
+      return {
+        agents: {
+          ...s.agents,
+          [id]: { ...s.agents[id], isMoving: false, position: { ...s.agents[id].targetPosition } },
+        },
+      }
+    }),
 
   incrementDeskItem: (id, item) =>
     set((s) => {
       const agent = s.agents[id]
+      if (!agent) return s
       const count = { ...agent.deskItemCount }
       count[item] = ((count[item] || 0) + 1) % 6
       return { agents: { ...s.agents, [id]: { ...agent, deskItemCount: count } } }

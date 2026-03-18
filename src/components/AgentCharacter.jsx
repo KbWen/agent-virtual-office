@@ -30,7 +30,6 @@ const BLUSH = '#FFB6C1'
 
 // Base character facing down (idle frame 0)
 // Row by row: 0=top of head ... 19=feet
-const SKIRT = '#4a3a5a'
 
 function getBaseSprite(hairColor, clothesColor, hairStyle, gender = 'male') {
   // Start with empty grid
@@ -321,8 +320,10 @@ function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing 
     }
   }, [style.hair, style.clothes, style.hairStyle, gender])
 
-  let grid = isMoving ? (walkFrame ? sprites.walk2 : sprites.walk1) : sprites.idle
-  grid = applyExpression(grid, expression)
+  const grid = useMemo(() => {
+    const base = isMoving ? (walkFrame ? sprites.walk2 : sprites.walk1) : sprites.idle
+    return applyExpression(base, expression)
+  }, [isMoving, walkFrame, sprites, expression])
 
   const flipX = facing === 'left'
 

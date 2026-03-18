@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react'
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useOfficeStore } from '../systems/store'
 import { startOfficeLife } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
 import { eventName } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import {
-  Desk, Bookshelf, Plant, Couch, RoundTable, MeetingTable,
+  Bookshelf, Plant, Couch, RoundTable, MeetingTable,
   CoffeeMachine, WaterCooler, GateBooth, WallWindow, Whiteboard,
   ServerRack, Clock, Printer, Rug, CoffeeCup, DeskLamp
 } from './TopDownFurniture'
@@ -15,6 +15,8 @@ function FlyingDocument({ fromPos, toPos, onComplete }) {
   const [progress, setProgress] = React.useState(0)
   const rafRef = React.useRef(null)
   const startRef = React.useRef(null)
+  const onCompleteRef = React.useRef(onComplete)
+  onCompleteRef.current = onComplete
   const DURATION = 800 // ms
 
   React.useEffect(() => {
@@ -26,12 +28,12 @@ function FlyingDocument({ fromPos, toPos, onComplete }) {
       if (t < 1) {
         rafRef.current = requestAnimationFrame(animate)
       } else {
-        onComplete?.()
+        onCompleteRef.current?.()
       }
     }
     rafRef.current = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(rafRef.current)
-  }, [onComplete])
+  }, []) // stable — onComplete stored in ref
 
   // Parabolic arc: x linear, y with arc
   const x = fromPos.x + (toPos.x - fromPos.x) * progress
@@ -345,7 +347,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     return cleanup
   }, [])
 
-  const agentList = sortByY(Object.values(agents))
+  const agentList = useMemo(() => sortByY(Object.values(agents)), [agents])
   const lightOverlay = getLightingOverlay(hour)
 
   // Individual desk positions matching WAYPOINTS
@@ -404,6 +406,22 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
         <filter id="bubble-shadow" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000" floodOpacity="0.12" />
         </filter>
+        {/* Night-time gradients (defined once, referenced by id) */}
+        {deskData.map((d) => (
+          <radialGradient key={`scr-${d.id}`} id={`scr-${d.id}`} cx="50%" cy="30%" r="60%">
+            <stop offset="0%" stopColor="#4af" stopOpacity="0.10" />
+            <stop offset="60%" stopColor="#4af" stopOpacity="0.03" />
+            <stop offset="100%" stopColor="#4af" stopOpacity="0" />
+          </radialGradient>
+        ))}
+        <radialGradient id="mtg-light" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FFE8B0" stopOpacity="0.10" />
+          <stop offset="100%" stopColor="#FFE8B0" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="lounge-light" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FFD090" stopOpacity="0.07" />
+          <stop offset="100%" stopColor="#FFD090" stopOpacity="0" />
+        </radialGradient>
       </defs>
 
       {/* ═══ BACKGROUND ═══ */}
@@ -619,32 +637,17 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {/* ═══ NIGHT EFFECTS ═══ */}
       {hour >= 19 && (
         <g pointerEvents="none">
-          {/* Monitor screen glow on desks */}
+          {/* Monitor screen glow on desks (gradients defined in <defs>) */}
           {deskData.map((d) => (
-            <g key={`glow-${d.id}`}>
-              <radialGradient id={`scr-${d.id}`} cx="50%" cy="30%" r="60%">
-                <stop offset="0%" stopColor="#4af" stopOpacity="0.10" />
-                <stop offset="60%" stopColor="#4af" stopOpacity="0.03" />
-                <stop offset="100%" stopColor="#4af" stopOpacity="0" />
-              </radialGradient>
-              <ellipse cx={d.x} cy={d.y - 8} rx={32} ry={22} fill={`url(#scr-${d.id})`} />
-            </g>
+            <ellipse key={`glow-${d.id}`} cx={d.x} cy={d.y - 8} rx={32} ry={22} fill={`url(#scr-${d.id})`} />
           ))}
           {/* Desk lamps (warm glow) */}
           {deskData.map((d) => (
             <DeskLamp key={`lamp-${d.id}`} x={d.x + 22} y={d.y - 14} on />
           ))}
           {/* Meeting room ceiling light */}
-          <radialGradient id="mtg-light" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#FFE8B0" stopOpacity="0.10" />
-            <stop offset="100%" stopColor="#FFE8B0" stopOpacity="0" />
-          </radialGradient>
           <ellipse cx={705} cy={162} rx={60} ry={45} fill="url(#mtg-light)" />
           {/* Lounge ambient warm light */}
-          <radialGradient id="lounge-light" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#FFD090" stopOpacity="0.07" />
-            <stop offset="100%" stopColor="#FFD090" stopOpacity="0" />
-          </radialGradient>
           <ellipse cx={120} cy={480} rx={80} ry={50} fill="url(#lounge-light)" />
         </g>
       )}

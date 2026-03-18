@@ -1,12 +1,25 @@
+<div align="center">
+
 # Agent Virtual Office
 
-> Your AI agents aren't just running code — they're **at the office**.
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+[![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev)
+[![Vite 6](https://img.shields.io/badge/vite-6-646cff.svg)](https://vitejs.dev)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/KbWen/agent-virtual-office/pulls)
+
+**Your AI agents aren't just running code — they're at the office.**
 
 ![Virtual Office Screenshot](docs/screenshot.png)
 
-A pixel-art isometric office where AI agent characters work, grab coffee, argue about code reviews, and hold stand-ups. They don't know you're watching, but you'll smile anyway.
+A pixel-art virtual office where AI agent characters work, grab coffee, argue about code reviews, and hold stand-ups.
+They don't know you're watching, but you'll smile anyway.
 
-**This isn't a monitoring dashboard — it's a vibe tool.**
+*This isn't a monitoring dashboard — it's a vibe tool.*
+
+[Quick Start](#quick-start) · [Status API](#status-api) · [中文版](README.zh-TW.md)
+
+</div>
 
 ---
 
@@ -59,7 +72,7 @@ Options:
 ### Option 2: Clone & dev
 
 ```bash
-git clone https://github.com/anthropics/agent-virtual-office.git
+git clone https://github.com/KbWen/agent-virtual-office.git
 cd agent-virtual-office
 npm install
 npm run dev
@@ -92,10 +105,10 @@ curl -X POST http://localhost:5174/api/status \
 ```
 
 ### Supported Roles
-`pm`, `arch`, `dev`, `qa`, `ops`, `res`, `gate`
+`pm` · `arch` · `dev` · `qa` · `ops` · `res` · `gate`
 
 ### Supported Statuses
-`idle`, `working`, `blocked`, `done`
+`idle` · `working` · `blocked` · `done`
 
 ### Platform Integration
 
@@ -131,14 +144,16 @@ Default language is English. Chinese (Traditional) is available:
 
 ## Tech Highlights
 
-- **Pure SVG pixel art** — 16×20 hand-drawn characters, 7 hairstyles + 7 expressions + 2 genders
-- **25 behavior animations** — Each behavior has a matching icon (keyboard, coffee cup, magnifier...)
-- **RAF movement** — requestAnimationFrame-driven smooth walking at 80px/s
-- **Corridor routing** — Characters walk through doorways and corridors, no clipping
-- **Behavior engine** — Weighted random: work 65% / daily 12% / social 13% / away 10%
-- **Status-aware speech** — "Let's go!" when working, "Help..." when blocked
-- **Real-time clock** — Nap at noon, only Dev stays late with one lamp on
-- **Never-stuck guarantee** — try/catch + watchdog timer, behavior chain never breaks
+| Feature | Detail |
+|---------|--------|
+| **Pure SVG pixel art** | 16×20 hand-drawn characters, 7 hairstyles + 7 expressions + 2 genders |
+| **25 behavior animations** | Each behavior has a matching icon (keyboard, coffee cup, magnifier...) |
+| **RAF movement** | requestAnimationFrame-driven smooth walking at 80px/s |
+| **Corridor routing** | Characters walk through doorways and corridors, no clipping |
+| **Behavior engine** | Weighted random: work 65% / daily 12% / social 13% / away 10% |
+| **Status-aware speech** | "Let's go!" when working, "Help..." when blocked |
+| **Real-time clock** | Nap at noon, only Dev stays late with one lamp on |
+| **Never-stuck guarantee** | try/catch + watchdog timer, behavior chain never breaks |
 
 ---
 
@@ -153,6 +168,7 @@ Default language is English. Chinese (Traditional) is available:
 │   │   ├── AgentCharacter.jsx  # Character sprite + behavior scheduler + RAF movement
 │   │   ├── PixelOffice.jsx     # Main scene (SVG office + furniture)
 │   │   ├── BehaviorBubble.jsx  # Speech bubbles
+│   │   ├── TopDownFurniture.jsx # Desk & furniture SVG components
 │   │   └── ControlPanel.jsx    # Bottom status panel + language toggle
 │   ├── systems/
 │   │   ├── behaviorEngine.js   # Weighted random behavior engine
@@ -160,7 +176,8 @@ Default language is English. Chinese (Traditional) is available:
 │   │   ├── officeLife.js       # Group event system (8+ events)
 │   │   └── store.js            # Zustand state management
 │   ├── inference/
-│   │   └── inferStatus.js      # External status integration
+│   │   ├── inferStatus.js      # External status integration
+│   │   └── agentRouter.js      # Agent routing logic
 │   ├── i18n.js                 # Lightweight i18n (~90 lines)
 │   ├── locales/
 │   │   ├── en.json             # English strings
@@ -168,6 +185,10 @@ Default language is English. Chinese (Traditional) is available:
 │   └── config/
 │       ├── characters.json     # Character definitions
 │       └── officeEvents.json   # Event pool + message library
+├── public/
+│   ├── bridge.html             # Status bridge for iframe embedding
+│   └── hooks/                  # Example hook configs
+├── docs/                       # Design specs & architecture docs
 ├── vite.config.js              # Vite + status API middleware
 └── package.json
 ```
@@ -176,28 +197,54 @@ Default language is English. Chinese (Traditional) is available:
 
 ## Tech Stack
 
-| Using | Why |
-|-------|-----|
-| React + Vite | Fast dev, fast builds |
-| SVG | Lightweight, no GPU needed |
-| requestAnimationFrame | Smooth movement, no jank |
-| Zustand | 100× lighter than Redux |
-| Tailwind CSS | Rapid UI iteration |
-| `new Date()` | Time-of-day effects, no server needed |
+<table>
+<tr><th>Using</th><th>Why</th></tr>
+<tr><td>React 19 + Vite 6</td><td>Fast dev, fast builds</td></tr>
+<tr><td>SVG</td><td>Lightweight, no GPU needed</td></tr>
+<tr><td>requestAnimationFrame</td><td>Smooth movement, no jank</td></tr>
+<tr><td>Zustand</td><td>100× lighter than Redux</td></tr>
+<tr><td>Tailwind CSS v4</td><td>Rapid UI iteration</td></tr>
+<tr><td><code>new Date()</code></td><td>Time-of-day effects, no server needed</td></tr>
+</table>
 
-| Not Using | Why |
-|-----------|-----|
-| Canvas / WebGL | Too heavy |
-| WebSocket | Not needed |
-| Backend / Database | Not needed |
+<details>
+<summary><b>Not Using (and why)</b></summary>
+
+| Technology | Why not |
+|-----------|---------|
+| Canvas / WebGL | Too heavy for this use case |
+| WebSocket | Not needed — polling + postMessage is enough |
+| Backend / Database | Pure frontend, zero infrastructure |
 | Three.js | Bundle too large |
+
+</details>
 
 ---
 
-## Language
+## Documentation
 
-- [中文版 README](README.zh-TW.md)
+- [Architecture & Technical Design](docs/ARCHITECTURE.md) — System architecture, movement system, behavior engine internals
+- [Design Specification](docs/DESIGN_SPEC.md) — Visual style, sprite system, animation states, event scripts
+- [Sprite Requirements](docs/SPRITE_REQUIREMENTS.md) — Pixel art asset specs for contributors
+
+---
+
+## Contributing
+
+PRs are welcome! See the [docs](docs/) folder for technical details before diving in.
+
+---
 
 ## License
 
 MIT
+
+---
+
+<div align="center">
+
+**[English](README.md)** · **[中文](README.zh-TW.md)**
+
+Made with pixels and coffee.
+
+</div>

@@ -314,16 +314,24 @@ function executeEvent(store, event, participants) {
       const s = store.getState()
       participants.forEach((id) => {
         if (s.agents[id]?.inGroupEvent) {
-          store.getState().clearAgentGroupEvent(id)
-          store.getState().clearBubble(id)
+          s.clearAgentGroupEvent(id)
+          s.clearBubble(id)
         }
       })
-      store.getState().clearActiveEvent()
+      s.clearActiveEvent()
     }, event.duration)
   }
 }
 
 export function startOfficeLife(store) {
+  // Guard against double-init (React StrictMode)
+  if (dailyTimer || rareTimer) {
+    clearTimeout(dailyTimer)
+    clearTimeout(rareTimer)
+    dailyTimer = null
+    rareTimer = null
+  }
+
   const scheduleDaily = () => {
     dailyTimer = setTimeout(() => {
       const state = store.getState()
@@ -362,9 +370,80 @@ export function startOfficeLife(store) {
     store.getState().updateTime()
   }, 60000)
 
+  // ─── Time-linked events ──────────────────────────────────────────────
+  // Check every minute for time-specific behaviors
+  let lastTriggeredHour = -1
+  const timeEventInterval = setInterval(() => {
+    const state = store.getState()
+    if (state.isPaused || state.activeEvent) return
+    const hour = state.hour
+    if (hour === lastTriggeredHour) return
+    lastTriggeredHour = hour
+
+    const agentIds = Object.keys(state.agents)
+
+    // 12:00-13:00 — Lunch nap: half the agents nap at desk
+    if (hour === 12) {
+      const nappers = agentIds.filter(() => Math.random() < 0.5)
+      nappers.forEach((id) => {
+        store.getState().setAgentGroupEvent(id, {
+          behavior: 'nap',
+          expression: 'sleepy',
+          bubble: eventBubble('group-stretch'),
+          groupTarget: null,
+        })
+      })
+      setTimeout(() => {
+        const s = store.getState()
+        nappers.forEach((id) => {
+          if (s.agents[id]?.inGroupEvent) {
+            s.clearAgentGroupEvent(id)
+          }
+        })
+      }, 45000)
+    }
+
+    // 14:00-14:30 — Post-lunch drowsiness: everyone gets sleepy expression
+    if (hour === 14) {
+      agentIds.forEach((id) => {
+        store.getState().setAgentBehavior(id, store.getState().agents[id]?.behavior || 'typing', 'tired', null)
+      })
+      setTimeout(() => {
+        agentIds.forEach((id) => {
+          const s = store.getState()
+          if (s.agents[id]?.expression === 'tired') {
+            s.setAgentBehavior(id, s.agents[id].behavior, 'normal', null)
+          }
+        })
+      }, 30000)
+    }
+
+    // 10:00 or 15:00 — Auto tea break
+    if (hour === 10 || hour === 15) {
+      const teaEvent = eventsData.daily.find(e => e.id === 'tea-break')
+      if (teaEvent) {
+        const participants = pickParticipants(teaEvent, state.agents, state.externalStatus)
+        store.getState().setActiveEvent(teaEvent)
+        executeEvent(store, teaEvent, participants)
+      }
+    }
+
+    // Friday 15:00+ — Social boost (handled via behavior weights already, but trigger a group-meeting)
+    const day = new Date().getDay()
+    if (day === 5 && hour === 15) {
+      const meetEvent = eventsData.daily.find(e => e.id === 'group-meeting')
+      if (meetEvent) {
+        const participants = pickParticipants(meetEvent, state.agents, state.externalStatus)
+        store.getState().setActiveEvent(meetEvent)
+        executeEvent(store, meetEvent, participants)
+      }
+    }
+  }, 60000)
+
   return () => {
     clearTimeout(dailyTimer)
     clearTimeout(rareTimer)
     clearInterval(timeInterval)
+    clearInterval(timeEventInterval)
   }
 }

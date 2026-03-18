@@ -71,7 +71,10 @@
 
     // Also try postMessage to parent (for iframe/artifact embedding)
     if (window.parent && window.parent !== window) {
-      try { window.parent.postMessage(msg, '*') } catch (_) {}
+      try {
+        const targetOrigin = window.location.origin || '*'
+        window.parent.postMessage(msg, targetOrigin)
+      } catch (_) {}
     }
   }
 
