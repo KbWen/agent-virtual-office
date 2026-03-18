@@ -3,9 +3,104 @@
 const { execSync, spawn } = require('child_process')
 const path = require('path')
 const fs = require('fs')
+const os = require('os')
 
 const root = path.resolve(__dirname, '..')
 const args = process.argv.slice(2)
+const command = args[0]
+
+// ─── setup: one-click Claude Code hook installation ───
+if (command === 'setup') {
+  const claudeDir = path.join(os.homedir(), '.claude')
+  const settingsPath = path.join(claudeDir, 'settings.json')
+  const hookSrc = path.join(root, 'public', 'hooks', 'office-status-hook.js')
+
+  // Ensure ~/.claude exists
+  if (!fs.existsSync(claudeDir)) fs.mkdirSync(claudeDir, { recursive: true })
+
+  // Copy hook script to ~/.claude/
+  const hookDest = path.join(claudeDir, 'office-status-hook.js')
+  fs.copyFileSync(hookSrc, hookDest)
+
+  // Read or create settings.json
+  let settings = {}
+  if (fs.existsSync(settingsPath)) {
+    try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) } catch {}
+  }
+
+  // Build hook command (node works on all platforms, no jq/bash dependency)
+  const hookCmd = `node "${hookDest.replace(/\\/g, '/')}"`
+  const hookEntry = { type: 'command', command: hookCmd }
+
+  // Add hooks for all relevant events
+  if (!settings.hooks) settings.hooks = {}
+  for (const event of ['PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop']) {
+    if (!settings.hooks[event]) settings.hooks[event] = []
+    // Check if already installed (avoid duplicates)
+    const existing = settings.hooks[event]
+    const hasHook = existing.some(h =>
+      (h.hooks || []).some(hh => hh.command && hh.command.includes('office-status-hook'))
+    )
+    if (!hasHook) {
+      existing.push({ hooks: [hookEntry] })
+    }
+  }
+
+  // Write back
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
+
+  console.log(`
+  Virtual Office setup complete!
+
+  Hook installed:  ${hookDest}
+  Settings updated: ${settingsPath}
+
+  Now run:
+    npx agent-virtual-office
+
+  Then use Claude Code in any project — the office will light up automatically.
+  `)
+  process.exit(0)
+}
+
+// ─── uninstall: remove hooks ───
+if (command === 'uninstall') {
+  const claudeDir = path.join(os.homedir(), '.claude')
+  const settingsPath = path.join(claudeDir, 'settings.json')
+  const hookDest = path.join(claudeDir, 'office-status-hook.js')
+  const hookDestLegacy = path.join(claudeDir, 'office-status-hook.sh')
+
+  // Remove hook files (current + legacy .sh)
+  for (const f of [hookDest, hookDestLegacy]) {
+    if (fs.existsSync(f)) {
+      fs.unlinkSync(f)
+      console.log('  Removed: ' + f)
+    }
+  }
+
+  // Remove from settings.json
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
+      if (settings.hooks) {
+        for (const event of ['PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop']) {
+          if (settings.hooks[event]) {
+            settings.hooks[event] = settings.hooks[event].filter(h =>
+              !(h.hooks || []).some(hh => hh.command && hh.command.includes('office-status-hook'))
+            )
+            if (settings.hooks[event].length === 0) delete settings.hooks[event]
+          }
+        }
+        if (Object.keys(settings.hooks).length === 0) delete settings.hooks
+      }
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
+      console.log('  Cleaned: ' + settingsPath)
+    } catch {}
+  }
+
+  console.log('\n  Virtual Office hooks removed.\n')
+  process.exit(0)
+}
 
 // Parse flags
 const port = args.find(a => a.startsWith('--port='))?.split('=')[1] || '5174'
@@ -19,6 +114,8 @@ if (help) {
 
   Usage:
     npx agent-virtual-office [options]
+    npx agent-virtual-office setup       Install Claude Code hooks (one-time)
+    npx agent-virtual-office uninstall   Remove hooks
 
   Options:
     --port=PORT    Port number (default: 5174)
@@ -27,18 +124,11 @@ if (help) {
     --no-host      Don't expose to network (localhost only)
     --help, -h     Show this help
 
-  Status API:
-    POST http://localhost:PORT/api/status
-    Body: {"dev":"working","workflow":"Feature X"}
+  Quick start:
+    npx agent-virtual-office setup   # one-time: install hooks
+    npx agent-virtual-office         # start the office
 
-  Embedding:
-    http://localhost:PORT?mode=panel   (compact panel for IDE sidebars)
-    http://localhost:PORT?lang=zh-TW   (force Chinese)
-
-  Example:
-    curl -X POST http://localhost:5174/api/status \\
-      -H "Content-Type: application/json" \\
-      -d '{"dev":"working","qa":"testing","workflow":"Sprint 42"}'
+  Then use Claude Code in any project — the office lights up automatically.
 `)
   process.exit(0)
 }
