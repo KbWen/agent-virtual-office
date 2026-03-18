@@ -24,6 +24,7 @@ if (help) {
     --port=PORT    Port number (default: 5174)
     --lang=LANG    Language: en, zh-TW (default: auto-detect)
     --no-open      Don't open browser automatically
+    --no-host      Don't expose to network (localhost only)
     --help, -h     Show this help
 
   Status API:
@@ -46,7 +47,7 @@ if (help) {
 const nodeModules = path.join(root, 'node_modules')
 if (!fs.existsSync(nodeModules)) {
   console.log('Installing dependencies...')
-  execSync('npm install --production=false', { cwd: root, stdio: 'inherit' })
+  execSync('npm install', { cwd: root, stdio: 'inherit' })
 }
 
 // Build URL
@@ -60,7 +61,10 @@ console.log(`
 `)
 
 // Start vite dev server
-const vite = spawn('npx', ['vite', '--port', port, '--host'], {
+const host = !args.includes('--no-host')
+const viteArgs = ['vite', '--port', port]
+if (host) viteArgs.push('--host')
+const vite = spawn('npx', viteArgs, {
   cwd: root,
   stdio: 'inherit',
   shell: true,

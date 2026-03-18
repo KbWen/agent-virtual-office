@@ -75,6 +75,8 @@ export function inferFromParams() {
 
 function listenForStatusUpdates(callback) {
   const handler = (event) => {
+    // Only accept messages from same origin or trusted parent frames
+    if (event.origin !== window.location.origin && event.source !== window.parent) return
     const msg = normalizeStatusMessage(event.data)
     if (msg) callback(msg)
   }

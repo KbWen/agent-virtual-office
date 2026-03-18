@@ -1,13 +1,25 @@
+<div align="center">
+
 # Agent Virtual Office
 
-> 你的 AI Agent 團隊不只是在跑 code — 他們在**上班**。
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+[![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev)
+[![Vite 6](https://img.shields.io/badge/vite-6-646cff.svg)](https://vitejs.dev)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/KbWen/agent-virtual-office/pulls)
+
+**你的 AI Agent 團隊不只是在跑 code — 他們在上班。**
 
 ![Virtual Office Screenshot](docs/screenshot.png)
 
 一群像素小人在 2.5D 等距辦公室裡認真工作、偷喝咖啡、吵架、開會、上廁所。
 他們不知道你在看，但你看了會嘴角上揚。
 
-**這不是監控面板，是氛圍工具。**
+*這不是監控面板，是氛圍工具。*
+
+[快速開始](#快速開始) · [狀態 API](#狀態-api) · [English](README.md)
+
+</div>
 
 ---
 
@@ -60,7 +72,7 @@ npx agent-virtual-office
 ### 方式二：Clone & 開發
 
 ```bash
-git clone https://github.com/anthropics/agent-virtual-office.git
+git clone https://github.com/KbWen/agent-virtual-office.git
 cd agent-virtual-office
 npm install
 npm run dev
@@ -93,10 +105,10 @@ curl -X POST http://localhost:5174/api/status \
 ```
 
 ### 支援的角色
-`pm`, `arch`, `dev`, `qa`, `ops`, `res`, `gate`
+`pm` · `arch` · `dev` · `qa` · `ops` · `res` · `gate`
 
 ### 支援的狀態
-`idle`, `working`, `blocked`, `done`
+`idle` · `working` · `blocked` · `done`
 
 ### 平台整合
 
@@ -132,14 +144,16 @@ http://localhost:5174?lang=zh-TW   # 強制中文
 
 ## 技術亮點
 
-- **純 SVG 像素藝術** — 16x20 像素格手繪角色，7 種髮型 + 7 種表情 + 2 種性別
-- **25 種行為動畫圖標** — 每個行為旁邊都有對應的小圖標（鍵盤、咖啡杯、放大鏡...）
-- **RAF 移動系統** — requestAnimationFrame 驅動的 80px/s 平滑走路，不用 CSS transition
-- **走廊路由** — 角色走路會經過門口和走廊，不會穿牆穿桌
-- **行為引擎** — 權重隨機系統：工作 65% / 日常 12% / 社交 13% / 離席 10%
-- **狀態感知對話** — working 時說「衝衝衝!」，blocked 時說「救命啊」
-- **真實時間連動** — 中午趴桌午休、晚上只剩 Dev 和一盞燈
-- **永不卡死** — try/catch + 看門狗計時器，行為排程鏈永遠不會斷
+| 特色 | 細節 |
+|------|------|
+| **純 SVG 像素藝術** | 16×20 像素格手繪角色，7 種髮型 + 7 種表情 + 2 種性別 |
+| **25 種行為動畫圖標** | 每個行為旁邊都有對應的小圖標（鍵盤、咖啡杯、放大鏡...） |
+| **RAF 移動系統** | requestAnimationFrame 驅動的 80px/s 平滑走路 |
+| **走廊路由** | 角色走路會經過門口和走廊，不會穿牆穿桌 |
+| **行為引擎** | 權重隨機系統：工作 65% / 日常 12% / 社交 13% / 離席 10% |
+| **狀態感知對話** | working 時說「衝衝衝!」，blocked 時說「救命啊」 |
+| **真實時間連動** | 中午趴桌午休、晚上只剩 Dev 和一盞燈 |
+| **永不卡死** | try/catch + 看門狗計時器，行為排程鏈永遠不會斷 |
 
 ---
 
@@ -153,10 +167,24 @@ http://localhost:5174?lang=zh-TW   # 強制中文
 
 ---
 
+## 文件
+
+- [技術架構](docs/ARCHITECTURE.md) — 系統架構、移動系統、行為引擎內部細節
+- [設計規格書](docs/DESIGN_SPEC.md) — 視覺風格、精靈系統、動畫狀態、事件腳本
+- [精靈圖需求](docs/SPRITE_REQUIREMENTS.md) — 像素藝術素材規格
+
+---
+
 ## License
 
 MIT
 
 ---
 
-[English README](README.md)
+<div align="center">
+
+**[English](README.md)** · **[中文](README.zh-TW.md)**
+
+用像素和咖啡做的。
+
+</div>

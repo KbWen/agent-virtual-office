@@ -2,7 +2,7 @@
   "name": "agent-virtual-office",
   "version": "1.0.0",
   "description": "Pixel-art virtual office that visualizes AI agent activity in real-time. Works with Claude Code, Gemini CLI, Codex, and any tool that can POST status.",
-  "main": "index.js",
+  "main": "bin/cli.js",
   "bin": {
     "agent-virtual-office": "./bin/cli.js"
   },
@@ -37,7 +37,6 @@
     "package.json"
   ],
   "dependencies": {
-    "framer-motion": "^12.37.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "zustand": "^5.0.12"

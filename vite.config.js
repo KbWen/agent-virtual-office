@@ -47,6 +47,24 @@ function officeStatusPlugin() {
     }
   }
 
+  // Simple rate limiter: max 30 POST requests per 10 seconds per IP
+  const postCounts = new Map()
+  const RATE_WINDOW = 10000
+  const RATE_LIMIT = 30
+
+  function checkRateLimit(req) {
+    if (req.method !== 'POST') return true
+    const ip = req.socket?.remoteAddress || 'unknown'
+    const now = Date.now()
+    const entry = postCounts.get(ip)
+    if (!entry || now - entry.start > RATE_WINDOW) {
+      postCounts.set(ip, { start: now, count: 1 })
+      return true
+    }
+    entry.count++
+    return entry.count <= RATE_LIMIT
+  }
+
   return {
     name: 'office-status-api',
     configureServer(server) {
@@ -59,6 +77,13 @@ function officeStatusPlugin() {
 
         // CORS preflight
         if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return }
+
+        // Rate limiting for POST
+        if (!checkRateLimit(req)) {
+          res.statusCode = 429
+          res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
+          return
+        }
 
         // GET → read current status
         if (req.method === 'GET') {
