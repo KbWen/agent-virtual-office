@@ -38,8 +38,10 @@ function toolToRole(tool) {
     Edit: 'dev', Write: 'dev', NotebookEdit: 'dev',
     Bash: 'ops',
     Read: 'res', Glob: 'res', Grep: 'res',
-    Agent: 'pm',
+    Agent: 'pm', TodoWrite: 'pm',
     WebFetch: 'res', WebSearch: 'res',
+    EnterPlanMode: 'arch', ExitPlanMode: 'arch',
+    AskUserQuestion: 'gate',
   }
   return map[tool] || 'dev'
 }
@@ -94,6 +96,13 @@ function extractContext(tool, toolInput) {
       case 'WebFetch':
       case 'WebSearch':
         return input.query || input.url?.replace(/^https?:\/\//, '').slice(0, 25) || null
+      case 'TodoWrite':
+        return input.todos?.length ? `${input.todos.length} tasks` : null
+      case 'EnterPlanMode':
+      case 'ExitPlanMode':
+        return null
+      case 'AskUserQuestion':
+        return input.questions?.[0]?.question?.slice(0, 25) || null
       default:
         return null
     }
@@ -120,7 +129,9 @@ function toolLabel(tool, context, isDone) {
       case 'Bash':   return `⚡ ${context}`
       case 'Grep':   return `🔎 搜 ${context}`
       case 'Glob':   return `🔍 找 ${context}`
-      case 'Agent':  return `📋 ${context}`
+      case 'Agent':
+      case 'TodoWrite':  return `📋 ${context}`
+      case 'AskUserQuestion':  return `🚪 確認：${context}`
       case 'WebFetch':
       case 'WebSearch': return `🌐 ${context}`
       default:       return `💻 ${context}`
@@ -139,6 +150,10 @@ function toolLabel(tool, context, isDone) {
     WebFetch:     ['🌐 查資料中', '🌐 上網看看'],
     WebSearch:    ['🌐 搜尋中', '🌐 找答案中'],
     NotebookEdit: ['📓 改 notebook', '📓 跑實驗中'],
+    TodoWrite:       ['📋 整理任務中', '📋 排工作'],
+    EnterPlanMode:   ['🏗️ 規劃架構中', '🏗️ 想想怎麼做'],
+    ExitPlanMode:    ['🏗️ 架構定案！', '🏗️ 計劃好了'],
+    AskUserQuestion: ['🚪 問問看', '🚪 確認一下'],
   }
   return pick(fallback[tool] || ['💻 處理中', '💻 忙著呢'])
 }

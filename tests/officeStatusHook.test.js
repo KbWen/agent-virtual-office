@@ -29,9 +29,21 @@ describe('toolToRole', () => {
     expect(toolToRole('WebSearch')).toBe('res')
   })
 
+  it('maps TodoWrite to pm', () => {
+    expect(toolToRole('TodoWrite')).toBe('pm')
+  })
+
+  it('maps EnterPlanMode/ExitPlanMode to arch', () => {
+    expect(toolToRole('EnterPlanMode')).toBe('arch')
+    expect(toolToRole('ExitPlanMode')).toBe('arch')
+  })
+
+  it('maps AskUserQuestion to gate', () => {
+    expect(toolToRole('AskUserQuestion')).toBe('gate')
+  })
+
   it('defaults unknown tools to dev', () => {
     expect(toolToRole('UnknownTool')).toBe('dev')
-    expect(toolToRole('TodoWrite')).toBe('dev')
   })
 })
 
@@ -158,5 +170,24 @@ describe('extractContext (hook)', () => {
 
   it('returns null for unknown tool', () => {
     expect(extractContext('UnknownTool', { anything: 'here' })).toBeNull()
+  })
+
+  it('extracts task count from TodoWrite input', () => {
+    const result = extractContext('TodoWrite', { todos: [{ content: 'a' }, { content: 'b' }] })
+    expect(result).toBe('2 tasks')
+  })
+
+  it('returns null for TodoWrite with no todos', () => {
+    expect(extractContext('TodoWrite', {})).toBeNull()
+  })
+
+  it('extracts question from AskUserQuestion input', () => {
+    const result = extractContext('AskUserQuestion', { questions: [{ question: 'Which approach should we use for auth?' }] })
+    expect(result).toBe('Which approach should we ')
+  })
+
+  it('returns null for EnterPlanMode/ExitPlanMode', () => {
+    expect(extractContext('EnterPlanMode', {})).toBeNull()
+    expect(extractContext('ExitPlanMode', {})).toBeNull()
   })
 })
