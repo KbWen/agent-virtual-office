@@ -186,7 +186,7 @@ function processEvent(event) {
       task = tool
       // Detect errors from tool result
       const toolResult = event.tool_result || ''
-      const isError = event.is_error || (typeof toolResult === 'string' && /error|failed|exception|ENOENT/i.test(toolResult.slice(0, 200)))
+      const isError = event.is_error || (typeof toolResult === 'string' && /^(Error:|Exit code [1-9]|ENOENT|EPERM|EACCES|Command failed|fatal:)/im.test(toolResult.slice(0, 300)))
       status = isError ? 'blocked' : 'done'
       hint = isError ? 'error' : null
       const ctx = extractContext(tool, toolInput)

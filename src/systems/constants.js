@@ -17,8 +17,8 @@ export const CORRIDOR_JITTER = 30       // px jitter for corridor waypoints
 export const DOOR_JITTER = 20           // px jitter for door waypoints
 
 // Office life events
-export const DAILY_EVENT_INTERVAL = [60000, 180000]    // 1-3 min
-export const RARE_EVENT_INTERVAL = [300000, 600000]    // 5-10 min
+export const DAILY_EVENT_INTERVAL = [60000, 180000]    // 1–3 min
+export const RARE_EVENT_INTERVAL = [300000, 600000]    // 5–10 min
 export const TIME_CHECK_INTERVAL = 60000               // 1 min
 
 // API

@@ -187,6 +187,17 @@
       "anyone want to order delivery together"
     ]
   },
+  "activityFeed": {
+    "title": "Activity",
+    "expand": "Activity Feed",
+    "collapse": "Collapse",
+    "items": "items",
+    "empty": "No activity yet"
+  },
+  "inspector": {
+    "recentActivity": "Recent",
+    "noActivity": "No recent activity"
+  },
   "moodLabels": {
     "normal": "Normal",
     "rushing": "Rushing",

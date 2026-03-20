@@ -1,6 +1,7 @@
 import React, { useMemo, useEffect } from 'react'
 import PixelOffice from './components/PixelOffice'
 import ControlPanel from './components/ControlPanel'
+import ActivityFeed from './components/ActivityFeed'
 import ErrorBoundary from './components/ErrorBoundary'
 import { detectPlatform, getPlatformConfig } from './systems/platformDetect'
 import { useOfficeStore } from './systems/store'
@@ -50,7 +51,9 @@ export default function App() {
       <div className="w-screen h-screen bg-[#F5F2EB] dark:bg-[#1a1814] flex flex-col items-center justify-center overflow-hidden">
         <PixelOffice animationQuality={config.animationQuality} />
         {config.showControlPanel && <ControlPanel platform={platform} />}
+        <ActivityFeed mode={mode} />
       </div>
     </ErrorBoundary>
   )
 }
+

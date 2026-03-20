@@ -1,13 +1,6 @@
 import React, { useState } from 'react'
-import { useOfficeStore } from '../systems/store'
+import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName } from '../i18n'
-
-const statusColors = {
-  idle: '#888',
-  working: '#EF9F27',
-  done: '#5CB88A',
-  blocked: '#E24B4A',
-}
 
 const statusOptions = ['idle', 'working', 'blocked', 'done']
 
@@ -73,7 +66,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
               return (
                 <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${charName(agent.id)}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
                   <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: agent.color }} />
-                  <span className="inline-block w-1 h-1 rounded-full" style={{ backgroundColor: statusColors[agent.status] || '#888' }} />
+                  <span className="inline-block w-1 h-1 rounded-full" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} />
                 </div>
               )
             })}
@@ -113,7 +106,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
                 <span className="text-gray-700 dark:text-gray-200 font-medium">{name}</span>
                 <span className="text-gray-400 dark:text-gray-500">·</span>
                 <span className={ext ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-gray-500 dark:text-gray-400'}>{label}</span>
-                <span className="inline-block w-1.5 h-1.5 rounded-full ml-0.5" style={{ backgroundColor: statusColors[agent.status] || '#888' }} />
+                <span className="inline-block w-1.5 h-1.5 rounded-full ml-0.5" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} />
               </div>
             )
           })}
@@ -180,7 +173,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
                         ? 'text-white font-bold'
                         : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 bg-gray-200 dark:bg-gray-700'
                     }`}
-                    style={agent.status === st ? { backgroundColor: statusColors[st] } : {}}
+                    style={agent.status === st ? { backgroundColor: STATUS_COLORS[st] } : {}}
                   >
                     {st}
                   </button>

@@ -16,6 +16,8 @@ export function normalizePost(body) {
     }
     if (body.mood) body.mood = VALID_MOODS.includes(body.mood) ? body.mood : null
     if (body.moodDuration) body.moodDuration = Math.min(Number(body.moodDuration) || 60000, MAX_MOOD_DURATION)
+    // Ensure _seq is always set (used for dedup + staleness)
+    if (!body._seq) body._seq = String(Date.now())
     return body
   }
   const agents = []
