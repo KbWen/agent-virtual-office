@@ -236,6 +236,9 @@ function fileWatcherFallbackPlugin() {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), officeStatusPlugin(), fileWatcherFallbackPlugin()],
+  server: {
+    strictPort: false,
+  },
   build: {
     rollupOptions: {
       output: { inlineDynamicImports: true }

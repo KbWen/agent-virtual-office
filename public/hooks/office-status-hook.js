@@ -241,6 +241,7 @@ function processEvent(event) {
 
   const output = {
     _seq: String(Date.now()),
+    _cwd: process.cwd(),
     type: 'office-status',
     agents: newAgents,
     activeCount,

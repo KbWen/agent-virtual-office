@@ -206,5 +206,29 @@
     "smooth": "順風順水",
     "intense": "全力衝刺",
     "idle": "悠哉悠哉"
+  },
+  "ui": {
+    "live": "即時",
+    "fallbackAgents": "{0} 個 agent",
+    "run": "執行",
+    "test": "測試",
+    "testHint": "設定 agent 狀態以改變行為權重 — 工作中：更多打字，卡住：焦躁，完成：慶祝",
+    "platforms": {
+      "browser": "瀏覽器",
+      "claude-cli": "Claude CLI",
+      "claude-desktop": "Claude 桌面版",
+      "codex-app": "Codex App",
+      "codex-cli": "Codex CLI",
+      "antigravity": "Antigravity",
+      "embedded": "嵌入式"
+    }
+  },
+  "onboarding": {
+    "description": "這個辦公室會即時顯示你的 Claude Code 工作狀態 — 每個角色會隨著你的開發活動做出反應。",
+    "shortcuts": "快捷鍵",
+    "shortcutPause": "空白鍵 — 暫停 / 繼續",
+    "shortcutLang": "L — 切換語言",
+    "shortcutClick": "點擊角色 — 查看詳情",
+    "gotIt": "了解！"
   }
 }

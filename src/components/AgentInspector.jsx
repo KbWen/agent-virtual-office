@@ -26,6 +26,15 @@ export default function AgentInspector() {
     return () => window.removeEventListener('keydown', handler)
   }, [selectedAgent, clearSelectedAgent])
 
+  // Hooks must be called unconditionally (React Rules of Hooks),
+  // so this must appear before the early-return guard.
+  const recentActivities = useMemo(() => {
+    if (!selectedAgent) return []
+    return activityLog
+      .filter(a => a.agentId === selectedAgent)
+      .slice(0, 5)
+  }, [activityLog, selectedAgent])
+
   if (!selectedAgent || !agent) return null
 
   const name = charName(selectedAgent)
@@ -34,14 +43,6 @@ export default function AgentInspector() {
   const currentBehavior = behaviorLabel(agent.behavior)
   const task = ext?.label || ext?.task || null
   const color = agent.color || '#888'
-
-  // Recent activities for this agent (last 5)
-  const recentActivities = useMemo(() =>
-    activityLog
-      .filter(a => a.agentId === selectedAgent)
-      .slice(0, 5),
-    [activityLog, selectedAgent]
-  )
 
   const pos = agent.position || { x: 300, y: 250 }
 

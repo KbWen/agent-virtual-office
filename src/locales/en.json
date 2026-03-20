@@ -206,5 +206,29 @@
     "smooth": "Smooth",
     "intense": "Intense",
     "idle": "Idle"
+  },
+  "ui": {
+    "live": "Live",
+    "fallbackAgents": "{0} agents",
+    "run": "Run",
+    "test": "Test",
+    "testHint": "Set agent status to change behavior weights — working: more typing, blocked: frustrated, done: celebratory",
+    "platforms": {
+      "browser": "Browser",
+      "claude-cli": "Claude CLI",
+      "claude-desktop": "Claude Desktop",
+      "codex-app": "Codex App",
+      "codex-cli": "Codex CLI",
+      "antigravity": "Antigravity",
+      "embedded": "Embedded"
+    }
+  },
+  "onboarding": {
+    "description": "This office visualizes your Claude Code session — each character reacts to your real coding activity.",
+    "shortcuts": "Keyboard shortcuts",
+    "shortcutPause": "Space — Pause / Resume",
+    "shortcutLang": "L — Switch language",
+    "shortcutClick": "Click agent — Inspector",
+    "gotIt": "Got it!"
   }
 }

@@ -4,16 +4,6 @@ import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eve
 
 const statusOptions = ['idle', 'working', 'blocked', 'done']
 
-const platformLabels = {
-  browser: 'Browser',
-  'claude-cli': 'Claude CLI',
-  'claude-desktop': 'Claude Desktop',
-  'codex-app': 'Codex App',
-  'codex-cli': 'Codex CLI',
-  antigravity: 'Antigravity',
-  embedded: 'Embedded',
-}
-
 export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const agents = useOfficeStore((s) => s.agents)
   const isPaused = useOfficeStore((s) => s.isPaused)
@@ -26,6 +16,10 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const statusSource = useOfficeStore((s) => s.statusSource)
 
   const [showTest, setShowTest] = useState(false)
+  const [showInfo, setShowInfo] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return !localStorage.getItem('office-onboarded')
+  })
   const lang = useLocale()
   const agentList = Object.values(agents)
   const isPanel = mode === 'panel'
@@ -55,6 +49,11 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
     return labels[next] || next.toUpperCase()
   })()
 
+  const dismissInfo = () => {
+    setShowInfo(false)
+    localStorage.setItem('office-onboarded', '1')
+  }
+
   // ─── Panel mode: compact single-line status bar ───
   if (isPanel) {
     return (
@@ -74,7 +73,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
           {statusSource === 'external' && (
             <div className="flex items-center gap-0.5 shrink-0">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-emerald-600 dark:text-emerald-400 font-medium">Live</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-medium">{t('ui.live')}</span>
             </div>
           )}
           <button onClick={togglePause} className="px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
@@ -88,6 +87,28 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   // ─── Full mode: standard control panel ───
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t border-gray-200 dark:border-gray-700 px-3 py-1.5 text-xs select-none z-50">
+      {/* Onboarding popover */}
+      {showInfo && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs z-50">
+          <p className="text-gray-700 dark:text-gray-200 mb-2">
+            {t('onboarding.description')}
+          </p>
+          <div className="text-gray-400 dark:text-gray-500 space-y-0.5 mb-2">
+            <div>{t('onboarding.shortcutPause')}</div>
+            <div>{t('onboarding.shortcutLang')}</div>
+            <div>{t('onboarding.shortcutClick')}</div>
+          </div>
+          <button
+            onClick={dismissInfo}
+            className="w-full px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors text-[11px] font-medium"
+          >
+            {t('onboarding.gotIt')}
+          </button>
+          {/* Triangle pointer */}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-white dark:border-t-gray-800" />
+        </div>
+      )}
+
       <div className="flex items-center gap-3">
         <div className="text-gray-500 dark:text-gray-400 font-mono min-w-[42px]">
           {String(hour).padStart(2, '0')}:{String(minute).padStart(2, '0')}
@@ -121,20 +142,20 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         {statusSource === 'external' && (
           <div className="flex items-center gap-1 shrink-0">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Live</span>
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">{t('ui.live')}</span>
           </div>
         )}
         {statusSource === 'fallback' && (
           <div className="flex items-center gap-1 shrink-0">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
             <span className="text-[10px] text-yellow-600 dark:text-yellow-400 font-medium">
-              {Object.keys(externalStatus).length} agents
+              {t('ui.fallbackAgents').replace('{0}', Object.keys(externalStatus).length)}
             </span>
           </div>
         )}
 
         <div className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded shrink-0">
-          {platformLabels[platform] || platform}
+          {t('ui.platforms.' + platform, platform)}
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
@@ -145,14 +166,21 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             {isPaused ? '▶' : '⏸'}
           </button>
           <button onClick={triggerWorkflow} className="px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors" title="Run workflow animation">
-            Run
+            {t('ui.run')}
           </button>
           <button
             onClick={() => setShowTest(!showTest)}
             className={`px-2 py-1 rounded border transition-colors ${showTest ? 'bg-orange-100 border-orange-400 text-orange-700 dark:bg-orange-900 dark:text-orange-300' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
             title="Toggle test controls"
           >
-            Test
+            {t('ui.test')}
+          </button>
+          <button
+            onClick={() => setShowInfo(!showInfo)}
+            className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 text-[10px]"
+            title="Info"
+          >
+            ?
           </button>
         </div>
       </div>
@@ -182,7 +210,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             ))}
           </div>
           <div className="mt-1 text-[10px] text-gray-400">
-            Set agent status to change behavior weights — working: more typing, blocked: frustrated, done: celebratory
+            {t('ui.testHint')}
           </div>
         </div>
       )}
