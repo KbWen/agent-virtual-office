@@ -25,7 +25,7 @@ function pick(arr) {
  * "⚡ npm test" → "npm test"
  * "🔎 搜 useLocale" → "useLocale"
  */
-function extractContext(label) {
+export function extractContext(label) {
   if (!label) return null
   // Strip emoji prefix: "✏️ 改 App.jsx" → "改 App.jsx" → "App.jsx"
   // Pattern: optional emoji(s) + optional Chinese verb + space + context
@@ -51,7 +51,7 @@ function fromTemplate(key, ctx) {
 /**
  * Map tool name to action category for template lookup
  */
-function toolToAction(task) {
+export function toolToAction(task) {
   if (!task) return null
   switch (task) {
     case 'Edit': return 'edit'

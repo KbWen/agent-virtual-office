@@ -240,3 +240,8 @@ function processEvent(event) {
   fs.writeFileSync(tmp, JSON.stringify(output, null, 2))
   fs.renameSync(tmp, STATUS_FILE)
 }
+
+// Export helpers for testing (CommonJS — this file runs as a Node.js hook)
+if (typeof module !== 'undefined') {
+  module.exports = { toolToRole, skillToRole, shortFile, shortCommand, extractContext }
+}
