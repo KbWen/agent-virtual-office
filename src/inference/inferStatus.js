@@ -119,10 +119,13 @@ function startPolling(callback, intervalMs = 2000) {
 // ─── File polling via /api/status (CLI hook writes ~/.claude/office-status.json)
 // This is the primary channel for real CLI integration
 
-function startFilePolling(callback, intervalMs = 2000) {
+function startFilePolling(callback, intervalMs = 1000) {
   let lastEtag = null
+  let lastSeq = null    // prevent re-applying same data even if ETag is invalidated
   let consecutive404 = 0
   const timer = setInterval(async () => {
+    // Back off when server is unreachable (skip every other poll after 10 failures)
+    if (consecutive404 > 10 && consecutive404 % 3 !== 0) return
     try {
       const headers = {}
       if (lastEtag) headers['If-None-Match'] = lastEtag
@@ -132,15 +135,18 @@ function startFilePolling(callback, intervalMs = 2000) {
       consecutive404 = 0
       lastEtag = resp.headers.get('ETag')
       let data
-      try { data = await resp.json() } catch { return } // malformed JSON — skip without counting as 404
+      try { data = await resp.json() } catch { return }
       if (!data) return
+      // Same _seq means same data — don't re-apply (prevents expiresAt reset)
+      if (data._seq && data._seq === lastSeq) return
+      lastSeq = data._seq || null
       const msg = normalizeStatusMessage(data)
       if (msg) callback(msg)
     } catch {
       consecutive404++
     }
-    // Stop polling if server seems down
-    if (consecutive404 > 15) clearInterval(timer)
+    // Back off if server seems down (skip polls but don't kill the interval)
+    // Polling resumes automatically when server comes back (consecutive404 resets on success)
   }, intervalMs)
   return () => clearInterval(timer)
 }
@@ -233,7 +239,7 @@ function listenTitleChanges(callback) {
 // ─── Master integration orchestrator ───────────────────────────────────
 
 const STALENESS_TIMEOUT = 120000 // 2 minutes
-const DEBOUNCE_MS = 500
+const DEBOUNCE_MS = 150  // keep low — tool calls are 1-2s apart, debounce must not eat them
 
 /**
  * Start all status integration channels

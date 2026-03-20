@@ -187,6 +187,17 @@
       "有人要一起叫外送嗎"
     ]
   },
+  "activityFeed": {
+    "title": "動態",
+    "expand": "活動記錄",
+    "collapse": "收合",
+    "items": "筆",
+    "empty": "尚無動態"
+  },
+  "inspector": {
+    "recentActivity": "近期動態",
+    "noActivity": "尚無近期動態"
+  },
   "moodLabels": {
     "normal": "正常",
     "rushing": "趕工中",

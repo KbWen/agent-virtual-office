@@ -78,8 +78,16 @@ export function behaviorLabel(behaviorId) {
   return t(`behaviorLabels.${behaviorId}`, behaviorId)
 }
 
-// Convenience: get character name
+// ─── Custom name resolver (set by store to avoid circular dep) ───
+let _nameResolver = null
+export function setNameResolver(fn) { _nameResolver = fn }
+
+// Convenience: get character name (custom profile overrides i18n)
 export function charName(charId) {
+  if (_nameResolver) {
+    const custom = _nameResolver(charId)
+    if (custom) return custom
+  }
   return t(`characters.${charId}.name`, charId)
 }
 

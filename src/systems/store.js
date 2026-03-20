@@ -1,32 +1,140 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
 import { HOME_POSITIONS } from './movementSystem'
-import { randomBubble } from '../i18n'
+import { randomBubble, setNameResolver, behaviorLabel } from '../i18n'
 import { generateContextBubble } from './contextBubble'
 import { detectProjectMode } from './platformDetect'
 
-const detectMode = () => {
+// ─── Shared constants ───
+export const STATUS_COLORS = {
+  idle: '#888',
+  working: '#EF9F27',
+  done: '#5CB88A',
+  blocked: '#E24B4A',
+}
+
+// ─── Persistence helpers ───
+const PERSIST_KEY = 'office-state'
+
+function loadPersistedState() {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(PERSIST_KEY)
+    if (!raw) return null
+    const data = JSON.parse(raw)
+    // Discard stale data (older than 4 hours)
+    if (Date.now() - (data._savedAt || 0) > 4 * 60 * 60 * 1000) return null
+    return data
+  } catch { return null }
+}
+
+function savePersistedState(state) {
+  if (typeof window === 'undefined') return
+  try {
+    const data = {
+      _savedAt: Date.now(),
+      agents: {},
+      // Don't persist transient state (mood, externalStatus, statusSource, activeWorkflow)
+    }
+    for (const [id, a] of Object.entries(state.agents)) {
+      data.agents[id] = {
+        // Don't persist status — it's transient, driven only by external hooks
+        behavior: a.behavior,
+        expression: a.expression,
+        deskItemCount: a.deskItemCount,
+        position: a.position,
+        facing: a.facing,
+      }
+    }
+    localStorage.setItem(PERSIST_KEY, JSON.stringify(data))
+  } catch { /* quota exceeded — ignore */ }
+}
+
+// ─── Validation for persisted data ───
+const VALID_FACINGS = new Set(['up', 'down', 'left', 'right'])
+
+function isValidPosition(pos) {
+  return pos && typeof pos.x === 'number' && typeof pos.y === 'number'
+    && isFinite(pos.x) && isFinite(pos.y)
+}
+
+function validatePersistedAgent(saved) {
+  if (!saved) return null
+  return {
+    // status is NOT persisted — always starts as 'idle', driven by external hooks
+    behavior: typeof saved.behavior === 'string' ? saved.behavior : undefined,
+    expression: typeof saved.expression === 'string' ? saved.expression : undefined,
+    deskItemCount: saved.deskItemCount && typeof saved.deskItemCount === 'object' ? saved.deskItemCount : undefined,
+    position: isValidPosition(saved.position) ? saved.position : undefined,
+    facing: VALID_FACINGS.has(saved.facing) ? saved.facing : undefined,
+  }
+}
+
+// ─── Cached init-time computations (avoid redundant calls) ───
+const _persisted = loadPersistedState()
+
+const _mode = (() => {
   if (typeof window === 'undefined') return 'agentcortex'
   return detectProjectMode()
+})()
+
+// ─── Custom agent profiles (cached — URL params don't change) ───
+// Supported via: ?agents=Alice:dev,Bob:qa  OR  window.__office_config__.agents
+const _customProfiles = (() => {
+  if (typeof window === 'undefined') return {}
+  const profiles = {}
+  const cfg = window.__office_config__?.agents
+  if (cfg && typeof cfg === 'object') {
+    for (const [id, override] of Object.entries(cfg)) {
+      profiles[id] = { name: override.name, color: override.color }
+    }
+  }
+  const params = new URLSearchParams(window.location.search)
+  const agentsParam = params.get('agents')
+  if (agentsParam) {
+    for (const entry of agentsParam.split(',')) {
+      const [name, role] = entry.split(':').map(s => s.trim())
+      if (name && role) profiles[role] = { name, ...(profiles[role] || {}) }
+    }
+  }
+  return profiles
+})()
+
+// ─── Activity log helpers ───
+let _activityId = 0
+function mkActivity(entry) {
+  return { id: ++_activityId, timestamp: Date.now(), ...entry }
 }
+
+// Behaviors worth logging to the activity feed (skip mundane ones like idle)
+const LOGGABLE_BEHAVIORS = new Set([
+  'typing', 'reading-screen', 'writing-notes', 'whiteboard', 'research',
+  'deploy-button', 'shield-verify', 'meeting', 'chat', 'pass-document',
+  'goto-coffee-machine', 'nap', 'scratch-head', 'desk-slam',
+])
+
 
 const initAgents = (mode) => {
   const roster = characters[mode] || characters.agentcortex
   const agents = {}
   for (const c of roster) {
     const home = HOME_POSITIONS[c.id] || { x: 300, y: 250 }
+    const saved = validatePersistedAgent(_persisted?.agents?.[c.id])
+    const custom = _customProfiles[c.id]
     agents[c.id] = {
       ...c,
-      behavior: 'idle',
-      expression: 'normal',
+      name: custom?.name || c.name,
+      color: custom?.color || c.color,
+      behavior: saved?.behavior || 'idle',
+      expression: saved?.expression || 'normal',
       bubble: null,
-      status: 'idle',
+      status: 'idle',  // always start idle — external hooks drive status
       weightOverride: null,
-      deskItemCount: { coffee: 0, sticky: 0, books: 0 },
-      position: { ...home },
-      targetPosition: { ...home },
+      deskItemCount: saved?.deskItemCount || { coffee: 0, sticky: 0, books: 0 },
+      position: saved?.position || { ...home },
+      targetPosition: saved?.position || { ...home },
       isMoving: false,
-      facing: 'down',
+      facing: saved?.facing || 'down',
       inGroupEvent: false,
       groupTarget: null,
     }
@@ -35,8 +143,8 @@ const initAgents = (mode) => {
 }
 
 export const useOfficeStore = create((set) => ({
-  mode: detectMode(),
-  agents: initAgents(detectMode()),
+  mode: _mode,
+  agents: initAgents(_mode),
   hour: new Date().getHours(),
   minute: new Date().getMinutes(),
   activeEvent: null,
@@ -46,12 +154,19 @@ export const useOfficeStore = create((set) => ({
   setAgentBehavior: (id, behavior, expression, bubble) =>
     set((s) => {
       if (!s.agents[id]) return s
-      return {
-        agents: {
-          ...s.agents,
-          [id]: { ...s.agents[id], behavior, expression: expression || s.agents[id].expression, bubble: bubble || null },
-        },
+      const prev = s.agents[id].behavior
+      // Status is driven only by external integration (hooks), not by organic behaviors
+      const agents = {
+        ...s.agents,
+        [id]: { ...s.agents[id], behavior, expression: expression || s.agents[id].expression, bubble: bubble || null },
       }
+      // Log notable behavior changes to activity feed
+      if (behavior !== prev && LOGGABLE_BEHAVIORS.has(behavior)) {
+        const msg = bubble || behaviorLabel(behavior)
+        const entry = mkActivity({ type: 'behavior', agentId: id, message: msg })
+        return { agents, activityLog: [entry, ...s.activityLog].slice(0, 50) }
+      }
+      return { agents }
     }),
 
   // Group event: lock agent into event behavior + set movement target
@@ -126,7 +241,11 @@ export const useOfficeStore = create((set) => ({
     set({ hour: now.getHours(), minute: now.getMinutes() })
   },
 
-  setActiveEvent: (event) => set({ activeEvent: event }),
+  setActiveEvent: (event) => set((s) => {
+    if (!event) return { activeEvent: event }
+    const entry = mkActivity({ type: 'event', agentId: null, message: event.id || event.name || 'event' })
+    return { activeEvent: event, activityLog: [entry, ...s.activityLog].slice(0, 50) }
+  }),
   clearActiveEvent: () => set({ activeEvent: null }),
   togglePause: () => set((s) => {
     const next = !s.isPaused
@@ -146,6 +265,7 @@ export const useOfficeStore = create((set) => ({
       const now = Date.now()
       const ext = { ...s.externalStatus }
       const agents = { ...s.agents }
+      const activities = []
       for (const u of updates) {
         if (!agents[u.agentId]) continue
         ext[u.agentId] = {
@@ -153,7 +273,9 @@ export const useOfficeStore = create((set) => ({
           task: u.task,
           label: u.label,
           hint: u.hint || null,
-          expiresAt: u.status === 'done' ? now + 15000 : now + 120000,
+          // working/blocked: 15s expiry (hook re-sends on each tool call to keep alive)
+          // done: 10s expiry (brief celebration then back to idle)
+          expiresAt: u.status === 'done' ? now + 10000 : now + 15000,
         }
         // Immediately set behavior + expression to match work status
         const behaviorMap = {
@@ -162,18 +284,27 @@ export const useOfficeStore = create((set) => ({
           done:    { behavior: 'thumbs-up', expression: 'happy' },
         }
         const bm = behaviorMap[u.status] || {}
+        // Don't overwrite behavior/expression during group events (officeLife controls those)
+        const inGroup = agents[u.agentId].inGroupEvent
         agents[u.agentId] = {
           ...agents[u.agentId],
           status: u.status,
-          behavior: bm.behavior || agents[u.agentId].behavior,
-          expression: bm.expression || agents[u.agentId].expression,
+          behavior: inGroup ? agents[u.agentId].behavior : (bm.behavior || agents[u.agentId].behavior),
+          expression: inGroup ? agents[u.agentId].expression : (bm.expression || agents[u.agentId].expression),
         }
         // Context-aware bubble > status pool fallback
         const bubble = generateContextBubble(u.agentId, u, ext)
           || randomBubble(u.status === 'blocked' ? 'blocked-status' : u.status === 'done' ? 'done-status' : 'working-status')
         if (bubble) agents[u.agentId] = { ...agents[u.agentId], bubble }
+        // Log activity inline (single loop instead of two)
+        if (u.status === 'done' || u.status === 'blocked' || (u.status === 'working' && u.label)) {
+          activities.push(mkActivity({ type: 'status', agentId: u.agentId, message: u.label || u.status }))
+        }
       }
-      return { externalStatus: ext, agents }
+      const log = activities.length > 0
+        ? [...activities, ...s.activityLog].slice(0, 50)
+        : s.activityLog
+      return { externalStatus: ext, agents, activityLog: log }
     }),
 
   clearExternalStatus: (agentId) =>
@@ -194,7 +325,7 @@ export const useOfficeStore = create((set) => ({
     }),
 
   // ─── Mood system ───
-  mood: 'normal',                // normal | rushing | frustrated | stuck | smooth | intense | idle
+  mood: 'normal',  // normal | rushing | frustrated | stuck | smooth | intense | idle (transient, not persisted)
   setMood: (mood) => set({ mood }),
 
   setStatusSource: (source) => set({ statusSource: source }),
@@ -210,4 +341,25 @@ export const useOfficeStore = create((set) => ({
     set((s) => ({
       handoffs: s.handoffs.filter(h => h.id !== id),
     })),
+
+  // ─── Activity Log (for Activity Feed) ───
+  activityLog: [],  // [{ id, timestamp, type, agentId, message }]
+
+  // ─── Selected agent for inspect popover ───
+  selectedAgent: null,
+  setSelectedAgent: (id) => set((s) => ({ selectedAgent: s.selectedAgent === id ? null : id })),
+  clearSelectedAgent: () => set({ selectedAgent: null }),
 }))
+
+// ─── Register custom name resolver for i18n ───
+setNameResolver((charId) => _customProfiles[charId]?.name || null)
+
+// ─── Auto-persist on state changes (throttled) ───
+let _persistTimer = null
+useOfficeStore.subscribe(() => {
+  if (_persistTimer) return
+  _persistTimer = setTimeout(() => {
+    _persistTimer = null
+    savePersistedState(useOfficeStore.getState())
+  }, 2000)
+})

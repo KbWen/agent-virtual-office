@@ -19,8 +19,12 @@ import { normalizePost, VALID_ROLES } from './src/utils/normalizePost.js'
 // Shorthand format: { "dev": "working", "qa": "blocked", "workflow": "name" }
 // Full format:      { "type": "office-status", "agents": [...], "workflow": "name" }
 
+// Shared status file path and ETag cache (shared between plugins)
+const STATUS_PATH = path.join(os.homedir(), '.claude', 'office-status.json')
+const etagCache = { lastEtag: null, lastData: null }
+
 function officeStatusPlugin() {
-  const statusPath = path.join(os.homedir(), '.claude', 'office-status.json')
+  const statusPath = STATUS_PATH
 
   // Simple rate limiter: max 30 POST requests per 10 seconds per IP
   const postCounts = new Map()
@@ -40,9 +44,7 @@ function officeStatusPlugin() {
     return entry.count <= RATE_LIMIT
   }
 
-  // ETag tracking for GET 304 responses
-  let lastEtag = null
-  let lastData = null
+  // ETag tracking uses shared etagCache (so file watcher can invalidate)
 
   return {
     name: 'office-status-api',
@@ -66,22 +68,41 @@ function officeStatusPlugin() {
           return
         }
 
-        // GET → read current status (with ETag support)
+        // GET → read current status (ETag cache + server-side staleness)
         if (req.method === 'GET') {
           try {
+            // Fast path: check cached ETag before reading file
+            const clientEtag = req.headers['if-none-match']
+            if (clientEtag && etagCache.lastEtag === clientEtag) {
+              res.statusCode = 304
+              res.end()
+              return
+            }
+
             const data = fs.readFileSync(statusPath, 'utf-8')
+
+            // Server-side staleness: if _seq is older than 60s, return empty
+            try {
+              const parsed = JSON.parse(data)
+              const seq = parseInt(parsed._seq, 10)
+              if (seq && Date.now() - seq > 60000) {
+                res.end('null')
+                return
+              }
+            } catch {}
+
             const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
 
-            // 304 Not Modified if ETag matches
-            if (req.headers['if-none-match'] === etag) {
+            // 304 if ETag matches (for clients with stale cache ref)
+            if (clientEtag === etag) {
               res.statusCode = 304
               res.end()
               return
             }
 
             res.setHeader('ETag', etag)
-            lastEtag = etag
-            lastData = data
+            etagCache.lastEtag = etag
+            etagCache.lastData = data
             res.end(data)
           } catch {
             res.end('null')
@@ -115,8 +136,8 @@ function officeStatusPlugin() {
               const json = JSON.stringify(normalized, null, 2)
               fs.writeFileSync(statusPath, json)
               // Invalidate ETag cache
-              lastEtag = null
-              lastData = null
+              etagCache.lastEtag = null
+              etagCache.lastData = null
               res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
             } catch (err) {
               res.statusCode = 400
@@ -133,8 +154,88 @@ function officeStatusPlugin() {
   }
 }
 
+// ─── Zero-config fallback: watch ~/.claude/office-status.json + project files ───
+// When hooks aren't installed (e.g. worktree, new setup), the office can still
+// detect development activity by watching file changes via Vite's built-in watcher.
+
+function fileWatcherFallbackPlugin() {
+  const statusPath = STATUS_PATH
+  const DEBOUNCE_MS = 1500
+  const recentEdits = new Map()  // role → { file, time }
+
+  // Map file path/extension to agent roles (test/spec checked first)
+  function fileToRole(file) {
+    if (/\.(test|spec)\./i.test(file)) return 'qa'
+    if (/tests?[/\\]/i.test(file)) return 'qa'
+    if (/\.(jsx?|tsx?|vue|svelte)$/i.test(file)) return 'dev'
+    if (/\.(css|scss|less|tailwind)/i.test(file)) return 'dev'
+    if (/\.(json|ya?ml|toml|env)/i.test(file)) return 'ops'
+    if (/\.(md|txt|doc)/i.test(file)) return 'res'
+    return 'dev'
+  }
+
+  function shortName(filePath) {
+    return path.basename(filePath)
+  }
+
+  function writeStatus(role, file) {
+    const now = Date.now()
+    // Per-role debounce (so editing test + src simultaneously both register)
+    const last = recentEdits.get(role)
+    if (last && now - last.time < DEBOUNCE_MS) return
+
+    // Don't overwrite richer hook-generated status — skip if hooks recently wrote
+    try {
+      const existing = JSON.parse(fs.readFileSync(statusPath, 'utf-8'))
+      if (existing.source === 'claude-cli' && existing._seq && now - parseInt(existing._seq, 10) < 10000) return
+    } catch {}
+
+    recentEdits.set(role, { file, time: now })
+
+    // Build agents list from all recent edits (within 15s)
+    const agents = []
+    for (const [r, entry] of recentEdits) {
+      if (now - entry.time < 15000) {
+        agents.push({ role: r, task: 'Edit', status: 'working', label: `✏️ ${shortName(entry.file)}` })
+      } else {
+        recentEdits.delete(r)
+      }
+    }
+
+    const output = {
+      _seq: String(now),
+      type: 'office-status',
+      agents,
+      activeCount: agents.length,
+      source: 'file-watcher',
+    }
+
+    try {
+      const dir = path.dirname(statusPath)
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(statusPath, JSON.stringify(output, null, 2))
+      etagCache.lastEtag = null
+      etagCache.lastData = null
+    } catch {}
+  }
+
+  return {
+    name: 'office-file-watcher-fallback',
+    configureServer(server) {
+      // Watch project source files for changes (Vite's watcher covers src/)
+      server.watcher.on('change', (file) => {
+        // Skip node_modules, dist, .git, and the status file itself
+        if (/node_modules|dist|\.git/.test(file)) return
+        if (file.includes('office-status')) return
+        const role = fileToRole(file)
+        writeStatus(role, file)
+      })
+    }
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), officeStatusPlugin()],
+  plugins: [react(), tailwindcss(), officeStatusPlugin(), fileWatcherFallbackPlugin()],
   build: {
     rollupOptions: {
       output: { inlineDynamicImports: true }

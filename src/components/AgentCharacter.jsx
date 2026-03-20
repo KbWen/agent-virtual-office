@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { useOfficeStore } from '../systems/store'
+import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { getNextBehavior } from '../systems/behaviorEngine'
 import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale } from '../i18n'
@@ -562,6 +562,16 @@ function BehaviorIndicator({ behavior }) {
   }
 }
 
+// ─── Unicode-aware text width for monospace SVG ──────────────────────
+// CJK chars ~10 units, ASCII ~7 units at fontSize 12 monospace
+function estimateTextWidth(str) {
+  let w = 0
+  for (const ch of str) {
+    w += ch.codePointAt(0) > 0x2E7F ? 10 : 7
+  }
+  return w
+}
+
 // ═══ AGENT CHARACTER WITH RAF-BASED MOVEMENT ═══
 
 function AgentCharacter({ agent }) {
@@ -870,20 +880,35 @@ function AgentCharacter({ agent }) {
     }
   }, [doSchedule, id])
 
+  const setSelectedAgent = useOfficeStore((s) => s.setSelectedAgent)
+
+  const handleClick = useCallback((e) => {
+    e.stopPropagation()
+    setSelectedAgent(id)
+  }, [id, setSelectedAgent])
+
   const state = agentState || {}
   const pos = renderPos || state.position || { x: 0, y: 0 }
 
+  // Name tag dimensions (lifted from render for clarity)
+  const tagW = estimateTextWidth(name) + 16
+  const tagHalfW = tagW / 2
+  const tagFill = state.status !== 'idle' ? (STATUS_COLORS[state.status] || color) : color
+  const statusIcon = state.status === 'working' ? '⚡' : state.status === 'blocked' ? '✕' : state.status === 'done' ? '✓' : null
+  const glowColor = STATUS_COLORS[state.status]
+
   return (
-    <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}>
+    <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}
+      style={{ cursor: 'pointer' }} onClick={handleClick}>
       {/* Working glow ring */}
       {state.status === 'working' && (
-        <circle cx={0} cy={-18} r={22} fill="none" stroke="#EF9F27" strokeWidth="2" opacity="0.5">
+        <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.5">
           <animate attributeName="opacity" values="0.2;0.6;0.2" dur="1.5s" repeatCount="indefinite" />
           <animate attributeName="r" values="20;24;20" dur="1.5s" repeatCount="indefinite" />
         </circle>
       )}
       {state.status === 'blocked' && (
-        <circle cx={0} cy={-18} r={22} fill="none" stroke="#E24B4A" strokeWidth="2" opacity="0.4">
+        <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.4">
           <animate attributeName="opacity" values="0.2;0.5;0.2" dur="1s" repeatCount="indefinite" />
         </circle>
       )}
@@ -902,40 +927,16 @@ function AgentCharacter({ agent }) {
       {/* Name tag + bubble: inverse-scale to keep text at original size despite character scale */}
       <g transform={`scale(${1/1.35})`}>
         <g transform="translate(0, -48)">
-          <rect
-            x={-name.length * 5 - 10}
-            y={-11}
-            width={name.length * 10 + 20}
-            height={20}
-            rx={10}
-            fill={
-              state.status === 'working' ? '#EF9F27' :
-              state.status === 'done' ? '#5CB88A' :
-              state.status === 'blocked' ? '#E24B4A' : color
-            }
-            opacity="0.92"
-          />
+          <rect x={-tagHalfW} y={-11} width={tagW} height={20} rx={10}
+            fill={tagFill} opacity="0.92" />
           <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"
-            fontSize="12" fontFamily="monospace" fontWeight="bold" fill="white"
-          >
+            fontSize="12" fontFamily="monospace" fontWeight="bold" fill="white">
             {name}
           </text>
-          {state.status === 'working' && (
-            <g transform={`translate(${name.length * 5 + 6}, -2)`}>
+          {statusIcon && (
+            <g transform={`translate(${tagHalfW - 2}, -2)`}>
               <rect x={-4} y={-4} width={8} height={8} rx={2} fill="white" opacity="0.9" />
-              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="7" fill="#EF9F27">⚡</text>
-            </g>
-          )}
-          {state.status === 'blocked' && (
-            <g transform={`translate(${name.length * 5 + 6}, -2)`}>
-              <rect x={-4} y={-4} width={8} height={8} rx={2} fill="white" opacity="0.9" />
-              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="7" fill="#E24B4A">✕</text>
-            </g>
-          )}
-          {state.status === 'done' && (
-            <g transform={`translate(${name.length * 5 + 6}, -2)`}>
-              <rect x={-4} y={-4} width={8} height={8} rx={2} fill="white" opacity="0.9" />
-              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="7" fill="#5CB88A">✓</text>
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="7" fill={tagFill}>{statusIcon}</text>
             </g>
           )}
         </g>

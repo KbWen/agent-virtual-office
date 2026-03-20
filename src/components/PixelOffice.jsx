@@ -4,6 +4,7 @@ import { startOfficeLife } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
 import { eventName } from '../i18n'
 import AgentCharacter from './AgentCharacter'
+import AgentInspector from './AgentInspector'
 import {
   Bookshelf, Plant, Couch, RoundTable, MeetingTable,
   CoffeeMachine, WaterCooler, GateBooth, WallWindow, Whiteboard,
@@ -658,6 +659,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* ═══ FLYING DOCUMENTS (handoff animation) ═══ */}
       <FlyingDocuments />
+
+      {/* ═══ AGENT INSPECTOR (click-to-inspect popover) ═══ */}
+      <AgentInspector />
 
       {/* ═══ LIGHTING ═══ */}
       {lightOverlay.opacity > 0 && (
