@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { normalizePost, VALID_ROLES } from './src/utils/normalizePost.js'
 
 // Middleware: Universal status API
 //   GET  /api/status → read current status (browser polls this)
@@ -20,47 +21,6 @@ import os from 'node:os'
 
 function officeStatusPlugin() {
   const statusPath = path.join(os.homedir(), '.claude', 'office-status.json')
-  const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate']
-  const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
-
-  // Convert shorthand { dev: "working", qa: "testing" } to full format
-  function normalizePost(body) {
-    if (body.type === 'office-status') {
-      // Validate statuses in full format too
-      if (Array.isArray(body.agents)) {
-        body.agents = body.agents.filter(a =>
-          VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status)
-        ).map(a => ({ ...a, hint: a.hint || null }))
-      }
-      // Preserve mood and hint fields
-      if (body.mood) body.mood = String(body.mood)
-      if (body.moodDuration) body.moodDuration = Number(body.moodDuration) || 60000
-      return body
-    }
-    const agents = []
-    for (const key of VALID_ROLES) {
-      const val = body[key]
-      if (val == null) continue
-      const isStatus = VALID_STATUSES.includes(val)
-      agents.push({
-        role: key,
-        task: isStatus ? null : val,
-        status: isStatus ? val : 'working',
-        label: body.label || null,
-        hint: body.hint || null,
-      })
-    }
-    return {
-      _seq: String(Date.now()),
-      type: 'office-status',
-      agents,
-      activeCount: agents.filter(a => a.status !== 'done').length,
-      workflow: body.workflow || null,
-      source: body.source || 'api',
-      mood: body.mood || null,
-      moodDuration: body.moodDuration || null,
-    }
-  }
 
   // Simple rate limiter: max 30 POST requests per 10 seconds per IP
   const postCounts = new Map()
@@ -157,7 +117,7 @@ function officeStatusPlugin() {
               // Invalidate ETag cache
               lastEtag = null
               lastData = null
-              res.end(JSON.stringify({ ok: true, agents: normalized.agents.length }))
+              res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
             } catch (err) {
               res.statusCode = 400
               res.end(JSON.stringify({ ok: false, error: err.message }))

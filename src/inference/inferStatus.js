@@ -12,7 +12,7 @@
  */
 
 import { routeExternalAgents, distributeFallbackCount, routeTaskToAgent } from './agentRouter'
-import { pushEvent, setMoodOverride, resetMood } from '../systems/moodEngine'
+import { pushEventBatch, setMoodOverride, resetMood } from '../systems/moodEngine'
 
 // ─── Message normalization ─────────────────────────────────────────────
 
@@ -76,8 +76,12 @@ export function inferFromParams() {
 
 function listenForStatusUpdates(callback) {
   const handler = (event) => {
-    // Only accept messages from same origin or trusted parent frames
-    if (event.origin !== window.location.origin && event.source !== window.parent) return
+    // Accept same-origin messages (any source) or messages from parent frame (for embedded/artifact mode).
+    // Note: cross-origin parent frames CAN send status updates — this is intentional for embedding,
+    // and the impact is limited to visual changes (character animations/mood). No sensitive data exposed.
+    const sameOrigin = event.origin === window.location.origin
+    const fromParent = event.source === window.parent
+    if (!sameOrigin && !fromParent) return
     const msg = normalizeStatusMessage(event.data)
     if (msg) callback(msg)
   }
@@ -127,7 +131,8 @@ function startFilePolling(callback, intervalMs = 2000) {
       if (!resp.ok) { consecutive404++; return }
       consecutive404 = 0
       lastEtag = resp.headers.get('ETag')
-      const data = await resp.json()
+      let data
+      try { data = await resp.json() } catch { return } // malformed JSON — skip without counting as 404
       if (!data) return
       const msg = normalizeStatusMessage(data)
       if (msg) callback(msg)
@@ -236,6 +241,8 @@ const DEBOUNCE_MS = 500
  * @returns {Function} cleanup function
  */
 export function startStatusIntegration(store) {
+  // Reset mood state in case of HMR or React Strict Mode double-invoke
+  resetMood()
   let lastUpdateTime = 0
   let debounceTimer = null
   let stalenessTimer = null
@@ -251,15 +258,8 @@ export function startStatusIntegration(store) {
       s.applyExternalStatus(updates)
       s.setStatusSource('external')
 
-      // Feed mood engine with each agent update
-      for (const u of updates) {
-        pushEvent({
-          role: u.agentId,
-          status: u.status,
-          task: u.task,
-          hint: u.hint || null,
-        })
-      }
+      // Feed mood engine — batch to recompute mood once instead of once per agent
+      pushEventBatch(updates.map(u => ({ role: u.agentId, status: u.status, task: u.task, hint: u.hint || null })))
     } else if (msg.activeCount > 0) {
       const ids = distributeFallbackCount(msg.activeCount)
       s.applyExternalStatus(ids.map(id => ({ agentId: id, status: 'working', task: null, label: null })))

@@ -190,7 +190,7 @@ function processEvent(event) {
       status = isError ? 'blocked' : 'done'
       hint = isError ? 'error' : null
       const ctx = extractContext(tool, toolInput)
-      label = isError ? `❌ ${ctx || tool} 失敗了` : toolLabel(tool, ctx, true)
+      label = isError ? `❌ ${ctx || tool} failed` : toolLabel(tool, ctx, true)
       break
     }
     case 'SubagentStart':
@@ -239,4 +239,9 @@ function processEvent(event) {
   const tmp = STATUS_FILE + '.tmp'
   fs.writeFileSync(tmp, JSON.stringify(output, null, 2))
   fs.renameSync(tmp, STATUS_FILE)
+}
+
+// Export helpers for testing (CommonJS — this file runs as a Node.js hook)
+if (typeof module !== 'undefined') {
+  module.exports = { toolToRole, skillToRole, shortFile, shortCommand, extractContext }
 }
