@@ -6,7 +6,10 @@ CLAUDE.md
 .agent/
 .agents/
 .antigravity/
-.claude/
+.claude/**
+!.claude/settings.json
+!.claude/commands/
+!.claude/commands/**
 .codex/
 codex/
 agentcortex/

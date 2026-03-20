@@ -38,10 +38,8 @@ function pruneStale() {
 
 function computeMood() {
   // Manual override takes priority
-  if (overrideMood && overrideExpiry && Date.now() < overrideExpiry) {
-    return overrideMood
-  }
-  if (overrideMood && overrideExpiry && Date.now() >= overrideExpiry) {
+  if (overrideMood && overrideExpiry) {
+    if (Date.now() < overrideExpiry) return overrideMood
     overrideMood = null
     overrideExpiry = null
   }
@@ -109,11 +107,13 @@ function resetIdleTimer() {
 }
 
 /**
- * Push an event into the sliding window and recompute mood.
- * Called from inferStatus.js on every incoming status update.
+ * Push multiple events at once — only recomputes mood once after all are queued.
  */
-export function pushEvent({ role, status, task, hint }) {
-  events.push({ timestamp: Date.now(), role, status, task: task || null, hint: hint || null })
+export function pushEventBatch(eventList) {
+  const now = Date.now()
+  for (const { role, status, task, hint } of eventList) {
+    events.push({ timestamp: now, role, status, task: task || null, hint: hint || null })
+  }
 
   // Keep window size bounded
   while (events.length > MAX_EVENTS) {

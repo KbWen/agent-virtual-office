@@ -190,7 +190,7 @@ function processEvent(event) {
       status = isError ? 'blocked' : 'done'
       hint = isError ? 'error' : null
       const ctx = extractContext(tool, toolInput)
-      label = isError ? `❌ ${ctx || tool} 失敗了` : toolLabel(tool, ctx, true)
+      label = isError ? `❌ ${ctx || tool} failed` : toolLabel(tool, ctx, true)
       break
     }
     case 'SubagentStart':

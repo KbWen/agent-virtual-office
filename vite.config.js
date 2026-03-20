@@ -22,6 +22,8 @@ function officeStatusPlugin() {
   const statusPath = path.join(os.homedir(), '.claude', 'office-status.json')
   const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate']
   const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
+  const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
+  const MAX_MOOD_DURATION = 3_600_000 // 1 hour
 
   // Convert shorthand { dev: "working", qa: "testing" } to full format
   function normalizePost(body) {
@@ -32,9 +34,9 @@ function officeStatusPlugin() {
           VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status)
         ).map(a => ({ ...a, hint: a.hint || null }))
       }
-      // Preserve mood and hint fields
-      if (body.mood) body.mood = String(body.mood)
-      if (body.moodDuration) body.moodDuration = Number(body.moodDuration) || 60000
+      // Validate mood against allowlist; cap duration to prevent permanent overrides
+      if (body.mood) body.mood = VALID_MOODS.includes(body.mood) ? body.mood : null
+      if (body.moodDuration) body.moodDuration = Math.min(Number(body.moodDuration) || 60000, MAX_MOOD_DURATION)
       return body
     }
     const agents = []
@@ -57,8 +59,8 @@ function officeStatusPlugin() {
       activeCount: agents.filter(a => a.status !== 'done').length,
       workflow: body.workflow || null,
       source: body.source || 'api',
-      mood: body.mood || null,
-      moodDuration: body.moodDuration || null,
+      mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
+      moodDuration: body.moodDuration ? Math.min(Number(body.moodDuration) || 60000, MAX_MOOD_DURATION) : null,
     }
   }
 
@@ -157,7 +159,7 @@ function officeStatusPlugin() {
               // Invalidate ETag cache
               lastEtag = null
               lastData = null
-              res.end(JSON.stringify({ ok: true, agents: normalized.agents.length }))
+              res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
             } catch (err) {
               res.statusCode = 400
               res.end(JSON.stringify({ ok: false, error: err.message }))

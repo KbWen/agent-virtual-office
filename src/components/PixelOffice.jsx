@@ -359,7 +359,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     const ids = Object.keys(s.agents)
     return ids.join(',')  // primitive string → stable reference
   })
-  const agents = useOfficeStore((s) => s.agents)
+  // Targeted selector — only re-renders when coffee counts change, not on every agent tick
+  const coffeeCounts = useOfficeStore((s) => {
+    const counts = {}
+    for (const [id, agent] of Object.entries(s.agents)) {
+      counts[id] = agent.deskItemCount?.coffee || 0
+    }
+    return JSON.stringify(counts)
+  })
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
   const activeEvent = useOfficeStore((s) => s.activeEvent)
@@ -376,7 +383,11 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   }, [])
 
   // Memoize agent list — only re-sort when IDs change (not on every property update)
-  const agentList = useMemo(() => sortByY(Object.values(agents)), [agentIds])
+  const agentList = useMemo(
+    () => sortByY(agentIds ? agentIds.split(',').map(id => useOfficeStore.getState().agents[id]).filter(Boolean) : []),
+    [agentIds]
+  )
+  const coffeeCountMap = useMemo(() => JSON.parse(coffeeCounts), [coffeeCounts])
   const lightOverlay = getLightingOverlay(hour)
 
   // Panel mode: auto-adapt viewBox to container shape
@@ -564,7 +575,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           label={d.label}
           color={d.color}
           variant={d.variant}
-          coffeeCount={agents[d.id]?.deskItemCount?.coffee || 0}
+          coffeeCount={coffeeCountMap[d.id] || 0}
         />
       ))}
 
