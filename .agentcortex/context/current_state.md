@@ -11,22 +11,24 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-03-30T04:10:00Z
-- **Update Sequence**: 14
+- **Last Updated**: 2026-04-02
+- **Update Sequence**: 1
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
-  - `docs/adr/ADR-002-three-platform-low-token-trigger-governance.md`
-- **Active Backlog**: none
-  - When a multi-feature product spec is decomposed, the backlog path is recorded here (e.g., `docs/specs/_product-backlog.md`). Bootstrap reads this to detect ongoing product work.
-- **Spec Index** (framework template specs at `.agentcortex/specs/`; project specs go to `docs/specs/`):
-  - `[template-import-cleanup] .agentcortex/specs/template-import-cleanup.md [Frozen] [Updated: 2026-03-06]`
-  - `[red-team-skill] .agentcortex/specs/red-team-skill.md [Frozen] [Updated: 2026-03-18]`
-  - `[governance-hardening-batch] docs/specs/governance-hardening-batch.md [Draft] [Updated: 2026-03-25]`
-  - `[doc-lifecycle-governance] docs/specs/doc-lifecycle-governance.md [Shipped] [Updated: 2026-03-29]`
-  - `[document-governance-downstream-hardening] docs/specs/document-governance-downstream-hardening.md [Shipped] [Updated: 2026-03-30]`
-  - `[document-governance-authority-hardening] docs/specs/document-governance-authority-hardening.md [Shipped] [Updated: 2026-03-30]`
-  - `[document-governance-external-intake-hardening] docs/specs/document-governance-external-intake-hardening.md [Shipped] [Updated: 2026-03-30]`
-  - `[document-governance-final-polish-hardening] docs/specs/document-governance-final-polish-hardening.md [Shipped] [Updated: 2026-03-30]`
+- **Active Backlog**: `docs/specs/_product-backlog.md`
+  - 15 features across 5 themes: 辦公室生命感、資訊密度、互動性、整合延伸、視覺升級
+  - **Done (branch `fix/agent-inspector-hooks-crash`, 2026-04-02)**:
+    - #10 smart file routing (fileToRole in hook)
+    - #11 multi-worktree (session slug files, 1-per-session merge)
+    - #12 webhook endpoint (/api/event, 11 events + custom)
+    - Designer character (pink female, design corner, poetic bubbles)
+    - Skill-aware hooks: Stop/UserPromptSubmit/subagent skill context
+    - Compound skill routing (eng_review→arch, ceo-review→gate, etc.)
+    - Review P0/P1 fixes (event validation, project scoping, dead cache)
+    - AgentCortex upgraded to v5.4.0
+  - **Remaining P1**: #1 角色成長系統, #5 Inspector 資訊加強, #7 可點擊辦公室物件
+  - **Branch status**: `fix/agent-inspector-hooks-crash` pushed, ready to PR → main
+- **Spec Index**:
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -74,30 +76,8 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
->
-> Older entries have been compacted to reduce context size. See `.agentcortex/context/archive/ship_history_archive.md`.
 
-### Ship-feat-doc-lifecycle-governance-2026-03-29
+### fix-agent-inspector-hooks-crash-2026-04-02
 
-- Feature shipped: addressed 6 Keeva field report defects — introduced Domain Doc two-layer architecture (L1 Synthesis + L2 Decision Log), knowledge consolidation in /ship, document taxonomy (7 types), fast-path safety predicates, SSoT heartbeat (Update Sequence), shipped spec lifecycle, and structured extraction protocol (## Domain Decisions). 14 files changed, 573 insertions, 2 deletions. Knowledge Consolidation dogfood: docs/architecture/document-governance.{md,log.md} created.
-- Tests: Pass (validate.sh 44/44, 13 structural tests, adversarial 4/4)
-
-### Ship-feat-doc-lifecycle-governance-2026-03-30
-
-- Feature shipped: hardened downstream document-governance adoption by adding bounded retrofit/advisory workflow wording, validator-backed checks for primary_domain and review routing_actions, and a follow-up Layer 2 decision-log entry without redesigning the routing model.
-- Tests: Pass
-
-### Ship-feat-doc-lifecycle-governance-authority-2026-03-30
-
-- Feature shipped: hardened document-governance authority boundaries by requiring status: living for bootstrap L1 reads, preserving workflow contracts in the L1 synthesis doc, and making /ship primary_domain skip paths explicitly justify against spec frontmatter.
-- Tests: Pass
-
-### Ship-feat-doc-lifecycle-governance-external-intake-2026-03-30
-
-- Feature shipped: hardened external spec intake by forcing architecture specs and PRDs through /spec-intake, adding L1 conflict checks for external assumptions, protecting legacy domain-doc warnings from unsafe frontmatter edits, and preserving bootstrap-time primary_domain accountability through ship.
-- Tests: Pass
-
-### Ship-feat-doc-lifecycle-governance-final-polish-2026-03-30
-
-- Feature shipped: finalized document-governance hardening by making external-spec intake trigger on substantial background material, requiring the fuller L1 frontmatter contract (`status: living` + `domain:`), and giving explicit acceptable `/ship` skip examples.
-- Tests: Pass
+- Feature shipped: Designer character, multi-worktree support, skill-aware hooks (Stop/UserPromptSubmit/skill context), smart file routing, webhook endpoint, compound skill routing, review P0/P1 fixes, AgentCortex v5.4.0 upgrade.
+- Tests: Pass (98/98 vitest, no console errors)
