@@ -113,13 +113,29 @@ function extractFilePath(tool, toolInput) {
 
 function skillToRole(name) {
   if (!name) return 'dev'
-  if (/plan|spec|bootstrap|decide/i.test(name)) return 'pm'
-  if (/review|test|lint|classify/i.test(name)) return 'qa'
-  if (/implement|code|fix|debug/i.test(name)) return 'dev'
-  if (/ship|deploy|handoff|retro/i.test(name)) return 'ops'
-  if (/research|explore|search/i.test(name)) return 'res'
-  if (/architect|design|brainstorm/i.test(name)) return 'arch'
-  if (/security|gate|audit|comply/i.test(name)) return 'gate'
+  const n = name.toLowerCase()
+
+  // ── Specific compound patterns first (before generic keyword catch-alls) ──
+  // CEO / exec review → gate (approval/policy authority)
+  if (/ceo|exec|stakeholder|board/i.test(n)) return 'gate'
+  // Engineering / architecture review → arch
+  if (/eng.?review|arch.?review|plan.eng|technical.review|adr/i.test(n)) return 'arch'
+  // Design / UI review → designer
+  if (/design.?review|ui.?review|ux.?review|visual.?review/i.test(n)) return 'designer'
+  // Security / compliance review → gate
+  if (/security.?review|compliance.?review|pentest|vuln/i.test(n)) return 'gate'
+  // Product / spec / intake → pm
+  if (/product.?review|spec.?intake|prd|roadmap.?review/i.test(n)) return 'pm'
+
+  // ── Generic keyword fallbacks ──
+  if (/plan|spec|bootstrap|decide|intake|priorit|backlog/i.test(n)) return 'pm'
+  if (/review|test|lint|classify|qa|quality/i.test(n)) return 'qa'
+  if (/implement|code|fix|debug|build|feature/i.test(n)) return 'dev'
+  if (/ship|deploy|handoff|retro|release|infra/i.test(n)) return 'ops'
+  if (/research|explore|search|analyz|investigat/i.test(n)) return 'res'
+  if (/architect|brainstorm|diagram|schema|rfc/i.test(n)) return 'arch'
+  if (/security|gate|audit|comply|guard|permission/i.test(n)) return 'gate'
+  if (/design|ui|ux|style|visual|brand|figma/i.test(n)) return 'designer'
   return 'dev'
 }
 
