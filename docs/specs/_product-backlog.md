@@ -41,7 +41,7 @@
 | # | Feature | Priority | Status | Notes |
 |---|---------|----------|--------|-------|
 | 10 | **智能 file_path 路由** — `*.test.*` → qa、`*.yml/Dockerfile` → ops、`*.md` → res | P1 | Pending | `office-status-hook.js: extractContext` + `toolToRole` 加邏輯 |
-| 11 | **多 worktree 支援** — `?session=foo` 讓不同 worktree 的 agent 同時出現 | P3 | Pending | 需重新設計 store 隔離（多 store instance 或 namespaced state） |
+| 11 | **多 worktree 支援** — `?session=foo` 讓不同 worktree 的 agent 同時出現 | P3 | Done | ✅ session 用 branch slug 命名檔案，merge 時 1 session = 1 代表角色 |
 | 12 | **Webhook 事件端點** — `POST /api/event` 接受一次性事件（PR merged → deploy-success），CI/CD 可推資料 | P2 | Pending | `vite.config.js` 加 `/api/event` middleware |
 
 ---
@@ -67,3 +67,4 @@
 | **#10 智能 file_path 路由** — *.test.* → qa、*.css/svg → designer、Dockerfile → ops | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
 | **#12 Webhook 事件端點** — POST /api/event 接受 12 種 CI/CD 事件 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
 | **設計師角色** — 粉色女生角色，設計角落，對 CSS/SVG/設計檔案有感 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
+| **#11 多 worktree 支援** — 每個 session 寫獨立 JSON，merge 時 1 session = 1 代表角色，入口大廳展示訪客 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
