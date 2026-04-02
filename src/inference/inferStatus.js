@@ -13,6 +13,7 @@
 
 import { routeExternalAgents, distributeFallbackCount, routeTaskToAgent } from './agentRouter'
 import { pushEventBatch, setMoodOverride, resetMood } from '../systems/moodEngine'
+import { VALID_ROLES, VALID_STATUSES } from '../systems/constants'
 
 // ─── Message normalization ─────────────────────────────────────────────
 
@@ -161,12 +162,11 @@ function listenHashChanges(callback) {
     if (!hash) return null
     const params = new URLSearchParams(hash)
     const agents = []
-    const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate']
     for (const role of VALID_ROLES) {
       const val = params.get(role)
       if (val) {
         // value can be: "working", "blocked", "done", or "task-name"
-        const isStatus = ['working', 'blocked', 'done', 'idle'].includes(val)
+        const isStatus = VALID_STATUSES.includes(val)
         agents.push({
           role,
           task: isStatus ? null : val,
@@ -310,7 +310,12 @@ export function startStatusIntegration(store) {
     const now = Date.now()
     for (const [id, ext] of Object.entries(s.externalStatus)) {
       if (ext.expiresAt && now > ext.expiresAt) {
-        store.getState().clearExternalStatus(id)
+        // Re-read fresh state: a new applyExternalStatus call may have renewed
+        // expiresAt between the snapshot above and this clear — don't clobber it.
+        const current = store.getState().externalStatus[id]
+        if (current && now > current.expiresAt) {
+          store.getState().clearExternalStatus(id)
+        }
       }
     }
     // If all external entries cleared, revert to organic

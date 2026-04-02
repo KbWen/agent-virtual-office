@@ -1,5 +1,5 @@
-export const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate']
-export const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
+import { VALID_ROLES, VALID_STATUSES } from '../systems/constants'
+export { VALID_ROLES, VALID_STATUSES }
 export const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
 export const MAX_MOOD_DURATION = 3_600_000 // 1 hour
 

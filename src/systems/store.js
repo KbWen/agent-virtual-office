@@ -4,14 +4,9 @@ import { HOME_POSITIONS } from './movementSystem'
 import { randomBubble, setNameResolver, behaviorLabel } from '../i18n'
 import { generateContextBubble } from './contextBubble'
 import { detectProjectMode } from './platformDetect'
+import { STATUS_COLORS } from './constants'
 
-// ─── Shared constants ───
-export const STATUS_COLORS = {
-  idle: '#888',
-  working: '#EF9F27',
-  done: '#5CB88A',
-  blocked: '#E24B4A',
-}
+export { STATUS_COLORS }
 
 // ─── Persistence helpers ───
 const PERSIST_KEY = 'office-state'
