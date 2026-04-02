@@ -5,7 +5,7 @@
 
 const ROLE_KEYWORDS = {
   pm:       [/plan/i, /spec/i, /bootstrap/i, /manage/i, /schedule/i, /roadmap/i, /sprint/i, /standup/i, /priorit/i, /backlog/i],
-  arch:     [/architect/i, /brainstorm/i, /decide/i, /diagram/i, /pattern/i, /rfc/i, /structur/i, /schema/i],
+  arch:     [/architect/i, /brainstorm/i, /decide/i, /diagram/i, /pattern/i, /rfc/i, /structur/i, /schema/i, /system.design/i, /design.system/i],
   dev:      [/implement/i, /code/i, /develop/i, /build/i, /feature/i, /refactor/i, /fix/i, /write/i, /program/i, /commit/i, /merge/i],
   qa:       [/test/i, /review/i, /lint/i, /check/i, /verify/i, /validate/i, /quality/i, /bug/i, /assert/i, /coverage/i],
   ops:      [/deploy/i, /ship/i, /release/i, /ci/i, /cd/i, /infra/i, /monitor/i, /handoff/i, /docker/i, /publish/i],

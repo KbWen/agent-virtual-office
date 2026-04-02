@@ -148,8 +148,8 @@ describe('normalizePost', () => {
 })
 
 describe('constants', () => {
-  it('VALID_ROLES has 7 entries', () => {
-    expect(VALID_ROLES).toHaveLength(7)
+  it('VALID_ROLES has 8 entries', () => {
+    expect(VALID_ROLES).toHaveLength(8)
   })
 
   it('VALID_STATUSES has 4 entries', () => {

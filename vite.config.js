@@ -19,9 +19,8 @@ import { normalizePost, VALID_ROLES } from './src/utils/normalizePost.js'
 // Shorthand format: { "dev": "working", "qa": "blocked", "workflow": "name" }
 // Full format:      { "type": "office-status", "agents": [...], "workflow": "name" }
 
-// Shared status file path and ETag cache (shared between plugins)
+// Shared status file path (shared between plugins)
 const STATUS_PATH = path.join(os.homedir(), '.claude', 'office-status.json')
-const etagCache = { lastEtag: null, lastData: null }
 
 function officeStatusPlugin() {
   const statusPath = STATUS_PATH
@@ -43,8 +42,6 @@ function officeStatusPlugin() {
     entry.count++
     return entry.count <= RATE_LIMIT
   }
-
-  // ETag tracking uses shared etagCache (so file watcher can invalidate)
 
   return {
     name: 'office-status-api',
@@ -78,7 +75,8 @@ function officeStatusPlugin() {
             const dir = path.dirname(statusPath)
             const now = Date.now()
 
-            // Scan ~/.claude/office-status-*.json (all session files)
+            // Scan ~/.claude/office-status-*.json (only sessions from THIS project)
+            const projectRoot = process.cwd()
             const sessions = []
             if (fs.existsSync(dir)) {
               for (const file of fs.readdirSync(dir)) {
@@ -88,6 +86,10 @@ function officeStatusPlugin() {
                   const parsed = JSON.parse(raw)
                   const seq = parseInt(parsed._seq, 10)
                   if (seq && now - seq > 60000) continue // stale — skip
+                  // Skip sessions from other projects (hooks write _cwd).
+                  // Slugged files without _cwd are from old hooks — skip them too (bare main is OK as fallback).
+                  if (parsed._cwd && path.resolve(parsed._cwd) !== path.resolve(projectRoot)) continue
+                  if (!parsed._cwd && file !== 'office-status.json') continue
                   // Skip file-watcher sessions in multi-session merge — they fire on every
                   // JS edit and would make single-worktree users appear as multi-session.
                   if (parsed.source === 'file-watcher') continue
@@ -99,6 +101,18 @@ function officeStatusPlugin() {
             }
 
             if (sessions.length === 0) { res.end('null'); return }
+
+            // Dedup: if bare `office-status.json` ("main") has a _seq within 2s of any
+            // slugged session, it's a duplicate from an old user-level hook. Drop it.
+            if (sessions.length > 1) {
+              const mainIdx = sessions.findIndex(s => s.slug === 'main')
+              if (mainIdx !== -1) {
+                const mainSeq = parseInt(sessions[mainIdx].data._seq, 10) || 0
+                const isDup = sessions.some((s, i) => i !== mainIdx
+                  && Math.abs((parseInt(s.data._seq, 10) || 0) - mainSeq) < 2000)
+                if (isDup) sessions.splice(mainIdx, 1)
+              }
+            }
 
             let merged
             if (sessions.length === 1) {
@@ -137,8 +151,6 @@ function officeStatusPlugin() {
             const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
             if (clientEtag === etag) { res.statusCode = 304; res.end(); return }
             res.setHeader('ETag', etag)
-            etagCache.lastEtag = etag
-            etagCache.lastData = data
             res.end(data)
           } catch {
             res.end('null')
@@ -166,14 +178,12 @@ function officeStatusPlugin() {
             try {
               const parsed = JSON.parse(body)
               const normalized = normalizePost(parsed)
+              normalized._cwd = process.cwd()
               // Ensure directory exists
               const dir = path.dirname(statusPath)
               if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
               const json = JSON.stringify(normalized, null, 2)
               fs.writeFileSync(statusPath, json)
-              // Invalidate ETag cache
-              etagCache.lastEtag = null
-              etagCache.lastData = null
               res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
             } catch (err) {
               res.statusCode = 400
@@ -243,6 +253,11 @@ function officeStatusPlugin() {
 
             let agents
             if (eventName === 'custom' && parsed.role && parsed.status) {
+              if (!VALID_ROLES.includes(parsed.role) || !VALID_STATUSES.includes(parsed.status)) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ ok: false, error: `Invalid role or status` }))
+                return
+              }
               agents = [{ role: parsed.role, status: parsed.status, label: parsed.label || eventName }]
             } else {
               agents = EVENT_TO_STATUS[eventName]
@@ -257,6 +272,7 @@ function officeStatusPlugin() {
 
             const output = {
               _seq: String(Date.now()),
+              _cwd: process.cwd(),
               type: 'office-status',
               agents,
               activeCount: agents.filter(a => a.status !== 'done').length,
@@ -266,8 +282,6 @@ function officeStatusPlugin() {
             const dir = path.dirname(statusPath)
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
             fs.writeFileSync(statusPath, JSON.stringify(output, null, 2))
-            etagCache.lastEtag = null
-            etagCache.lastData = null
             res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
           } catch (err) {
             res.statusCode = 400
@@ -339,8 +353,6 @@ function fileWatcherFallbackPlugin() {
       const dir = path.dirname(statusPath)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
       fs.writeFileSync(statusPath, JSON.stringify(output, null, 2))
-      etagCache.lastEtag = null
-      etagCache.lastData = null
     } catch {}
   }
 
