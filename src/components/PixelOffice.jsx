@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore } from '../systems/store'
 import { startOfficeLife } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
@@ -360,6 +361,14 @@ const DESK_DATA = [
   { id: 'ops',      x: 460, y: 340, label: 'Ops',      color: '#D85A30', variant: 'ops' },
   { id: 'designer', x: 140, y: 360, label: 'Design',   color: '#E8688A', variant: 'designer' },
 ]
+const DESK_IDS = DESK_DATA.map(({ id }) => id)
+
+function getAgentOrderSignature(agents) {
+  return Object.keys(agents).map((id) => {
+    const y = agents[id]?.targetPosition?.y ?? agents[id]?.position?.y ?? 0
+    return `${id}|${Math.round(y)}`
+  })
+}
 
 // Static SVG grid lines — pre-built once to avoid re-creating 103 elements per render
 const GRID_LINES = (() => {
@@ -376,18 +385,9 @@ const GRID_LINES = (() => {
 export default function PixelOffice({ animationQuality = 'full', mode = 'full' }) {
   // Only re-render PixelOffice when agent IDs change, not on every property update.
   // AgentCharacter subscribes to its own agent state independently.
-  const agentIds = useOfficeStore((s) => {
-    const ids = Object.keys(s.agents)
-    return ids.join(',')  // primitive string → stable reference
-  })
+  const agentOrderSignature = useOfficeStore(useShallow((s) => getAgentOrderSignature(s.agents)))
   // Targeted selector — only re-renders when coffee counts change, not on every agent tick
-  const coffeeCounts = useOfficeStore((s) => {
-    const counts = {}
-    for (const [id, agent] of Object.entries(s.agents)) {
-      counts[id] = agent.deskItemCount?.coffee || 0
-    }
-    return JSON.stringify(counts)
-  })
+  const coffeeCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.coffee || 0)))
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
   const activeEvent = useOfficeStore((s) => s.activeEvent)
@@ -405,10 +405,13 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
   // Memoize agent list — only re-sort when IDs change (not on every property update)
   const agentList = useMemo(
-    () => sortByY(agentIds ? agentIds.split(',').map(id => useOfficeStore.getState().agents[id]).filter(Boolean) : []),
-    [agentIds]
+    () => sortByY(agentOrderSignature.map((entry) => entry.split('|', 1)[0]).map(id => useOfficeStore.getState().agents[id]).filter(Boolean)),
+    [agentOrderSignature]
   )
-  const coffeeCountMap = useMemo(() => JSON.parse(coffeeCounts), [coffeeCounts])
+  const coffeeCountMap = useMemo(
+    () => Object.fromEntries(DESK_IDS.map((id, index) => [id, coffeeCounts[index] || 0])),
+    [coffeeCounts]
+  )
   const lightOverlay = getLightingOverlay(hour)
 
   // Panel mode: auto-adapt viewBox to container shape

@@ -10,6 +10,26 @@ export { STATUS_COLORS }
 
 // ─── Persistence helpers ───
 const PERSIST_KEY = 'office-state'
+let _lastPersistedSnapshot = null
+
+export function createPersistedState(state) {
+  const data = {
+    _savedAt: Date.now(),
+    agents: {},
+    // Don't persist transient state (mood, externalStatus, statusSource, activeWorkflow)
+  }
+  for (const [id, a] of Object.entries(state.agents)) {
+    data.agents[id] = {
+      // Don't persist status — it's transient, driven only by external hooks
+      behavior: a.behavior,
+      expression: a.expression,
+      deskItemCount: a.deskItemCount,
+      position: a.position,
+      facing: a.facing,
+    }
+  }
+  return data
+}
 
 function loadPersistedState() {
   if (typeof window === 'undefined') return null
@@ -19,6 +39,7 @@ function loadPersistedState() {
     const data = JSON.parse(raw)
     // Discard stale data (older than 4 hours)
     if (Date.now() - (data._savedAt || 0) > 4 * 60 * 60 * 1000) return null
+    _lastPersistedSnapshot = raw
     return data
   } catch { return null }
 }
@@ -26,22 +47,10 @@ function loadPersistedState() {
 function savePersistedState(state) {
   if (typeof window === 'undefined') return
   try {
-    const data = {
-      _savedAt: Date.now(),
-      agents: {},
-      // Don't persist transient state (mood, externalStatus, statusSource, activeWorkflow)
-    }
-    for (const [id, a] of Object.entries(state.agents)) {
-      data.agents[id] = {
-        // Don't persist status — it's transient, driven only by external hooks
-        behavior: a.behavior,
-        expression: a.expression,
-        deskItemCount: a.deskItemCount,
-        position: a.position,
-        facing: a.facing,
-      }
-    }
-    localStorage.setItem(PERSIST_KEY, JSON.stringify(data))
+    const snapshot = JSON.stringify(createPersistedState(state))
+    if (snapshot === _lastPersistedSnapshot) return
+    localStorage.setItem(PERSIST_KEY, snapshot)
+    _lastPersistedSnapshot = snapshot
   } catch { /* quota exceeded — ignore */ }
 }
 

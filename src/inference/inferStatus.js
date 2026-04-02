@@ -120,32 +120,57 @@ function startPolling(callback, intervalMs = 2000) {
 // ─── File polling via /api/status (CLI hook writes ~/.claude/office-status.json)
 // This is the primary channel for real CLI integration
 
-function startFilePolling(callback, intervalMs = 1000) {
-  let lastEtag = null
-  let lastSeq = null    // prevent re-applying same data even if ETag is invalidated
-  let consecutive404 = 0
-  const timer = setInterval(async () => {
-    // Back off when server is unreachable (skip every other poll after 10 failures)
-    if (consecutive404 > 10 && consecutive404 % 3 !== 0) return
-    try {
-      const headers = {}
-      if (lastEtag) headers['If-None-Match'] = lastEtag
-      const resp = await fetch('/api/status', { headers })
-      if (resp.status === 304) return // Not modified — skip processing
-      if (!resp.ok) { consecutive404++; return }
-      consecutive404 = 0
-      lastEtag = resp.headers.get('ETag')
-      let data
-      try { data = await resp.json() } catch { return }
-      if (!data) return
-      // Same _seq means same data — don't re-apply (prevents expiresAt reset)
-      if (data._seq && data._seq === lastSeq) return
-      lastSeq = data._seq || null
-      const msg = normalizeStatusMessage(data)
-      if (msg) callback(msg)
-    } catch {
-      consecutive404++
+export function createFilePollingState() {
+  return {
+    lastEtag: null,
+    lastSeq: null,
+    consecutive404: 0,
+    inFlight: false,
+  }
+}
+
+export async function pollFileStatusOnce(fetchImpl, state, callback) {
+  if (state.inFlight) return
+  // Back off when server is unreachable (skip every other poll after 10 failures)
+  if (state.consecutive404 > 10 && state.consecutive404 % 3 !== 0) return
+
+  state.inFlight = true
+  try {
+    const headers = {}
+    if (state.lastEtag) headers['If-None-Match'] = state.lastEtag
+    const resp = await fetchImpl('/api/status', { headers })
+    if (resp.status === 304) return
+    if (!resp.ok) {
+      state.consecutive404++
+      return
     }
+
+    state.consecutive404 = 0
+    state.lastEtag = resp.headers.get('ETag')
+
+    let data
+    try {
+      data = await resp.json()
+    } catch {
+      return
+    }
+    if (!data) return
+    if (data._seq && data._seq === state.lastSeq) return
+
+    state.lastSeq = data._seq || null
+    const msg = normalizeStatusMessage(data)
+    if (msg) callback(msg)
+  } catch {
+    state.consecutive404++
+  } finally {
+    state.inFlight = false
+  }
+}
+
+function startFilePolling(callback, intervalMs = 1000) {
+  const pollingState = createFilePollingState()
+  const timer = setInterval(() => {
+    void pollFileStatusOnce(fetch, pollingState, callback)
     // Back off if server seems down (skip polls but don't kill the interval)
     // Polling resumes automatically when server comes back (consecutive404 resets on success)
   }, intervalMs)

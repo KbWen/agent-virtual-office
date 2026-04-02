@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-04-02
-- **Update Sequence**: 1
+- **Update Sequence**: 2
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
 - **Active Backlog**: `docs/specs/_product-backlog.md`
@@ -29,6 +29,7 @@
   - **Remaining P1**: #1 角色成長系統, #5 Inspector 資訊加強, #7 可點擊辦公室物件
   - **Branch status**: `fix/agent-inspector-hooks-crash` pushed, ready to PR → main
 - **Spec Index**:
+  - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
