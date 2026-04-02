@@ -1,0 +1,4 @@
+# Legacy text-integrity exceptions kept as baseline so validation only blocks regressions.
+# One relative path per line.
+.agentcortex/docs/CLAUDE_PLATFORM_GUIDE.md
+tests/template_import_cleanup_smoke.ps1

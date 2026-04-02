@@ -1,17 +1,12 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
-import { HOME_POSITIONS } from './movementSystem'
+import { HOME_POSITIONS, OVERFLOW_POSITIONS } from './movementSystem'
 import { randomBubble, setNameResolver, behaviorLabel } from '../i18n'
 import { generateContextBubble } from './contextBubble'
 import { detectProjectMode } from './platformDetect'
+import { STATUS_COLORS } from './constants'
 
-// ─── Shared constants ───
-export const STATUS_COLORS = {
-  idle: '#888',
-  working: '#EF9F27',
-  done: '#5CB88A',
-  blocked: '#E24B4A',
-}
+export { STATUS_COLORS }
 
 // ─── Persistence helpers ───
 const PERSIST_KEY = 'office-state'
@@ -267,7 +262,25 @@ export const useOfficeStore = create((set) => ({
       const agents = { ...s.agents }
       const activities = []
       for (const u of updates) {
-        if (!agents[u.agentId]) continue
+        if (!agents[u.agentId]) {
+          // Dynamic worktree agent — clone base role's visual style, place in overflow spot
+          const baseRole = u.agentId.includes('~') ? u.agentId.split('~')[1] : u.agentId
+          const baseAgent = s.agents[baseRole] || s.agents['dev']
+          if (!baseAgent) continue
+          const overflowIdx = Object.values(agents).filter(a => a.session).length
+          const pos = { ...OVERFLOW_POSITIONS[overflowIdx % OVERFLOW_POSITIONS.length] }
+          agents[u.agentId] = {
+            ...baseAgent,
+            id: u.agentId,
+            session: u.session || null,
+            position: { ...pos },
+            targetPosition: { ...pos },
+            isMoving: false,
+            status: 'idle',
+            bubble: null,
+            inGroupEvent: false,
+          }
+        }
         ext[u.agentId] = {
           status: u.status,
           task: u.task,
@@ -313,13 +326,20 @@ export const useOfficeStore = create((set) => ({
         const ext = { ...s.externalStatus }
         delete ext[agentId]
         const agents = { ...s.agents }
-        if (agents[agentId]) agents[agentId] = { ...agents[agentId], status: 'idle' }
+        if (agents[agentId]) {
+          // Dynamic session agents disappear when they expire; base agents go idle
+          if (agents[agentId].session) delete agents[agentId]
+          else agents[agentId] = { ...agents[agentId], status: 'idle' }
+        }
         return { externalStatus: ext, agents }
       }
       // Clear all
       const agents = { ...s.agents }
       for (const id of Object.keys(s.externalStatus)) {
-        if (agents[id]) agents[id] = { ...agents[id], status: 'idle' }
+        if (agents[id]) {
+          if (agents[id].session) delete agents[id]
+          else agents[id] = { ...agents[id], status: 'idle' }
+        }
       }
       return { externalStatus: {}, agents, statusSource: 'organic', activeWorkflow: null }
     }),

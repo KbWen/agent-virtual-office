@@ -69,6 +69,16 @@
       "personality": "站安全亭、驗證舉盾牌、很嚴肅",
       "deskItems": ["gate-booth"],
       "position": { "x": 80, "y": 420 }
+    },
+    {
+      "id": "designer",
+      "name": "設計師",
+      "color": "#E8688A",
+      "accessory": "long",
+      "commands": ["/design", "/ui", "/style"],
+      "personality": "戴耳環、拿 iPad、對間距有意見、完美主義",
+      "deskItems": ["monitor", "ipad", "color-swatch"],
+      "position": { "x": 140, "y": 380 }
     }
   ],
   "lightweight": [

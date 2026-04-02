@@ -34,6 +34,7 @@ They don't know you're watching, but you'll smile anyway.
 | **DevOps** | Hard-hat action hero | Taking a deep breath, then pressing the big red button |
 | **Researcher** | Long-haired bookworm | Book pile growing taller, occasional epiphany |
 | **Gatekeeper** | Spiky-haired bouncer | Holding up a shield: "Prerequisites not met" |
+| **Designer** | Pink-haired creative, design corner | Arranging color swatches, sketching on her iPad |
 
 ---
 
@@ -105,19 +106,81 @@ curl -X POST http://localhost:5174/api/status \
 ```
 
 ### Supported Roles
-`pm` · `arch` · `dev` · `qa` · `ops` · `res` · `gate`
+`pm` · `arch` · `dev` · `qa` · `ops` · `res` · `gate` · `designer`
 
 ### Supported Statuses
 `idle` · `working` · `blocked` · `done`
+
+### Webhook — One-shot Events
+
+CI/CD pipelines and external tools can push one-shot events via `POST /api/event`:
+
+```bash
+# Trigger a deploy-success celebration
+curl -X POST http://localhost:5174/api/event \
+  -H "Content-Type: application/json" \
+  -d '{"event":"deploy-success","role":"ops","status":"done"}'
+
+# Mark a character as blocked with a label
+curl -X POST http://localhost:5174/api/event \
+  -H "Content-Type: application/json" \
+  -d '{"event":"custom","role":"dev","status":"blocked","label":"Waiting on API keys"}'
+```
+
+**Supported events:** `deploy-success` · `review-approved` · `test-passed` · `test-failed` · `build-failed` · `pr-merged` · `release-cut` · `rollback` · `incident-start` · `incident-resolved` · `custom`
+
+Both `role` and `status` are validated — invalid values return HTTP 400.
+
+### Claude Code Hook Install
+
+The hook updates character status in real-time as Claude uses tools. Copy the hook to your project:
+
+```bash
+# From inside your project directory (with office running):
+cp node_modules/agent-virtual-office/public/hooks/office-status-hook.js \
+   .claude/hooks/office-status-hook.js
+```
+
+Register it in `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse":       [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js PreToolUse" }],
+    "PostToolUse":      [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js PostToolUse" }],
+    "SubagentStart":    [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js SubagentStart" }],
+    "SubagentStop":     [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js SubagentStop" }],
+    "UserPromptSubmit": [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js UserPromptSubmit" }],
+    "Stop":             [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js Stop" }]
+  }
+}
+```
+
+The hook auto-detects the current git branch slug, writes `~/.claude/office-status-{slug}.json`, and the office filters by `process.cwd()` so sessions from other projects never appear.
+
+### Multi-Worktree Support
+
+Running multiple worktrees in parallel? Each worktree's agent appears as a separate character in the lobby:
+
+```bash
+# Worktree 1: main project
+git worktree add ../feat-auth feat/auth
+cd ../feat-auth && npx agent-virtual-office --port=5175
+
+# Worktree 2: current project (different port, same office view)
+# Both worktrees share the same ~/.claude/ directory but are isolated by branch slug
+```
+
+Open `http://localhost:5174?session=feat-auth` to see the characters from a specific session. The office shows one representative per active worktree.
 
 ### Platform Integration
 
 | Platform | How to integrate |
 |----------|-----------------|
-| **Claude Code** | `curl POST` from hooks or scripts |
-| **Gemini CLI** | `curl POST` from shell hooks |
-| **Codex CLI** | `curl POST` from task runners |
-| **Any CI/CD** | `curl POST` from pipeline steps |
+| **Claude Code** | Install the hook (see above) — automatic per-tool routing |
+| **Gemini CLI** | `curl POST /api/status` from shell hooks |
+| **Codex CLI** | `curl POST /api/status` from task runners |
+| **Any CI/CD** | `curl POST /api/event` for one-shot events |
 | **Browser** | `postMessage` or `BroadcastChannel('agent-office')` |
 
 ---

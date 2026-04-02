@@ -79,12 +79,29 @@ describe('skillToRole', () => {
 
   it('maps architecture skills to arch', () => {
     expect(skillToRole('architect')).toBe('arch')
-    expect(skillToRole('design')).toBe('arch')
+    expect(skillToRole('brainstorm')).toBe('arch')
   })
 
   it('maps security skills to gate', () => {
     expect(skillToRole('security')).toBe('gate')
     expect(skillToRole('audit')).toBe('gate')
+  })
+
+  it('maps designer skills to designer', () => {
+    expect(skillToRole('design')).toBe('designer')
+    expect(skillToRole('ui_review')).toBe('designer')
+    expect(skillToRole('design_review')).toBe('designer')
+  })
+
+  it('routes compound review skills by domain (not generic /review/ match)', () => {
+    expect(skillToRole('eng_review')).toBe('arch')
+    expect(skillToRole('plan-eng-review')).toBe('arch')
+    expect(skillToRole('technical-review')).toBe('arch')
+    expect(skillToRole('ceo-review')).toBe('gate')
+    expect(skillToRole('security_review')).toBe('gate')
+    expect(skillToRole('product-review')).toBe('pm')
+    expect(skillToRole('code-review')).toBe('qa')
+    expect(skillToRole('review')).toBe('qa')
   })
 
   it('defaults to dev for null/unknown', () => {
@@ -189,5 +206,33 @@ describe('extractContext (hook)', () => {
   it('returns null for EnterPlanMode/ExitPlanMode', () => {
     expect(extractContext('EnterPlanMode', {})).toBeNull()
     expect(extractContext('ExitPlanMode', {})).toBeNull()
+  })
+})
+
+// Import skill context helpers for testing
+const { skillContextPath, saveSkillContext, readSkillContext, clearSkillContext } = await import('../public/hooks/office-status-hook.js')
+
+describe('skill context', () => {
+  it('saves and reads skill context by agent_id', () => {
+    const agentId = 'test-agent-123'
+    saveSkillContext(agentId, 'qa', 'review')
+    const ctx = readSkillContext(agentId)
+    expect(ctx).toEqual({ role: 'qa', skillName: 'review' })
+    clearSkillContext(agentId)
+  })
+
+  it('returns null for unknown agent_id', () => {
+    expect(readSkillContext('nonexistent-agent-xyz')).toBeNull()
+  })
+
+  it('clears skill context on SubagentStop', () => {
+    const agentId = 'test-agent-456'
+    saveSkillContext(agentId, 'dev', 'implement')
+    clearSkillContext(agentId)
+    expect(readSkillContext(agentId)).toBeNull()
+  })
+
+  it('returns null for null agent_id', () => {
+    expect(readSkillContext(null)).toBeNull()
   })
 })

@@ -19,9 +19,8 @@ import { normalizePost, VALID_ROLES } from './src/utils/normalizePost.js'
 // Shorthand format: { "dev": "working", "qa": "blocked", "workflow": "name" }
 // Full format:      { "type": "office-status", "agents": [...], "workflow": "name" }
 
-// Shared status file path and ETag cache (shared between plugins)
+// Shared status file path (shared between plugins)
 const STATUS_PATH = path.join(os.homedir(), '.claude', 'office-status.json')
-const etagCache = { lastEtag: null, lastData: null }
 
 function officeStatusPlugin() {
   const statusPath = STATUS_PATH
@@ -43,8 +42,6 @@ function officeStatusPlugin() {
     entry.count++
     return entry.count <= RATE_LIMIT
   }
-
-  // ETag tracking uses shared etagCache (so file watcher can invalidate)
 
   return {
     name: 'office-status-api',
@@ -68,41 +65,92 @@ function officeStatusPlugin() {
           return
         }
 
-        // GET → read current status (ETag cache + server-side staleness)
+        // GET → merge all active session files (multi-worktree support)
         if (req.method === 'GET') {
           try {
-            // Fast path: check cached ETag before reading file
             const clientEtag = req.headers['if-none-match']
-            if (clientEtag && etagCache.lastEtag === clientEtag) {
-              res.statusCode = 304
-              res.end()
-              return
-            }
+            // NOTE: No fast-path ETag skip here — session files are written directly
+            // to disk by hooks and don't go through POST, so we must always re-scan.
 
-            const data = fs.readFileSync(statusPath, 'utf-8')
+            const dir = path.dirname(statusPath)
+            const now = Date.now()
 
-            // Server-side staleness: if _seq is older than 60s, return empty
-            try {
-              const parsed = JSON.parse(data)
-              const seq = parseInt(parsed._seq, 10)
-              if (seq && Date.now() - seq > 60000) {
-                res.end('null')
-                return
+            // Scan ~/.claude/office-status-*.json (only sessions from THIS project)
+            const projectRoot = process.cwd()
+            const sessions = []
+            if (fs.existsSync(dir)) {
+              for (const file of fs.readdirSync(dir)) {
+                if (!file.match(/^office-status(-[^.]+)?\.json$/)) continue
+                try {
+                  const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
+                  const parsed = JSON.parse(raw)
+                  const seq = parseInt(parsed._seq, 10)
+                  if (seq && now - seq > 60000) continue // stale — skip
+                  // Skip sessions from other projects (hooks write _cwd).
+                  // Slugged files without _cwd are from old hooks — skip them too (bare main is OK as fallback).
+                  if (parsed._cwd && path.resolve(parsed._cwd) !== path.resolve(projectRoot)) continue
+                  if (!parsed._cwd && file !== 'office-status.json') continue
+                  // Skip file-watcher sessions in multi-session merge — they fire on every
+                  // JS edit and would make single-worktree users appear as multi-session.
+                  if (parsed.source === 'file-watcher') continue
+                  const slug = file === 'office-status.json' ? 'main'
+                    : file.replace(/^office-status-/, '').replace(/\.json$/, '')
+                  sessions.push({ slug, data: parsed })
+                } catch {}
               }
-            } catch {}
-
-            const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
-
-            // 304 if ETag matches (for clients with stale cache ref)
-            if (clientEtag === etag) {
-              res.statusCode = 304
-              res.end()
-              return
             }
 
+            if (sessions.length === 0) { res.end('null'); return }
+
+            // Dedup: if bare `office-status.json` ("main") has a _seq within 2s of any
+            // slugged session, it's a duplicate from an old user-level hook. Drop it.
+            if (sessions.length > 1) {
+              const mainIdx = sessions.findIndex(s => s.slug === 'main')
+              if (mainIdx !== -1) {
+                const mainSeq = parseInt(sessions[mainIdx].data._seq, 10) || 0
+                const isDup = sessions.some((s, i) => i !== mainIdx
+                  && Math.abs((parseInt(s.data._seq, 10) || 0) - mainSeq) < 2000)
+                if (isDup) sessions.splice(mainIdx, 1)
+              }
+            }
+
+            let merged
+            if (sessions.length === 1) {
+              // Single session — return as-is (backward compat, plain role IDs)
+              merged = sessions[0].data
+            } else {
+              // Multi-session — one representative agent per session (the most active one)
+              // Rule: only working/blocked agents spawn extra characters; done agents are transient
+              // Priority: blocked > working (shows the most urgent state per session)
+              const STATUS_PRIORITY = { blocked: 0, working: 1, done: 2, idle: 3 }
+              const allAgents = []
+              let latestSeq = 0
+              let workflow = null
+              for (const { slug, data } of sessions) {
+                const seq = parseInt(data._seq, 10) || 0
+                if (seq > latestSeq) { latestSeq = seq; workflow = data.workflow }
+                // Pick the single most active agent from this session
+                const active = (data.agents || [])
+                  .filter(a => a.status === 'working' || a.status === 'blocked')
+                  .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9))
+                const pick = active[0]
+                if (pick) allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
+              }
+              merged = {
+                _seq: String(latestSeq),
+                type: 'office-status',
+                agents: allAgents,
+                activeCount: allAgents.filter(a => a.status !== 'done').length,
+                workflow,
+                source: 'multi-session',
+                sessionCount: sessions.length,
+              }
+            }
+
+            const data = JSON.stringify(merged)
+            const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
+            if (clientEtag === etag) { res.statusCode = 304; res.end(); return }
             res.setHeader('ETag', etag)
-            etagCache.lastEtag = etag
-            etagCache.lastData = data
             res.end(data)
           } catch {
             res.end('null')
@@ -130,14 +178,12 @@ function officeStatusPlugin() {
             try {
               const parsed = JSON.parse(body)
               const normalized = normalizePost(parsed)
+              normalized._cwd = process.cwd()
               // Ensure directory exists
               const dir = path.dirname(statusPath)
               if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
               const json = JSON.stringify(normalized, null, 2)
               fs.writeFileSync(statusPath, json)
-              // Invalidate ETag cache
-              etagCache.lastEtag = null
-              etagCache.lastData = null
               res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
             } catch (err) {
               res.statusCode = 400
@@ -149,6 +195,99 @@ function officeStatusPlugin() {
 
         res.statusCode = 405
         res.end(JSON.stringify({ error: 'Method not allowed' }))
+      })
+
+      // ─── /api/event — one-shot CI/CD webhook ────────────────────────────
+      // Usage:
+      //   curl -X POST http://localhost:5173/api/event \
+      //     -H "Content-Type: application/json" \
+      //     -d '{"event":"pr-merged"}'
+      //
+      // Supported events: pr-merged, pr-opened, pr-reviewed,
+      //   test-passed, test-failed, build-success, build-failed,
+      //   deploy-start, deploy-success, deploy-failed, release
+      //
+      // Custom: { "event": "custom", "role": "qa", "status": "blocked", "label": "❌ flaky test" }
+
+      const EVENT_TO_STATUS = {
+        'pr-merged':      [{ role: 'ops', status: 'done',    label: '🚀 PR merged!' },
+                           { role: 'dev', status: 'done',    label: '✅ 上了！' }],
+        'pr-opened':      [{ role: 'dev', status: 'working', label: '📋 PR 開好了' }],
+        'pr-reviewed':    [{ role: 'qa',  status: 'done',    label: '✅ PR reviewed' }],
+        'test-passed':    [{ role: 'qa',  status: 'done',    label: '✅ Tests passed!' }],
+        'test-failed':    [{ role: 'qa',  status: 'blocked', label: '❌ Tests failed' }],
+        'build-success':  [{ role: 'ops', status: 'done',    label: '🏗️ Build success' }],
+        'build-failed':   [{ role: 'ops', status: 'blocked', label: '💥 Build failed' }],
+        'deploy-start':   [{ role: 'ops', status: 'working', label: '🚀 Deploying...' }],
+        'deploy-success': [{ role: 'ops', status: 'done',    label: '🎉 Deployed!' }],
+        'deploy-failed':  [{ role: 'ops', status: 'blocked', label: '💥 Deploy failed' }],
+        'release':        [{ role: 'ops', status: 'done',    label: '🎉 Released!' },
+                           { role: 'dev', status: 'done',    label: '🎉 Ship it!' },
+                           { role: 'qa',  status: 'done',    label: '✅ Quality approved' }],
+      }
+
+      server.middlewares.use('/api/event', (req, res) => {
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Access-Control-Allow-Origin', '*')
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+
+        if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return }
+        if (req.method !== 'POST') {
+          res.statusCode = 405
+          res.end(JSON.stringify({ error: 'Method not allowed' }))
+          return
+        }
+        if (!checkRateLimit(req)) {
+          res.statusCode = 429
+          res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
+          return
+        }
+
+        let body = ''
+        req.on('data', chunk => { body += chunk })
+        req.on('end', () => {
+          try {
+            const parsed = JSON.parse(body)
+            const eventName = parsed.event || ''
+
+            let agents
+            if (eventName === 'custom' && parsed.role && parsed.status) {
+              if (!VALID_ROLES.includes(parsed.role) || !VALID_STATUSES.includes(parsed.status)) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ ok: false, error: `Invalid role or status` }))
+                return
+              }
+              agents = [{ role: parsed.role, status: parsed.status, label: parsed.label || eventName }]
+            } else {
+              agents = EVENT_TO_STATUS[eventName]
+              if (!agents) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ ok: false, error: `Unknown event: ${eventName}` }))
+                return
+              }
+              // Allow label override
+              if (parsed.label) agents = agents.map((a, i) => i === 0 ? { ...a, label: parsed.label } : a)
+            }
+
+            const output = {
+              _seq: String(Date.now()),
+              _cwd: process.cwd(),
+              type: 'office-status',
+              agents,
+              activeCount: agents.filter(a => a.status !== 'done').length,
+              workflow: parsed.workflow || eventName,
+              source: 'webhook',
+            }
+            const dir = path.dirname(statusPath)
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+            fs.writeFileSync(statusPath, JSON.stringify(output, null, 2))
+            res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
+          } catch (err) {
+            res.statusCode = 400
+            res.end(JSON.stringify({ ok: false, error: err.message }))
+          }
+        })
       })
     }
   }
@@ -214,8 +353,6 @@ function fileWatcherFallbackPlugin() {
       const dir = path.dirname(statusPath)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
       fs.writeFileSync(statusPath, JSON.stringify(output, null, 2))
-      etagCache.lastEtag = null
-      etagCache.lastData = null
     } catch {}
   }
 

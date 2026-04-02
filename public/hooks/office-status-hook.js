@@ -29,7 +29,24 @@ process.stdin.on('end', () => {
   }
 })
 
-const STATUS_FILE = path.join(os.homedir(), '.claude', 'office-status.json')
+// Derive a session slug from the current git branch (or CWD basename as fallback).
+// Each worktree writes to its own file so sessions don't overwrite each other.
+function getSessionSlug() {
+  try {
+    const { execSync } = require('child_process')
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim()
+    if (branch && branch !== 'HEAD') {
+      return branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 28)
+    }
+  } catch {}
+  return path.basename(process.cwd()).replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').slice(0, 28)
+}
+
+const SESSION_SLUG = getSessionSlug()
+const STATUS_FILE = path.join(os.homedir(), '.claude', `office-status-${SESSION_SLUG}.json`)
 
 // ─── Role mapping ───
 
@@ -46,15 +63,79 @@ function toolToRole(tool) {
   return map[tool] || 'dev'
 }
 
+function skillToRoleExtended(name) {
+  if (!name) return 'dev'
+  if (/design|ui|ux|style|visual|brand/i.test(name)) return 'designer'
+  return skillToRole(name)
+}
+
+// Smart file routing — override tool-based role for Edit/Write/Read based on file type
+function fileToRole(filePath) {
+  if (!filePath) return null
+  const f = filePath.replace(/\\/g, '/').toLowerCase()
+  const base = path.basename(f)
+
+  // Test files → qa
+  if (/\.(test|spec)\.(js|ts|jsx|tsx|py|rb|go|java|cjs|mjs)$/.test(base)) return 'qa'
+  if (/\/(tests?|__tests?|specs?)\//i.test(f)) return 'qa'
+
+  // CI/CD and infra → ops
+  if (/^dockerfile/i.test(base)) return 'ops'
+  if (/docker-compose/i.test(base)) return 'ops'
+  if (/\/(\.github|\.gitlab|\.circleci|\.buildkite|\.drone)\//i.test(f)) return 'ops'
+  if (/\.(ya?ml|toml)$/.test(base) && !/^package/.test(base)) return 'ops'
+
+  // Docs / notes → res
+  if (/\.(md|mdx|txt|rst|adoc)$/.test(base)) return 'res'
+  if (/\/(docs?|wiki|notes?)\//i.test(f)) return 'res'
+
+  // Architecture / ADR → arch
+  if (/\/(adr|architecture)\//i.test(f)) return 'arch'
+  if (/\.(puml|drawio)$/.test(base)) return 'arch'
+
+  // Design / UI → designer
+  if (/\.(css|scss|less|sass)$/.test(base)) return 'designer'
+  if (/\.(svg|figma|sketch|xd|ai)$/.test(base)) return 'designer'
+  if (/\/(design|ui|ux|styles?|themes?|assets?)\//i.test(f)) return 'designer'
+  if (/\.(png|jpe?g|gif|webp|ico)$/.test(base)) return 'designer'
+
+  return null  // null = fall through to tool-based mapping
+}
+
+// Extract full file path from tool_input (for routing, not display)
+function extractFilePath(tool, toolInput) {
+  if (!toolInput || !['Edit', 'Write', 'Read'].includes(tool)) return null
+  try {
+    const input = typeof toolInput === 'string' ? JSON.parse(toolInput) : toolInput
+    return input.file_path || input.path || null
+  } catch { return null }
+}
+
 function skillToRole(name) {
   if (!name) return 'dev'
-  if (/plan|spec|bootstrap|decide/i.test(name)) return 'pm'
-  if (/review|test|lint|classify/i.test(name)) return 'qa'
-  if (/implement|code|fix|debug/i.test(name)) return 'dev'
-  if (/ship|deploy|handoff|retro/i.test(name)) return 'ops'
-  if (/research|explore|search/i.test(name)) return 'res'
-  if (/architect|design|brainstorm/i.test(name)) return 'arch'
-  if (/security|gate|audit|comply/i.test(name)) return 'gate'
+  const n = name.toLowerCase()
+
+  // ── Specific compound patterns first (before generic keyword catch-alls) ──
+  // CEO / exec review → gate (approval/policy authority)
+  if (/ceo|exec|stakeholder|board/i.test(n)) return 'gate'
+  // Engineering / architecture review → arch
+  if (/eng.?review|arch.?review|plan.eng|technical.review|adr/i.test(n)) return 'arch'
+  // Design / UI review → designer
+  if (/design.?review|ui.?review|ux.?review|visual.?review/i.test(n)) return 'designer'
+  // Security / compliance review → gate
+  if (/security.?review|compliance.?review|pentest|vuln/i.test(n)) return 'gate'
+  // Product / spec / intake → pm
+  if (/product.?review|spec.?intake|prd|roadmap.?review/i.test(n)) return 'pm'
+
+  // ── Generic keyword fallbacks ──
+  if (/plan|spec|bootstrap|decide|intake|priorit|backlog/i.test(n)) return 'pm'
+  if (/review|test|lint|classify|qa|quality/i.test(n)) return 'qa'
+  if (/implement|code|fix|debug|build|feature/i.test(n)) return 'dev'
+  if (/ship|deploy|handoff|retro|release|infra/i.test(n)) return 'ops'
+  if (/research|explore|search|analyz|investigat/i.test(n)) return 'res'
+  if (/architect|brainstorm|diagram|schema|rfc/i.test(n)) return 'arch'
+  if (/security|gate|audit|comply|guard|permission/i.test(n)) return 'gate'
+  if (/design|ui|ux|style|visual|brand|figma/i.test(n)) return 'designer'
   return 'dev'
 }
 
@@ -177,6 +258,33 @@ function skillLabel(skill, isDone) {
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)] }
 
+// ─── Skill context — persist skill→role across tool calls within a subagent ───
+// When SubagentStart fires (e.g. /review), we save the skill's role to a temp file.
+// PreToolUse/PostToolUse events within that subagent (same agent_id) read the file
+// and use the skill's role instead of the tool/file-based role, keeping the right
+// character active throughout the skill (e.g. QA stays working during /review).
+
+function skillContextPath(agentId) {
+  return path.join(os.homedir(), '.claude', `office-skill-${agentId}.json`)
+}
+
+function saveSkillContext(agentId, role, skillName) {
+  try {
+    fs.writeFileSync(skillContextPath(agentId), JSON.stringify({ role, skillName }))
+  } catch {}
+}
+
+function readSkillContext(agentId) {
+  if (!agentId) return null
+  try {
+    return JSON.parse(fs.readFileSync(skillContextPath(agentId), 'utf-8'))
+  } catch { return null }
+}
+
+function clearSkillContext(agentId) {
+  try { fs.unlinkSync(skillContextPath(agentId)) } catch {}
+}
+
 // ─── Main ───
 
 function processEvent(event) {
@@ -184,12 +292,24 @@ function processEvent(event) {
   const tool = event.tool_name || ''
   const agentType = event.agent_type || ''
   const toolInput = event.tool_input || null
+  const agentId = event.agent_id || null
 
   let role, task, status, label, hint = null
 
   switch (hookEvent) {
+    case 'UserPromptSubmit': {
+      // User sent a message — PM enters thinking/planning mode
+      role = 'pm'
+      task = 'thinking'
+      status = 'working'
+      label = pick(['🤔 想一下...', '📊 收到，規劃中', '💡 好問題...', '🧠 分析中'])
+      break
+    }
     case 'PreToolUse': {
-      role = toolToRole(tool)
+      const fullPath = extractFilePath(tool, toolInput)
+      // If inside a subagent with skill context, prefer the skill's role
+      const skillCtx = readSkillContext(agentId)
+      role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
       task = tool
       status = 'working'
       const ctx = extractContext(tool, toolInput)
@@ -197,7 +317,9 @@ function processEvent(event) {
       break
     }
     case 'PostToolUse': {
-      role = toolToRole(tool)
+      const fullPath = extractFilePath(tool, toolInput)
+      const skillCtx = readSkillContext(agentId)
+      role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
       task = tool
       // Detect errors from tool result
       const toolResult = event.tool_result || ''
@@ -208,18 +330,47 @@ function processEvent(event) {
       label = isError ? `❌ ${ctx || tool} failed` : toolLabel(tool, ctx, true)
       break
     }
-    case 'SubagentStart':
-      role = skillToRole(agentType)
+    case 'SubagentStart': {
+      role = skillToRoleExtended(agentType)
       task = agentType
       status = 'working'
       label = skillLabel(agentType, false)
+      // Persist skill context so tool calls within this subagent stay on the right role
+      if (agentId) saveSkillContext(agentId, role, agentType)
       break
-    case 'SubagentStop':
-      role = skillToRole(agentType)
+    }
+    case 'SubagentStop': {
+      role = skillToRoleExtended(agentType)
       task = agentType
       status = 'done'
       label = skillLabel(agentType, true)
+      if (agentId) clearSkillContext(agentId)
       break
+    }
+    case 'Stop': {
+      // Claude's turn is over — mark all current agents as done
+      try {
+        const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+        const doneAgents = (data.agents || []).map(a => ({
+          ...a, status: 'done', label: pick(['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了'])
+        }))
+        const output = {
+          _seq: String(Date.now()),
+          _cwd: process.cwd(),
+          type: 'office-status',
+          agents: doneAgents,
+          activeCount: 0,
+          workflow: data.workflow || null,
+          source: 'claude-cli',
+        }
+        const dir = path.dirname(STATUS_FILE)
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+        const tmp = STATUS_FILE + '.tmp'
+        fs.writeFileSync(tmp, JSON.stringify(output, null, 2))
+        fs.renameSync(tmp, STATUS_FILE)
+      } catch {}
+      return  // no further processing needed
+    }
     default:
       return
   }
@@ -259,5 +410,6 @@ function processEvent(event) {
 
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)
 if (typeof module !== 'undefined') {
-  module.exports = { toolToRole, skillToRole, shortFile, shortCommand, extractContext }
+  module.exports = { toolToRole, skillToRole, shortFile, shortCommand, extractContext,
+    skillContextPath, saveSkillContext, readSkillContext, clearSkillContext }
 }

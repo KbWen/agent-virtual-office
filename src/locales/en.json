@@ -7,6 +7,7 @@
     "ops": { "name": "DevOps", "personality": "Wears a hard hat, decisive, loves the big red button" },
     "res": { "name": "Researcher", "personality": "Piles of books, always reading, occasional eureka moments" },
     "gate": { "name": "Gatekeeper", "personality": "Guards the gate, verifies with a shield, very serious" },
+    "designer": { "name": "Designer", "personality": "Wears earrings, iPad in hand, opinions on spacing, perfectionist" },
     "planner": { "name": "Planner", "personality": "Loves sticky notes, always discussing with others" },
     "worker": { "name": "Worker", "personality": "Wears headphones, focused typing, scratches head sometimes" },
     "checker": { "name": "Checker", "personality": "Wears glasses, compares carefully, always checking off items" }
@@ -157,6 +158,15 @@
     "gate-working": ["security scanning...", "checking permissions", "compliance review...no shortcuts", "every line matters", "vulnerability scan running"],
     "gate-done": ["security check passed!", "no vulnerabilities~clear to go", "compliance OK"],
     "gate-error": ["found a vulnerability!", "non-compliant! rejected!", "can't ship this"],
+
+    "designer-edit": ["the whitespace in {ctx} is where the design breathes", "{ctx} needs more light and shadow", "the color in {ctx} should sing with the whole", "reshaping {ctx} so the eye knows where to rest", "the rhythm of {ctx} is broken — start over", "this touch in {ctx} could be everything"],
+    "designer-write": ["from blank space, {ctx} will find its form", "{ctx} — form follows feeling", "first beauty, then structure: writing {ctx}"],
+    "designer-read": ["what is {ctx} trying to say visually...", "reading {ctx}, feeling its rhythm", "studying {ctx} — inspiration is borrowed, beauty is earned"],
+    "designer-bash": ["building {ctx}, curious how it looks in the light", "{ctx} spinning up, waiting for that moment", "shipping {ctx} — letting the world see it"],
+    "designer-search": ["looking through {ctx}, learning from the past", "so many beautiful possibilities in {ctx}...", "searching {ctx} — a designer is always collecting"],
+    "designer-working": ["this silence in the layout isn't right...", "the warmth of this color needs softening", "too much contrast — it's arguing with itself", "the eye doesn't know where to go", "let the composition breathe", "every pixel is a choice", "beauty is restraint", "balance isn't symmetry — it's tension"],
+    "designer-done": ["{ctx} is done — almost too beautiful to ship", "delivered, though design is never truly finished", "{ctx} complete — the next canvas waits", "I like this version~", "it's alive now, {ctx}"],
+    "designer-error": ["{ctx} is crying out...", "the visual order has collapsed", "{ctx} lost its soul", "this isn't a bug — it's design in pain"],
 
     "any-done": ["done!", "OK finished~", "next one!", "nice~"],
     "any-error": ["uh oh...", "something broke", "what now...", "not good..."],

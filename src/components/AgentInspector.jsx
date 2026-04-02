@@ -44,7 +44,9 @@ export default function AgentInspector() {
   const task = ext?.label || ext?.task || null
   const color = agent.color || '#888'
 
-  const pos = agent.position || { x: 300, y: 250 }
+  // While moving, anchor to targetPosition so the panel follows where the agent is heading
+  // rather than staying frozen at the departure point.
+  const pos = (agent.isMoving ? agent.targetPosition : agent.position) || { x: 300, y: 250 }
 
   // Panel dimensions — expand for activity rows
   const activityRows = Math.min(recentActivities.length, 3)

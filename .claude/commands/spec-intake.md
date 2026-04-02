@@ -1,44 +1,22 @@
-# Claude Spec Intake Template
+# /spec-intake
 
-Use this when you have an existing spec (from another LLM, a document, or your own notes) and want to bring it into the project workflow.
+Execute the canonical workflow: `.agent/workflows/spec-intake.md`
 
-```text
-Please run /spec-intake behavior.
-Spec source: <paste spec here, or give a file path, or describe in natural language>
-```
+## Required reads before execution
 
-## Examples
+1. `AGENTS.md` — global directives (Spec Intake Gate, Intent Router)
+2. `.agent/rules/engineering_guardrails.md` — §4 Design Before Implementation
+3. `.agentcortex/context/current_state.md` — check for existing `_product-backlog.md`
 
-**Pasting a spec directly:**
-```text
-Please run /spec-intake behavior.
-Spec source:
-  # User Authentication
-  Goal: Allow users to sign in with Google OAuth and email/password.
-  AC:
-  1. User can sign in with Google
-  2. User can sign in with email + password
-  3. Session persists across page reloads
-```
+## Execution
 
-**Referencing a file:**
-```text
-Please run /spec-intake behavior.
-Spec source: docs/specs/draft-product-spec.md
-```
+Follow every step in `.agent/workflows/spec-intake.md` sequentially.
 
-**Natural language (product early stage):**
-```text
-Please run /spec-intake behavior.
-Spec source: 我要做一個任務管理系統，有用戶系統、任務 CRUD、標籤分類、還有通知功能
-```
+The user's spec input is: $ARGUMENTS
 
-## What the AI will do
-
-1. Read and parse the spec in whatever format you gave it
-2. If it's a large product spec → extract all features, show you a list, ask which to start with
-3. Generate a proper `docs/specs/<feature>.md` with quality assessment
-4. Flag anything it inferred (you confirm or correct)
-5. Freeze the spec and run bootstrap automatically
-
-No reformatting required from you.
+- If multi-feature input: decompose into Feature Inventory, ask user which to start.
+- If single-feature: proceed directly to spec generation.
+- Generate `docs/specs/<feature>.md` with quality assessment.
+- Flag inferred items for user confirmation.
+- After spec is frozen, proceed to bootstrap automatically.
+- End response with ⚡ ACX.
