@@ -130,19 +130,21 @@ export function createFilePollingState() {
 }
 
 export async function pollFileStatusOnce(fetchImpl, state, callback) {
-  if (state.inFlight) return
+  if (state.inFlight) return { ok: true, skipped: true, reason: 'in-flight' }
   // Back off when server is unreachable (skip every other poll after 10 failures)
-  if (state.consecutive404 > 10 && state.consecutive404 % 3 !== 0) return
+  if (state.consecutive404 > 10 && state.consecutive404 % 3 !== 0) {
+    return { ok: false, skipped: true, reason: 'backoff' }
+  }
 
   state.inFlight = true
   try {
     const headers = {}
     if (state.lastEtag) headers['If-None-Match'] = state.lastEtag
     const resp = await fetchImpl('/api/status', { headers })
-    if (resp.status === 304) return
+    if (resp.status === 304) return { ok: true, unchanged: true }
     if (!resp.ok) {
       state.consecutive404++
-      return
+      return { ok: false, status: resp.status }
     }
 
     state.consecutive404 = 0
@@ -152,25 +154,29 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
     try {
       data = await resp.json()
     } catch {
-      return
+      return { ok: false, parseError: true }
     }
-    if (!data) return
-    if (data._seq && data._seq === state.lastSeq) return
+    if (!data) return { ok: true, empty: true }
+    if (data._seq && data._seq === state.lastSeq) return { ok: true, duplicate: true }
 
     state.lastSeq = data._seq || null
     const msg = normalizeStatusMessage(data)
     if (msg) callback(msg)
+    return { ok: true, delivered: Boolean(msg) }
   } catch {
     state.consecutive404++
+    return { ok: false, networkError: true }
   } finally {
     state.inFlight = false
   }
 }
 
-function startFilePolling(callback, intervalMs = 1000) {
+function startFilePolling(callback, intervalMs = 1000, onProbe = null) {
   const pollingState = createFilePollingState()
   const timer = setInterval(() => {
-    void pollFileStatusOnce(fetch, pollingState, callback)
+    void pollFileStatusOnce(fetch, pollingState, callback).then((result) => {
+      if (onProbe && result) onProbe(result)
+    })
     // Back off if server seems down (skip polls but don't kill the interval)
     // Polling resumes automatically when server comes back (consecutive404 resets on success)
   }, intervalMs)
@@ -319,6 +325,11 @@ export function startStatusIntegration(store) {
     }, DEBOUNCE_MS)
   }
 
+  function handleProbe(result) {
+    if (result.skipped) return
+    store.getState().markIntegrationProbe({ ok: Boolean(result.ok) })
+  }
+
   function resetStalenessTimer() {
     if (stalenessTimer) clearTimeout(stalenessTimer)
     stalenessTimer = setTimeout(() => {
@@ -359,7 +370,7 @@ export function startStatusIntegration(store) {
     listenForStatusUpdates(handleIncoming),   // postMessage (artifact/embedded)
     listenBroadcastChannel(handleIncoming),   // cross-tab (CLI opens browser)
     startPolling(handleIncoming),             // window global (CLI injection)
-    startFilePolling(handleIncoming),         // /api/status (CLI hook → file → vite)
+    startFilePolling(handleIncoming, 1000, handleProbe), // /api/status (CLI hook → file → vite)
     listenHashChanges(handleIncoming),        // URL hash (passive, any platform)
     listenTitleChanges(handleIncoming),       // title monitoring (heuristic)
   ]

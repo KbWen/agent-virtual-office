@@ -14,6 +14,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const minute = useOfficeStore((s) => s.minute)
   const externalStatus = useOfficeStore((s) => s.externalStatus)
   const statusSource = useOfficeStore((s) => s.statusSource)
+  const integrationHealth = useOfficeStore((s) => s.integrationHealth)
 
   const [showTest, setShowTest] = useState(false)
   const [showInfo, setShowInfo] = useState(() => {
@@ -74,6 +75,12 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             <div className="flex items-center gap-0.5 shrink-0">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-emerald-600 dark:text-emerald-400 font-medium">{t('ui.live')}</span>
+            </div>
+          )}
+          {integrationHealth.state === 'offline' && (
+            <div className="flex items-center gap-0.5 shrink-0">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
+              <span className="text-red-600 dark:text-red-400 font-medium">offline</span>
             </div>
           )}
           <button onClick={togglePause} className="px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
@@ -150,6 +157,22 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
             <span className="text-[10px] text-yellow-600 dark:text-yellow-400 font-medium">
               {t('ui.fallbackAgents').replace('{0}', Object.keys(externalStatus).length)}
+            </span>
+          </div>
+        )}
+        {integrationHealth.state === 'offline' && (
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
+            <span className="text-[10px] text-red-600 dark:text-red-400 font-medium">
+              status api offline
+            </span>
+          </div>
+        )}
+        {integrationHealth.state === 'degraded' && (
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+              status api retrying
             </span>
           </div>
         )}

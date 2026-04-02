@@ -22,8 +22,44 @@ import { normalizePost, VALID_ROLES } from './src/utils/normalizePost.js'
 // Shared status file path (shared between plugins)
 const STATUS_PATH = path.join(os.homedir(), '.claude', 'office-status.json')
 
+const LOOPBACK_ORIGIN_RE = /^https?:\/\/(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?$/i
+
+export function getOfficeApiConfig(env = process.env) {
+  const token = env.OFFICE_API_TOKEN?.trim() || null
+  const allowedOrigins = (env.OFFICE_API_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+
+  return {
+    token,
+    allowedOrigins,
+  }
+}
+
+export function isAllowedOrigin(origin, config = getOfficeApiConfig()) {
+  if (!origin) return true
+  if (config.allowedOrigins.length > 0) return config.allowedOrigins.includes(origin)
+  return LOOPBACK_ORIGIN_RE.test(origin)
+}
+
+export function getAllowedOriginHeader(origin, config = getOfficeApiConfig()) {
+  if (!origin || !isAllowedOrigin(origin, config)) return null
+  return origin
+}
+
+export function isAuthorizedOfficeRequest(req, config = getOfficeApiConfig()) {
+  if (!config.token) return true
+  const header = req.headers['x-office-token']
+  const auth = req.headers.authorization
+  if (header === config.token) return true
+  if (typeof auth === 'string' && auth === `Bearer ${config.token}`) return true
+  return false
+}
+
 function officeStatusPlugin() {
   const statusPath = STATUS_PATH
+  const apiConfig = getOfficeApiConfig()
 
   // Simple rate limiter: max 30 POST requests per 10 seconds per IP
   const postCounts = new Map()
@@ -49,14 +85,23 @@ function officeStatusPlugin() {
       server.middlewares.use('/api/status', (req, res) => {
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Cache-Control', 'no-cache')
-        // Dev-only: allow any origin so local tools (CLI, curl, etc.) can POST status
-        // This middleware does NOT exist in production builds
-        res.setHeader('Access-Control-Allow-Origin', '*')
+        const allowedOrigin = getAllowedOriginHeader(req.headers.origin, apiConfig)
+        if (allowedOrigin) res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match, X-Office-Token, Authorization')
+        res.setHeader('Vary', 'Origin')
 
         // CORS preflight
-        if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return }
+        if (req.method === 'OPTIONS') {
+          if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
+            res.statusCode = 403
+            res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
+            return
+          }
+          res.statusCode = 204
+          res.end()
+          return
+        }
 
         // Rate limiting for POST
         if (!checkRateLimit(req)) {
@@ -160,6 +205,11 @@ function officeStatusPlugin() {
 
         // POST → update status (16KB limit to prevent abuse)
         if (req.method === 'POST') {
+          if (!isAuthorizedOfficeRequest(req, apiConfig)) {
+            res.statusCode = 401
+            res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
+            return
+          }
           let body = ''
           let aborted = false
           const MAX_BODY = 16 * 1024
@@ -228,14 +278,30 @@ function officeStatusPlugin() {
 
       server.middlewares.use('/api/event', (req, res) => {
         res.setHeader('Content-Type', 'application/json')
-        res.setHeader('Access-Control-Allow-Origin', '*')
+        const allowedOrigin = getAllowedOriginHeader(req.headers.origin, apiConfig)
+        if (allowedOrigin) res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
         res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Office-Token, Authorization')
+        res.setHeader('Vary', 'Origin')
 
-        if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return }
+        if (req.method === 'OPTIONS') {
+          if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
+            res.statusCode = 403
+            res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
+            return
+          }
+          res.statusCode = 204
+          res.end()
+          return
+        }
         if (req.method !== 'POST') {
           res.statusCode = 405
           res.end(JSON.stringify({ error: 'Method not allowed' }))
+          return
+        }
+        if (!isAuthorizedOfficeRequest(req, apiConfig)) {
+          res.statusCode = 401
+          res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
           return
         }
         if (!checkRateLimit(req)) {

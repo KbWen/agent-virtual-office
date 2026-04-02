@@ -263,6 +263,12 @@ export const useOfficeStore = create((set) => ({
   externalStatus: {},          // { [agentId]: { status, task, label, expiresAt } }
   statusSource: 'organic',     // 'organic' | 'external' | 'fallback'
   activeWorkflow: null,        // workflow name for banner display
+  integrationHealth: {
+    state: 'idle',             // idle | online | degraded | offline
+    lastSuccessAt: null,
+    lastErrorAt: null,
+    consecutiveFailures: 0,
+  },
 
   applyExternalStatus: (updates) =>
     set((s) => {
@@ -359,6 +365,19 @@ export const useOfficeStore = create((set) => ({
 
   setStatusSource: (source) => set({ statusSource: source }),
   setActiveWorkflow: (name) => set({ activeWorkflow: name }),
+  markIntegrationProbe: ({ ok }) =>
+    set((s) => {
+      const now = Date.now()
+      const failures = ok ? 0 : s.integrationHealth.consecutiveFailures + 1
+      return {
+        integrationHealth: {
+          state: ok ? 'online' : (failures >= 3 ? 'offline' : 'degraded'),
+          lastSuccessAt: ok ? now : s.integrationHealth.lastSuccessAt,
+          lastErrorAt: ok ? s.integrationHealth.lastErrorAt : now,
+          consecutiveFailures: failures,
+        },
+      }
+    }),
 
   // Handoff animation state
   handoffs: [],
