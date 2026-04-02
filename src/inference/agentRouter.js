@@ -98,6 +98,7 @@ export function routeExternalAgents(agents) {
         task: entry.task || null,
         label: entry.label || null,
         hint: entry.hint || null,
+        session: entry.session || null,
       })
     }
   }

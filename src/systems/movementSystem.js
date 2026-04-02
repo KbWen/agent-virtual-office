@@ -137,6 +137,17 @@ export const MEETING_CHAIRS = [
   { x: 645, y: 160 }, { x: 765, y: 160 },                       // sides
 ]
 
+// Overflow positions for dynamically spawned worktree agents (entrance hallway)
+// Agents from other sessions appear here — feels like a "visiting team"
+export const OVERFLOW_POSITIONS = [
+  { x: 200, y: 80 },
+  { x: 370, y: 80 },
+  { x: 490, y: 80 },
+  { x: 100, y: 55 },
+  { x: 540, y: 60 },
+  { x: 300, y: 50 },
+]
+
 // Home = chair position (behind desk, y+24), NOT desk center
 export const HOME_POSITIONS = {
   pm:   { x: 140, y: 264 },

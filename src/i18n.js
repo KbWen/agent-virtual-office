@@ -88,7 +88,9 @@ export function charName(charId) {
     const custom = _nameResolver(charId)
     if (custom) return custom
   }
-  return t(`characters.${charId}.name`, charId)
+  // Strip session prefix: "feat-x~dev" → look up "dev", return "開發者"
+  const baseRole = charId.includes('~') ? charId.split('~')[1] : charId
+  return t(`characters.${baseRole}.name`, baseRole)
 }
 
 // Convenience: get event display name

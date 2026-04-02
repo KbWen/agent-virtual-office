@@ -315,7 +315,9 @@ function PixelSprite({ grid, flipX = false, scale = 1 }) {
 
 // ─── Full Sprite with shadow ──────────────────────────────────────────
 function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing }) {
-  const style = CHAR_STYLES[charId] || CHAR_STYLES.pm
+  // Strip session prefix for style lookup: "feat-x~dev" → use dev's style
+  const baseRole = charId.includes('~') ? charId.split('~')[1] : charId
+  const style = CHAR_STYLES[charId] || CHAR_STYLES[baseRole] || CHAR_STYLES.pm
   const gender = style.gender || 'male'
 
   const sprites = useMemo(() => {
@@ -890,6 +892,7 @@ function AgentCharacter({ agent }) {
 
   const state = agentState || {}
   const pos = renderPos || state.position || { x: 0, y: 0 }
+  const session = state.session || null
 
   // Name tag dimensions (lifted from render for clarity)
   const tagW = estimateTextWidth(name) + 16
@@ -928,6 +931,17 @@ function AgentCharacter({ agent }) {
       {/* Name tag + bubble: inverse-scale to keep text at original size despite character scale */}
       <g transform={`scale(${1/1.35})`}>
         <g transform="translate(0, -48)">
+          {/* Session branch badge — shown above name tag for worktree agents */}
+          {session && (
+            <g transform="translate(0, -16)">
+              <rect x={-tagHalfW} y={-7} width={tagW} height={13} rx={6}
+                fill={color} opacity="0.7" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"
+                fontSize="8" fontFamily="monospace" fill="white" opacity="0.95">
+                {session.slice(0, 16)}
+              </text>
+            </g>
+          )}
           <rect x={-tagHalfW} y={-11} width={tagW} height={20} rx={10}
             fill={tagFill} opacity="0.92" />
           <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"

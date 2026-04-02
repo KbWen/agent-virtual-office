@@ -68,38 +68,66 @@ function officeStatusPlugin() {
           return
         }
 
-        // GET → read current status (ETag cache + server-side staleness)
+        // GET → merge all active session files (multi-worktree support)
         if (req.method === 'GET') {
           try {
-            // Fast path: check cached ETag before reading file
             const clientEtag = req.headers['if-none-match']
             if (clientEtag && etagCache.lastEtag === clientEtag) {
-              res.statusCode = 304
-              res.end()
-              return
+              res.statusCode = 304; res.end(); return
             }
 
-            const data = fs.readFileSync(statusPath, 'utf-8')
+            const dir = path.dirname(statusPath)
+            const now = Date.now()
 
-            // Server-side staleness: if _seq is older than 60s, return empty
-            try {
-              const parsed = JSON.parse(data)
-              const seq = parseInt(parsed._seq, 10)
-              if (seq && Date.now() - seq > 60000) {
-                res.end('null')
-                return
+            // Scan ~/.claude/office-status-*.json (all session files)
+            const sessions = []
+            if (fs.existsSync(dir)) {
+              for (const file of fs.readdirSync(dir)) {
+                if (!file.match(/^office-status(-[^.]+)?\.json$/)) continue
+                try {
+                  const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
+                  const parsed = JSON.parse(raw)
+                  const seq = parseInt(parsed._seq, 10)
+                  if (seq && now - seq > 60000) continue // stale — skip
+                  const slug = file === 'office-status.json' ? 'main'
+                    : file.replace(/^office-status-/, '').replace(/\.json$/, '')
+                  sessions.push({ slug, data: parsed })
+                } catch {}
               }
-            } catch {}
-
-            const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
-
-            // 304 if ETag matches (for clients with stale cache ref)
-            if (clientEtag === etag) {
-              res.statusCode = 304
-              res.end()
-              return
             }
 
+            if (sessions.length === 0) { res.end('null'); return }
+
+            let merged
+            if (sessions.length === 1) {
+              // Single session — return as-is (backward compat, plain role IDs)
+              merged = sessions[0].data
+            } else {
+              // Multi-session — prefix agent roles with session slug so they don't collide
+              const allAgents = []
+              let latestSeq = 0
+              let workflow = null
+              for (const { slug, data } of sessions) {
+                const seq = parseInt(data._seq, 10) || 0
+                if (seq > latestSeq) { latestSeq = seq; workflow = data.workflow }
+                for (const agent of (data.agents || [])) {
+                  allAgents.push({ ...agent, role: `${slug}~${agent.role}`, session: slug })
+                }
+              }
+              merged = {
+                _seq: String(latestSeq),
+                type: 'office-status',
+                agents: allAgents,
+                activeCount: allAgents.filter(a => a.status !== 'done').length,
+                workflow,
+                source: 'multi-session',
+                sessionCount: sessions.length,
+              }
+            }
+
+            const data = JSON.stringify(merged)
+            const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
+            if (clientEtag === etag) { res.statusCode = 304; res.end(); return }
             res.setHeader('ETag', etag)
             etagCache.lastEtag = etag
             etagCache.lastData = data
