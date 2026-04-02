@@ -40,9 +40,9 @@
 
 | # | Feature | Priority | Status | Notes |
 |---|---------|----------|--------|-------|
-| 10 | **智能 file_path 路由** — `*.test.*` → qa、`*.yml/Dockerfile` → ops、`*.md` → res | P1 | Pending | `office-status-hook.js: extractContext` + `toolToRole` 加邏輯 |
+| 10 | **智能 file_path 路由** — `*.test.*` → qa、`*.yml/Dockerfile` → ops、`*.md` → res | P1 | Done | ✅ fileToRole() in hook, 含 designer 路由 |
 | 11 | **多 worktree 支援** — `?session=foo` 讓不同 worktree 的 agent 同時出現 | P3 | Done | ✅ session 用 branch slug 命名檔案，merge 時 1 session = 1 代表角色 |
-| 12 | **Webhook 事件端點** — `POST /api/event` 接受一次性事件（PR merged → deploy-success），CI/CD 可推資料 | P2 | Pending | `vite.config.js` 加 `/api/event` middleware |
+| 12 | **Webhook 事件端點** — `POST /api/event` 接受一次性事件（PR merged → deploy-success），CI/CD 可推資料 | P2 | Done | ✅ /api/event 支援 11 種事件 + custom，含 role/status 驗證 |
 
 ---
 
