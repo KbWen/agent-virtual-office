@@ -4,17 +4,18 @@
  */
 
 const ROLE_KEYWORDS = {
-  pm:   [/plan/i, /spec/i, /bootstrap/i, /manage/i, /schedule/i, /roadmap/i, /sprint/i, /standup/i, /priorit/i, /backlog/i],
-  arch: [/architect/i, /design/i, /brainstorm/i, /decide/i, /diagram/i, /pattern/i, /rfc/i, /structur/i, /schema/i],
-  dev:  [/implement/i, /code/i, /develop/i, /build/i, /feature/i, /refactor/i, /fix/i, /write/i, /program/i, /commit/i, /merge/i],
-  qa:   [/test/i, /review/i, /lint/i, /check/i, /verify/i, /validate/i, /quality/i, /bug/i, /assert/i, /coverage/i],
-  ops:  [/deploy/i, /ship/i, /release/i, /ci/i, /cd/i, /infra/i, /monitor/i, /handoff/i, /docker/i, /publish/i],
-  res:  [/research/i, /search/i, /explore/i, /learn/i, /analyze/i, /investigate/i, /read/i, /study/i, /survey/i],
-  gate: [/gate/i, /guard/i, /security/i, /auth/i, /permission/i, /approve/i, /compliance/i, /audit/i, /policy/i],
+  pm:       [/plan/i, /spec/i, /bootstrap/i, /manage/i, /schedule/i, /roadmap/i, /sprint/i, /standup/i, /priorit/i, /backlog/i],
+  arch:     [/architect/i, /brainstorm/i, /decide/i, /diagram/i, /pattern/i, /rfc/i, /structur/i, /schema/i],
+  dev:      [/implement/i, /code/i, /develop/i, /build/i, /feature/i, /refactor/i, /fix/i, /write/i, /program/i, /commit/i, /merge/i],
+  qa:       [/test/i, /review/i, /lint/i, /check/i, /verify/i, /validate/i, /quality/i, /bug/i, /assert/i, /coverage/i],
+  ops:      [/deploy/i, /ship/i, /release/i, /ci/i, /cd/i, /infra/i, /monitor/i, /handoff/i, /docker/i, /publish/i],
+  res:      [/research/i, /search/i, /explore/i, /learn/i, /analyze/i, /investigate/i, /read/i, /study/i, /survey/i],
+  gate:     [/gate/i, /guard/i, /security/i, /auth/i, /permission/i, /approve/i, /compliance/i, /audit/i, /policy/i],
+  designer: [/design/i, /ui/i, /ux/i, /style/i, /css/i, /layout/i, /visual/i, /brand/i, /icon/i, /figma/i, /sketch/i, /color/i, /font/i, /spacing/i, /typography/i],
 }
 
 // Stable fallback order for activeCount distribution
-const FALLBACK_ORDER = ['dev', 'qa', 'pm', 'ops', 'arch', 'res', 'gate']
+const FALLBACK_ORDER = ['dev', 'qa', 'pm', 'ops', 'arch', 'res', 'designer', 'gate']
 
 // Legacy command→agent mapping (from old inferStatus.js)
 const COMMAND_TO_AGENT = {

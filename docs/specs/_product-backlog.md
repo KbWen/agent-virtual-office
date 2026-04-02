@@ -64,3 +64,6 @@
 | STATUS_COLORS / VALID_STATUSES 集中化 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
 | TTL expiry 競態修復 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
 | AgentInspector 移動中 position lag 修復 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
+| **#10 智能 file_path 路由** — *.test.* → qa、*.css/svg → designer、Dockerfile → ops | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
+| **#12 Webhook 事件端點** — POST /api/event 接受 12 種 CI/CD 事件 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
+| **設計師角色** — 粉色女生角色，設計角落，對 CSS/SVG/設計檔案有感 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |

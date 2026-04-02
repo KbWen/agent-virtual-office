@@ -7,6 +7,7 @@
     "ops": { "name": "DevOps", "personality": "戴安全帽、做事果斷、愛按大按鈕" },
     "res": { "name": "研究員", "personality": "桌上書堆、常翻書、偶爾恍然大悟" },
     "gate": { "name": "門神", "personality": "站安全亭、驗證舉盾牌、很嚴肅" },
+    "designer": { "name": "設計師", "personality": "戴耳環、拿 iPad、對間距有意見、完美主義" },
     "planner": { "name": "規劃師", "personality": "愛寫便利貼、常跟人討論" },
     "worker": { "name": "執行者", "personality": "戴耳機、專注打字、偶爾抓頭" },
     "checker": { "name": "檢查員", "personality": "戴眼鏡、仔細對比、常打勾" }
@@ -157,6 +158,16 @@
     "gate-working": ["安全掃描中...", "檢查權限設定", "合規檢查...不准馬虎", "每一行都要看", "掃描弱點中"],
     "gate-done": ["安全檢查通過！", "沒有漏洞~放行", "合規 OK"],
     "gate-error": ["發現安全漏洞！", "不合規！退回！", "這個不能上線"],
+
+    "designer-edit": ["這個間距差了 2px！", "改 {ctx}，顏色要再暖一點", "{ctx} 的字體不對，換掉", "嗯 {ctx} 對齊有問題", "{ctx} 視覺層次要調整", "完美主義發作，改 {ctx}"],
+    "designer-write": ["新設計稿 {ctx} 出爐！", "寫 {ctx}，從 0 到美", "{ctx} 視覺規範建立中"],
+    "designer-read": ["研究 {ctx} 的設計語言...", "{ctx} 的 spacing 系統在哪", "看 {ctx}，找靈感"],
+    "designer-bash": ["跑 {ctx}，看看畫面跑出來沒", "{ctx} 打包中，等看最終版", "build {ctx} 確認視覺正確"],
+    "designer-search": ["找 {ctx} 的設計規範...", "{ctx} 有沒有對齊系統", "搜 {ctx}，找色票參考"],
+    "designer-css": ["{ctx} 這個 padding 不對", "CSS {ctx}，手感來了~", "{ctx} RWD 要調一下", "改 {ctx}，像素完美主義"],
+    "designer-working": ["間距哪裡怪怪的...", "顏色飽和度再高一點", "字體大小不統一！", "這個 hover 效果不夠絲滑", "整體視覺還需要呼吸感", "完美只差 1px！", "UI 不是藝術，是溝通"],
+    "designer-done": ["{ctx} 視覺搞定！", "像素完美~ 交付了", "{ctx} 設計通過！美麗~", "設計師滿意了~", "完美！下一個元件"],
+    "designer-error": ["{ctx} 視覺跑版了！", "這個顏色怎麼不對...", "{ctx} 完全跑掉了", "跟設計稿差太多了"],
 
     "any-done": ["搞定了！", "OK 完成~", "下一個！", "漂亮~"],
     "any-error": ["出事了...", "壞了壞了", "怎麼辦...", "不妙..."],

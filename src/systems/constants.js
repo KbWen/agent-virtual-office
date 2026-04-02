@@ -23,7 +23,7 @@ export const TIME_CHECK_INTERVAL = 60000               // 1 min
 
 // API
 export const STATUS_POLL_INTERVAL = 2000   // ms
-export const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate']
+export const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
 export const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
 
 export const STATUS_COLORS = {

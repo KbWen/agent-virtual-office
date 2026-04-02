@@ -217,9 +217,10 @@ const CHAR_STYLES = {
   ops:     { hair: '#4a3a2a', hairStyle: 'hard-hat',   clothes: '#D85A30', gender: 'male' },
   res:     { hair: '#3a7a6a', hairStyle: 'long',       clothes: '#5DCAA5', gender: 'female' },
   gate:    { hair: '#2a1a1a', hairStyle: 'spiky',      clothes: '#E24B4A', gender: 'male' },
-  planner: { hair: '#3a2a1a', hairStyle: 'neat',       clothes: '#378ADD', gender: 'male' },
-  worker:  { hair: '#2a5a3a', hairStyle: 'bangs',      clothes: '#1D9E75', gender: 'female' },
-  checker: { hair: '#5a4a3a', hairStyle: 'neat',       clothes: '#BA7517', gender: 'male' },
+  planner:  { hair: '#3a2a1a', hairStyle: 'neat',       clothes: '#378ADD', gender: 'male' },
+  worker:   { hair: '#2a5a3a', hairStyle: 'bangs',      clothes: '#1D9E75', gender: 'female' },
+  checker:  { hair: '#5a4a3a', hairStyle: 'neat',       clothes: '#BA7517', gender: 'male' },
+  designer: { hair: '#4a1a2a', hairStyle: 'long',       clothes: '#E8688A', gender: 'female' },
 }
 
 // ─── Expression modifiers ──────────────────────────────────────────────

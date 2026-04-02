@@ -46,6 +46,12 @@ function toolToRole(tool) {
   return map[tool] || 'dev'
 }
 
+function skillToRoleExtended(name) {
+  if (!name) return 'dev'
+  if (/design|ui|ux|style|visual|brand/i.test(name)) return 'designer'
+  return skillToRole(name)
+}
+
 // Smart file routing — override tool-based role for Edit/Write/Read based on file type
 function fileToRole(filePath) {
   if (!filePath) return null
@@ -67,8 +73,14 @@ function fileToRole(filePath) {
   if (/\/(docs?|wiki|notes?)\//i.test(f)) return 'res'
 
   // Architecture / ADR → arch
-  if (/\/(adr|architecture|design)\//i.test(f)) return 'arch'
+  if (/\/(adr|architecture)\//i.test(f)) return 'arch'
   if (/\.(puml|drawio)$/.test(base)) return 'arch'
+
+  // Design / UI → designer
+  if (/\.(css|scss|less|sass)$/.test(base)) return 'designer'
+  if (/\.(svg|figma|sketch|xd|ai)$/.test(base)) return 'designer'
+  if (/\/(design|ui|ux|styles?|themes?|assets?)\//i.test(f)) return 'designer'
+  if (/\.(png|jpe?g|gif|webp|ico)$/.test(base)) return 'designer'
 
   return null  // null = fall through to tool-based mapping
 }

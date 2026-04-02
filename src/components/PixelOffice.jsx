@@ -323,6 +323,25 @@ function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0 }) {
           <line x1={x - 21} y1={y - 2} x2={x - 21} y2={y + 8} stroke="#DDD" strokeWidth="0.5" />
         </g>
       )}
+      {variant === 'designer' && (
+        <g>
+          {/* iPad with color palette on screen */}
+          <rect x={x + 13} y={y - H / 2 + 2} width={14} height={20} rx={2} fill="#1a1a2a" stroke="#E8688A" strokeWidth="0.8" />
+          <rect x={x + 14} y={y - H / 2 + 4} width={12} height={15} rx={1} fill="#2a1a2a" />
+          {/* Color swatches on iPad */}
+          <circle cx={x + 17} cy={y - H / 2 + 8}  r={2.5} fill="#E8688A" opacity="0.9" />
+          <circle cx={x + 22} cy={y - H / 2 + 8}  r={2.5} fill="#F5C6D6" opacity="0.9" />
+          <circle cx={x + 17} cy={y - H / 2 + 14} r={2.5} fill="#C850A0" opacity="0.9" />
+          <circle cx={x + 22} cy={y - H / 2 + 14} r={2.5} fill="#FFE4F0" opacity="0.9" />
+          {/* Color swatch fan on desk */}
+          <rect x={x - 28} y={y + 2} width={8} height={2} rx={0.5} fill="#E8688A" opacity="0.8" />
+          <rect x={x - 28} y={y + 5} width={8} height={2} rx={0.5} fill="#C850A0" opacity="0.8" />
+          <rect x={x - 28} y={y + 8} width={8} height={2} rx={0.5} fill="#F5C6D6" opacity="0.8" />
+          <rect x={x - 27} y={y}     width={10} height={2} rx={0.5} fill="#FFE4F0" opacity="0.8" />
+          {/* Thin design ruler */}
+          <rect x={x - 28} y={y - 6} width={14} height={2} rx={0.5} fill="#bbb" opacity="0.6" />
+        </g>
+      )}
 
       {/* Extra coffee cups from behavior */}
       {variant !== 'dev' && coffeeCount >= 1 && <CoffeeCup x={x + 20} y={y + 6} />}
@@ -337,8 +356,9 @@ const DESK_DATA = [
   { id: 'arch', x: 260, y: 240, label: 'Arch',    color: '#7F77DD', variant: 'arch' },
   { id: 'qa',   x: 400, y: 220, label: 'QA',      color: '#BA7517', variant: 'qa' },
   { id: 'res',  x: 520, y: 220, label: 'Research', color: '#5DCAA5', variant: 'res' },
-  { id: 'dev',  x: 340, y: 340, label: 'Dev',     color: '#1D9E75', variant: 'dev' },
-  { id: 'ops',  x: 460, y: 340, label: 'Ops',     color: '#D85A30', variant: 'ops' },
+  { id: 'dev',      x: 340, y: 340, label: 'Dev',      color: '#1D9E75', variant: 'dev' },
+  { id: 'ops',      x: 460, y: 340, label: 'Ops',      color: '#D85A30', variant: 'ops' },
+  { id: 'designer', x: 140, y: 360, label: 'Design',   color: '#E8688A', variant: 'designer' },
 ]
 
 // Static SVG grid lines — pre-built once to avoid re-creating 103 elements per render

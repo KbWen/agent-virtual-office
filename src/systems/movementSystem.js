@@ -37,6 +37,7 @@ const OBSTACLE_RECTS = [
   { x1: 485, y1: 195, x2: 555, y2: 240 },  // Res desk
   { x1: 305, y1: 315, x2: 375, y2: 360 },  // Dev desk
   { x1: 425, y1: 315, x2: 495, y2: 360 },  // Ops desk
+  { x1: 105, y1: 335, x2: 175, y2: 370 },  // Designer desk (design corner below PM)
   // Meeting table
   { x1: 650, y1: 128, x2: 760, y2: 195 },
   // Whiteboard area
@@ -145,6 +146,7 @@ export const HOME_POSITIONS = {
   qa:   { x: 400, y: 244 },
   res:  { x: 520, y: 244 },
   gate: WAYPOINTS.gate,
+  designer: { x: 140, y: 384 },
   planner: { x: 200, y: 274 }, worker: { x: 400, y: 304 }, checker: { x: 500, y: 254 },
 }
 

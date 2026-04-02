@@ -7,6 +7,7 @@
     "ops": { "name": "DevOps", "personality": "Wears a hard hat, decisive, loves the big red button" },
     "res": { "name": "Researcher", "personality": "Piles of books, always reading, occasional eureka moments" },
     "gate": { "name": "Gatekeeper", "personality": "Guards the gate, verifies with a shield, very serious" },
+    "designer": { "name": "Designer", "personality": "Wears earrings, iPad in hand, opinions on spacing, perfectionist" },
     "planner": { "name": "Planner", "personality": "Loves sticky notes, always discussing with others" },
     "worker": { "name": "Worker", "personality": "Wears headphones, focused typing, scratches head sometimes" },
     "checker": { "name": "Checker", "personality": "Wears glasses, compares carefully, always checking off items" }
@@ -157,6 +158,16 @@
     "gate-working": ["security scanning...", "checking permissions", "compliance review...no shortcuts", "every line matters", "vulnerability scan running"],
     "gate-done": ["security check passed!", "no vulnerabilities~clear to go", "compliance OK"],
     "gate-error": ["found a vulnerability!", "non-compliant! rejected!", "can't ship this"],
+
+    "designer-edit": ["this spacing is off by 2px!", "tweaking {ctx}, color needs to be warmer", "{ctx} font is wrong, replacing it", "hmm {ctx} alignment issue", "{ctx} visual hierarchy needs work", "perfectionism mode: fixing {ctx}"],
+    "designer-write": ["new design for {ctx}!", "writing {ctx} from scratch, making it beautiful", "{ctx} design system coming together"],
+    "designer-read": ["studying {ctx} design language...", "where's the spacing system in {ctx}", "reading {ctx} for inspiration"],
+    "designer-bash": ["running {ctx}, checking how it looks", "{ctx} building...waiting for final render", "build {ctx} to verify the visuals"],
+    "designer-search": ["looking up {ctx} design specs...", "does {ctx} have an alignment system?", "searching {ctx} for color references"],
+    "designer-css": ["{ctx} padding is wrong", "CSS {ctx}, in the zone~", "{ctx} RWD needs adjustment", "tweaking {ctx}, pixel perfection"],
+    "designer-working": ["something's off with the spacing...", "saturation needs to go higher", "font sizes aren't consistent!", "this hover effect isn't smooth enough", "the layout needs more breathing room", "perfect is just 1px away!", "UI isn't art, it's communication"],
+    "designer-done": ["{ctx} visuals locked in!", "pixel perfect~ shipped it", "{ctx} design approved! gorgeous~", "designer is satisfied~", "beautiful! next component"],
+    "designer-error": ["{ctx} layout broke!", "these colors are wrong...", "{ctx} completely off", "looks nothing like the mockup"],
 
     "any-done": ["done!", "OK finished~", "next one!", "nice~"],
     "any-error": ["uh oh...", "something broke", "what now...", "not good..."],
