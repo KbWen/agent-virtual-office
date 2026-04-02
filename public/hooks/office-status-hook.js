@@ -46,6 +46,42 @@ function toolToRole(tool) {
   return map[tool] || 'dev'
 }
 
+// Smart file routing — override tool-based role for Edit/Write/Read based on file type
+function fileToRole(filePath) {
+  if (!filePath) return null
+  const f = filePath.replace(/\\/g, '/').toLowerCase()
+  const base = path.basename(f)
+
+  // Test files → qa
+  if (/\.(test|spec)\.(js|ts|jsx|tsx|py|rb|go|java|cjs|mjs)$/.test(base)) return 'qa'
+  if (/\/(tests?|__tests?|specs?)\//i.test(f)) return 'qa'
+
+  // CI/CD and infra → ops
+  if (/^dockerfile/i.test(base)) return 'ops'
+  if (/docker-compose/i.test(base)) return 'ops'
+  if (/\/(\.github|\.gitlab|\.circleci|\.buildkite|\.drone)\//i.test(f)) return 'ops'
+  if (/\.(ya?ml|toml)$/.test(base) && !/^package/.test(base)) return 'ops'
+
+  // Docs / notes → res
+  if (/\.(md|mdx|txt|rst|adoc)$/.test(base)) return 'res'
+  if (/\/(docs?|wiki|notes?)\//i.test(f)) return 'res'
+
+  // Architecture / ADR → arch
+  if (/\/(adr|architecture|design)\//i.test(f)) return 'arch'
+  if (/\.(puml|drawio)$/.test(base)) return 'arch'
+
+  return null  // null = fall through to tool-based mapping
+}
+
+// Extract full file path from tool_input (for routing, not display)
+function extractFilePath(tool, toolInput) {
+  if (!toolInput || !['Edit', 'Write', 'Read'].includes(tool)) return null
+  try {
+    const input = typeof toolInput === 'string' ? JSON.parse(toolInput) : toolInput
+    return input.file_path || input.path || null
+  } catch { return null }
+}
+
 function skillToRole(name) {
   if (!name) return 'dev'
   if (/plan|spec|bootstrap|decide/i.test(name)) return 'pm'
@@ -189,7 +225,8 @@ function processEvent(event) {
 
   switch (hookEvent) {
     case 'PreToolUse': {
-      role = toolToRole(tool)
+      const fullPath = extractFilePath(tool, toolInput)
+      role = fileToRole(fullPath) || toolToRole(tool)
       task = tool
       status = 'working'
       const ctx = extractContext(tool, toolInput)
@@ -197,7 +234,8 @@ function processEvent(event) {
       break
     }
     case 'PostToolUse': {
-      role = toolToRole(tool)
+      const fullPath = extractFilePath(tool, toolInput)
+      role = fileToRole(fullPath) || toolToRole(tool)
       task = tool
       // Detect errors from tool result
       const toolResult = event.tool_result || ''

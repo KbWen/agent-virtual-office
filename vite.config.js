@@ -150,6 +150,95 @@ function officeStatusPlugin() {
         res.statusCode = 405
         res.end(JSON.stringify({ error: 'Method not allowed' }))
       })
+
+      // ─── /api/event — one-shot CI/CD webhook ────────────────────────────
+      // Usage:
+      //   curl -X POST http://localhost:5173/api/event \
+      //     -H "Content-Type: application/json" \
+      //     -d '{"event":"pr-merged"}'
+      //
+      // Supported events: pr-merged, pr-opened, pr-reviewed,
+      //   test-passed, test-failed, build-success, build-failed,
+      //   deploy-start, deploy-success, deploy-failed, release
+      //
+      // Custom: { "event": "custom", "role": "qa", "status": "blocked", "label": "❌ flaky test" }
+
+      const EVENT_TO_STATUS = {
+        'pr-merged':      [{ role: 'ops', status: 'done',    label: '🚀 PR merged!' },
+                           { role: 'dev', status: 'done',    label: '✅ 上了！' }],
+        'pr-opened':      [{ role: 'dev', status: 'working', label: '📋 PR 開好了' }],
+        'pr-reviewed':    [{ role: 'qa',  status: 'done',    label: '✅ PR reviewed' }],
+        'test-passed':    [{ role: 'qa',  status: 'done',    label: '✅ Tests passed!' }],
+        'test-failed':    [{ role: 'qa',  status: 'blocked', label: '❌ Tests failed' }],
+        'build-success':  [{ role: 'ops', status: 'done',    label: '🏗️ Build success' }],
+        'build-failed':   [{ role: 'ops', status: 'blocked', label: '💥 Build failed' }],
+        'deploy-start':   [{ role: 'ops', status: 'working', label: '🚀 Deploying...' }],
+        'deploy-success': [{ role: 'ops', status: 'done',    label: '🎉 Deployed!' }],
+        'deploy-failed':  [{ role: 'ops', status: 'blocked', label: '💥 Deploy failed' }],
+        'release':        [{ role: 'ops', status: 'done',    label: '🎉 Released!' },
+                           { role: 'dev', status: 'done',    label: '🎉 Ship it!' },
+                           { role: 'qa',  status: 'done',    label: '✅ Quality approved' }],
+      }
+
+      server.middlewares.use('/api/event', (req, res) => {
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Access-Control-Allow-Origin', '*')
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+
+        if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return }
+        if (req.method !== 'POST') {
+          res.statusCode = 405
+          res.end(JSON.stringify({ error: 'Method not allowed' }))
+          return
+        }
+        if (!checkRateLimit(req)) {
+          res.statusCode = 429
+          res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
+          return
+        }
+
+        let body = ''
+        req.on('data', chunk => { body += chunk })
+        req.on('end', () => {
+          try {
+            const parsed = JSON.parse(body)
+            const eventName = parsed.event || ''
+
+            let agents
+            if (eventName === 'custom' && parsed.role && parsed.status) {
+              agents = [{ role: parsed.role, status: parsed.status, label: parsed.label || eventName }]
+            } else {
+              agents = EVENT_TO_STATUS[eventName]
+              if (!agents) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ ok: false, error: `Unknown event: ${eventName}` }))
+                return
+              }
+              // Allow label override
+              if (parsed.label) agents = agents.map((a, i) => i === 0 ? { ...a, label: parsed.label } : a)
+            }
+
+            const output = {
+              _seq: String(Date.now()),
+              type: 'office-status',
+              agents,
+              activeCount: agents.filter(a => a.status !== 'done').length,
+              workflow: parsed.workflow || eventName,
+              source: 'webhook',
+            }
+            const dir = path.dirname(statusPath)
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+            fs.writeFileSync(statusPath, JSON.stringify(output, null, 2))
+            etagCache.lastEtag = null
+            etagCache.lastData = null
+            res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
+          } catch (err) {
+            res.statusCode = 400
+            res.end(JSON.stringify({ ok: false, error: err.message }))
+          }
+        })
+      })
     }
   }
 }
