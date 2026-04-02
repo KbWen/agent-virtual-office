@@ -72,9 +72,8 @@ function officeStatusPlugin() {
         if (req.method === 'GET') {
           try {
             const clientEtag = req.headers['if-none-match']
-            if (clientEtag && etagCache.lastEtag === clientEtag) {
-              res.statusCode = 304; res.end(); return
-            }
+            // NOTE: No fast-path ETag skip here — session files are written directly
+            // to disk by hooks and don't go through POST, so we must always re-scan.
 
             const dir = path.dirname(statusPath)
             const now = Date.now()
@@ -89,6 +88,9 @@ function officeStatusPlugin() {
                   const parsed = JSON.parse(raw)
                   const seq = parseInt(parsed._seq, 10)
                   if (seq && now - seq > 60000) continue // stale — skip
+                  // Skip file-watcher sessions in multi-session merge — they fire on every
+                  // JS edit and would make single-worktree users appear as multi-session.
+                  if (parsed.source === 'file-watcher') continue
                   const slug = file === 'office-status.json' ? 'main'
                     : file.replace(/^office-status-/, '').replace(/\.json$/, '')
                   sessions.push({ slug, data: parsed })
@@ -103,16 +105,22 @@ function officeStatusPlugin() {
               // Single session — return as-is (backward compat, plain role IDs)
               merged = sessions[0].data
             } else {
-              // Multi-session — prefix agent roles with session slug so they don't collide
+              // Multi-session — one representative agent per session (the most active one)
+              // Rule: only working/blocked agents spawn extra characters; done agents are transient
+              // Priority: blocked > working (shows the most urgent state per session)
+              const STATUS_PRIORITY = { blocked: 0, working: 1, done: 2, idle: 3 }
               const allAgents = []
               let latestSeq = 0
               let workflow = null
               for (const { slug, data } of sessions) {
                 const seq = parseInt(data._seq, 10) || 0
                 if (seq > latestSeq) { latestSeq = seq; workflow = data.workflow }
-                for (const agent of (data.agents || [])) {
-                  allAgents.push({ ...agent, role: `${slug}~${agent.role}`, session: slug })
-                }
+                // Pick the single most active agent from this session
+                const active = (data.agents || [])
+                  .filter(a => a.status === 'working' || a.status === 'blocked')
+                  .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9))
+                const pick = active[0]
+                if (pick) allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
               }
               merged = {
                 _seq: String(latestSeq),
