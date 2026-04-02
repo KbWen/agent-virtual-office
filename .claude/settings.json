@@ -1,5 +1,15 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node public/hooks/office-status-hook.js"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "hooks": [
@@ -31,6 +41,16 @@
       }
     ],
     "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node public/hooks/office-status-hook.js"
+          }
+        ]
+      }
+    ],
+    "Stop": [
       {
         "hooks": [
           {

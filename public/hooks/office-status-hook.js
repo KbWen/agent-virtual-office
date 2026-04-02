@@ -242,6 +242,33 @@ function skillLabel(skill, isDone) {
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)] }
 
+// ─── Skill context — persist skill→role across tool calls within a subagent ───
+// When SubagentStart fires (e.g. /review), we save the skill's role to a temp file.
+// PreToolUse/PostToolUse events within that subagent (same agent_id) read the file
+// and use the skill's role instead of the tool/file-based role, keeping the right
+// character active throughout the skill (e.g. QA stays working during /review).
+
+function skillContextPath(agentId) {
+  return path.join(os.homedir(), '.claude', `office-skill-${agentId}.json`)
+}
+
+function saveSkillContext(agentId, role, skillName) {
+  try {
+    fs.writeFileSync(skillContextPath(agentId), JSON.stringify({ role, skillName }))
+  } catch {}
+}
+
+function readSkillContext(agentId) {
+  if (!agentId) return null
+  try {
+    return JSON.parse(fs.readFileSync(skillContextPath(agentId), 'utf-8'))
+  } catch { return null }
+}
+
+function clearSkillContext(agentId) {
+  try { fs.unlinkSync(skillContextPath(agentId)) } catch {}
+}
+
 // ─── Main ───
 
 function processEvent(event) {
@@ -249,13 +276,24 @@ function processEvent(event) {
   const tool = event.tool_name || ''
   const agentType = event.agent_type || ''
   const toolInput = event.tool_input || null
+  const agentId = event.agent_id || null
 
   let role, task, status, label, hint = null
 
   switch (hookEvent) {
+    case 'UserPromptSubmit': {
+      // User sent a message — PM enters thinking/planning mode
+      role = 'pm'
+      task = 'thinking'
+      status = 'working'
+      label = pick(['🤔 想一下...', '📊 收到，規劃中', '💡 好問題...', '🧠 分析中'])
+      break
+    }
     case 'PreToolUse': {
       const fullPath = extractFilePath(tool, toolInput)
-      role = fileToRole(fullPath) || toolToRole(tool)
+      // If inside a subagent with skill context, prefer the skill's role
+      const skillCtx = readSkillContext(agentId)
+      role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
       task = tool
       status = 'working'
       const ctx = extractContext(tool, toolInput)
@@ -264,7 +302,8 @@ function processEvent(event) {
     }
     case 'PostToolUse': {
       const fullPath = extractFilePath(tool, toolInput)
-      role = fileToRole(fullPath) || toolToRole(tool)
+      const skillCtx = readSkillContext(agentId)
+      role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
       task = tool
       // Detect errors from tool result
       const toolResult = event.tool_result || ''
@@ -275,18 +314,47 @@ function processEvent(event) {
       label = isError ? `❌ ${ctx || tool} failed` : toolLabel(tool, ctx, true)
       break
     }
-    case 'SubagentStart':
-      role = skillToRole(agentType)
+    case 'SubagentStart': {
+      role = skillToRoleExtended(agentType)
       task = agentType
       status = 'working'
       label = skillLabel(agentType, false)
+      // Persist skill context so tool calls within this subagent stay on the right role
+      if (agentId) saveSkillContext(agentId, role, agentType)
       break
-    case 'SubagentStop':
-      role = skillToRole(agentType)
+    }
+    case 'SubagentStop': {
+      role = skillToRoleExtended(agentType)
       task = agentType
       status = 'done'
       label = skillLabel(agentType, true)
+      if (agentId) clearSkillContext(agentId)
       break
+    }
+    case 'Stop': {
+      // Claude's turn is over — mark all current agents as done
+      try {
+        const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+        const doneAgents = (data.agents || []).map(a => ({
+          ...a, status: 'done', label: pick(['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了'])
+        }))
+        const output = {
+          _seq: String(Date.now()),
+          _cwd: process.cwd(),
+          type: 'office-status',
+          agents: doneAgents,
+          activeCount: 0,
+          workflow: data.workflow || null,
+          source: 'claude-cli',
+        }
+        const dir = path.dirname(STATUS_FILE)
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+        const tmp = STATUS_FILE + '.tmp'
+        fs.writeFileSync(tmp, JSON.stringify(output, null, 2))
+        fs.renameSync(tmp, STATUS_FILE)
+      } catch {}
+      return  // no further processing needed
+    }
     default:
       return
   }
@@ -326,5 +394,6 @@ function processEvent(event) {
 
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)
 if (typeof module !== 'undefined') {
-  module.exports = { toolToRole, skillToRole, shortFile, shortCommand, extractContext }
+  module.exports = { toolToRole, skillToRole, shortFile, shortCommand, extractContext,
+    skillContextPath, saveSkillContext, readSkillContext, clearSkillContext }
 }
