@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { charName, behaviorLabel, t, useLocale } from '../i18n'
 import { formatTimeAgo } from '../utils/formatTime'
+import { buildAgentInspectorMeta } from './agentInspectorModel'
 
 const statusEmoji = {
   idle: '💤',
@@ -16,6 +17,9 @@ export default function AgentInspector() {
   const agent = useOfficeStore((s) => s.selectedAgent ? s.agents[s.selectedAgent] : null)
   const ext = useOfficeStore((s) => s.selectedAgent ? s.externalStatus[s.selectedAgent] : null)
   const activityLog = useOfficeStore((s) => s.activityLog)
+  const dailyDoneLedger = useOfficeStore((s) => s.dailyDoneLedger)
+  const mood = useOfficeStore((s) => s.mood)
+  const activeWorkflow = useOfficeStore((s) => s.activeWorkflow)
   const clearSelectedAgent = useOfficeStore((s) => s.clearSelectedAgent)
 
   // Close on Escape
@@ -35,6 +39,11 @@ export default function AgentInspector() {
       .slice(0, 5)
   }, [activityLog, selectedAgent])
 
+  const inspectorMeta = useMemo(() => {
+    if (!selectedAgent) return { doneToday: 0, mood: 'normal', activeWorkflow: null }
+    return buildAgentInspectorMeta(dailyDoneLedger, selectedAgent, mood, activeWorkflow)
+  }, [activeWorkflow, dailyDoneLedger, mood, selectedAgent])
+
   if (!selectedAgent || !agent) return null
 
   const name = charName(selectedAgent)
@@ -43,15 +52,44 @@ export default function AgentInspector() {
   const currentBehavior = behaviorLabel(agent.behavior)
   const task = ext?.label || ext?.task || null
   const color = agent.color || '#888'
+  const detailRows = [
+    {
+      label: t('inspector.doneToday', 'Done today'),
+      value: String(inspectorMeta.doneToday),
+      valueFill: '#2E7D32',
+    },
+    {
+      label: t('inspector.mood', 'Mood'),
+      value: t(`moodLabels.${inspectorMeta.mood}`, inspectorMeta.mood),
+      valueFill: '#6A4C93',
+    },
+    inspectorMeta.activeWorkflow
+      ? {
+          label: t('inspector.activeWorkflow', 'Workflow'),
+          value: inspectorMeta.activeWorkflow,
+          valueFill: '#1565C0',
+        }
+      : null,
+  ].filter(Boolean)
 
   // While moving, anchor to targetPosition so the panel follows where the agent is heading
   // rather than staying frozen at the departure point.
   const pos = (agent.isMoving ? agent.targetPosition : agent.position) || { x: 300, y: 250 }
 
-  // Panel dimensions — expand for activity rows
+  const detailsStartY = task ? 94 : 78
   const activityRows = Math.min(recentActivities.length, 3)
-  const baseH = task ? 90 : 74
-  const W = 200, H = baseH + (activityRows > 0 ? 14 + activityRows * 13 : 0)
+  let contentBottomY = task ? 78 : 62
+  if (detailRows.length > 0) {
+    contentBottomY = detailsStartY + (detailRows.length - 1) * 14
+  }
+  const activityDividerY = contentBottomY + 8
+  const activityStartY = activityDividerY + 12
+  if (activityRows > 0) {
+    contentBottomY = activityStartY + (activityRows - 1) * 13
+  }
+
+  // Panel dimensions — expand for metadata and activity rows
+  const W = 200, H = contentBottomY + 16
   // Position panel above agent, clamped to viewport (SVG 800x560)
   let px = pos.x - W / 2
   let py = pos.y - H - 80
@@ -107,13 +145,33 @@ export default function AgentInspector() {
         </text>
       )}
 
+      {/* Summary details */}
+      {detailRows.length > 0 && (
+        <g>
+          {detailRows.map((row, i) => {
+            const rowY = py + detailsStartY + i * 14
+            return (
+              <g key={row.label}>
+                <text x={px + 10} y={rowY} fontSize="8" fontFamily="monospace" fill="#888">
+                  {row.label}
+                </text>
+                <text x={px + W - 10} y={rowY} fontSize="8" fontFamily="'Segoe UI', system-ui, sans-serif" fill={row.valueFill}
+                  textAnchor="end">
+                  {truncate(row.value, 18)}
+                </text>
+              </g>
+            )
+          })}
+        </g>
+      )}
+
       {/* Recent activities */}
       {recentActivities.length > 0 && (
         <g>
-          <line x1={px + 10} y1={py + (task ? 86 : 70)} x2={px + W - 10} y2={py + (task ? 86 : 70)}
+          <line x1={px + 10} y1={py + activityDividerY} x2={px + W - 10} y2={py + activityDividerY}
             stroke="#eee" strokeWidth="0.5" />
           {recentActivities.slice(0, 3).map((a, i) => {
-            const baseY = py + (task ? 98 : 82) + i * 13
+            const baseY = py + activityStartY + i * 13
             const ago = formatTimeAgo(a.timestamp, { compact: true })
             return (
               <g key={a.id}>

@@ -11,10 +11,11 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-04-02
-- **Update Sequence**: 2
+- **Last Updated**: 2026-04-08
+- **Update Sequence**: 3
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
+  - `docs/adr/ADR-003-status-source-parity-for-codex.md`
 - **Active Backlog**: `docs/specs/_product-backlog.md`
   - 15 features across 5 themes: 辦公室生命感、資訊密度、互動性、整合延伸、視覺升級
   - **Done (branch `fix/agent-inspector-hooks-crash`, 2026-04-02)**:
@@ -26,10 +27,12 @@
     - Compound skill routing (eng_review→arch, ceo-review→gate, etc.)
     - Review P0/P1 fixes (event validation, project scoping, dead cache)
     - AgentCortex upgraded to v5.4.0
-  - **Remaining P1**: #1 角色成長系統, #5 Inspector 資訊加強, #7 可點擊辦公室物件
-  - **Branch status**: `fix/agent-inspector-hooks-crash` pushed, ready to PR → main
+  - **Remaining P1**: #1 角色成長系統, #7 可點擊辦公室物件
+  - **Branch status**: `main` shipped durable done count + Codex status parity updates on 2026-04-08
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
+  - [feature] docs/specs/agent-inspector-info-enhancement.md [Shipped]
+  - [architecture] docs/specs/codex-status-parity-and-done-count.md [Shipped]
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -77,6 +80,11 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### main-2026-04-08
+
+- Feature shipped: Inspector info enhancement with durable same-day done counting, mood/workflow rows, Codex CLI helper, and Codex App bridge parity/docs.
+- Tests: Pass (145/145 vitest, build success, Codex CLI/App live evidence captured)
 
 ### fix-agent-inspector-hooks-crash-2026-04-02
 

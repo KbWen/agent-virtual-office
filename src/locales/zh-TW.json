@@ -205,6 +205,9 @@
     "empty": "尚無動態"
   },
   "inspector": {
+    "doneToday": "今日完成",
+    "mood": "氣氛",
+    "activeWorkflow": "流程",
     "recentActivity": "近期動態",
     "noActivity": "尚無近期動態"
   },

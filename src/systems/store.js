@@ -12,11 +12,41 @@ export { STATUS_COLORS }
 const PERSIST_KEY = 'office-state'
 let _lastPersistedSnapshot = null
 
+function getLocalDayKey(now = Date.now()) {
+  const date = new Date(now)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function createDailyDoneLedger(now = Date.now(), seed = {}) {
+  return {
+    dayKey: getLocalDayKey(now),
+    counts: seed.counts && typeof seed.counts === 'object' ? { ...seed.counts } : {},
+    seenEventKeys: Array.isArray(seed.seenEventKeys) ? [...seed.seenEventKeys] : [],
+  }
+}
+
+function ensureCurrentDailyDoneLedger(ledger, now = Date.now()) {
+  const dayKey = getLocalDayKey(now)
+  if (!ledger || ledger.dayKey !== dayKey) return createDailyDoneLedger(now)
+  return createDailyDoneLedger(now, ledger)
+}
+
+function buildDoneEventKey(update, meta) {
+  if (!update?.agentId) return null
+  if (meta?.eventKey) return `${meta.eventKey}:${update.agentId}`
+  if (meta?.source && meta?.seq) return `${meta.source}:${meta.seq}:${update.agentId}`
+  return null
+}
+
 export function createPersistedState(state) {
   const data = {
     _savedAt: Date.now(),
     agents: {},
     // Don't persist transient state (mood, externalStatus, statusSource, activeWorkflow)
+    dailyDoneLedger: ensureCurrentDailyDoneLedger(state.dailyDoneLedger),
   }
   for (const [id, a] of Object.entries(state.agents)) {
     data.agents[id] = {
@@ -71,6 +101,29 @@ function validatePersistedAgent(saved) {
     deskItemCount: saved.deskItemCount && typeof saved.deskItemCount === 'object' ? saved.deskItemCount : undefined,
     position: isValidPosition(saved.position) ? saved.position : undefined,
     facing: VALID_FACINGS.has(saved.facing) ? saved.facing : undefined,
+  }
+}
+
+function validatePersistedDailyDoneLedger(saved) {
+  if (!saved || typeof saved !== 'object') return null
+  const dayKey = typeof saved.dayKey === 'string' ? saved.dayKey : null
+  if (!dayKey) return null
+
+  const counts = {}
+  for (const [agentId, value] of Object.entries(saved.counts || {})) {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+      counts[agentId] = value
+    }
+  }
+
+  const seenEventKeys = Array.isArray(saved.seenEventKeys)
+    ? saved.seenEventKeys.filter((value) => typeof value === 'string').slice(-500)
+    : []
+
+  return {
+    dayKey,
+    counts,
+    seenEventKeys,
   }
 }
 
@@ -262,6 +315,7 @@ export const useOfficeStore = create((set) => ({
   // ─── External status integration ───
   externalStatus: {},          // { [agentId]: { status, task, label, expiresAt } }
   statusSource: 'organic',     // 'organic' | 'external' | 'fallback'
+  integrationSource: null,     // e.g. claude-cli | codex-cli | codex-app | webhook
   activeWorkflow: null,        // workflow name for banner display
   integrationHealth: {
     state: 'idle',             // idle | online | degraded | offline
@@ -269,14 +323,17 @@ export const useOfficeStore = create((set) => ({
     lastErrorAt: null,
     consecutiveFailures: 0,
   },
+  dailyDoneLedger: validatePersistedDailyDoneLedger(_persisted?.dailyDoneLedger) || createDailyDoneLedger(),
 
-  applyExternalStatus: (updates) =>
+  applyExternalStatus: (updates, meta = {}) =>
     set((s) => {
-      const now = Date.now()
+      const now = meta.now || Date.now()
       const ext = { ...s.externalStatus }
       const agents = { ...s.agents }
       const activities = []
+      const dailyDoneLedger = ensureCurrentDailyDoneLedger(s.dailyDoneLedger, now)
       for (const u of updates) {
+        const previousStatus = ext[u.agentId]?.status || agents[u.agentId]?.status || 'idle'
         if (!agents[u.agentId]) {
           // Dynamic worktree agent — clone base role's visual style, place in overflow spot
           const baseRole = u.agentId.includes('~') ? u.agentId.split('~')[1] : u.agentId
@@ -326,13 +383,26 @@ export const useOfficeStore = create((set) => ({
         if (bubble) agents[u.agentId] = { ...agents[u.agentId], bubble }
         // Log activity inline (single loop instead of two)
         if (u.status === 'done' || u.status === 'blocked' || (u.status === 'working' && u.label)) {
-          activities.push(mkActivity({ type: 'status', agentId: u.agentId, message: u.label || u.status }))
+          activities.push(mkActivity({ type: 'status', agentId: u.agentId, status: u.status, message: u.label || u.status }))
+        }
+        if (u.status === 'done') {
+          const eventKey = buildDoneEventKey(u, meta)
+          const isFreshDoneTransition = previousStatus !== 'done'
+          const isUnseenEvent = eventKey ? !dailyDoneLedger.seenEventKeys.includes(eventKey) : true
+          const shouldCount = isFreshDoneTransition && isUnseenEvent
+
+          if (shouldCount) {
+            dailyDoneLedger.counts[u.agentId] = (dailyDoneLedger.counts[u.agentId] || 0) + 1
+            if (eventKey) {
+              dailyDoneLedger.seenEventKeys = [...dailyDoneLedger.seenEventKeys, eventKey].slice(-500)
+            }
+          }
         }
       }
       const log = activities.length > 0
         ? [...activities, ...s.activityLog].slice(0, 50)
         : s.activityLog
-      return { externalStatus: ext, agents, activityLog: log }
+      return { externalStatus: ext, agents, activityLog: log, dailyDoneLedger }
     }),
 
   clearExternalStatus: (agentId) =>
@@ -346,6 +416,9 @@ export const useOfficeStore = create((set) => ({
           if (agents[agentId].session) delete agents[agentId]
           else agents[agentId] = { ...agents[agentId], status: 'idle' }
         }
+        if (Object.keys(ext).length === 0) {
+          return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null }
+        }
         return { externalStatus: ext, agents }
       }
       // Clear all
@@ -356,7 +429,7 @@ export const useOfficeStore = create((set) => ({
           else agents[id] = { ...agents[id], status: 'idle' }
         }
       }
-      return { externalStatus: {}, agents, statusSource: 'organic', activeWorkflow: null }
+      return { externalStatus: {}, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null }
     }),
 
   // ─── Mood system ───
@@ -364,6 +437,7 @@ export const useOfficeStore = create((set) => ({
   setMood: (mood) => set({ mood }),
 
   setStatusSource: (source) => set({ statusSource: source }),
+  setIntegrationSource: (source) => set({ integrationSource: source || null }),
   setActiveWorkflow: (name) => set({ activeWorkflow: name }),
   markIntegrationProbe: ({ ok }) =>
     set((s) => {

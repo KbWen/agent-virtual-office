@@ -28,15 +28,24 @@
   const CHANNEL_NAME = 'agent-office'
   const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate']
   const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
+  const DEFAULT_SOURCE = detectDefaultSource()
 
   let bc = null
   try { bc = new BroadcastChannel(CHANNEL_NAME) } catch (_) {}
+
+  function detectDefaultSource() {
+    const ua = navigator.userAgent || ''
+    if (window.__codex__ || /Codex/i.test(ua)) return 'codex-app'
+    if (window.__claude_artifact__ || /Claude/i.test(ua)) return 'claude-desktop'
+    if (window.__antigravity__ || /Antigravity/i.test(ua)) return 'antigravity'
+    return 'browser'
+  }
 
   function parseShorthand(obj) {
     const agents = []
     let workflow = obj.workflow || null
     let activeCount = obj.activeCount || 0
-    let source = obj.source || null
+    let source = obj.source || DEFAULT_SOURCE
     let globalLabel = obj.label || null
 
     for (const key of VALID_ROLES) {
@@ -58,11 +67,18 @@
       activeCount,
       workflow,
       source,
+      _seq: obj._seq || String(Date.now()),
     }
   }
 
   function send(shorthand) {
-    const msg = shorthand.type === 'office-status' ? shorthand : parseShorthand(shorthand)
+    const msg = shorthand.type === 'office-status'
+      ? {
+          ...shorthand,
+          source: shorthand.source || DEFAULT_SOURCE,
+          _seq: shorthand._seq || String(Date.now()),
+        }
+      : parseShorthand(shorthand)
 
     // BroadcastChannel (same-origin cross-tab)
     if (bc) {

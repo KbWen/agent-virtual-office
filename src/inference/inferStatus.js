@@ -24,6 +24,14 @@ function phaseToStatus(phase) {
   return 'working'
 }
 
+function withStatusEnvelope(raw, fallbackSource = 'external') {
+  return {
+    ...raw,
+    source: raw.source || fallbackSource,
+    _seq: raw._seq || String(Date.now()),
+  }
+}
+
 /**
  * Normalize any incoming message to the unified office-status format
  */
@@ -31,11 +39,11 @@ export function normalizeStatusMessage(raw) {
   if (!raw || typeof raw !== 'object') return null
 
   // New protocol
-  if (raw.type === 'office-status') return raw
+  if (raw.type === 'office-status') return withStatusEnvelope(raw)
 
   // Legacy office-vibe → convert (uses agentRouter for command→role mapping)
   if (raw.type === 'office-vibe') {
-    return {
+    return withStatusEnvelope({
       type: 'office-status',
       agents: [{
         role: raw.agent || routeTaskToAgent(raw.command) || null,
@@ -43,9 +51,8 @@ export function normalizeStatusMessage(raw) {
         status: phaseToStatus(raw.phase),
         label: null,
       }],
-      source: raw.source || null,
       workflow: raw.workflow || null,
-    }
+    }, raw.source || 'legacy')
   }
 
   return null
@@ -187,32 +194,39 @@ function startFilePolling(callback, intervalMs = 1000, onProbe = null) {
 // Platforms or users can set: #dev=working&workflow=Build+Feature&qa=testing
 // This works in artifacts, iframes, and direct browser — no postMessage required
 
+export function buildHashStatusMessage(hash) {
+  const rawHash = typeof hash === 'string' ? hash.replace(/^#/, '') : ''
+  if (!rawHash) return null
+
+  const params = new URLSearchParams(rawHash)
+  const agents = []
+  for (const role of VALID_ROLES) {
+    const val = params.get(role)
+    if (!val) continue
+    const isStatus = VALID_STATUSES.includes(val)
+    agents.push({
+      role,
+      task: isStatus ? null : val,
+      status: isStatus ? val : 'working',
+      label: null,
+    })
+  }
+
+  if (agents.length === 0 && !params.get('workflow') && !params.get('count')) return null
+
+  return {
+    type: 'office-status',
+    agents,
+    activeCount: parseInt(params.get('count')) || 0,
+    workflow: params.get('workflow') || null,
+    source: params.get('source') || 'hash-bridge',
+    _seq: `hash:${rawHash}`,
+  }
+}
+
 function listenHashChanges(callback) {
   function parseHash() {
-    const hash = window.location.hash.slice(1)
-    if (!hash) return null
-    const params = new URLSearchParams(hash)
-    const agents = []
-    for (const role of VALID_ROLES) {
-      const val = params.get(role)
-      if (val) {
-        // value can be: "working", "blocked", "done", or "task-name"
-        const isStatus = VALID_STATUSES.includes(val)
-        agents.push({
-          role,
-          task: isStatus ? null : val,
-          status: isStatus ? val : 'working',
-          label: null,
-        })
-      }
-    }
-    if (agents.length === 0 && !params.get('workflow') && !params.get('count')) return null
-    return {
-      type: 'office-status',
-      agents,
-      activeCount: parseInt(params.get('count')) || 0,
-      workflow: params.get('workflow') || null,
-    }
+    return buildHashStatusMessage(window.location.hash)
   }
 
   // Check initial hash
@@ -292,8 +306,12 @@ export function startStatusIntegration(store) {
     const updates = routeExternalAgents(msg.agents || [])
 
     if (updates.length > 0) {
-      s.applyExternalStatus(updates)
+      s.applyExternalStatus(updates, {
+        source: msg.source || 'external',
+        seq: msg._seq || null,
+      })
       s.setStatusSource('external')
+      s.setIntegrationSource?.(msg.source || 'external')
 
       // Feed mood engine — batch to recompute mood once instead of once per agent
       pushEventBatch(updates.map(u => ({ role: u.agentId, status: u.status, task: u.task, hint: u.hint || null })))
@@ -301,6 +319,7 @@ export function startStatusIntegration(store) {
       const ids = distributeFallbackCount(msg.activeCount)
       s.applyExternalStatus(ids.map(id => ({ agentId: id, status: 'working', task: null, label: null })))
       s.setStatusSource('fallback')
+      s.setIntegrationSource?.(msg.source || 'fallback')
     }
 
     // Handle explicit mood override from API

@@ -103,8 +103,18 @@ http://localhost:5174?mode=panel</code>
       </div>
       <div class="platform-card">
         <h3>Gemini CLI / Codex CLI</h3>
-        <p>Panel mode + hash params for status</p>
+        <p>Panel mode + hash params, or use the Codex CLI helper script for file-backed status.</p>
         <code>open "http://localhost:5174?mode=panel#dev=working&amp;workflow=Task"</code>
+      </div>
+      <div class="platform-card">
+        <h3>Codex App</h3>
+        <p>Use this bridge UI or `bridge.js` from a host webview. Automatic host tool events still require a host-side emitter.</p>
+        <code>&lt;script src="http://localhost:5174/bridge.js"&gt;&lt;/script&gt;
+officeBridge.send({
+  source: 'codex-app',
+  workflow: 'Reviewing PR',
+  dev: 'working'
+})</code>
       </div>
       <div class="platform-card">
         <h3>Antigravity Panel</h3>

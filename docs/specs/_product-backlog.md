@@ -21,7 +21,7 @@
 | # | Feature | Priority | Status | Notes |
 |---|---------|----------|--------|-------|
 | 4 | **Sprint 進度看板** — 辦公室牆上小 Kanban，格子隨 `done` 事件填滿 | P2 | Pending | SVG 靜態元件 + store `doneCount` |
-| 5 | **Inspector 資訊加強** — 顯示今日完成數、當前 mood 指示、`activeWorkflow` 名稱 | P1 | Pending | `AgentInspector.jsx` 已有 `ext` 和 `activityLog`，加欄位即可 |
+| 5 | **Inspector 資訊加強** — 顯示今日完成數、當前 mood 指示、`activeWorkflow` 名稱 | P1 | Done | shipped with durable same-day count + Codex parity follow-up; specs: `docs/specs/agent-inspector-info-enhancement.md`, `docs/specs/codex-status-parity-and-done-count.md` |
 | 6 | **底部效能指標** — status bar 顯示今日 done / blocked 比率 | P3 | Pending | 需在 store 中累積 session 統計 |
 
 ---
@@ -68,3 +68,4 @@
 | **#12 Webhook 事件端點** — POST /api/event 接受 12 種 CI/CD 事件 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
 | **設計師角色** — 粉色女生角色，設計角落，對 CSS/SVG/設計檔案有感 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
 | **#11 多 worktree 支援** — 每個 session 寫獨立 JSON，merge 時 1 session = 1 代表角色，入口大廳展示訪客 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
+| **#5 Inspector 資訊加強** — durable done count、mood / workflow rows、Codex CLI/App parity | 2026-04-08 | `main` |

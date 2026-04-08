@@ -158,6 +158,45 @@ Register it in `.claude/settings.json`:
 
 The hook auto-detects the current git branch slug, writes `~/.claude/office-status-{slug}.json`, and the office filters by `process.cwd()` so sessions from other projects never appear.
 
+### Codex CLI Status Bridge
+
+Codex CLI can now use the same file-backed runtime path as Claude by writing a normalized `office-status` payload with the helper script:
+
+```bash
+node public/hooks/office-status-codex.js '{"dev":"working","workflow":"Build Feature"}'
+
+# Full payload also works
+node public/hooks/office-status-codex.js '{
+  "type": "office-status",
+  "source": "codex-cli",
+  "agents": [
+    {"role":"dev","task":"Edit","status":"working","label":"Implementing auth"}
+  ],
+  "workflow": "Build Feature"
+}'
+```
+
+The helper writes `~/.claude/office-status-{slug}.json`, so the office picks it up through the existing `/api/status` polling path. This is the recommended Codex CLI producer path for task runners, shell wrappers, or external automations.
+
+### Codex App Bridge
+
+If Codex App can run or embed browser JavaScript, use the built-in bridge:
+
+```html
+<script src="http://localhost:5174/bridge.js"></script>
+<script>
+  officeBridge.send({
+    source: 'codex-app',
+    workflow: 'Reviewing PR',
+    dev: 'working',
+  })
+</script>
+```
+
+You can also open [bridge.html](http://localhost:5174/bridge.html) and send `codex-app` updates through the UI.
+
+Limitation: this project does not receive automatic host-level tool events from the Codex desktop app by itself. Full parity requires a host-side emitter. When the host cannot emit events directly, `bridge.js` / `bridge.html` is the supported Codex App route.
+
 ### Multi-Worktree Support
 
 Running multiple worktrees in parallel? Each worktree's agent appears as a separate character in the lobby:
@@ -179,8 +218,9 @@ Open `http://localhost:5174?session=feat-auth` to see the characters from a spec
 |----------|-----------------|
 | **Claude Code** | Install the hook (see above) — automatic per-tool routing |
 | **Gemini CLI** | `curl POST /api/status` from shell hooks |
-| **Codex CLI** | `curl POST /api/status` from task runners |
+| **Codex CLI** | `node public/hooks/office-status-codex.js ...` or `curl POST /api/status` |
 | **Any CI/CD** | `curl POST /api/event` for one-shot events |
+| **Codex App** | `bridge.js` / `bridge.html` host bridge (host-side emitter required for automatic events) |
 | **Browser** | `postMessage` or `BroadcastChannel('agent-office')` |
 
 ---

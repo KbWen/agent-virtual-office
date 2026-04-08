@@ -205,6 +205,9 @@
     "empty": "No activity yet"
   },
   "inspector": {
+    "doneToday": "Done today",
+    "mood": "Mood",
+    "activeWorkflow": "Workflow",
     "recentActivity": "Recent",
     "noActivity": "No recent activity"
   },

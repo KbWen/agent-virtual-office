@@ -110,14 +110,54 @@ curl -X POST http://localhost:5174/api/status \
 ### 支援的狀態
 `idle` · `working` · `blocked` · `done`
 
+### Codex CLI 狀態橋接
+
+Codex CLI 現在可以直接走和 Claude 一樣的 file-backed runtime 路徑，只要用 helper script 寫入標準化的 `office-status` payload：
+
+```bash
+node public/hooks/office-status-codex.js '{"dev":"working","workflow":"Build Feature"}'
+
+# 也支援完整 payload
+node public/hooks/office-status-codex.js '{
+  "type": "office-status",
+  "source": "codex-cli",
+  "agents": [
+    {"role":"dev","task":"Edit","status":"working","label":"正在改 auth"}
+  ],
+  "workflow": "Build Feature"
+}'
+```
+
+這支 helper 會寫入 `~/.claude/office-status-{slug}.json`，辦公室會沿用既有 `/api/status` 輪詢路徑讀到它。這是目前最穩定的 Codex CLI producer path，適合 task runner、wrapper script 或自動化工具。
+
+### Codex App 橋接
+
+如果 Codex App 所在的 host 能執行或嵌入瀏覽器 JavaScript，可以直接使用內建 bridge：
+
+```html
+<script src="http://localhost:5174/bridge.js"></script>
+<script>
+  officeBridge.send({
+    source: 'codex-app',
+    workflow: 'Reviewing PR',
+    dev: 'working',
+  })
+</script>
+```
+
+也可以直接打開 `http://localhost:5174/bridge.html`，透過內建 UI 發送 `codex-app` 更新。
+
+限制說明：這個專案本身目前拿不到 Codex 桌面 app 的自動 host tool events。要做到完全自動同步，仍需要 host 端主動發事件；如果 host 無法提供，`bridge.js` / `bridge.html` 就是支援的 Codex App 路徑。
+
 ### 平台整合
 
 | 平台 | 整合方式 |
 |------|---------|
 | **Claude Code** | 從 hooks 或腳本 `curl POST` |
 | **Gemini CLI** | 從 shell hooks `curl POST` |
-| **Codex CLI** | 從 task runner `curl POST` |
+| **Codex CLI** | `node public/hooks/office-status-codex.js ...` 或 `curl POST /api/status` |
 | **任何 CI/CD** | 從 pipeline 步驟 `curl POST` |
+| **Codex App** | `bridge.js` / `bridge.html` host bridge（若要全自動，仍需 host emitter） |
 | **瀏覽器** | `postMessage` 或 `BroadcastChannel('agent-office')` |
 
 ---
