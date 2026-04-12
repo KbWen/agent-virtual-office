@@ -25,8 +25,13 @@
     "visualization",
     "status"
   ],
-  "author": "",
+  "author": "KbWen",
   "license": "MIT",
+  "homepage": "https://github.com/KbWen/agent-virtual-office#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KbWen/agent-virtual-office.git"
+  },
   "type": "commonjs",
   "files": [
     "bin/",
