@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { normalizePost, VALID_ROLES } from './src/utils/normalizePost.js'
+import { normalizePost, VALID_ROLES, VALID_STATUSES } from './src/utils/normalizePost.js'
 
 // Middleware: Universal status API
 //   GET  /api/status → read current status (browser polls this)
@@ -316,8 +316,13 @@ function officeStatusPlugin() {
         }
 
         let body = ''
-        req.on('data', chunk => { body += chunk })
+        let aborted = false
+        req.on('data', chunk => {
+          body += chunk
+          if (body.length > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.destroy() }
+        })
         req.on('end', () => {
+          if (aborted) return
           try {
             const parsed = JSON.parse(body)
             const eventName = parsed.event || ''

@@ -334,6 +334,7 @@ export function startStatusIntegration(store) {
   }
 
   function handleIncoming(msg) {
+    if (!msg) return
     pendingMsg = msg
     if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(() => {
