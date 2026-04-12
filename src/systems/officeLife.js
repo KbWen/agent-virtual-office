@@ -58,14 +58,15 @@ const EVENT_HANDLERS = {
     const coffeeSpots = [
       { x: 80, y: 475 }, { x: 110, y: 485 }, { x: 140, y: 470 },
     ]
-    participants.forEach((id, i) => {
-      store.getState().setAgentGroupEvent(id, {
+    store.getState().setMultipleAgentGroupEvents(
+      participants.map((id, i) => ({
+        id,
         behavior: i === 0 ? 'drink-coffee' : 'chat',
         expression: 'happy',
         bubble: eventBubble('tea-break'),
         groupTarget: jitter(coffeeSpots[i % coffeeSpots.length], 12),
-      })
-    })
+      }))
+    )
   },
 
   'standup': (store, participants, cancelled) => {
@@ -75,14 +76,15 @@ const EVENT_HANDLERS = {
       { x: 530, y: 385 }, { x: 550, y: 385 }, { x: 570, y: 370 },
       { x: 540, y: 365 },
     ]
-    participants.forEach((id, i) => {
-      store.getState().setAgentGroupEvent(id, {
+    store.getState().setMultipleAgentGroupEvents(
+      participants.map((id, i) => ({
+        id,
         behavior: i === 0 ? 'whiteboard' : 'meeting',
         expression: 'normal',
         bubble: i < 2 ? eventBubble('standup') : null,
         groupTarget: jitter(whiteboardSpots[i % whiteboardSpots.length], 8),
-      })
-    })
+      }))
+    )
     setTimeout(() => {
       if (cancelled?.value) return
       const s = store.getState()
@@ -205,14 +207,15 @@ const EVENT_HANDLERS = {
 
   'group-meeting': (store, participants, cancelled) => {
     const chairs = [...MEETING_CHAIRS].sort(() => Math.random() - 0.5)
-    participants.forEach((id, i) => {
-      store.getState().setAgentGroupEvent(id, {
+    store.getState().setMultipleAgentGroupEvents(
+      participants.map((id, i) => ({
+        id,
         behavior: 'meeting',
         expression: 'normal',
         bubble: eventBubble('meeting-start'),
         groupTarget: jitter(chairs[i % chairs.length], 6),
-      })
-    })
+      }))
+    )
     setTimeout(() => {
       if (cancelled?.value) return
       const s = store.getState()
@@ -226,16 +229,17 @@ const EVENT_HANDLERS = {
 
   'boss-visit': (store, participants, cancelled) => {
     // Everyone rushes back to their desk and pretends to be busy
-    participants.forEach((id) => {
-      const home = HOME_POSITIONS[id]
-      if (!home) return
-      store.getState().setAgentGroupEvent(id, {
-        behavior: 'typing',
-        expression: 'focused',
-        bubble: eventBubble('boss-visit'),
-        groupTarget: jitter(home, 6),
-      })
-    })
+    store.getState().setMultipleAgentGroupEvents(
+      participants
+        .filter((id) => HOME_POSITIONS[id])
+        .map((id) => ({
+          id,
+          behavior: 'typing',
+          expression: 'focused',
+          bubble: eventBubble('boss-visit'),
+          groupTarget: jitter(HOME_POSITIONS[id], 6),
+        }))
+    )
     // After a beat, everyone relaxes
     setTimeout(() => {
       if (cancelled?.value) return
@@ -279,14 +283,15 @@ const EVENT_HANDLERS = {
 
   'ac-broken': (store, participants, cancelled) => {
     // Everyone fans themselves and complains
-    participants.forEach((id) => {
-      store.getState().setAgentGroupEvent(id, {
+    store.getState().setMultipleAgentGroupEvents(
+      participants.map((id) => ({
+        id,
         behavior: 'stretch',
         expression: 'confused',
         bubble: eventBubble('ac-broken'),
         groupTarget: null,
-      })
-    })
+      }))
+    )
     setTimeout(() => {
       if (cancelled?.value) return
       const s = store.getState()
@@ -332,6 +337,23 @@ function executeEvent(store, event, participants, cancelled) {
       s.clearActiveEvent()
     }, event.duration)
   }
+}
+
+export function triggerInteractiveEvent(store, eventId) {
+  const state = store.getState()
+  if (state.isPaused || state.activeEvent) return false
+
+  const allEvents = [...(eventsData.daily || []), ...(eventsData.rare || [])]
+  const event = allEvents.find(e => e.id === eventId)
+  if (!event) return false
+
+  const participants = pickParticipants(event, state.agents, state.externalStatus)
+  const cancelled = { value: false }
+
+  state.setActiveEvent(event)
+  executeEvent(store, event, participants, cancelled)
+
+  return true
 }
 
 export function startOfficeLife(store) {
@@ -402,14 +424,15 @@ export function startOfficeLife(store) {
     // 12:00-13:00 — Lunch nap: half the agents nap at desk
     if (hour === 12) {
       const nappers = agentIds.filter(() => Math.random() < 0.5)
-      nappers.forEach((id) => {
-        store.getState().setAgentGroupEvent(id, {
+      store.getState().setMultipleAgentGroupEvents(
+        nappers.map((id) => ({
+          id,
           behavior: 'nap',
           expression: 'sleepy',
           bubble: eventBubble('lunch-nap'),
           groupTarget: null,
-        })
-      })
+        }))
+      )
       setTimeout(() => {
         if (cancelled.value) return
         const s = store.getState()

@@ -963,4 +963,7 @@ function AgentCharacter({ agent }) {
 }
 
 // Prevent parent re-renders from cascading — AgentCharacter reads its own state from store
-export default React.memo(AgentCharacter, (prev, next) => prev.agent.id === next.agent.id)
+export default React.memo(AgentCharacter, (prev, next) => {
+  return prev.agent.id === next.agent.id
+    && prev.agent.color === next.agent.color
+})

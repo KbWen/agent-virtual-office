@@ -222,10 +222,16 @@ describe('AgentInspector', () => {
   })
 
   it('renders today-done, mood, and active workflow details when present', async () => {
+    const today = new Date()
+    const dayKey = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ].join('-')
     const markup = await renderInspectorWithMocks({
       activityLog: [],
       dailyDoneLedger: {
-        dayKey: '2026-04-08',
+        dayKey,
         counts: { dev: 2 },
         seenEventKeys: ['claude-cli:1:dev', 'claude-cli:2:dev'],
       },

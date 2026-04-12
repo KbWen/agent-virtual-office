@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore } from '../systems/store'
-import { startOfficeLife } from '../systems/officeLife'
+import { startOfficeLife, triggerInteractiveEvent } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
 import { eventName } from '../i18n'
 import AgentCharacter from './AgentCharacter'
@@ -85,6 +85,75 @@ function FlyingDocuments() {
       />
     )
   })
+}
+
+function WhiteboardAnimation() {
+  const activeEvent = useOfficeStore((s) => s.activeEvent)
+  const [progress, setProgress] = React.useState(0)
+  const rafRef = React.useRef(null)
+  const startRef = React.useRef(null)
+
+  const isEureka = activeEvent?.id === 'eureka'
+
+  React.useEffect(() => {
+    if (!isEureka) {
+      setProgress(0)
+      return
+    }
+    startRef.current = null
+    const animate = (timestamp) => {
+      if (!startRef.current) startRef.current = timestamp
+      const t = Math.min(1, (timestamp - startRef.current) / 3000)
+      setProgress(t)
+      if (t < 1) rafRef.current = requestAnimationFrame(animate)
+    }
+    rafRef.current = requestAnimationFrame(animate)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [isEureka])
+
+  if (!isEureka || progress === 0) return null
+
+  const bx = 537, by = 282
+  const line1Len = 40
+  const line2Len = 35
+  const line3Len = 25
+  const circleLen = 50
+
+  const line1Dash = line1Len * Math.min(1, progress * 4)
+  const line2Dash = line2Len * Math.max(0, Math.min(1, (progress - 0.25) * 4))
+  const line3Dash = line3Len * Math.max(0, Math.min(1, (progress - 0.5) * 4))
+  const circleDash = circleLen * Math.max(0, Math.min(1, (progress - 0.7) * 3.33))
+
+  return (
+    <g pointerEvents="none" opacity={Math.min(1, progress * 3)}>
+      <line x1={bx + 3} y1={by + 8} x2={bx + 43} y2={by + 15}
+        stroke="#378ADD" strokeWidth="1.2" strokeLinecap="round"
+        strokeDasharray={line1Len}
+        strokeDashoffset={line1Len - line1Dash}
+      />
+      <line x1={bx + 5} y1={by + 20} x2={bx + 40} y2={by + 22}
+        stroke="#E24B4A" strokeWidth="0.8" strokeLinecap="round"
+        strokeDasharray={line2Len}
+        strokeDashoffset={line2Len - line2Dash}
+      />
+      <line x1={bx + 8} y1={by + 28} x2={bx + 33} y2={by + 30}
+        stroke="#1D9E75" strokeWidth="0.8" strokeLinecap="round"
+        strokeDasharray={line3Len}
+        strokeDashoffset={line3Len - line3Dash}
+      />
+      <circle cx={bx + 35} cy={by + 14} r={8}
+        fill="none" stroke="#F5C842" strokeWidth="1" strokeLinecap="round"
+        strokeDasharray={circleLen}
+        strokeDashoffset={circleLen - circleDash}
+      />
+      {progress > 0.85 && (
+        <text x={bx + 45} y={by + 10} fontSize="10" fill="#F5C842" fontWeight="bold"
+          opacity={Math.min(1, (progress - 0.85) * 6.67)}>
+          !
+        </text>
+      )}
+    </g>
+  )
 }
 
 function getLightingOverlay(hour) {
@@ -233,7 +302,7 @@ function sortByY(agents) {
 }
 
 // ─── Personalized desk with character-specific items ─────────────────────
-function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0 }) {
+function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0, stickyCount = 0, booksCount = 0, onDeployClick }) {
   const W = 60, H = 38
   return (
     <g>
@@ -303,9 +372,11 @@ function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0 }) {
       {variant === 'ops' && (
         <g>
           {/* Big red deploy button */}
-          <circle cx={x + 20} cy={y + 4} r={7} fill="#CC3333" stroke="#AA2222" strokeWidth="1" />
-          <circle cx={x + 20} cy={y + 3} r={5} fill="#E24B4A" />
-          <text x={x + 20} y={y + 5} textAnchor="middle" fontSize="3.5" fill="white" fontFamily="monospace" fontWeight="bold">GO</text>
+          <g style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); onDeployClick?.() }}>
+            <circle cx={x + 20} cy={y + 4} r={7} fill="#CC3333" stroke="#AA2222" strokeWidth="1" />
+            <circle cx={x + 20} cy={y + 3} r={5} fill="#E24B4A" />
+            <text x={x + 20} y={y + 5} textAnchor="middle" fontSize="3.5" fill="white" fontFamily="monospace" fontWeight="bold">GO</text>
+          </g>
           {/* Terminal */}
           <rect x={x - 28} y={y - 2} width={12} height={8} rx={1} fill="#1a1a1a" />
           <line x1={x - 26} y1={y + 1} x2={x - 20} y2={y + 1} stroke="#0f0" strokeWidth="0.6" opacity="0.8" />
@@ -347,6 +418,91 @@ function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0 }) {
       {/* Extra coffee cups from behavior */}
       {variant !== 'dev' && coffeeCount >= 1 && <CoffeeCup x={x + 20} y={y + 6} />}
       {coffeeCount >= 2 && <CoffeeCup x={x + 24} y={y - 2} steaming={false} />}
+
+      {/* Growth system: sticky notes accumulate near monitor (max 3, subtle) */}
+      {stickyCount >= 1 && (
+        <rect x={x + 10} y={y - 18 + 2} width={6} height={6} fill="#FFE066" opacity="0.7" transform={`rotate(-4, ${x + 13}, ${y - 13})`} />
+      )}
+      {stickyCount >= 2 && (
+        <rect x={x + 3} y={y - 18 + 2} width={6} height={6} fill="#FF9E9E" opacity="0.65" transform={`rotate(6, ${x + 6}, ${y - 13})`} />
+      )}
+      {stickyCount >= 3 && (
+        <rect x={x - 5} y={y - 18 + 2} width={6} height={6} fill="#A8E6CF" opacity="0.6" transform={`rotate(-3, ${x - 2}, ${y - 13})`} />
+      )}
+
+      {/* Growth system: book stack below monitor (max 3, tidy pile) */}
+      {booksCount >= 1 && (
+        <rect x={x - 12} y={y + 12} width={9} height={2.5} rx={0.5} fill="#E24B4A" opacity="0.6" />
+      )}
+      {booksCount >= 2 && (
+        <rect x={x - 13} y={y + 9.5} width={10} height={2.5} rx={0.5} fill="#378ADD" opacity="0.6" />
+      )}
+      {booksCount >= 3 && (
+        <rect x={x - 11} y={y + 7} width={8} height={2.5} rx={0.5} fill="#1D9E75" opacity="0.6" />
+      )}
+    </g>
+  )
+}
+
+// ─── Night sky visible through windows ───────────────────────────────────────
+function NightSky({ hour }) {
+  if (hour >= 6 && hour < 19) return null
+
+  return (
+    <g pointerEvents="none">
+      {/* Moon visible through rightmost window */}
+      <clipPath id="window-clip-moon">
+        <rect x={442} y={143} width={32} height={14} rx={1} />
+      </clipPath>
+      <g clipPath="url(#window-clip-moon)">
+        <circle cx={462} cy={147} r={7} fill="#FFFDE0" opacity="0.9" />
+        <circle cx={459} cy={145} r={1.5} fill="#E8E0C0" opacity="0.4" />
+        <circle cx={464} cy={149} r={1} fill="#E8E0C0" opacity="0.3" />
+      </g>
+
+      {/* Stars scattered across windows */}
+      <clipPath id="window-clip-stars">
+        <rect x={142} y={143} width={32} height={14} rx={1} />
+        <rect x={242} y={143} width={32} height={14} rx={1} />
+        <rect x={342} y={143} width={32} height={14} rx={1} />
+      </clipPath>
+      <g clipPath="url(#window-clip-stars)">
+        <circle cx={152} cy={148} r={0.8} fill="#FFF" opacity="0.7">
+          <animate attributeName="opacity" values="0.7;0.3;0.7" dur="2s" repeatCount="indefinite" />
+        </circle>
+        <circle cx={162} cy={145} r={0.5} fill="#FFF" opacity="0.5">
+          <animate attributeName="opacity" values="0.5;0.2;0.5" dur="2.5s" repeatCount="indefinite" />
+        </circle>
+        <circle cx={254} cy={146} r={0.8} fill="#FFF" opacity="0.6">
+          <animate attributeName="opacity" values="0.6;0.2;0.6" dur="1.8s" repeatCount="indefinite" />
+        </circle>
+        <circle cx={268} cy={149} r={0.5} fill="#FFF" opacity="0.4">
+          <animate attributeName="opacity" values="0.4;0.1;0.4" dur="3s" repeatCount="indefinite" />
+        </circle>
+        <circle cx={348} cy={147} r={0.6} fill="#FFF" opacity="0.5">
+          <animate attributeName="opacity" values="0.5;0.15;0.5" dur="2.2s" repeatCount="indefinite" />
+        </circle>
+        <circle cx={365} cy={145} r={0.7} fill="#FFF" opacity="0.6">
+          <animate attributeName="opacity" values="0.6;0.3;0.6" dur="1.5s" repeatCount="indefinite" />
+        </circle>
+      </g>
+
+      {/* Entrance windows stars */}
+      <clipPath id="window-clip-entrance">
+        <rect x={20} y={16} width={40} height={24} rx={1} />
+        <rect x={74} y={16} width={40} height={24} rx={1} />
+      </clipPath>
+      <g clipPath="url(#window-clip-entrance)">
+        <circle cx={35} cy={22} r={0.7} fill="#FFF" opacity="0.5">
+          <animate attributeName="opacity" values="0.5;0.2;0.5" dur="2.3s" repeatCount="indefinite" />
+        </circle>
+        <circle cx={50} cy={28} r={0.5} fill="#FFF" opacity="0.4">
+          <animate attributeName="opacity" values="0.4;0.1;0.4" dur="2.8s" repeatCount="indefinite" />
+        </circle>
+        <circle cx={88} cy={24} r={0.8} fill="#FFF" opacity="0.6">
+          <animate attributeName="opacity" values="0.6;0.2;0.6" dur="1.9s" repeatCount="indefinite" />
+        </circle>
+      </g>
     </g>
   )
 }
@@ -388,6 +544,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const agentOrderSignature = useOfficeStore(useShallow((s) => getAgentOrderSignature(s.agents)))
   // Targeted selector — only re-renders when coffee counts change, not on every agent tick
   const coffeeCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.coffee || 0)))
+  const stickyCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.sticky || 0)))
+  const booksCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.books || 0)))
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
   const activeEvent = useOfficeStore((s) => s.activeEvent)
@@ -411,6 +569,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const coffeeCountMap = useMemo(
     () => Object.fromEntries(DESK_IDS.map((id, index) => [id, coffeeCounts[index] || 0])),
     [coffeeCounts]
+  )
+  const stickyCountMap = useMemo(
+    () => Object.fromEntries(DESK_IDS.map((id, index) => [id, stickyCounts[index] || 0])),
+    [stickyCounts]
+  )
+  const booksCountMap = useMemo(
+    () => Object.fromEntries(DESK_IDS.map((id, index) => [id, booksCounts[index] || 0])),
+    [booksCounts]
   )
   const lightOverlay = getLightingOverlay(hour)
 
@@ -580,6 +746,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <Plant x={500} y={55} />
       <Plant x={500} y={105} />
 
+      {/* Night sky visible through windows */}
+      <NightSky hour={hour} />
+
       {/* ═══ MAIN OFFICE ═══ */}
       {/* SHIP IT poster on north wall interior */}
       <rect x={15} y={170} width={50} height={28} rx={2} fill="#F5F0E0" stroke="#CCC" strokeWidth="0.8" />
@@ -600,11 +769,16 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           color={d.color}
           variant={d.variant}
           coffeeCount={coffeeCountMap[d.id] || 0}
+          stickyCount={stickyCountMap[d.id] || 0}
+          booksCount={booksCountMap[d.id] || 0}
+          onDeployClick={d.id === 'ops' ? () => triggerInteractiveEvent(useOfficeStore, 'deploy-success') : undefined}
         />
       ))}
 
-      {/* Whiteboard (left of east wall) */}
-      <Whiteboard x={535} y={300} w={55} h={40} />
+      {/* Whiteboard (left of east wall) — clickable triggers eureka */}
+      <g style={{ cursor: 'pointer' }} onClick={() => triggerInteractiveEvent(useOfficeStore, 'eureka')}>
+        <Whiteboard x={535} y={300} w={55} h={40} />
+      </g>
       <Plant x={22} y={385} />
       <Plant x={575} y={385} />
       <Plant x={22} y={290} />
@@ -632,7 +806,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <Rug x={50} y={440} w={180} h={95} color="#507050" />
       <Couch x={55} y={450} width={90} color="#7B8FA1" />
       <RoundTable x={175} y={490} r={22} />
-      <CoffeeMachine x={20} y={445} />
+      <g style={{ cursor: 'pointer' }} onClick={() => triggerInteractiveEvent(useOfficeStore, 'tea-break')}>
+        <CoffeeMachine x={20} y={445} />
+      </g>
       <WaterCooler x={48} y={448} />
       {/* Bookshelf (single, away from WC and doors) */}
       <Bookshelf x={280} y={520} width={60} rows={1} />
@@ -682,6 +858,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* ═══ FLYING DOCUMENTS (handoff animation) ═══ */}
       <FlyingDocuments />
+      <WhiteboardAnimation />
 
       {/* ═══ AGENT INSPECTOR (click-to-inspect popover) ═══ */}
       <AgentInspector />
@@ -707,20 +884,31 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           <ellipse cx={705} cy={162} rx={60} ry={45} fill="url(#mtg-light)" />
           {/* Lounge ambient warm light */}
           <ellipse cx={120} cy={480} rx={80} ry={50} fill="url(#lounge-light)" />
+          {/* Late night overtime indicator */}
+          {hour >= 22 && (
+            <g>
+              <rect x={485} y={143} width={45} height={12} rx={6} fill="#E24B4A" opacity="0.85">
+                <animate attributeName="opacity" values="0.85;0.5;0.85" dur="2s" repeatCount="indefinite" />
+              </rect>
+              <text x={508} y={152} textAnchor="middle" fontSize="6" fill="white" fontFamily="monospace" fontWeight="bold">
+                OT
+              </text>
+            </g>
+          )}
         </g>
       )}
 
       {/* ═══ EVENT / WORKFLOW BANNER ═══ */}
       {(activeEvent || activeWorkflow) && (
         <g pointerEvents="none">
-          <rect x={280} y={4} width={240} height={22} rx={11}
+          <rect x={250} y={2} width={300} height={26} rx={13}
             fill={activeWorkflow ? '#E8F5E9' : '#FFF8E1'}
             stroke={activeWorkflow ? '#4CAF50' : '#F5C842'}
-            strokeWidth="1" opacity="0.95"
+            strokeWidth="1.5" opacity="0.95"
           >
             <animate attributeName="opacity" values="0;0.95" dur="0.4s" fill="freeze" />
           </rect>
-          <circle cx={296} cy={15} r={4} fill={activeWorkflow ? '#4CAF50' : '#F5C842'}>
+          <circle cx={268} cy={15} r={4} fill={activeWorkflow ? '#4CAF50' : '#F5C842'}>
             <animate attributeName="r" values="3;5;3" dur="1.5s" repeatCount="indefinite" />
           </circle>
           <text x={400} y={16} textAnchor="middle" dominantBaseline="middle"
@@ -729,6 +917,21 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           >
             {activeWorkflow || (activeEvent?.id ? eventName(activeEvent.id) : activeEvent?.name)}
           </text>
+          {activeWorkflow && (
+            <g transform="translate(535, 6)">
+              <rect x={0} y={4} width={4} height={8} rx={2} fill="#378ADD" />
+              <circle cx={2} cy={3} r={3} fill="#555" />
+              <circle cx={2} cy={3} r={2} fill="#777" />
+              <line x1={2} y1={12} x2={2} y2={16} stroke="#888" strokeWidth="0.8" />
+              <line x1={0} y1={16} x2={4} y2={16} stroke="#888" strokeWidth="0.8" />
+              <path d="M6,1 Q8,-1 6,3" fill="none" stroke="#4CAF50" strokeWidth="0.5" opacity="0.6">
+                <animate attributeName="opacity" values="0.6;0.2;0.6" dur="1s" repeatCount="indefinite" />
+              </path>
+              <path d="M8,0 Q11,-2 8,4" fill="none" stroke="#4CAF50" strokeWidth="0.4" opacity="0.4">
+                <animate attributeName="opacity" values="0.4;0.1;0.4" dur="1.2s" repeatCount="indefinite" />
+              </path>
+            </g>
+          )}
         </g>
       )}
     </svg>
