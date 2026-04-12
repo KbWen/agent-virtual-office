@@ -254,6 +254,22 @@ export const useOfficeStore = create((set) => ({
       }
     }),
 
+  // Batch version: apply group events to multiple agents in one state update
+  setMultipleAgentGroupEvents: (updates) =>
+    set((s) => {
+      const agents = { ...s.agents }
+      for (const { id, behavior, expression, bubble, groupTarget } of updates) {
+        if (!agents[id]) continue
+        agents[id] = {
+          ...agents[id],
+          behavior, expression, bubble: bubble || null,
+          inGroupEvent: true,
+          groupTarget: groupTarget || null,
+        }
+      }
+      return { agents }
+    }),
+
   clearBubble: (id) =>
     set((s) => {
       if (!s.agents[id]) return s
@@ -396,6 +412,20 @@ export const useOfficeStore = create((set) => ({
             if (eventKey) {
               dailyDoneLedger.seenEventKeys = [...dailyDoneLedger.seenEventKeys, eventKey].slice(-500)
             }
+          }
+          // Growth system: accumulate desk items on done events
+          const roleItems = {
+            pm: 'sticky', arch: 'books', dev: 'coffee',
+            qa: 'sticky', ops: 'coffee', res: 'books',
+            gate: 'sticky', designer: 'sticky',
+          }
+          const baseRole = u.agentId.includes('~') ? u.agentId.split('~')[1] : u.agentId
+          const growthItem = roleItems[baseRole] || 'coffee'
+          const agent = agents[u.agentId]
+          if (agent) {
+            const count = { ...agent.deskItemCount }
+            count[growthItem] = ((count[growthItem] || 0) + 1) % 4
+            agents[u.agentId] = { ...agent, deskItemCount: count }
           }
         }
       }
