@@ -149,13 +149,17 @@ function officeStatusPlugin() {
 
             // Dedup: if bare `office-status.json` ("main") has a _seq within 2s of any
             // slugged session, it's a duplicate from an old user-level hook. Drop it.
+            // Exception: keep main if it carries a workflow that slugged sessions lack,
+            // since that means it was an independent API POST, not a hook duplicate.
             if (sessions.length > 1) {
               const mainIdx = sessions.findIndex(s => s.slug === 'main')
               if (mainIdx !== -1) {
                 const mainSeq = parseInt(sessions[mainIdx].data._seq, 10) || 0
+                const mainWorkflow = sessions[mainIdx].data.workflow
                 const isDup = sessions.some((s, i) => i !== mainIdx
                   && Math.abs((parseInt(s.data._seq, 10) || 0) - mainSeq) < 2000)
-                if (isDup) sessions.splice(mainIdx, 1)
+                const hasUniqueWorkflow = mainWorkflow && !sessions.some((s, i) => i !== mainIdx && s.data.workflow)
+                if (isDup && !hasUniqueWorkflow) sessions.splice(mainIdx, 1)
               }
             }
 
@@ -173,7 +177,8 @@ function officeStatusPlugin() {
               let workflow = null
               for (const { slug, data } of sessions) {
                 const seq = parseInt(data._seq, 10) || 0
-                if (seq > latestSeq) { latestSeq = seq; workflow = data.workflow }
+                if (seq > latestSeq) latestSeq = seq
+                if (!workflow && data.workflow) workflow = data.workflow
                 // Pick the single most active agent from this session
                 const active = (data.agents || [])
                   .filter(a => a.status === 'working' || a.status === 'blocked')
