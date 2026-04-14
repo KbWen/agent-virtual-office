@@ -9,7 +9,7 @@
  *   node generic-llm-bridge.js [options]
  *
  * Options:
- *   --port 5173       Office dev server port (default: 5173)
+ *   --port 5174       Office dev server port (default: 5174)
  *   --watch .         Directory to watch (default: current directory)
  *   --source copilot  Name shown in office (default: generic)
  *
@@ -27,11 +27,15 @@ const os = require('os')
 // ─── CLI args ─────────────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
-  const args = { port: 5173, watch: process.cwd(), source: 'generic' }
+  const args = { port: 5174, watch: process.cwd(), source: 'generic' }
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--port' && argv[i + 1]) { args.port = parseInt(argv[i + 1], 10); i++ }
     else if (argv[i] === '--watch' && argv[i + 1]) { args.watch = path.resolve(argv[i + 1]); i++ }
     else if (argv[i] === '--source' && argv[i + 1]) { args.source = argv[i + 1]; i++ }
+  }
+  if (!args.port || args.port < 1 || args.port > 65535) {
+    console.error(`[bridge] Invalid port: ${args.port}. Must be 1-65535.`)
+    process.exit(1)
   }
   return args
 }
@@ -164,7 +168,7 @@ function buildAgents() {
   const agents = []
   for (const [role, entry] of activeRoles) {
     agents.push({
-      agentId: role,
+      role: role,
       status: 'working',
       label: workingLabel(entry.file),
       task: 'Edit',
@@ -186,7 +190,7 @@ function flushIdleThenDone(port, source) {
   // First: mark all tracked agents as idle
   const idleAgents = []
   for (const role of activeRoles.keys()) {
-    idleAgents.push({ agentId: role, status: 'idle', label: IDLE_LABEL, task: null })
+    idleAgents.push({ role: role, status: 'idle', label: IDLE_LABEL, task: null })
   }
   if (idleAgents.length > 0) postStatus(port, idleAgents, source)
 
@@ -195,7 +199,7 @@ function flushIdleThenDone(port, source) {
     if (claudeWroteRecently()) return
     const doneAgents = []
     for (const role of activeRoles.keys()) {
-      doneAgents.push({ agentId: role, status: 'done', label: doneLabel(), task: null })
+      doneAgents.push({ role: role, status: 'done', label: doneLabel(), task: null })
     }
     if (doneAgents.length > 0) postStatus(port, doneAgents, source)
     activeRoles.clear()
@@ -272,6 +276,7 @@ function startWatcher(watchDir, port, source) {
 
   watcher.on('error', (err) => {
     console.error(`[bridge] Watcher error: ${err.message}`)
+    shutdown(port, source, watcher)
   })
 
   return watcher
@@ -289,7 +294,7 @@ function shutdown(port, source, watcher) {
 
   const roles = activeRoles.size > 0 ? [...activeRoles.keys()] : ['dev']
   const doneAgents = roles.map(role => ({
-    agentId: role,
+    role: role,
     status: 'done',
     label: doneLabel(),
     task: null,

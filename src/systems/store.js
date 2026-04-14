@@ -205,7 +205,8 @@ export const useOfficeStore = create((set) => ({
   hour: new Date().getHours(),
   minute: new Date().getMinutes(),
   activeEvent: null,
-  isPaused: typeof window !== 'undefined' && localStorage.getItem('office-paused') === 'true',
+  isPaused: typeof window !== 'undefined' && (() => { try { return localStorage.getItem('office-paused') === 'true' } catch { return false } })(),
+  reducedMotion: typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || false,
   showWorkflow: false,
 
   setAgentBehavior: (id, behavior, expression, bubble) =>
@@ -322,7 +323,7 @@ export const useOfficeStore = create((set) => ({
   clearActiveEvent: () => set({ activeEvent: null }),
   togglePause: () => set((s) => {
     const next = !s.isPaused
-    if (typeof window !== 'undefined') localStorage.setItem('office-paused', String(next))
+    try { if (typeof window !== 'undefined') localStorage.setItem('office-paused', String(next)) } catch {}
     return { isPaused: next }
   }),
   triggerWorkflow: () => set({ showWorkflow: true }),
@@ -330,6 +331,7 @@ export const useOfficeStore = create((set) => ({
 
   // ─── External status integration ───
   externalStatus: {},          // { [agentId]: { status, task, label, expiresAt } }
+  hasEverReceivedStatus: false, // true once ANY external status has been applied
   statusSource: 'organic',     // 'organic' | 'external' | 'fallback'
   integrationSource: null,     // e.g. claude-cli | codex-cli | codex-app | webhook
   activeWorkflow: null,        // workflow name for banner display
@@ -374,9 +376,9 @@ export const useOfficeStore = create((set) => ({
           task: u.task,
           label: u.label,
           hint: u.hint || null,
-          // working/blocked: 15s expiry (hook re-sends on each tool call to keep alive)
+          // working/blocked: 30s expiry (hook re-sends on each tool call to keep alive)
           // done: 10s expiry (brief celebration then back to idle)
-          expiresAt: u.status === 'done' ? now + 10000 : now + 15000,
+          expiresAt: u.status === 'done' ? now + 10000 : now + 30000,
         }
         // Immediately set behavior + expression to match work status
         const behaviorMap = {
@@ -424,7 +426,7 @@ export const useOfficeStore = create((set) => ({
           const agent = agents[u.agentId]
           if (agent) {
             const count = { ...agent.deskItemCount }
-            count[growthItem] = ((count[growthItem] || 0) + 1) % 4
+            count[growthItem] = ((count[growthItem] || 0) + 1) % 6
             agents[u.agentId] = { ...agent, deskItemCount: count }
           }
         }
@@ -432,7 +434,7 @@ export const useOfficeStore = create((set) => ({
       const log = activities.length > 0
         ? [...activities, ...s.activityLog].slice(0, 50)
         : s.activityLog
-      return { externalStatus: ext, agents, activityLog: log, dailyDoneLedger }
+      return { externalStatus: ext, agents, activityLog: log, dailyDoneLedger, hasEverReceivedStatus: meta.skipHintDismiss ? s.hasEverReceivedStatus : true }
     }),
 
   clearExternalStatus: (agentId) =>
@@ -444,7 +446,7 @@ export const useOfficeStore = create((set) => ({
         if (agents[agentId]) {
           // Dynamic session agents disappear when they expire; base agents go idle
           if (agents[agentId].session) delete agents[agentId]
-          else agents[agentId] = { ...agents[agentId], status: 'idle' }
+          else agents[agentId] = { ...agents[agentId], status: 'idle', expression: 'normal', bubble: null }
         }
         if (Object.keys(ext).length === 0) {
           return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null }
@@ -456,7 +458,7 @@ export const useOfficeStore = create((set) => ({
       for (const id of Object.keys(s.externalStatus)) {
         if (agents[id]) {
           if (agents[id].session) delete agents[id]
-          else agents[id] = { ...agents[id], status: 'idle' }
+          else agents[id] = { ...agents[id], status: 'idle', expression: 'normal', bubble: null }
         }
       }
       return { externalStatus: {}, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null }
@@ -486,9 +488,10 @@ export const useOfficeStore = create((set) => ({
   // Handoff animation state
   handoffs: [],
   addHandoff: (from, to) =>
-    set((s) => ({
-      handoffs: [...s.handoffs, { id: Date.now(), from, to, startTime: Date.now() }],
-    })),
+    set((s) => {
+      const next = [...s.handoffs, { id: Date.now(), from, to, startTime: Date.now() }]
+      return { handoffs: next.length > 20 ? next.slice(-20) : next }
+    }),
   removeHandoff: (id) =>
     set((s) => ({
       handoffs: s.handoffs.filter(h => h.id !== id),
@@ -515,3 +518,15 @@ useOfficeStore.subscribe(() => {
     savePersistedState(useOfficeStore.getState())
   }, 2000)
 })
+
+// ─── Cross-tab pause sync ───
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'office-paused') {
+      const paused = e.newValue === 'true'
+      if (useOfficeStore.getState().isPaused !== paused) {
+        useOfficeStore.setState({ isPaused: paused })
+      }
+    }
+  })
+}

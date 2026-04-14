@@ -3,14 +3,14 @@
 # Agent Virtual Office
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
 [![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev)
 [![Vite 6](https://img.shields.io/badge/vite-6-646cff.svg)](https://vitejs.dev)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/KbWen/agent-virtual-office/pulls)
 
 **Your AI agents aren't just running code — they're at the office.**
 
-![Virtual Office Screenshot](docs/screenshot.png)
+![Virtual Office Screenshot](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.png)
 
 A pixel-art virtual office where AI agent characters work, grab coffee, argue about code reviews, and hold stand-ups.
 They don't know you're watching, but you'll smile anyway.
@@ -91,7 +91,7 @@ Any tool can push real-time status to the office via HTTP:
 # Simple: set agent statuses directly
 curl -X POST http://localhost:5174/api/status \
   -H "Content-Type: application/json" \
-  -d '{"dev":"working","qa":"testing","workflow":"Sprint 42"}'
+  -d '{"dev":"working","qa":"blocked","workflow":"Sprint 42"}'
 
 # Full format: explicit agent list
 curl -X POST http://localhost:5174/api/status \
@@ -119,7 +119,7 @@ CI/CD pipelines and external tools can push one-shot events via `POST /api/event
 # Trigger a deploy-success celebration
 curl -X POST http://localhost:5174/api/event \
   -H "Content-Type: application/json" \
-  -d '{"event":"deploy-success","role":"ops","status":"done"}'
+  -d '{"event":"deploy-success"}'
 
 # Mark a character as blocked with a label
 curl -X POST http://localhost:5174/api/event \
@@ -127,31 +127,38 @@ curl -X POST http://localhost:5174/api/event \
   -d '{"event":"custom","role":"dev","status":"blocked","label":"Waiting on API keys"}'
 ```
 
-**Supported events:** `deploy-success` · `review-approved` · `test-passed` · `test-failed` · `build-failed` · `pr-merged` · `release-cut` · `rollback` · `incident-start` · `incident-resolved` · `custom`
+**Supported events:** `pr-merged` · `pr-opened` · `pr-reviewed` · `review-approved` · `test-passed` · `test-failed` · `build-success` · `build-failed` · `deploy-start` · `deploy-success` · `deploy-failed` · `release` · `release-cut` · `rollback` · `incident-start` · `incident-resolved` · `custom`
 
-Both `role` and `status` are validated — invalid values return HTTP 400.
+Named events use predefined agents — `role` and `status` are only needed for `custom` events (validated, invalid values return HTTP 400).
 
 ### Claude Code Hook Install
 
-The hook updates character status in real-time as Claude uses tools. Copy the hook to your project:
+The recommended way is the one-click setup command:
 
 ```bash
-# From inside your project directory (with office running):
-cp node_modules/agent-virtual-office/public/hooks/office-status-hook.js \
-   .claude/hooks/office-status-hook.js
+npx agent-virtual-office setup
 ```
 
-Register it in `.claude/settings.json`:
+This copies the hook to `~/.claude/office-status-hook.js` and registers it in `~/.claude/settings.json` for all 6 events automatically.
+
+**Manual install** (if you prefer):
+
+```bash
+cp node_modules/agent-virtual-office/public/hooks/office-status-hook.js \
+   ~/.claude/office-status-hook.js
+```
+
+Register it in `~/.claude/settings.json` (the hook reads events from stdin, no arguments needed):
 
 ```json
 {
   "hooks": {
-    "PreToolUse":       [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js PreToolUse" }],
-    "PostToolUse":      [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js PostToolUse" }],
-    "SubagentStart":    [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js SubagentStart" }],
-    "SubagentStop":     [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js SubagentStop" }],
-    "UserPromptSubmit": [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js UserPromptSubmit" }],
-    "Stop":             [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js Stop" }]
+    "PreToolUse":       [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "PostToolUse":      [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "SubagentStart":    [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "SubagentStop":     [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }]
   }
 }
 ```
@@ -245,6 +252,85 @@ Default language is English. Chinese (Traditional) is available:
 
 ---
 
+## Troubleshooting
+
+<details>
+<summary><b>Common Issues</b></summary>
+
+### Port 5174 is already in use
+```bash
+npx agent-virtual-office --port=5175
+```
+
+### npm install fails (corporate proxy)
+```bash
+npm config set proxy http://your-proxy:8080
+npm config set https-proxy http://your-proxy:8080
+npm install
+```
+
+### Browser doesn't open automatically
+This can happen on headless Linux, WSL, or remote servers. Open manually:
+```
+http://localhost:5174
+```
+
+### Office is blank — no agents appear
+1. **No hooks installed?** Run `npx agent-virtual-office setup` to install Claude Code hooks.
+2. **Different directory?** The office filters by `process.cwd()`. Run the office in the same directory as your Claude Code session.
+3. **Stale status?** Status expires after 5 minutes of inactivity — start a new Claude session.
+4. **Not using Claude Code?** Use `curl` to push status manually:
+   ```bash
+   curl -X POST http://localhost:5174/api/status \
+     -H "Content-Type: application/json" \
+     -d '{"dev":"working","workflow":"Hello Office"}'
+   ```
+
+### LAN access doesn't work (colleagues can't see the office)
+Set the `OFFICE_API_ALLOWED_ORIGINS` environment variable:
+```bash
+OFFICE_API_ALLOWED_ORIGINS=http://192.168.1.100:5174 npx agent-virtual-office
+```
+Or use `--no-host` to restrict to localhost only.
+
+### Windows Firewall blocks the server
+The office binds to all interfaces by default (`--host`). Windows may prompt to allow access. Use `--no-host` to avoid this:
+```bash
+npx agent-virtual-office --no-host
+```
+
+### Node.js version error
+Requires Node.js 20 or higher:
+```bash
+node --version  # must be >= 20
+```
+
+</details>
+
+### Gemini CLI Integration
+
+Gemini CLI doesn't have a built-in hook system like Claude Code. Use `curl` in a wrapper script:
+
+```bash
+# In your Gemini CLI workflow, push status updates:
+curl -s -X POST http://localhost:5174/api/status \
+  -H "Content-Type: application/json" \
+  -d '{"dev":"working","workflow":"Gemini Session"}'
+
+# When done:
+curl -s -X POST http://localhost:5174/api/status \
+  -H "Content-Type: application/json" \
+  -d '{"dev":"done"}'
+```
+
+Or use the generic LLM bridge for file-watching mode:
+```bash
+node node_modules/agent-virtual-office/public/hooks/generic-llm-bridge.js --port=5174
+```
+This watches for file changes and automatically updates the office.
+
+---
+
 ## Tech Highlights
 
 | Feature | Detail |
@@ -326,9 +412,9 @@ Default language is English. Chinese (Traditional) is available:
 
 ## Documentation
 
-- [Architecture & Technical Design](docs/ARCHITECTURE.md) — System architecture, movement system, behavior engine internals
-- [Design Specification](docs/DESIGN_SPEC.md) — Visual style, sprite system, animation states, event scripts
-- [Sprite Requirements](docs/SPRITE_REQUIREMENTS.md) — Pixel art asset specs for contributors
+- [Architecture & Technical Design](https://github.com/KbWen/agent-virtual-office/blob/main/docs/ARCHITECTURE.md) — System architecture, movement system, behavior engine internals
+- [Design Specification](https://github.com/KbWen/agent-virtual-office/blob/main/docs/DESIGN_SPEC.md) — Visual style, sprite system, animation states, event scripts
+- [Sprite Requirements](https://github.com/KbWen/agent-virtual-office/blob/main/docs/SPRITE_REQUIREMENTS.md) — Pixel art asset specs for contributors
 
 ---
 

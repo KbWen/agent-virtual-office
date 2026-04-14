@@ -35,6 +35,15 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
+  // Respect prefers-reduced-motion
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    if (!mq) return
+    const handler = (e) => useOfficeStore.setState({ reducedMotion: e.matches })
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
   if (mode === 'panel') {
     return (
       <ErrorBoundary>

@@ -66,7 +66,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
               return (
                 <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${charName(agent.id)}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
                   <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: agent.color }} />
-                  <span className="inline-block w-1 h-1 rounded-full" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} />
+                  <span className="inline-block w-1 h-1 rounded-full" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} aria-hidden="true" />
                 </div>
               )
             })}
@@ -80,10 +80,10 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
           {integrationHealth.state === 'offline' && (
             <div className="flex items-center gap-0.5 shrink-0">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
-              <span className="text-red-600 dark:text-red-400 font-medium">offline</span>
+              <span className="text-red-600 dark:text-red-400 font-medium">{t('status.offline', 'offline')}</span>
             </div>
           )}
-          <button onClick={togglePause} className="px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+          <button onClick={togglePause} className="px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={isPaused ? t('aria.resume', 'Resume') : t('aria.pause', 'Pause')}>
             {isPaused ? '▶' : '⏸'}
           </button>
         </div>
@@ -134,7 +134,8 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
                 <span className="text-gray-700 dark:text-gray-200 font-medium">{name}</span>
                 <span className="text-gray-400 dark:text-gray-500">·</span>
                 <span className={ext ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-gray-500 dark:text-gray-400'}>{label}</span>
-                <span className="inline-block w-1.5 h-1.5 rounded-full ml-0.5" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} />
+                <span className="inline-block w-1.5 h-1.5 rounded-full ml-0.5" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} aria-hidden="true" />
+                <span className="sr-only">{agent.status}</span>
               </div>
             )
           })}
@@ -164,7 +165,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
           <div className="flex items-center gap-1 shrink-0">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
             <span className="text-[10px] text-red-600 dark:text-red-400 font-medium">
-              status api offline
+              {t('status.apiOffline', 'status api offline')}
             </span>
           </div>
         )}
@@ -172,7 +173,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
           <div className="flex items-center gap-1 shrink-0">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
             <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-              status api retrying
+              {t('status.apiRetrying', 'status api retrying')}
             </span>
           </div>
         )}
@@ -182,26 +183,26 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <button onClick={cycleLang} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 text-[10px]" title="Switch language (L)">
+          <button onClick={cycleLang} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 text-[10px]" title={`${t('aria.switchLang', 'Switch language')} (L)`} aria-label={t('aria.switchLang', 'Switch language')}>
             {nextLangLabel}
           </button>
-          <button onClick={togglePause} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300" title="Pause (Space)">
+          <button onClick={togglePause} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300" title={`${isPaused ? t('aria.resume', 'Resume') : t('aria.pause', 'Pause')} (Space)`} aria-label={isPaused ? t('aria.resume', 'Resume') : t('aria.pause', 'Pause')}>
             {isPaused ? '▶' : '⏸'}
           </button>
-          <button onClick={triggerWorkflow} className="px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors" title="Run workflow animation">
+          <button onClick={triggerWorkflow} className="px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors" title={t('aria.runWorkflow', 'Run workflow animation')}>
             {t('ui.run')}
           </button>
           <button
             onClick={() => setShowTest(!showTest)}
             className={`px-2 py-1 rounded border transition-colors ${showTest ? 'bg-orange-100 border-orange-400 text-orange-700 dark:bg-orange-900 dark:text-orange-300' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-            title="Toggle test controls"
+            title={t('aria.toggleTest', 'Toggle test controls')}
           >
             {t('ui.test')}
           </button>
           <button
             onClick={() => setShowInfo(!showInfo)}
             className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 text-[10px]"
-            title="Info"
+            title={t('aria.info', 'Info')}
           >
             ?
           </button>
@@ -226,7 +227,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
                     }`}
                     style={agent.status === st ? { backgroundColor: STATUS_COLORS[st] } : {}}
                   >
-                    {st}
+                    {t(`statusLabels.${st}`, st)}
                   </button>
                 ))}
               </div>

@@ -60,10 +60,8 @@
     "typing": ["hmm...", "this looks ugly...", "almost done!", "forgot a semicolon", "SO save me"],
     "coffee": ["☕ fuel up", "3rd cup!", "large americano", "good beans"],
     "chat": ["hey check this bug", "lunch plans?", "weird requirements", "haha"],
-    "gate-block": ["why won't it pass!", "checking again...", "ugh", "please..."],
     "done": ["done!", "finally...", "who's next!", "wrapping up~"],
-    "toilet-return": ["refreshed~", "I'm back", "almost dropped my phone"],
-    "gate-verify": ["let me see...", "doesn't meet criteria", "passed!", "safety first"],
+    "gate-verify":["let me see...", "doesn't meet criteria", "passed!", "safety first"],
     "thinking": ["hmm...", "let me think", "got it!", "wait..."],
     "frustrated": ["...", "sigh", "checks watch", "giving up", "stuck", "help anyone?", "debugging..."],
     "stretch": ["so tired~", "shoulders ache", "deep breath~"],
@@ -82,8 +80,6 @@
     "tea-break": ["☕ break~", "grab a cup", "let's chat", "so tired"],
     "standup": ["today's progress...", "reporting in", "mm-hmm", "standup time!", "keep it short"],
     "standup-done": "report done",
-    "standup-lead": "so the direction is...",
-    "standup-agree": "agreed",
     "food-delivery": "food's here! 🍱",
     "food-react": "awesome! let's eat!",
     "coffee-spill": "oh no! spilled it!",
@@ -168,6 +164,15 @@
     "designer-done": ["{ctx} is done — almost too beautiful to ship", "delivered, though design is never truly finished", "{ctx} complete — the next canvas waits", "I like this version~", "it's alive now, {ctx}"],
     "designer-error": ["{ctx} is crying out...", "the visual order has collapsed", "{ctx} lost its soul", "this isn't a bug — it's design in pain"],
 
+    "worker-edit": ["Updating the code...", "Making changes...", "Writing code..."],
+    "worker-working": ["Working on it...", "Processing...", "Building..."],
+    "worker-done": ["Done!", "Changes applied!", "Task complete!"],
+    "planner-working": ["Planning the approach...", "Analyzing scope...", "Mapping out steps..."],
+    "planner-done": ["Plan ready!", "Strategy set!", "Roadmap done!"],
+    "checker-working": ["Checking quality...", "Reviewing changes...", "Validating..."],
+    "checker-done": ["All checks passed!", "Looks good!", "Verified!"],
+    "checker-error": ["Found issues...", "Needs attention...", "Check failed..."],
+
     "any-done": ["done!", "OK finished~", "next one!", "nice~"],
     "any-error": ["uh oh...", "something broke", "what now...", "not good..."],
 
@@ -207,9 +212,7 @@
   "inspector": {
     "doneToday": "Done today",
     "mood": "Mood",
-    "activeWorkflow": "Workflow",
-    "recentActivity": "Recent",
-    "noActivity": "No recent activity"
+    "activeWorkflow": "Workflow"
   },
   "moodLabels": {
     "normal": "Normal",
@@ -236,6 +239,9 @@
       "embedded": "Embedded"
     }
   },
+  "hint": {
+    "noConnection": "Waiting for agent activity... Run: npx agent-virtual-office setup"
+  },
   "onboarding": {
     "description": "This office visualizes your Claude Code session — each character reacts to your real coding activity.",
     "shortcuts": "Keyboard shortcuts",
@@ -243,5 +249,29 @@
     "shortcutLang": "L — Switch language",
     "shortcutClick": "Click agent — Inspector",
     "gotIt": "Got it!"
+  },
+  "errors": {
+    "title": "Something went wrong",
+    "unknown": "Unknown error",
+    "retry": "Retry"
+  },
+  "status": {
+    "offline": "offline",
+    "apiOffline": "status api offline",
+    "apiRetrying": "status api retrying"
+  },
+  "aria": {
+    "pause": "Pause",
+    "resume": "Resume",
+    "switchLang": "Switch language",
+    "runWorkflow": "Run workflow animation",
+    "toggleTest": "Toggle test controls",
+    "info": "Info"
+  },
+  "time": {
+    "now": "now",
+    "secondsAgo": "{0}s ago",
+    "minutesAgo": "{0}m ago",
+    "hoursAgo": "{0}h ago"
   }
 }

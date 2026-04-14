@@ -35,7 +35,7 @@ export default function BehaviorBubble({ x, y, message }) {
   }
   const boxW = Math.max(Math.ceil(estWidth) + 18, 48)
   const boxH = 26
-  const bx = x - boxW / 2
+  const bx = Math.max(10, Math.min(x - boxW / 2, 790 - boxW))
   const by = y - boxH - 8
 
   return (

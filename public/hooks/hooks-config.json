@@ -1,13 +1,13 @@
 {
   "_comment": "Add this 'hooks' section to your ~/.claude/settings.json or .claude/settings.json",
-  "_usage": "Update HOOK_PATH below to the actual path of office-status-hook.sh",
+  "_usage": "Update HOOK_PATH below to the actual path of office-status-hook.js",
   "hooks": {
     "PreToolUse": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "bash /path/to/office-status-hook.sh"
+            "command": "node /path/to/office-status-hook.js"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /path/to/office-status-hook.sh"
+            "command": "node /path/to/office-status-hook.js"
           }
         ]
       }
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /path/to/office-status-hook.sh"
+            "command": "node /path/to/office-status-hook.js"
           }
         ]
       }
@@ -37,7 +37,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /path/to/office-status-hook.sh"
+            "command": "node /path/to/office-status-hook.js"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /path/to/office-status-hook.js"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /path/to/office-status-hook.js"
           }
         ]
       }

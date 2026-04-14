@@ -20,7 +20,7 @@ function detectLang() {
     if (saved && LOCALES[saved]) return saved
     // Check browser language — only map Traditional Chinese variants
     const nav = navigator.language
-    if (nav === 'zh-TW' || nav === 'zh-Hant' || nav?.startsWith('zh-Hant')) return 'zh-TW'
+    if (nav === 'zh-TW' || nav === 'zh-HK' || nav === 'zh-Hant' || nav?.startsWith('zh-Hant')) return 'zh-TW'
   }
   return 'en'
 }
@@ -39,6 +39,8 @@ export function setLocale(lang) {
   if (typeof window !== 'undefined') {
     localStorage.setItem('office-lang', lang)
     document.documentElement.lang = lang
+    // Persist to ~/.claude/office-lang so hooks can read it
+    fetch('/api/lang', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: lang }).catch(() => {})
   }
   listeners.forEach(fn => fn(lang))
 }

@@ -46,6 +46,18 @@ describe('normalizePost', () => {
         expect(a.hint).toBe('error')
       }
     })
+
+    it('truncates hint at 200 characters', () => {
+      const longHint = 'x'.repeat(300)
+      const result = normalizePost({ dev: 'working', hint: longHint })
+      expect(result.agents[0].hint).toHaveLength(200)
+    })
+
+    it('rejects non-string hint values', () => {
+      expect(normalizePost({ dev: 'working', hint: 42 }).agents[0].hint).toBeNull()
+      expect(normalizePost({ dev: 'working', hint: { xss: true } }).agents[0].hint).toBeNull()
+      expect(normalizePost({ dev: 'working', hint: ['a'] }).agents[0].hint).toBeNull()
+    })
   })
 
   describe('full format (type: office-status)', () => {
@@ -81,6 +93,24 @@ describe('normalizePost', () => {
       const body = {
         type: 'office-status',
         agents: [{ role: 'dev', status: 'working' }],
+      }
+      const result = normalizePost(body)
+      expect(result.agents[0].hint).toBeNull()
+    })
+
+    it('truncates hint at 200 characters in full format', () => {
+      const body = {
+        type: 'office-status',
+        agents: [{ role: 'dev', status: 'working', hint: 'y'.repeat(300) }],
+      }
+      const result = normalizePost(body)
+      expect(result.agents[0].hint).toHaveLength(200)
+    })
+
+    it('rejects non-string hint in full format', () => {
+      const body = {
+        type: 'office-status',
+        agents: [{ role: 'dev', status: 'working', hint: 999 }],
       }
       const result = normalizePost(body)
       expect(result.agents[0].hint).toBeNull()
