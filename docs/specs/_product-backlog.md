@@ -111,6 +111,13 @@
 | 64 | **hooks-config.json 缺 2 事件** — 手動安裝用戶漏 UserPromptSubmit/Stop | P2 | Done | ✅ 加入 6 事件完整設定 |
 | 65 | **setup 沒提示需 Claude Code** — 新用戶不知為何辦公室沒動靜 | P2 | Done | ✅ setup 成功訊息加 Claude Code 安裝連結 |
 | 66 | **`strictPort:true` 報錯無引導** — port 被佔只有 Vite 錯誤 | P2 | Done | ✅ `cli.js` vite exit 時印出 `--port=` 建議 |
+| 67 | **`normalizePost` 透傳未知 JSON 屬性** — 任意 key 寫入磁碟並回傳客戶端 | P1 | Done | ✅ 重建乾淨物件，僅保留已知屬性；字串加 200 字元上限；agents 上限 50 |
+| 68 | **`/api/event` label/workflow 無長度限制** — 可灌大量資料到磁碟 | P2 | Done | ✅ label/workflow 加 `.slice(0, 200)` 上限 |
+| 69 | **`/api/event` aborted 檢查順序錯** — body 可暫時超過 8KB | P2 | Done | ✅ `if (aborted) return` 移到 `body += chunk` 之前 |
+| 70 | **worker/planner/checker 沒有 contextBubbles** — 永遠顯示通用泡泡 | P2 | Done | ✅ 兩語系加入 worker/planner/checker 8 組泡泡文字 |
+| 71 | **`officeEvents.json` fallback 全中文** — bubbleMessages 中文 fallback 給英文用戶看 | P2 | Done | ✅ 移除 `bubbleMessages`（i18n 已完整覆蓋所有 key） |
+| 72 | **6 個死翻譯 key** — inspector.recentActivity/noActivity、standup-lead/agree、gate-block、toilet-return | P3 | Done | ✅ 從 en.json/zh-TW.json 移除 |
+| 73 | **`PixelOffice` useMemo 讀 stale getState()** — 新 agent 短暫消失數秒 | P2 | Done | ✅ 改用 reactive `agents` subscription 取代 `getState()` |
 
 ---
 

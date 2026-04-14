@@ -565,10 +565,11 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     return cleanup
   }, [])
 
+  const agents = useOfficeStore((s) => s.agents)
   // Memoize agent list — only re-sort when IDs change (not on every property update)
   const agentList = useMemo(
-    () => sortByY(agentOrderSignature.map((entry) => entry.split('|', 1)[0]).map(id => useOfficeStore.getState().agents[id]).filter(Boolean)),
-    [agentOrderSignature]
+    () => sortByY(agentOrderSignature.map((entry) => entry.split('|', 1)[0]).map(id => agents[id]).filter(Boolean)),
+    [agentOrderSignature, agents]
   )
   const coffeeCountMap = useMemo(
     () => Object.fromEntries(DESK_IDS.map((id, index) => [id, coffeeCounts[index] || 0])),

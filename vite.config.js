@@ -420,6 +420,7 @@ function officeStatusPlugin() {
         let body = ''
         let aborted = false
         req.on('data', chunk => {
+          if (aborted) return
           body += chunk
           if (body.length > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.destroy() }
         })
@@ -436,7 +437,7 @@ function officeStatusPlugin() {
                 res.end(JSON.stringify({ ok: false, error: `Invalid role or status` }))
                 return
               }
-              agents = [{ role: parsed.role, status: parsed.status, label: parsed.label || eventName }]
+              agents = [{ role: parsed.role, status: parsed.status, label: (parsed.label ? String(parsed.label).slice(0, 200) : eventName) }]
             } else {
               agents = EVENT_TO_STATUS[eventName]
               if (!agents) {
@@ -445,7 +446,7 @@ function officeStatusPlugin() {
                 return
               }
               // Allow label override
-              if (parsed.label) agents = agents.map((a, i) => i === 0 ? { ...a, label: parsed.label } : a)
+              if (parsed.label) agents = agents.map((a, i) => i === 0 ? { ...a, label: String(parsed.label).slice(0, 200) } : a)
             }
 
             const output = {
@@ -454,7 +455,7 @@ function officeStatusPlugin() {
               type: 'office-status',
               agents,
               activeCount: agents.filter(a => a.status !== 'done').length,
-              workflow: parsed.workflow || eventName,
+              workflow: parsed.workflow ? String(parsed.workflow).slice(0, 200) : eventName,
               source: 'webhook',
             }
             const dir = path.dirname(statusPath)

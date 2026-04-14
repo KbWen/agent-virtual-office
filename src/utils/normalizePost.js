@@ -9,16 +9,28 @@ export const MAX_MOOD_DURATION = 3_600_000 // 1 hour
  */
 export function normalizePost(body) {
   if (body.type === 'office-status') {
-    if (Array.isArray(body.agents)) {
-      body.agents = body.agents.filter(a =>
-        VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status)
-      ).map(a => ({ ...a, hint: a.hint || null }))
+    const normalized = {
+      type: 'office-status',
+      agents: (Array.isArray(body.agents) ? body.agents : [])
+        .filter(a => a && typeof a === 'object'
+          && VALID_ROLES.includes(a.role)
+          && VALID_STATUSES.includes(a.status))
+        .slice(0, 50)
+        .map(a => ({
+          role: a.role,
+          status: a.status,
+          task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
+          label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
+          hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
+        })),
+      activeCount: typeof body.activeCount === 'number' ? body.activeCount : 0,
+      workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
+      mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
+      moodDuration: Math.min(Math.max(Number(body.moodDuration) || 60000, 1000), MAX_MOOD_DURATION),
+      source: typeof body.source === 'string' ? body.source.slice(0, 50) : null,
+      _seq: String(Date.now()),
     }
-    if (body.mood) body.mood = VALID_MOODS.includes(body.mood) ? body.mood : null
-    if (body.moodDuration) body.moodDuration = Math.min(Number(body.moodDuration) || 60000, MAX_MOOD_DURATION)
-    // Ensure _seq is always set (used for dedup + staleness)
-    if (!body._seq) body._seq = String(Date.now())
-    return body
+    return normalized
   }
   const agents = []
   for (const key of VALID_ROLES) {
@@ -27,9 +39,9 @@ export function normalizePost(body) {
     const isStatus = VALID_STATUSES.includes(val)
     agents.push({
       role: key,
-      task: isStatus ? null : val,
+      task: isStatus ? null : (typeof val === 'string' ? val.slice(0, 200) : null),
       status: isStatus ? val : 'working',
-      label: body.label || null,
+      label: typeof body.label === 'string' ? body.label.slice(0, 200) : null,
       hint: body.hint || null,
     })
   }
@@ -38,8 +50,8 @@ export function normalizePost(body) {
     type: 'office-status',
     agents,
     activeCount: agents.filter(a => a.status !== 'done').length,
-    workflow: body.workflow || null,
-    source: body.source || 'api',
+    workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
+    source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
     mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
     moodDuration: body.moodDuration ? Math.min(Number(body.moodDuration) || 60000, MAX_MOOD_DURATION) : null,
   }
