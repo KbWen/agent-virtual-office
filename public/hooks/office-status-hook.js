@@ -167,8 +167,8 @@ function skillToRole(name) {
 
 function shortFile(filePath) {
   if (!filePath) return null
-  // "C:\Users\x\project\src\App.jsx" → "App.jsx"
-  return path.basename(filePath)
+  // Normalize backslashes so path.basename works on Linux with Windows-style paths
+  return path.basename(filePath.replace(/\\/g, '/'))
 }
 
 function shortCommand(cmd) {
@@ -329,7 +329,10 @@ function skillContextPath(agentId) {
 
 function saveSkillContext(agentId, role, skillName) {
   try {
-    fs.writeFileSync(skillContextPath(agentId), JSON.stringify({ role, skillName }))
+    const p = skillContextPath(agentId)
+    const dir = path.dirname(p)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(p, JSON.stringify({ role, skillName }))
   } catch {}
 }
 
