@@ -228,10 +228,13 @@ if (host) {
 const viteBin = path.join(root, 'node_modules', '.bin', 'vite')
 const viteFlags = ['--port', port]
 if (host) viteFlags.push('--host')
-const vite = spawn(viteBin, viteFlags, {
+const isWin = process.platform === 'win32'
+const viteCmd = isWin ? `"${viteBin}" ${viteFlags.join(' ')}` : viteBin
+const viteArgs = isWin ? [] : viteFlags
+const vite = spawn(viteCmd, viteArgs, {
   cwd: root,
   stdio: 'inherit',
-  shell: process.platform === 'win32',
+  shell: isWin,
 })
 
 // Open browser after a short delay

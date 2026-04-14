@@ -8,17 +8,18 @@ const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer'
 const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
 
 function getSessionSlug() {
+  const cwdHash = require('crypto').createHash('md5').update(process.cwd()).digest('hex').slice(0, 4)
   try {
     const branch = execSync('git rev-parse --abbrev-ref HEAD', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     }).trim()
     if (branch && branch !== 'HEAD') {
-      return branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 28)
+      return branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 28) + `-${cwdHash}`
     }
   } catch {}
 
-  return path.basename(process.cwd()).replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').slice(0, 28)
+  return path.basename(process.cwd()).replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').slice(0, 28) + `-${cwdHash}`
 }
 
 function normalizeAgent(agent) {
@@ -89,13 +90,13 @@ function writeCodexStatusFile(payload, cwd = process.cwd()) {
 
   const dir = path.dirname(statusFile)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmpFile = `${statusFile}.tmp`
+  const tmpFile = `${statusFile}.tmp.${process.pid}`
   try {
     fs.writeFileSync(tmpFile, JSON.stringify(output, null, 2))
     fs.renameSync(tmpFile, statusFile)
   } catch {
     try { fs.writeFileSync(statusFile, JSON.stringify(output, null, 2)) } catch {}
-    try { fs.unlinkSync(tmpFile) } catch {}
+    try { fs.unlinkSync(`${statusFile}.tmp.${process.pid}`) } catch {}
   }
   return { statusFile, payload: output }
 }
@@ -122,7 +123,7 @@ async function main() {
 if (require.main === module) {
   main().catch((error) => {
     process.stderr.write(`${error.message}\n`)
-    process.exit(1)
+    process.exit(0)
   })
 }
 

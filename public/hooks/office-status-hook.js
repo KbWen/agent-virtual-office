@@ -378,7 +378,8 @@ function processEvent(event) {
       role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
       task = tool
       // Detect errors from tool result
-      const toolResult = event.tool_result || ''
+      let toolResult = event.tool_result || ''
+      if (typeof toolResult === 'object') toolResult = JSON.stringify(toolResult)
       const isError = event.is_error || (typeof toolResult === 'string' && /^(Error:|Exit code [1-9]|ENOENT|EPERM|EACCES|Command failed|fatal:)/im.test(toolResult.slice(0, 300)))
       status = isError ? 'blocked' : 'done'
       hint = isError ? 'error' : null

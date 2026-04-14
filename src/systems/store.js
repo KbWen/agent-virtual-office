@@ -323,7 +323,7 @@ export const useOfficeStore = create((set) => ({
   clearActiveEvent: () => set({ activeEvent: null }),
   togglePause: () => set((s) => {
     const next = !s.isPaused
-    if (typeof window !== 'undefined') localStorage.setItem('office-paused', String(next))
+    try { if (typeof window !== 'undefined') localStorage.setItem('office-paused', String(next)) } catch {}
     return { isPaused: next }
   }),
   triggerWorkflow: () => set({ showWorkflow: true }),
@@ -378,7 +378,7 @@ export const useOfficeStore = create((set) => ({
           hint: u.hint || null,
           // working/blocked: 15s expiry (hook re-sends on each tool call to keep alive)
           // done: 10s expiry (brief celebration then back to idle)
-          expiresAt: u.status === 'done' ? now + 10000 : now + 15000,
+          expiresAt: u.status === 'done' ? now + 10000 : now + 30000,
         }
         // Immediately set behavior + expression to match work status
         const behaviorMap = {
@@ -426,7 +426,7 @@ export const useOfficeStore = create((set) => ({
           const agent = agents[u.agentId]
           if (agent) {
             const count = { ...agent.deskItemCount }
-            count[growthItem] = ((count[growthItem] || 0) + 1) % 4
+            count[growthItem] = ((count[growthItem] || 0) + 1) % 6
             agents[u.agentId] = { ...agent, deskItemCount: count }
           }
         }
@@ -446,7 +446,7 @@ export const useOfficeStore = create((set) => ({
         if (agents[agentId]) {
           // Dynamic session agents disappear when they expire; base agents go idle
           if (agents[agentId].session) delete agents[agentId]
-          else agents[agentId] = { ...agents[agentId], status: 'idle' }
+          else agents[agentId] = { ...agents[agentId], status: 'idle', expression: 'normal', bubble: null }
         }
         if (Object.keys(ext).length === 0) {
           return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null }
@@ -458,7 +458,7 @@ export const useOfficeStore = create((set) => ({
       for (const id of Object.keys(s.externalStatus)) {
         if (agents[id]) {
           if (agents[id].session) delete agents[id]
-          else agents[id] = { ...agents[id], status: 'idle' }
+          else agents[id] = { ...agents[id], status: 'idle', expression: 'normal', bubble: null }
         }
       }
       return { externalStatus: {}, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null }

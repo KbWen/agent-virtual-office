@@ -96,6 +96,7 @@ export default function AgentInspector() {
   if (px < 10) px = 10
   if (px + W > 790) px = 790 - W
   if (py < 10) py = 10
+  if (py + H > 550) py = 550 - H
 
   return (
     <g

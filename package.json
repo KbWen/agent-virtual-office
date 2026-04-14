@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "start": "vite",
     "build:single": "vite build --outDir dist-single",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npx vitest run"
   },
   "keywords": [
     "virtual-office",

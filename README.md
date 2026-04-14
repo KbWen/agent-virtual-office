@@ -127,7 +127,7 @@ curl -X POST http://localhost:5174/api/event \
   -d '{"event":"custom","role":"dev","status":"blocked","label":"Waiting on API keys"}'
 ```
 
-**Supported events:** `deploy-success` · `review-approved` · `test-passed` · `test-failed` · `build-failed` · `pr-merged` · `release-cut` · `rollback` · `incident-start` · `incident-resolved` · `custom`
+**Supported events:** `pr-merged` · `pr-opened` · `pr-reviewed` · `review-approved` · `test-passed` · `test-failed` · `build-success` · `build-failed` · `deploy-start` · `deploy-success` · `deploy-failed` · `release` · `release-cut` · `rollback` · `incident-start` · `incident-resolved` · `custom`
 
 Both `role` and `status` are validated — invalid values return HTTP 400.
 

@@ -196,7 +196,6 @@ function officeStatusPlugin() {
                   const parsed = JSON.parse(raw)
                   const seq = parseInt(parsed._seq, 10)
                   if (!seq || now - seq > 300000) continue
-                  if (parsed.source === 'file-watcher') continue
                   const slug = file === 'office-status.json' ? 'main'
                     : file.replace(/^office-status-/, '').replace(/\.json$/, '')
                   sessions.push({ slug, data: parsed })
@@ -324,9 +323,15 @@ function officeStatusPlugin() {
         'deploy-start':   [{ role: 'ops', status: 'working', label: '🚀 Deploying...' }],
         'deploy-success': [{ role: 'ops', status: 'done',    label: '🎉 Deployed!' }],
         'deploy-failed':  [{ role: 'ops', status: 'blocked', label: '💥 Deploy failed' }],
-        'release':        [{ role: 'ops', status: 'done',    label: '🎉 Released!' },
-                           { role: 'dev', status: 'done',    label: '🎉 Ship it!' },
-                           { role: 'qa',  status: 'done',    label: '✅ Quality approved' }],
+        'release':           [{ role: 'ops', status: 'done',    label: '🎉 Released!' },
+                            { role: 'dev', status: 'done',    label: '🎉 Ship it!' },
+                            { role: 'qa',  status: 'done',    label: '✅ Quality approved' }],
+        'review-approved':   [{ role: 'qa',  status: 'done',    label: '✅ Review approved' }],
+        'release-cut':       [{ role: 'ops', status: 'working', label: '📦 Cutting release...' }],
+        'rollback':          [{ role: 'ops', status: 'blocked', label: '⏪ Rolling back' }],
+        'incident-start':    [{ role: 'ops', status: 'blocked', label: '🚨 Incident started' },
+                              { role: 'dev', status: 'working', label: '🔥 Investigating...' }],
+        'incident-resolved': [{ role: 'ops', status: 'done',    label: '✅ Incident resolved' }],
       }
 
       server.middlewares.use('/api/lang', (req, res) => {

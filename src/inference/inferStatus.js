@@ -150,7 +150,12 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
     const resp = await fetchImpl('/api/status', { headers })
     if (resp.status === 304) return { ok: true, unchanged: true }
     if (!resp.ok) {
-      state.consecutive404++
+      if (resp.status === 404) {
+        state.consecutive404++
+      } else {
+        // Non-404 errors (401, 500, etc.) — don't back off, just skip this cycle
+        state.consecutive404 = 0
+      }
       return { ok: false, status: resp.status }
     }
 
@@ -309,7 +314,6 @@ const DEBOUNCE_MS = 150  // keep low — tool calls are 1-2s apart, debounce mus
 export function startStatusIntegration(store) {
   // Reset mood state in case of HMR or React Strict Mode double-invoke
   resetMood()
-  let lastUpdateTime = 0
   let debounceTimer = null
   let stalenessTimer = null
   let pendingMsg = null
@@ -345,7 +349,6 @@ export function startStatusIntegration(store) {
 
     if (msg.workflow) s.setActiveWorkflow(msg.workflow)
 
-    lastUpdateTime = Date.now()
     resetStalenessTimer()
   }
 
