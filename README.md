@@ -3,7 +3,7 @@
 # Agent Virtual Office
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
 [![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev)
 [![Vite 6](https://img.shields.io/badge/vite-6-646cff.svg)](https://vitejs.dev)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/KbWen/agent-virtual-office/pulls)
@@ -300,9 +300,9 @@ npx agent-virtual-office --no-host
 ```
 
 ### Node.js version error
-Requires Node.js 18 or higher:
+Requires Node.js 20 or higher:
 ```bash
-node --version  # must be >= 18
+node --version  # must be >= 20
 ```
 
 </details>
