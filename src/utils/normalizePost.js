@@ -1,4 +1,4 @@
-import { VALID_ROLES, VALID_STATUSES } from '../systems/constants'
+import { VALID_ROLES, VALID_STATUSES } from '../systems/constants.js'
 export { VALID_ROLES, VALID_STATUSES }
 export const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
 export const MAX_MOOD_DURATION = 3_600_000 // 1 hour

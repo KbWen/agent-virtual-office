@@ -245,6 +245,85 @@ Default language is English. Chinese (Traditional) is available:
 
 ---
 
+## Troubleshooting
+
+<details>
+<summary><b>Common Issues</b></summary>
+
+### Port 5174 is already in use
+```bash
+npx agent-virtual-office --port=5175
+```
+
+### npm install fails (corporate proxy)
+```bash
+npm config set proxy http://your-proxy:8080
+npm config set https-proxy http://your-proxy:8080
+npm install
+```
+
+### Browser doesn't open automatically
+This can happen on headless Linux, WSL, or remote servers. Open manually:
+```
+http://localhost:5174
+```
+
+### Office is blank — no agents appear
+1. **No hooks installed?** Run `npx agent-virtual-office setup` to install Claude Code hooks.
+2. **Different directory?** The office filters by `process.cwd()`. Run the office in the same directory as your Claude Code session.
+3. **Stale status?** Status expires after 5 minutes of inactivity — start a new Claude session.
+4. **Not using Claude Code?** Use `curl` to push status manually:
+   ```bash
+   curl -X POST http://localhost:5174/api/status \
+     -H "Content-Type: application/json" \
+     -d '{"dev":"working","workflow":"Hello Office"}'
+   ```
+
+### LAN access doesn't work (colleagues can't see the office)
+Set the `OFFICE_API_ALLOWED_ORIGINS` environment variable:
+```bash
+OFFICE_API_ALLOWED_ORIGINS=http://192.168.1.100:5174 npx agent-virtual-office
+```
+Or use `--no-host` to restrict to localhost only.
+
+### Windows Firewall blocks the server
+The office binds to all interfaces by default (`--host`). Windows may prompt to allow access. Use `--no-host` to avoid this:
+```bash
+npx agent-virtual-office --no-host
+```
+
+### Node.js version error
+Requires Node.js 18 or higher:
+```bash
+node --version  # must be >= 18
+```
+
+</details>
+
+### Gemini CLI Integration
+
+Gemini CLI doesn't have a built-in hook system like Claude Code. Use `curl` in a wrapper script:
+
+```bash
+# In your Gemini CLI workflow, push status updates:
+curl -s -X POST http://localhost:5174/api/status \
+  -H "Content-Type: application/json" \
+  -d '{"dev":"working","workflow":"Gemini Session"}'
+
+# When done:
+curl -s -X POST http://localhost:5174/api/status \
+  -H "Content-Type: application/json" \
+  -d '{"dev":"done"}'
+```
+
+Or use the generic LLM bridge for file-watching mode:
+```bash
+node node_modules/agent-virtual-office/public/hooks/generic-llm-bridge.js --port=5174
+```
+This watches for file changes and automatically updates the office.
+
+---
+
 ## Tech Highlights
 
 | Feature | Detail |

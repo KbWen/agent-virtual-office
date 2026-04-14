@@ -12,9 +12,25 @@
  * No dependencies — just Node.js (which you already have).
  */
 
+const HOOK_VERSION = '1.0.0'
+
+let _seqCounter = 0
+
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+
+// ─── Bilingual labels ───
+function detectHookLang() {
+  try {
+    const langFile = path.join(os.homedir(), '.claude', 'office-lang')
+    const lang = fs.readFileSync(langFile, 'utf-8').trim()
+    if (lang === 'en' || lang === 'zh-TW') return lang
+  } catch {}
+  return 'zh-TW' // default: Chinese (backward compat)
+}
+
+const LANG = detectHookLang()
 
 // Read hook event from stdin
 let input = ''
@@ -24,7 +40,8 @@ process.stdin.on('end', () => {
   try {
     const event = JSON.parse(input)
     processEvent(event)
-  } catch {
+  } catch (e) {
+    process.stderr.write('[office-hook] ' + (e.message || e) + '\n')
     process.exit(0)
   }
 })
@@ -32,17 +49,24 @@ process.stdin.on('end', () => {
 // Derive a session slug from the current git branch (or CWD basename as fallback).
 // Each worktree writes to its own file so sessions don't overwrite each other.
 function getSessionSlug() {
+  // Short hash of CWD for project disambiguation (two repos on the same branch name
+  // would otherwise write to the same file and overwrite each other).
+  const cwdHash = require('crypto').createHash('md5').update(process.cwd()).digest('hex').slice(0, 4)
   try {
-    const { execSync } = require('child_process')
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim()
+    const branch = require('child_process')
+      .execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
+      .trim()
     if (branch && branch !== 'HEAD') {
-      return branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 28)
+      const slug = branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) || 'default'
+      return `${slug}-${cwdHash}`
     }
   } catch {}
-  return path.basename(process.cwd()).replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').slice(0, 28)
+  const cwdSlug = path.basename(process.cwd())
+    .replace(/[^a-zA-Z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 28) || 'default'
+  return `${cwdSlug}-${cwdHash}`
 }
 
 const SESSION_SLUG = getSessionSlug()
@@ -197,30 +221,45 @@ function extractContext(tool, toolInput) {
 function toolLabel(tool, context, isDone) {
   if (isDone) {
     const ctx = context ? ` ${context}` : ''
-    const doneLabels = [`✅${ctx} 好了`, `✅${ctx} 搞定`, `✅ 完成！`, `✅ 下一個`]
+    const doneLabels = LANG === 'en'
+      ? [`✅${ctx} done`, `✅${ctx} ready`, `✅ Done!`, `✅ Next`]
+      : [`✅${ctx} 好了`, `✅${ctx} 搞定`, `✅ 完成！`, `✅ 下一個`]
     return context ? doneLabels[Math.floor(Math.random() * 2)] : pick(doneLabels)
   }
 
-  // With context: show what's actually happening
   if (context) {
-    switch (tool) {
-      case 'Edit':   return `✏️ 改 ${context}`
-      case 'Write':  return `📝 寫 ${context}`
-      case 'Read':   return `📖 讀 ${context}`
-      case 'Bash':   return `⚡ ${context}`
-      case 'Grep':   return `🔎 搜 ${context}`
-      case 'Glob':   return `🔍 找 ${context}`
-      case 'Agent':
-      case 'TodoWrite':  return `📋 ${context}`
-      case 'AskUserQuestion':  return `🚪 確認：${context}`
-      case 'WebFetch':
-      case 'WebSearch': return `🌐 ${context}`
-      default:       return `💻 ${context}`
+    const labels = {
+      Edit:   LANG === 'en' ? `✏️ Edit ${context}`   : `✏️ 改 ${context}`,
+      Write:  LANG === 'en' ? `📝 Write ${context}`  : `📝 寫 ${context}`,
+      Read:   LANG === 'en' ? `📖 Read ${context}`   : `📖 讀 ${context}`,
+      Bash:   `⚡ ${context}`,
+      Grep:   LANG === 'en' ? `🔎 Search ${context}` : `🔎 搜 ${context}`,
+      Glob:   LANG === 'en' ? `🔍 Find ${context}`   : `🔍 找 ${context}`,
+      Agent:  `📋 ${context}`,
+      TodoWrite:  `📋 ${context}`,
+      AskUserQuestion: LANG === 'en' ? `🚪 Ask: ${context}` : `🚪 確認：${context}`,
+      WebFetch: `🌐 ${context}`,
+      WebSearch: `🌐 ${context}`,
     }
+    return labels[tool] || `💻 ${context}`
   }
 
-  // No context: generic but still fun
-  const fallback = {
+  const fallback = LANG === 'en' ? {
+    Edit:         ['✏️ Editing code', '✏️ Making changes'],
+    Write:        ['📝 Writing file', '📝 Generating'],
+    Read:         ['📖 Reading docs', '📖 Researching'],
+    Glob:         ['🔍 Finding files', '🔍 Searching around'],
+    Grep:         ['🔎 Searching code', '🔎 Looking for clues'],
+    Bash:         ['⚡ Running command', '⚡ Terminal time'],
+    Agent:        ['📋 Delegating task', '📋 Teamwork'],
+    WebFetch:     ['🌐 Fetching data', '🌐 Browsing'],
+    WebSearch:    ['🌐 Searching', '🌐 Looking it up'],
+    NotebookEdit: ['📓 Editing notebook', '📓 Experimenting'],
+    TodoWrite:    ['📋 Organizing tasks', '📋 Planning'],
+    EnterPlanMode:['🏗️ Planning', '🏗️ Thinking it through'],
+    ExitPlanMode: ['🏗️ Plan ready!', '🏗️ Got it figured out'],
+    AskUserQuestion: ['🚪 Asking user', '🚪 Quick check'],
+  } : {
     Edit:         ['✏️ 改 code 中', '✏️ 下刀了'],
     Write:        ['📝 寫新檔案', '📝 生成中'],
     Read:         ['📖 翻資料中', '📖 研究研究'],
@@ -231,18 +270,33 @@ function toolLabel(tool, context, isDone) {
     WebFetch:     ['🌐 查資料中', '🌐 上網看看'],
     WebSearch:    ['🌐 搜尋中', '🌐 找答案中'],
     NotebookEdit: ['📓 改 notebook', '📓 跑實驗中'],
-    TodoWrite:       ['📋 整理任務中', '📋 排工作'],
-    EnterPlanMode:   ['🏗️ 規劃架構中', '🏗️ 想想怎麼做'],
-    ExitPlanMode:    ['🏗️ 架構定案！', '🏗️ 計劃好了'],
+    TodoWrite:    ['📋 整理任務中', '📋 排工作'],
+    EnterPlanMode:['🏗️ 規劃架構中', '🏗️ 想想怎麼做'],
+    ExitPlanMode: ['🏗️ 架構定案！', '🏗️ 計劃好了'],
     AskUserQuestion: ['🚪 問問看', '🚪 確認一下'],
   }
-  return pick(fallback[tool] || ['💻 處理中', '💻 忙著呢'])
+  return pick(fallback[tool] || (LANG === 'en' ? ['💻 Working', '💻 Busy'] : ['💻 處理中', '💻 忙著呢']))
 }
 
 function skillLabel(skill, isDone) {
-  if (isDone) return pick(['✅ 報告完畢', '✅ 任務結束', '✅ 收工！'])
+  if (isDone) return pick(LANG === 'en'
+    ? ['✅ Report done', '✅ Task complete', '✅ Wrapping up!']
+    : ['✅ 報告完畢', '✅ 任務結束', '✅ 收工！'])
 
-  // Show the skill name in a human way
+  if (LANG === 'en') {
+    if (/plan/i.test(skill))                return '📊 Planning'
+    if (/spec|bootstrap/i.test(skill))      return '📋 Writing spec'
+    if (/review/i.test(skill))              return '🧐 Reviewing'
+    if (/test/i.test(skill))                return '🧪 Testing'
+    if (/implement|code/i.test(skill))      return '⌨️ Coding'
+    if (/fix|debug/i.test(skill))           return '🔧 Debugging'
+    if (/ship|deploy/i.test(skill))         return '🚀 Deploying'
+    if (/research|explore/i.test(skill))    return '🔬 Researching'
+    if (/architect|design/i.test(skill))    return '🏗️ Designing'
+    if (/security|audit/i.test(skill))      return '🛡️ Security check'
+    return `💼 ${skill}`
+  }
+
   if (/plan/i.test(skill))                return '📊 規劃中'
   if (/spec|bootstrap/i.test(skill))      return '📋 寫規格中'
   if (/review/i.test(skill))              return '🧐 Review 中'
@@ -302,7 +356,9 @@ function processEvent(event) {
       role = 'pm'
       task = 'thinking'
       status = 'working'
-      label = pick(['🤔 想一下...', '📊 收到，規劃中', '💡 好問題...', '🧠 分析中'])
+      label = pick(LANG === 'en'
+        ? ['🤔 Thinking...', '📊 Got it, planning', '💡 Good question...', '🧠 Analyzing']
+        : ['🤔 想一下...', '📊 收到，規劃中', '💡 好問題...', '🧠 分析中'])
       break
     }
     case 'PreToolUse': {
@@ -352,10 +408,12 @@ function processEvent(event) {
       try {
         const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
         const doneAgents = (data.agents || []).map(a => ({
-          ...a, status: 'done', label: pick(['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了'])
+          ...a, status: 'done', label: pick(LANG === 'en'
+            ? ['✅ All done', '✅ Round complete', '✅ Over to you']
+            : ['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了'])
         }))
         const output = {
-          _seq: String(Date.now()),
+          _seq: `${Date.now()}-${++_seqCounter}`,
           _cwd: process.cwd(),
           type: 'office-status',
           agents: doneAgents,
@@ -365,10 +423,42 @@ function processEvent(event) {
         }
         const dir = path.dirname(STATUS_FILE)
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-        const tmp = STATUS_FILE + '.tmp'
-        fs.writeFileSync(tmp, JSON.stringify(output, null, 2))
-        fs.renameSync(tmp, STATUS_FILE)
-      } catch {}
+        const json = JSON.stringify(output, null, 2)
+        const tmp = STATUS_FILE + '.tmp.' + process.pid
+        try {
+          fs.writeFileSync(tmp, json)
+          fs.renameSync(tmp, STATUS_FILE)
+        } catch {
+          // Rename failed (EBUSY / file locked) — write directly as fallback
+          try { fs.writeFileSync(STATUS_FILE, json) } catch {}
+          try { fs.unlinkSync(tmp) } catch {}
+        }
+      } catch {
+        // File doesn't exist yet (first-ever Stop) or is invalid — write a clean "idle" state
+        // so the office always receives a response rather than silently getting nothing.
+        const output = {
+          type: 'office-status',
+          agents: [],
+          activeCount: 0,
+          workflow: null,
+          source: 'claude-cli',
+          _cwd: process.cwd(),
+          _seq: `${Date.now()}-${++_seqCounter}`,
+        }
+        const dir = path.dirname(STATUS_FILE)
+        try {
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+          const json = JSON.stringify(output, null, 2)
+          const tmp = STATUS_FILE + '.tmp.' + process.pid
+          try {
+            fs.writeFileSync(tmp, json)
+            fs.renameSync(tmp, STATUS_FILE)
+          } catch {
+            try { fs.writeFileSync(STATUS_FILE, json) } catch {}
+            try { fs.unlinkSync(tmp) } catch {}
+          }
+        } catch {}
+      }
       return  // no further processing needed
     }
     default:
@@ -391,7 +481,7 @@ function processEvent(event) {
   const activeCount = newAgents.filter(a => a.status !== 'done').length
 
   const output = {
-    _seq: String(Date.now()),
+    _seq: `${Date.now()}-${++_seqCounter}`,
     _cwd: process.cwd(),
     type: 'office-status',
     agents: newAgents,
@@ -400,16 +490,23 @@ function processEvent(event) {
     source: 'claude-cli',
   }
 
-  // Write atomically
+  // Write with retry (Windows file locking can cause EBUSY on rename)
   const dir = path.dirname(STATUS_FILE)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmp = STATUS_FILE + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(output, null, 2))
-  fs.renameSync(tmp, STATUS_FILE)
+  const json = JSON.stringify(output, null, 2)
+  const tmp = STATUS_FILE + '.tmp.' + process.pid
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(tmp, json)
+    fs.renameSync(tmp, STATUS_FILE)
+  } catch {
+    // Rename failed (EBUSY / file locked) — write directly as fallback
+    try { fs.writeFileSync(STATUS_FILE, json) } catch {}
+    try { fs.unlinkSync(tmp) } catch {}
+  }
 }
 
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)
 if (typeof module !== 'undefined') {
-  module.exports = { toolToRole, skillToRole, shortFile, shortCommand, extractContext,
+  module.exports = { HOOK_VERSION, toolToRole, skillToRole, shortFile, shortCommand, extractContext,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext }
 }

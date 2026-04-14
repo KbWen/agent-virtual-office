@@ -236,6 +236,9 @@
       "embedded": "Embedded"
     }
   },
+  "hint": {
+    "noConnection": "Waiting for agent activity... Run: npx agent-virtual-office setup"
+  },
   "onboarding": {
     "description": "This office visualizes your Claude Code session — each character reacts to your real coding activity.",
     "shortcuts": "Keyboard shortcuts",

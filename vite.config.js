@@ -24,6 +24,24 @@ const STATUS_PATH = path.join(os.homedir(), '.claude', 'office-status.json')
 
 const LOOPBACK_ORIGIN_RE = /^https?:\/\/(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?$/i
 
+// Auto-detect server's LAN IPs for CORS when --host is active
+function getServerIPs() {
+  const ips = new Set(['localhost', '127.0.0.1', '[::1]'])
+  try {
+    const interfaces = os.networkInterfaces()
+    for (const iface of Object.values(interfaces)) {
+      for (const addr of iface) {
+        if (!addr.internal) {
+          ips.add(addr.family === 'IPv6' ? `[${addr.address}]` : addr.address)
+        }
+      }
+    }
+  } catch {}
+  return ips
+}
+
+const SERVER_IPS = getServerIPs()
+
 export function getOfficeApiConfig(env = process.env) {
   const token = env.OFFICE_API_TOKEN?.trim() || null
   const allowedOrigins = (env.OFFICE_API_ALLOWED_ORIGINS || '')
@@ -40,6 +58,11 @@ export function getOfficeApiConfig(env = process.env) {
 export function isAllowedOrigin(origin, config = getOfficeApiConfig()) {
   if (!origin) return true
   if (config.allowedOrigins.length > 0) return config.allowedOrigins.includes(origin)
+  // Allow loopback + any of this machine's own IPs (for --host LAN access)
+  try {
+    const url = new URL(origin)
+    if (SERVER_IPS.has(url.hostname)) return true
+  } catch {}
   return LOOPBACK_ORIGIN_RE.test(origin)
 }
 
@@ -66,12 +89,24 @@ function officeStatusPlugin() {
   const RATE_WINDOW = 10000
   const RATE_LIMIT = 30
 
+  // Case-insensitive path comparison on Windows (C:\users vs C:\Users are the same)
+  const isWin = process.platform === 'win32'
+  function pathsEqual(a, b) {
+    return isWin ? a.toLowerCase() === b.toLowerCase() : a === b
+  }
+
   function checkRateLimit(req) {
     if (req.method !== 'POST') return true
     const ip = req.socket?.remoteAddress || 'unknown'
     const now = Date.now()
     const entry = postCounts.get(ip)
     if (!entry || now - entry.start > RATE_WINDOW) {
+      // Clean up stale entries periodically (every 100 checks)
+      if (postCounts.size > 50) {
+        for (const [k, v] of postCounts) {
+          if (now - v.start > RATE_WINDOW) postCounts.delete(k)
+        }
+      }
       postCounts.set(ip, { start: now, count: 1 })
       return true
     }
@@ -130,13 +165,37 @@ function officeStatusPlugin() {
                   const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
                   const parsed = JSON.parse(raw)
                   const seq = parseInt(parsed._seq, 10)
-                  if (seq && now - seq > 60000) continue // stale — skip
+                  if (!seq || now - seq > 300000) {  // stale or no valid _seq
+                    // Clean up very old files (>1 hour) to prevent ~/.claude/ clutter
+                    if (seq && now - seq > 3600000 && file !== 'office-status.json') {
+                      try { fs.unlinkSync(path.join(dir, file)) } catch {}
+                    }
+                    continue
+                  }
                   // Skip sessions from other projects (hooks write _cwd).
                   // Slugged files without _cwd are from old hooks — skip them too (bare main is OK as fallback).
-                  if (parsed._cwd && path.resolve(parsed._cwd) !== path.resolve(projectRoot)) continue
+                  if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), path.resolve(projectRoot))) continue
                   if (!parsed._cwd && file !== 'office-status.json') continue
                   // Skip file-watcher sessions in multi-session merge — they fire on every
                   // JS edit and would make single-worktree users appear as multi-session.
+                  if (parsed.source === 'file-watcher') continue
+                  const slug = file === 'office-status.json' ? 'main'
+                    : file.replace(/^office-status-/, '').replace(/\.json$/, '')
+                  sessions.push({ slug, data: parsed })
+                } catch {}
+              }
+            }
+
+            // Fallback: if no sessions match this project, show all non-stale sessions
+            // (better to show something than a blank office with no feedback)
+            if (sessions.length === 0 && fs.existsSync(dir)) {
+              for (const file of fs.readdirSync(dir)) {
+                if (!file.match(/^office-status(-[^.]+)?\.json$/)) continue
+                try {
+                  const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
+                  const parsed = JSON.parse(raw)
+                  const seq = parseInt(parsed._seq, 10)
+                  if (!seq || now - seq > 300000) continue
                   if (parsed.source === 'file-watcher') continue
                   const slug = file === 'office-status.json' ? 'main'
                     : file.replace(/^office-status-/, '').replace(/\.json$/, '')
@@ -166,7 +225,8 @@ function officeStatusPlugin() {
             let merged
             if (sessions.length === 1) {
               // Single session — return as-is (backward compat, plain role IDs)
-              merged = sessions[0].data
+              merged = { ...sessions[0].data }
+              delete merged._cwd
             } else {
               // Multi-session — one representative agent per session (the most active one)
               // Rule: only working/blocked agents spawn extra characters; done agents are transient
@@ -252,18 +312,6 @@ function officeStatusPlugin() {
         res.end(JSON.stringify({ error: 'Method not allowed' }))
       })
 
-      // ─── /api/event — one-shot CI/CD webhook ────────────────────────────
-      // Usage:
-      //   curl -X POST http://localhost:5173/api/event \
-      //     -H "Content-Type: application/json" \
-      //     -d '{"event":"pr-merged"}'
-      //
-      // Supported events: pr-merged, pr-opened, pr-reviewed,
-      //   test-passed, test-failed, build-success, build-failed,
-      //   deploy-start, deploy-success, deploy-failed, release
-      //
-      // Custom: { "event": "custom", "role": "qa", "status": "blocked", "label": "❌ flaky test" }
-
       const EVENT_TO_STATUS = {
         'pr-merged':      [{ role: 'ops', status: 'done',    label: '🚀 PR merged!' },
                            { role: 'dev', status: 'done',    label: '✅ 上了！' }],
@@ -280,6 +328,60 @@ function officeStatusPlugin() {
                            { role: 'dev', status: 'done',    label: '🎉 Ship it!' },
                            { role: 'qa',  status: 'done',    label: '✅ Quality approved' }],
       }
+
+      server.middlewares.use('/api/lang', (req, res) => {
+        if (req.method === 'POST') {
+          let body = ''
+          const MAX_LANG_BODY = 16  // lang codes are tiny
+          let langAborted = false
+          req.on('data', chunk => {
+            if (langAborted) return
+            body += chunk
+            if (body.length > MAX_LANG_BODY) {
+              langAborted = true
+              res.statusCode = 413
+              res.end(JSON.stringify({ ok: false, error: 'Body too large' }))
+              req.destroy()
+              return
+            }
+          })
+          req.on('end', () => {
+            if (langAborted) return
+            const lang = body.trim()
+            if (lang === 'en' || lang === 'zh-TW') {
+              const langFile = path.join(os.homedir(), '.claude', 'office-lang')
+              try {
+                const dir = path.dirname(langFile)
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+                fs.writeFileSync(langFile, lang)
+                res.statusCode = 200
+                res.end(JSON.stringify({ ok: true }))
+              } catch {
+                res.statusCode = 500
+                res.end(JSON.stringify({ ok: false }))
+              }
+            } else {
+              res.statusCode = 400
+              res.end(JSON.stringify({ ok: false, error: 'Invalid lang' }))
+            }
+          })
+          return
+        }
+        res.statusCode = 405
+        res.end()
+      })
+
+      // ─── /api/event — one-shot CI/CD webhook ────────────────────────────
+      // Usage:
+      //   curl -X POST http://localhost:5173/api/event \
+      //     -H "Content-Type: application/json" \
+      //     -d '{"event":"pr-merged"}'
+      //
+      // Supported events: pr-merged, pr-opened, pr-reviewed,
+      //   test-passed, test-failed, build-success, build-failed,
+      //   deploy-start, deploy-success, deploy-failed, release
+      //
+      // Custom: { "event": "custom", "role": "qa", "status": "blocked", "label": "❌ flaky test" }
 
       server.middlewares.use('/api/event', (req, res) => {
         res.setHeader('Content-Type', 'application/json')
@@ -450,7 +552,7 @@ function fileWatcherFallbackPlugin() {
 export default defineConfig({
   plugins: [react(), tailwindcss(), officeStatusPlugin(), fileWatcherFallbackPlugin()],
   server: {
-    strictPort: false,
+    strictPort: true,
   },
   build: {
     rollupOptions: {

@@ -206,6 +206,7 @@ export const useOfficeStore = create((set) => ({
   minute: new Date().getMinutes(),
   activeEvent: null,
   isPaused: typeof window !== 'undefined' && localStorage.getItem('office-paused') === 'true',
+  reducedMotion: typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || false,
   showWorkflow: false,
 
   setAgentBehavior: (id, behavior, expression, bubble) =>
@@ -330,6 +331,7 @@ export const useOfficeStore = create((set) => ({
 
   // ─── External status integration ───
   externalStatus: {},          // { [agentId]: { status, task, label, expiresAt } }
+  hasEverReceivedStatus: false, // true once ANY external status has been applied
   statusSource: 'organic',     // 'organic' | 'external' | 'fallback'
   integrationSource: null,     // e.g. claude-cli | codex-cli | codex-app | webhook
   activeWorkflow: null,        // workflow name for banner display
@@ -432,7 +434,7 @@ export const useOfficeStore = create((set) => ({
       const log = activities.length > 0
         ? [...activities, ...s.activityLog].slice(0, 50)
         : s.activityLog
-      return { externalStatus: ext, agents, activityLog: log, dailyDoneLedger }
+      return { externalStatus: ext, agents, activityLog: log, dailyDoneLedger, hasEverReceivedStatus: meta.skipHintDismiss ? s.hasEverReceivedStatus : true }
     }),
 
   clearExternalStatus: (agentId) =>
@@ -486,9 +488,10 @@ export const useOfficeStore = create((set) => ({
   // Handoff animation state
   handoffs: [],
   addHandoff: (from, to) =>
-    set((s) => ({
-      handoffs: [...s.handoffs, { id: Date.now(), from, to, startTime: Date.now() }],
-    })),
+    set((s) => {
+      const next = [...s.handoffs, { id: Date.now(), from, to, startTime: Date.now() }]
+      return { handoffs: next.length > 20 ? next.slice(-20) : next }
+    }),
   removeHandoff: (id) =>
     set((s) => ({
       handoffs: s.handoffs.filter(h => h.id !== id),
@@ -515,3 +518,15 @@ useOfficeStore.subscribe(() => {
     savePersistedState(useOfficeStore.getState())
   }, 2000)
 })
+
+// ─── Cross-tab pause sync ───
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'office-paused') {
+      const paused = e.newValue === 'true'
+      if (useOfficeStore.getState().isPaused !== paused) {
+        useOfficeStore.setState({ isPaused: paused })
+      }
+    }
+  })
+}

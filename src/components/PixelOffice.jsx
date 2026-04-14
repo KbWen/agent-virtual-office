@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore } from '../systems/store'
 import { startOfficeLife, triggerInteractiveEvent } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
-import { eventName } from '../i18n'
+import { eventName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import AgentInspector from './AgentInspector'
 import {
@@ -69,7 +69,9 @@ function FlyingDocument({ fromPos, toPos, onComplete }) {
 function FlyingDocuments() {
   const handoffs = useOfficeStore((s) => s.handoffs)
   const agents = useOfficeStore((s) => s.agents)
+  const reducedMotion = useOfficeStore((s) => s.reducedMotion)
 
+  if (reducedMotion) return null
   return handoffs.map((h) => {
     const fromAgent = agents[h.from]
     const toAgent = agents[h.to]
@@ -550,6 +552,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const minute = useOfficeStore((s) => s.minute)
   const activeEvent = useOfficeStore((s) => s.activeEvent)
   const activeWorkflow = useOfficeStore((s) => s.activeWorkflow)
+  const hasEverReceivedStatus = useOfficeStore((s) => s.hasEverReceivedStatus)
+  useLocale() // re-render on language switch so hint text updates
 
   useEffect(() => {
     const cleanup = startOfficeLife(useOfficeStore)
@@ -621,7 +625,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       viewBox={viewBox}
       xmlns="http://www.w3.org/2000/svg"
       className="w-full h-full"
-      style={isPanel ? {} : { maxHeight: 'calc(100vh - 44px)' }}
+      style={isPanel ? {} : { maxHeight: 'calc(100vh - 44px)', minWidth: '480px' }}
       preserveAspectRatio="xMidYMid meet"
     >
       <defs>
@@ -847,6 +851,15 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       </g>
       <Printer x={600} y={495} />
 
+      {/* ═══ CONNECTION HINT (shown until first external status is received) ═══ */}
+      {!hasEverReceivedStatus && (
+        <g className="animate-pulse" opacity="0.85" pointerEvents="none">
+          <text x="400" y="28" textAnchor="middle" fontSize="11" fill="#d4c8a0" fontFamily="monospace">
+            {t('hint.noConnection')}
+          </text>
+        </g>
+      )}
+
       {/* ═══ AGENTS ═══ */}
       {agentList.map((agent) => (
         <AgentCharacter key={agent.id} agent={agent} />
@@ -945,5 +958,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     )
   }
 
-  return svgElement
+  return (
+    <div className="w-full flex-1 overflow-auto min-h-0">
+      {svgElement}
+    </div>
+  )
 }

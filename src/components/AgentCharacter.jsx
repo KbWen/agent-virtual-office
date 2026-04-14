@@ -349,12 +349,13 @@ function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing 
 // Small pixel-art icons that appear next to the character based on current behavior
 function BehaviorIndicator({ behavior }) {
   const [frame, setFrame] = useState(0)
+  const reducedMotion = useOfficeStore((s) => s.reducedMotion)
 
   useEffect(() => {
     // Animate indicator every 600ms
-    const iv = setInterval(() => setFrame(f => (f + 1) % 4), 600)
-    return () => clearInterval(iv)
-  }, [])
+    const iv = reducedMotion ? null : setInterval(() => setFrame(f => (f + 1) % 4), 600)
+    return () => { if (iv) clearInterval(iv) }
+  }, [reducedMotion])
 
   // Position: to the right of character
   const ox = 14, oy = -8
@@ -582,6 +583,7 @@ function AgentCharacter({ agent }) {
   useLocale() // re-render on language change
   const name = charName(id)
   const agentState = useOfficeStore((s) => s.agents[id])
+  const reducedMotion = useOfficeStore((s) => s.reducedMotion)
 
   const timerRef = useRef(null)
   const pathRef = useRef([])
@@ -615,9 +617,9 @@ function AgentCharacter({ agent }) {
   // Walk animation timer (leg alternation)
   useEffect(() => {
     if (!isWalking) return
-    const iv = setInterval(() => setWalkFrame((f) => 1 - f), WALK_FRAME_INTERVAL)
-    return () => clearInterval(iv)
-  }, [isWalking])
+    const iv = reducedMotion ? null : setInterval(() => setWalkFrame((f) => 1 - f), WALK_FRAME_INTERVAL)
+    return () => { if (iv) clearInterval(iv) }
+  }, [isWalking, reducedMotion])
 
   // RAF animation loop — only active while walking, stops when arrived
   // Throttled to ~30fps React updates (physics still runs at 60fps for smooth position)
@@ -903,7 +905,9 @@ function AgentCharacter({ agent }) {
 
   return (
     <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}
-      style={{ cursor: 'pointer' }} onClick={handleClick}>
+      style={{ cursor: 'pointer' }} onClick={handleClick}
+      role="button" aria-label={name} tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(e) } }}>
       {/* Working glow ring */}
       {state.status === 'working' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.5">

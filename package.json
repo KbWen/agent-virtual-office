@@ -27,6 +27,9 @@
   ],
   "author": "KbWen",
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "homepage": "https://github.com/KbWen/agent-virtual-office#readme",
   "repository": {
     "type": "git",
@@ -35,7 +38,6 @@
   "type": "commonjs",
   "files": [
     "bin/",
-    "dist/",
     "public/",
     "src/",
     "index.html",
@@ -43,15 +45,15 @@
     "package.json"
   ],
   "dependencies": {
+    "@tailwindcss/vite": "^4.2.1",
+    "@vitejs/plugin-react": "^4.7.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "tailwindcss": "^4.2.1",
+    "vite": "^6.4.1",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.2.1",
-    "@vitejs/plugin-react": "^4.7.0",
-    "tailwindcss": "^4.2.1",
-    "vite": "^6.4.1",
     "vitest": "^3.2.1"
   }
 }

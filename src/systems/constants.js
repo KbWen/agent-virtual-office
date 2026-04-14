@@ -22,7 +22,7 @@ export const RARE_EVENT_INTERVAL = [300000, 600000]    // 5–10 min
 export const TIME_CHECK_INTERVAL = 60000               // 1 min
 
 // API
-export const STATUS_POLL_INTERVAL = 2000   // ms
+export const STATUS_POLL_INTERVAL = 1000   // ms — matches startFilePolling default
 export const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
 export const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
 

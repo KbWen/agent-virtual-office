@@ -90,8 +90,13 @@ function writeCodexStatusFile(payload, cwd = process.cwd()) {
   const dir = path.dirname(statusFile)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   const tmpFile = `${statusFile}.tmp`
-  fs.writeFileSync(tmpFile, JSON.stringify(output, null, 2))
-  fs.renameSync(tmpFile, statusFile)
+  try {
+    fs.writeFileSync(tmpFile, JSON.stringify(output, null, 2))
+    fs.renameSync(tmpFile, statusFile)
+  } catch {
+    try { fs.writeFileSync(statusFile, JSON.stringify(output, null, 2)) } catch {}
+    try { fs.unlinkSync(tmpFile) } catch {}
+  }
   return { statusFile, payload: output }
 }
 

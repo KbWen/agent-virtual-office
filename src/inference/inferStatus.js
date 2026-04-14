@@ -13,7 +13,7 @@
 
 import { routeExternalAgents, distributeFallbackCount, routeTaskToAgent } from './agentRouter'
 import { pushEventBatch, setMoodOverride, resetMood } from '../systems/moodEngine'
-import { VALID_ROLES, VALID_STATUSES } from '../systems/constants'
+import { VALID_ROLES, VALID_STATUSES, STATUS_POLL_INTERVAL } from '../systems/constants'
 
 // ─── Message normalization ─────────────────────────────────────────────
 
@@ -179,6 +179,21 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
 }
 
 function startFilePolling(callback, intervalMs = 1000, onProbe = null) {
+  // Skip file polling when /api/status can't work:
+  // - file:// protocol (no server)
+  // - HTTPS page can't fetch HTTP localhost (mixed content)
+  if (typeof window !== 'undefined') {
+    const proto = window.location.protocol
+    if (proto === 'file:') {
+      console.info('[Office] Skipping API polling (file:// protocol). Use URL hash or postMessage instead.')
+      return () => {}
+    }
+    if (proto === 'https:' && window.location.hostname !== 'localhost') {
+      console.info('[Office] Skipping API polling (HTTPS page cannot reach HTTP API). Use postMessage or hash instead.')
+      return () => {}
+    }
+  }
+
   const pollingState = createFilePollingState()
   const timer = setInterval(() => {
     void pollFileStatusOnce(fetch, pollingState, callback).then((result) => {
@@ -309,6 +324,7 @@ export function startStatusIntegration(store) {
       s.applyExternalStatus(updates, {
         source: msg.source || 'external',
         seq: msg._seq || null,
+        skipHintDismiss: msg.source === 'file-watcher',
       })
       s.setStatusSource('external')
       s.setIntegrationSource?.(msg.source || 'external')
@@ -390,7 +406,7 @@ export function startStatusIntegration(store) {
     listenForStatusUpdates(handleIncoming),   // postMessage (artifact/embedded)
     listenBroadcastChannel(handleIncoming),   // cross-tab (CLI opens browser)
     startPolling(handleIncoming),             // window global (CLI injection)
-    startFilePolling(handleIncoming, 1000, handleProbe), // /api/status (CLI hook → file → vite)
+    startFilePolling(handleIncoming, STATUS_POLL_INTERVAL, handleProbe), // /api/status (CLI hook → file → vite)
     listenHashChanges(handleIncoming),        // URL hash (passive, any platform)
     listenTitleChanges(handleIncoming),       // title monitoring (heuristic)
   ]

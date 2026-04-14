@@ -39,6 +39,8 @@ export function setLocale(lang) {
   if (typeof window !== 'undefined') {
     localStorage.setItem('office-lang', lang)
     document.documentElement.lang = lang
+    // Persist to ~/.claude/office-lang so hooks can read it
+    fetch('/api/lang', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: lang }).catch(() => {})
   }
   listeners.forEach(fn => fn(lang))
 }
