@@ -26,7 +26,7 @@
   if (typeof window === 'undefined') return
 
   const CHANNEL_NAME = 'agent-office'
-  const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate']
+  const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
   const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
   const DEFAULT_SOURCE = detectDefaultSource()
 
@@ -88,8 +88,8 @@
     // Also try postMessage to parent (for iframe/artifact embedding)
     if (window.parent && window.parent !== window) {
       try {
-        const targetOrigin = window.location.origin || '*'
-        window.parent.postMessage(msg, targetOrigin)
+        const targetOrigin = window.location.origin
+        if (targetOrigin) window.parent.postMessage(msg, targetOrigin)
       } catch (_) {}
     }
   }

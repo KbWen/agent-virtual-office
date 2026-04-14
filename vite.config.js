@@ -398,7 +398,7 @@ function officeStatusPlugin() {
 
       // ─── /api/event — one-shot CI/CD webhook ────────────────────────────
       // Usage:
-      //   curl -X POST http://localhost:5173/api/event \
+      //   curl -X POST http://localhost:5174/api/event \
       //     -H "Content-Type: application/json" \
       //     -d '{"event":"pr-merged"}'
       //

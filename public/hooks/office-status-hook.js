@@ -471,11 +471,13 @@ function processEvent(event) {
       return
   }
 
-  // Read existing status to merge (keep other agents' states)
+  // Read existing status to merge (keep other agents' states + workflow)
   let existing = []
+  let existingWorkflow = null
   try {
     const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
     existing = data.agents || []
+    existingWorkflow = data.workflow || null
   } catch {}
 
   // Replace agent with same role, or add new
@@ -492,7 +494,7 @@ function processEvent(event) {
     type: 'office-status',
     agents: newAgents,
     activeCount,
-    workflow: agentType || null,
+    workflow: agentType || existingWorkflow,
     source: 'claude-cli',
   }
 
