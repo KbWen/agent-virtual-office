@@ -13,7 +13,7 @@
     "start": "vite",
     "build:single": "vite build --outDir dist-single",
     "test": "vitest run",
-    "prepublishOnly": "npx vitest run"
+    "prepublishOnly": "npm test"
   },
   "keywords": [
     "virtual-office",

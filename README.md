@@ -91,7 +91,7 @@ Any tool can push real-time status to the office via HTTP:
 # Simple: set agent statuses directly
 curl -X POST http://localhost:5174/api/status \
   -H "Content-Type: application/json" \
-  -d '{"dev":"working","qa":"testing","workflow":"Sprint 42"}'
+  -d '{"dev":"working","qa":"blocked","workflow":"Sprint 42"}'
 
 # Full format: explicit agent list
 curl -X POST http://localhost:5174/api/status \
@@ -119,7 +119,7 @@ CI/CD pipelines and external tools can push one-shot events via `POST /api/event
 # Trigger a deploy-success celebration
 curl -X POST http://localhost:5174/api/event \
   -H "Content-Type: application/json" \
-  -d '{"event":"deploy-success","role":"ops","status":"done"}'
+  -d '{"event":"deploy-success"}'
 
 # Mark a character as blocked with a label
 curl -X POST http://localhost:5174/api/event \
@@ -129,29 +129,36 @@ curl -X POST http://localhost:5174/api/event \
 
 **Supported events:** `pr-merged` · `pr-opened` · `pr-reviewed` · `review-approved` · `test-passed` · `test-failed` · `build-success` · `build-failed` · `deploy-start` · `deploy-success` · `deploy-failed` · `release` · `release-cut` · `rollback` · `incident-start` · `incident-resolved` · `custom`
 
-Both `role` and `status` are validated — invalid values return HTTP 400.
+Named events use predefined agents — `role` and `status` are only needed for `custom` events (validated, invalid values return HTTP 400).
 
 ### Claude Code Hook Install
 
-The hook updates character status in real-time as Claude uses tools. Copy the hook to your project:
+The recommended way is the one-click setup command:
 
 ```bash
-# From inside your project directory (with office running):
-cp node_modules/agent-virtual-office/public/hooks/office-status-hook.js \
-   .claude/hooks/office-status-hook.js
+npx agent-virtual-office setup
 ```
 
-Register it in `.claude/settings.json`:
+This copies the hook to `~/.claude/office-status-hook.js` and registers it in `~/.claude/settings.json` for all 6 events automatically.
+
+**Manual install** (if you prefer):
+
+```bash
+cp node_modules/agent-virtual-office/public/hooks/office-status-hook.js \
+   ~/.claude/office-status-hook.js
+```
+
+Register it in `~/.claude/settings.json` (the hook reads events from stdin, no arguments needed):
 
 ```json
 {
   "hooks": {
-    "PreToolUse":       [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js PreToolUse" }],
-    "PostToolUse":      [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js PostToolUse" }],
-    "SubagentStart":    [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js SubagentStart" }],
-    "SubagentStop":     [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js SubagentStop" }],
-    "UserPromptSubmit": [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js UserPromptSubmit" }],
-    "Stop":             [{ "type": "command", "command": "node .claude/hooks/office-status-hook.js Stop" }]
+    "PreToolUse":       [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "PostToolUse":      [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "SubagentStart":    [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "SubagentStop":     [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }]
   }
 }
 ```

@@ -318,8 +318,13 @@ function pick(arr) { return arr[Math.floor(Math.random() * arr.length)] }
 // and use the skill's role instead of the tool/file-based role, keeping the right
 // character active throughout the skill (e.g. QA stays working during /review).
 
+function sanitizeId(id) {
+  if (typeof id !== 'string') return 'unknown'
+  return id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'unknown'
+}
+
 function skillContextPath(agentId) {
-  return path.join(os.homedir(), '.claude', `office-skill-${agentId}.json`)
+  return path.join(os.homedir(), '.claude', `office-skill-${sanitizeId(agentId)}.json`)
 }
 
 function saveSkillContext(agentId, role, skillName) {

@@ -42,7 +42,7 @@ export function normalizePost(body) {
       task: isStatus ? null : (typeof val === 'string' ? val.slice(0, 200) : null),
       status: isStatus ? val : 'working',
       label: typeof body.label === 'string' ? body.label.slice(0, 200) : null,
-      hint: body.hint || null,
+      hint: typeof body.hint === 'string' ? body.hint.slice(0, 200) : null,
     })
   }
   return {

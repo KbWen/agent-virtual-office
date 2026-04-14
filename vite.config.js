@@ -299,9 +299,9 @@ function officeStatusPlugin() {
               const json = JSON.stringify(normalized, null, 2)
               fs.writeFileSync(statusPath, json)
               res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
-            } catch (err) {
+            } catch {
               res.statusCode = 400
-              res.end(JSON.stringify({ ok: false, error: err.message }))
+              res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }))
             }
           })
           return
@@ -336,6 +336,12 @@ function officeStatusPlugin() {
 
       server.middlewares.use('/api/lang', (req, res) => {
         if (req.method === 'POST') {
+          if (!isAuthorizedOfficeRequest(req, apiConfig)) {
+            res.statusCode = 401
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
+            return
+          }
           let body = ''
           const MAX_LANG_BODY = 16  // lang codes are tiny
           let langAborted = false
@@ -382,9 +388,10 @@ function officeStatusPlugin() {
       //     -H "Content-Type: application/json" \
       //     -d '{"event":"pr-merged"}'
       //
-      // Supported events: pr-merged, pr-opened, pr-reviewed,
+      // Supported events: pr-merged, pr-opened, pr-reviewed, review-approved,
       //   test-passed, test-failed, build-success, build-failed,
-      //   deploy-start, deploy-success, deploy-failed, release
+      //   deploy-start, deploy-success, deploy-failed,
+      //   release, release-cut, rollback, incident-start, incident-resolved
       //
       // Custom: { "event": "custom", "role": "qa", "status": "blocked", "label": "❌ flaky test" }
 
@@ -447,7 +454,7 @@ function officeStatusPlugin() {
               agents = EVENT_TO_STATUS[eventName]
               if (!agents) {
                 res.statusCode = 400
-                res.end(JSON.stringify({ ok: false, error: `Unknown event: ${eventName}` }))
+                res.end(JSON.stringify({ ok: false, error: 'Unknown event' }))
                 return
               }
               // Allow label override
@@ -467,9 +474,9 @@ function officeStatusPlugin() {
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
             fs.writeFileSync(statusPath, JSON.stringify(output, null, 2))
             res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
-          } catch (err) {
+          } catch {
             res.statusCode = 400
-            res.end(JSON.stringify({ ok: false, error: err.message }))
+            res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }))
           }
         })
       })

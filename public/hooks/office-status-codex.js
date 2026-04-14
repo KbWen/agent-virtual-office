@@ -44,12 +44,13 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
       : []
 
     return {
-      ...body,
       type: 'office-status',
       agents,
       activeCount: typeof body.activeCount === 'number'
         ? body.activeCount
         : agents.filter((agent) => agent.status !== 'done').length,
+      workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
+      mood: typeof body.mood === 'string' ? body.mood : null,
       source: body.source || 'codex-cli',
       _seq: body._seq || String(now),
     }
