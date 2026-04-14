@@ -33,6 +33,10 @@ function parseArgs(argv) {
     else if (argv[i] === '--watch' && argv[i + 1]) { args.watch = path.resolve(argv[i + 1]); i++ }
     else if (argv[i] === '--source' && argv[i + 1]) { args.source = argv[i + 1]; i++ }
   }
+  if (!args.port || args.port < 1 || args.port > 65535) {
+    console.error(`[bridge] Invalid port: ${args.port}. Must be 1-65535.`)
+    process.exit(1)
+  }
   return args
 }
 
@@ -272,6 +276,7 @@ function startWatcher(watchDir, port, source) {
 
   watcher.on('error', (err) => {
     console.error(`[bridge] Watcher error: ${err.message}`)
+    shutdown(port, source, watcher)
   })
 
   return watcher

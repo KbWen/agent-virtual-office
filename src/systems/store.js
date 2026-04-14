@@ -205,7 +205,7 @@ export const useOfficeStore = create((set) => ({
   hour: new Date().getHours(),
   minute: new Date().getMinutes(),
   activeEvent: null,
-  isPaused: typeof window !== 'undefined' && localStorage.getItem('office-paused') === 'true',
+  isPaused: typeof window !== 'undefined' && (() => { try { return localStorage.getItem('office-paused') === 'true' } catch { return false } })(),
   reducedMotion: typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || false,
   showWorkflow: false,
 
@@ -376,7 +376,7 @@ export const useOfficeStore = create((set) => ({
           task: u.task,
           label: u.label,
           hint: u.hint || null,
-          // working/blocked: 15s expiry (hook re-sends on each tool call to keep alive)
+          // working/blocked: 30s expiry (hook re-sends on each tool call to keep alive)
           // done: 10s expiry (brief celebration then back to idle)
           expiresAt: u.status === 'done' ? now + 10000 : now + 30000,
         }

@@ -734,6 +734,7 @@ function AgentCharacter({ agent }) {
 
   // Behavior scheduling — wrapped in try/catch to guarantee the chain never breaks
   const doSchedule = useCallback(() => {
+    if (isUnmountedRef.current) return
     let nextDelay = 8000 // fallback delay if anything goes wrong
 
     try {

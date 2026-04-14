@@ -66,7 +66,7 @@ function weightedRandom(weights) {
 function pickBehavior(agentId, category) {
   const pool = behaviors[category] || behaviors.work
   const valid = pool.filter((b) => !b.only || b.only.includes(agentId))
-  if (valid.length === 0) return pool[0]
+  if (valid.length === 0) return { behaviorId: 'typing', msgKey: null, duration: 8000 }
   return valid[Math.floor(Math.random() * valid.length)]
 }
 

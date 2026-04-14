@@ -236,6 +236,11 @@ const vite = spawn(viteCmd, viteArgs, {
   stdio: 'inherit',
   shell: isWin,
 })
+vite.on('error', (err) => {
+  console.error(`\n  Failed to start Vite: ${err.message}`)
+  console.error(`  Try running manually: cd "${root}" && npx vite --port ${port}\n`)
+  process.exit(1)
+})
 
 // Open browser after a short delay
 if (open) {

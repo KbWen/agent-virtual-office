@@ -15,11 +15,11 @@ function getSessionSlug() {
       stdio: ['pipe', 'pipe', 'pipe'],
     }).trim()
     if (branch && branch !== 'HEAD') {
-      return branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 28) + `-${cwdHash}`
+      return branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) + `-${cwdHash}`
     }
   } catch {}
 
-  return path.basename(process.cwd()).replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').slice(0, 28) + `-${cwdHash}`
+  return path.basename(process.cwd()).replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) + `-${cwdHash}`
 }
 
 function normalizeAgent(agent) {

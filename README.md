@@ -10,7 +10,7 @@
 
 **Your AI agents aren't just running code — they're at the office.**
 
-![Virtual Office Screenshot](docs/screenshot.png)
+![Virtual Office Screenshot](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.png)
 
 A pixel-art virtual office where AI agent characters work, grab coffee, argue about code reviews, and hold stand-ups.
 They don't know you're watching, but you'll smile anyway.
@@ -412,9 +412,9 @@ This watches for file changes and automatically updates the office.
 
 ## Documentation
 
-- [Architecture & Technical Design](docs/ARCHITECTURE.md) — System architecture, movement system, behavior engine internals
-- [Design Specification](docs/DESIGN_SPEC.md) — Visual style, sprite system, animation states, event scripts
-- [Sprite Requirements](docs/SPRITE_REQUIREMENTS.md) — Pixel art asset specs for contributors
+- [Architecture & Technical Design](https://github.com/KbWen/agent-virtual-office/blob/main/docs/ARCHITECTURE.md) — System architecture, movement system, behavior engine internals
+- [Design Specification](https://github.com/KbWen/agent-virtual-office/blob/main/docs/DESIGN_SPEC.md) — Visual style, sprite system, animation states, event scripts
+- [Sprite Requirements](https://github.com/KbWen/agent-virtual-office/blob/main/docs/SPRITE_REQUIREMENTS.md) — Pixel art asset specs for contributors
 
 ---
 

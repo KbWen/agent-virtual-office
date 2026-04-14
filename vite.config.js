@@ -216,7 +216,7 @@ function officeStatusPlugin() {
                 const mainWorkflow = sessions[mainIdx].data.workflow
                 const isDup = sessions.some((s, i) => i !== mainIdx
                   && Math.abs((parseInt(s.data._seq, 10) || 0) - mainSeq) < 2000)
-                const hasUniqueWorkflow = mainWorkflow && !sessions.some((s, i) => i !== mainIdx && s.data.workflow)
+                const hasUniqueWorkflow = mainWorkflow && !sessions.some((s, i) => i !== mainIdx && s.data.workflow === mainWorkflow)
                 if (isDup && !hasUniqueWorkflow) sessions.splice(mainIdx, 1)
               }
             }
@@ -335,6 +335,20 @@ function officeStatusPlugin() {
       }
 
       server.middlewares.use('/api/lang', (req, res) => {
+        if (req.method === 'OPTIONS') {
+          if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
+            res.statusCode = 403
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
+            return
+          }
+          res.statusCode = 204
+          res.setHeader('Access-Control-Allow-Origin', getAllowedOriginHeader(req.headers.origin, apiConfig))
+          res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Office-Token, Authorization')
+          res.end()
+          return
+        }
         if (req.method === 'POST') {
           if (!isAuthorizedOfficeRequest(req, apiConfig)) {
             res.statusCode = 401
