@@ -51,7 +51,7 @@ const OBSTACLE_RECTS = [
 ]
 
 // Also use desk rects for path line-crossing checks
-const DESK_RECTS = OBSTACLE_RECTS.slice(0, 6) // just the 6 desks
+const DESK_RECTS = OBSTACLE_RECTS.slice(0, 7) // 7 desks (PM, Arch, QA, Res, Dev, Ops, Designer)
 
 // ─── Walkability functions ──────────────────────────────────────────
 

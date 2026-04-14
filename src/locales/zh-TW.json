@@ -249,5 +249,29 @@
     "shortcutLang": "L — 切換語言",
     "shortcutClick": "點擊角色 — 查看詳情",
     "gotIt": "了解！"
+  },
+  "errors": {
+    "title": "發生錯誤",
+    "unknown": "未知錯誤",
+    "retry": "重試"
+  },
+  "status": {
+    "offline": "離線",
+    "apiOffline": "狀態 API 離線",
+    "apiRetrying": "狀態 API 重試中"
+  },
+  "aria": {
+    "pause": "暫停",
+    "resume": "繼續",
+    "switchLang": "切換語言",
+    "runWorkflow": "播放工作流動畫",
+    "toggleTest": "切換測試面板",
+    "info": "資訊"
+  },
+  "time": {
+    "now": "剛剛",
+    "secondsAgo": "{0}秒前",
+    "minutesAgo": "{0}分鐘前",
+    "hoursAgo": "{0}小時前"
   }
 }

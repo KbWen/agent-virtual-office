@@ -1,4 +1,5 @@
 import React from 'react'
+import { t } from '../i18n'
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -22,9 +23,9 @@ export default class ErrorBoundary extends React.Component {
           width: '100%', height: '100%', background: '#1a1814', color: '#ccc',
           fontFamily: 'monospace', flexDirection: 'column', gap: '12px',
         }}>
-          <div style={{ fontSize: '16px', color: '#E24B4A' }}>Something went wrong</div>
+          <div style={{ fontSize: '16px', color: '#E24B4A' }}>{t('errors.title', 'Something went wrong')}</div>
           <div style={{ fontSize: '11px', color: '#888', maxWidth: '400px', textAlign: 'center' }}>
-            {this.state.error?.message || 'Unknown error'}
+            {this.state.error?.message || t('errors.unknown', 'Unknown error')}
           </div>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
@@ -33,7 +34,7 @@ export default class ErrorBoundary extends React.Component {
               background: '#333', color: '#ccc', cursor: 'pointer', fontSize: '12px',
             }}
           >
-            Retry
+            {t('errors.retry', 'Retry')}
           </button>
         </div>
       )

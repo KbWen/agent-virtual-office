@@ -27,7 +27,7 @@ function detectHookLang() {
     const lang = fs.readFileSync(langFile, 'utf-8').trim()
     if (lang === 'en' || lang === 'zh-TW') return lang
   } catch {}
-  return 'zh-TW' // default: Chinese (backward compat)
+  return 'en' // default: English (matches browser-side i18n default)
 }
 
 const LANG = detectHookLang()
@@ -202,7 +202,7 @@ function extractContext(tool, toolInput) {
       case 'WebSearch':
         return input.query || input.url?.replace(/^https?:\/\//, '').slice(0, 25) || null
       case 'TodoWrite':
-        return input.todos?.length ? `${input.todos.length} tasks` : null
+        return input.todos?.length ? (LANG === 'zh-TW' ? `${input.todos.length} 個任務` : `${input.todos.length} tasks`) : null
       case 'EnterPlanMode':
       case 'ExitPlanMode':
         return null
@@ -384,7 +384,7 @@ function processEvent(event) {
       status = isError ? 'blocked' : 'done'
       hint = isError ? 'error' : null
       const ctx = extractContext(tool, toolInput)
-      label = isError ? `❌ ${ctx || tool} failed` : toolLabel(tool, ctx, true)
+      label = isError ? (LANG === 'zh-TW' ? `❌ ${ctx || tool} 失敗` : `❌ ${ctx || tool} failed`) : toolLabel(tool, ctx, true)
       break
     }
     case 'SubagentStart': {

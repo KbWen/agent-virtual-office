@@ -249,5 +249,29 @@
     "shortcutLang": "L — Switch language",
     "shortcutClick": "Click agent — Inspector",
     "gotIt": "Got it!"
+  },
+  "errors": {
+    "title": "Something went wrong",
+    "unknown": "Unknown error",
+    "retry": "Retry"
+  },
+  "status": {
+    "offline": "offline",
+    "apiOffline": "status api offline",
+    "apiRetrying": "status api retrying"
+  },
+  "aria": {
+    "pause": "Pause",
+    "resume": "Resume",
+    "switchLang": "Switch language",
+    "runWorkflow": "Run workflow animation",
+    "toggleTest": "Toggle test controls",
+    "info": "Info"
+  },
+  "time": {
+    "now": "now",
+    "secondsAgo": "{0}s ago",
+    "minutesAgo": "{0}m ago",
+    "hoursAgo": "{0}h ago"
   }
 }

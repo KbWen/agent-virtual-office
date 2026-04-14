@@ -248,7 +248,8 @@ if (open) {
       return
     }
     try {
-      execSync(`${opener} "${url}"`, { stdio: 'ignore' })
+      const cmd = opener === 'start' ? `start "" "${url}"` : `${opener} "${url}"`
+      execSync(cmd, { stdio: 'ignore' })
     } catch {
       console.log(`  Open in browser: ${url}`)
     }
