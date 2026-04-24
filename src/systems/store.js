@@ -404,7 +404,7 @@ export const useOfficeStore = create((set) => ({
         // Context-aware bubble > status pool fallback
         const bubble = generateContextBubble(u.agentId, u, ext)
           || randomBubble(u.status === 'blocked' ? 'blocked-status' : u.status === 'done' ? 'done-status' : 'working-status')
-        if (bubble) agents[u.agentId] = { ...agents[u.agentId], bubble }
+        if (bubble && !inGroup) agents[u.agentId] = { ...agents[u.agentId], bubble }
         // Log activity inline (single loop instead of two)
         if (u.status === 'done' || u.status === 'blocked' || (u.status === 'working' && u.label)) {
           activities.push(mkActivity({ type: 'status', agentId: u.agentId, status: u.status, message: u.label || u.status }))

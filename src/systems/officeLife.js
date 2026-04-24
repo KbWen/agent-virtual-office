@@ -287,6 +287,7 @@ const EVENT_HANDLERS = {
   },
 
   'pm-all-meeting': (store, participants, cancelled) => {
+    if (!participants.includes('pm')) return
     const s = store.getState()
     if (!s.agents['pm']) return
     s.setAgentGroupEvent('pm', {
