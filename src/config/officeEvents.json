@@ -55,6 +55,27 @@
       "participants": "random-2-3",
       "duration": 20000,
       "description": "2-3人走到會議室開會"
+    },
+    {
+      "id": "dev-arch-disagree",
+      "name": "技術爭論",
+      "participants": ["dev", "arch"],
+      "duration": 20000,
+      "description": "dev 和 arch 對設計方向不同意見，來回辯論後妥協"
+    },
+    {
+      "id": "ops-dev-deploy-check",
+      "name": "能部署了嗎",
+      "participants": ["ops", "dev"],
+      "duration": 16000,
+      "description": "ops 問 dev 能不能 deploy，dev 猶豫後答應"
+    },
+    {
+      "id": "pm-all-meeting",
+      "name": "臨時小會",
+      "participants": "all",
+      "duration": 18000,
+      "description": "PM 宣布臨時開會，其他人翻白眼後勉強去會議室"
     }
   ],
   "rare": [

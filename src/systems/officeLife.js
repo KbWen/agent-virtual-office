@@ -225,6 +225,84 @@ const EVENT_HANDLERS = {
     }, 8000)
   },
 
+  'dev-arch-disagree': (store, participants, cancelled) => {
+    const s = store.getState()
+    if (!s.agents['dev'] || !s.agents['arch']) return
+    const meetPoint = { x: 300, y: 305 }
+    s.setAgentGroupEvent('dev', {
+      behavior: 'chat', expression: 'confused',
+      bubble: eventBubble('dev-arch-dis-1'),
+      groupTarget: jitter({ x: meetPoint.x - 20, y: meetPoint.y }, 8),
+    })
+    s.setAgentGroupEvent('arch', {
+      behavior: 'whiteboard', expression: 'focused',
+      bubble: eventBubble('arch-dis-1'),
+      groupTarget: jitter({ x: meetPoint.x + 20, y: meetPoint.y }, 8),
+    })
+    setTimeout(() => {
+      if (cancelled?.value) return
+      const s = store.getState()
+      if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'chat', 'focused', eventBubble('dev-arch-dis-2'))
+      if (s.agents.arch?.inGroupEvent) s.setAgentBehavior('arch', 'chat', 'normal', eventBubble('arch-dis-2'))
+    }, 6000)
+    setTimeout(() => {
+      if (cancelled?.value) return
+      const s = store.getState()
+      if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'typing', 'normal', eventBubble('dev-arch-dis-3'))
+      if (s.agents.arch?.inGroupEvent) s.setAgentBehavior('arch', 'chat', 'happy', eventBubble('arch-dis-3'))
+    }, 13000)
+  },
+
+  'ops-dev-deploy-check': (store, participants, cancelled) => {
+    const s = store.getState()
+    if (!s.agents['ops'] || !s.agents['dev']) return
+    const devPos = HOME_POSITIONS.dev || { x: 340, y: 364 }
+    s.setAgentGroupEvent('ops', {
+      behavior: 'chat', expression: 'normal',
+      bubble: eventBubble('ops-dev-check-1'),
+      groupTarget: jitter({ x: devPos.x + 35, y: devPos.y }, 10),
+    })
+    setTimeout(() => {
+      if (cancelled?.value) return
+      const s = store.getState()
+      if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'scratch-head', 'confused', eventBubble('dev-ops-check-1'))
+      if (s.agents.ops?.inGroupEvent) s.setAgentBehavior('ops', 'chat', 'normal', eventBubble('ops-dev-check-2'))
+    }, 4000)
+    setTimeout(() => {
+      if (cancelled?.value) return
+      const s = store.getState()
+      if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'thumbs-up', 'happy', eventBubble('dev-ops-check-2'))
+      if (s.agents.ops?.inGroupEvent) s.setAgentBehavior('ops', 'deploy-button', 'happy', eventBubble('ops-dev-check-3'))
+    }, 10000)
+  },
+
+  'pm-all-meeting': (store, participants, cancelled) => {
+    const s = store.getState()
+    if (!s.agents['pm']) return
+    s.setAgentGroupEvent('pm', {
+      behavior: 'chat', expression: 'happy',
+      bubble: eventBubble('pm-meeting-call'),
+      groupTarget: null,
+    })
+    setTimeout(() => {
+      if (cancelled?.value) return
+      const chairs = [...MEETING_CHAIRS].sort(() => Math.random() - 0.5)
+      const otherIds = participants.filter(id => id !== 'pm')
+      store.getState().setMultipleAgentGroupEvents(
+        otherIds.map((id, i) => ({
+          id, behavior: 'meeting', expression: 'confused',
+          bubble: eventBubble('pm-meeting-react'),
+          groupTarget: jitter(chairs[(i + 1) % chairs.length], 6),
+        }))
+      )
+      store.getState().setAgentGroupEvent('pm', {
+        behavior: 'meeting', expression: 'happy',
+        bubble: eventBubble('pm-meeting-lead'),
+        groupTarget: jitter(chairs[0], 6),
+      })
+    }, 2500)
+  },
+
   // ─── Rare events ─────────────────────────────────────────────────
 
   'boss-visit': (store, participants, cancelled) => {

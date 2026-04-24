@@ -54,7 +54,10 @@
     "dog-visit": { "name": "有人帶狗", "description": "小狗在辦公室跑來跑去" },
     "ac-broken": { "name": "空調壞了", "description": "所有人搧風動作，冒汗滴" },
     "boss-visit": { "name": "老闆巡視", "description": "所有人回座位坐好假裝忙" },
-    "group-stretch": { "name": "集體伸懶腰", "description": "所有人同時伸懶腰" }
+    "group-stretch": { "name": "集體伸懶腰", "description": "所有人同時伸懶腰" },
+    "dev-arch-disagree": { "name": "技術爭論", "description": "dev 和 arch 對設計方向不同意見，來回辯論後妥協" },
+    "ops-dev-deploy-check": { "name": "能部署了嗎", "description": "ops 問 dev 能不能 deploy，dev 猶豫後答應" },
+    "pm-all-meeting": { "name": "臨時小會", "description": "PM 宣布臨時開會，其他人翻白眼後勉強去會議室" }
   },
   "bubbles": {
     "typing": ["嗯嗯嗯...", "這段好醜...", "快好了!", "忘了分號", "SO 救我"],
@@ -104,7 +107,21 @@
     "ac-broken": ["好熱...", "搧一下", "誰弄壞冷氣的？", "快融化了..."],
     "ac-fan": "💨 呼~",
     "group-stretch": ["伸懶腰~", "腰好痠...", "舒服~", "深呼吸~"],
-    "lunch-nap": ["zzz...", "飯後好睏~", "午休一下", "吃飽就想睡"]
+    "lunch-nap": ["zzz...", "飯後好睏~", "午休一下", "吃飽就想睡"],
+    "dev-arch-dis-1": ["這個設計有問題", "架構這樣不對吧", "我有更好的方法"],
+    "arch-dis-1": ["照計劃走", "設計是這樣定的", "信任我的判斷"],
+    "dev-arch-dis-2": ["但效能會很差", "你看這個 bottleneck", "這樣怎麼 scale？"],
+    "arch-dis-2": ["那你說怎麼辦？", "嗯...說來聽聽", "有道理繼續說"],
+    "dev-arch-dis-3": "...好吧先這樣",
+    "arch-dis-3": "我說會 OK 的",
+    "ops-dev-check-1": "能 deploy 了嗎？",
+    "ops-dev-check-2": "真的 ready 了？",
+    "ops-dev-check-3": "🚀 開始部署！",
+    "dev-ops-check-1": "等我一下...還差一點",
+    "dev-ops-check-2": "好了！可以了",
+    "pm-meeting-call": "臨時開個小會！📢",
+    "pm-meeting-react": ["又開會...", "怎麼又？", "好吧...", "幾分鐘？"],
+    "pm-meeting-lead": "大家注意一下~"
   },
   "statusLabels": {
     "working": "工作中",

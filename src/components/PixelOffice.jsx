@@ -12,6 +12,51 @@ import {
   ServerRack, Clock, Printer, Rug, CoffeeCup, DeskLamp
 } from './TopDownFurniture'
 
+// ─── Sprint Kanban Board ─────────────────────────────────────────────────
+function SprintKanban({ x, y, doneCount = 0 }) {
+  const W = 78, H = 52
+  const MAX_CELLS = 6  // 3 rows × 2 per row, leaves row 4 for overflow text
+  const filled = Math.min(doneCount, MAX_CELLS)
+  const overflow = doneCount > MAX_CELLS ? doneCount - MAX_CELLS : 0
+  const todoCards = ['#F5A623', '#7F77DD', '#4A90D9']
+  const doingCards = ['#1D9E75', '#E24B4A']
+  return (
+    <g>
+      <rect x={x} y={y} width={W} height={H} rx={2} fill="#F8F4E8" stroke="#C8C0A8" strokeWidth="0.8" />
+      {/* Header bar */}
+      <rect x={x} y={y} width={W} height={10} rx={2} fill="#7070A0" opacity="0.9" />
+      <text x={x + 28} y={y + 7} textAnchor="middle" fontSize="5" fill="white" fontFamily="monospace" fontWeight="bold">SPRINT</text>
+      <text x={x + W - 4} y={y + 7} textAnchor="end" fontSize="4.5" fill="#FFE08A" fontFamily="monospace" fontWeight="bold">{doneCount}</text>
+      {/* Column dividers */}
+      <line x1={x + 26} y1={y + 10} x2={x + 26} y2={y + H} stroke="#D8D0C0" strokeWidth="0.6" />
+      <line x1={x + 52} y1={y + 10} x2={x + 52} y2={y + H} stroke="#D8D0C0" strokeWidth="0.6" />
+      {/* Column headers */}
+      <text x={x + 13} y={y + 17} textAnchor="middle" fontSize="3.5" fill="#999" fontFamily="monospace">TODO</text>
+      <text x={x + 39} y={y + 17} textAnchor="middle" fontSize="3.5" fill="#999" fontFamily="monospace">DOING</text>
+      <text x={x + 65} y={y + 17} textAnchor="middle" fontSize="3.5" fill={filled > 0 ? '#2E7D32' : '#999'} fontFamily="monospace" fontWeight={filled > 0 ? 'bold' : 'normal'}>DONE</text>
+      {/* TODO column: static colored task cards */}
+      {todoCards.map((color, i) => (
+        <rect key={i} x={x + 3} y={y + 20 + i * 8} width={20} height={6} rx={1} fill={color} opacity="0.25" />
+      ))}
+      {/* DOING column: static cards */}
+      {doingCards.map((color, i) => (
+        <rect key={i} x={x + 29} y={y + 20 + i * 8} width={20} height={6} rx={1} fill={color} opacity="0.35" />
+      ))}
+      {/* DONE column: fills dynamically — max 6 cells (3 rows × 2) */}
+      {Array.from({ length: filled }).map((_, i) => (
+        <rect key={i}
+          x={x + 55 + (i % 2) * 9} y={y + 20 + Math.floor(i / 2) * 8}
+          width={7} height={6} rx={1} fill="#4CAF50" opacity="0.75"
+        />
+      ))}
+      {/* Row 4: overflow indicator when done count exceeds 6 */}
+      {overflow > 0 && (
+        <text x={x + 65} y={y + 47} textAnchor="middle" fontSize="4" fill="#2E7D32" fontFamily="monospace" fontWeight="bold">+{overflow}</text>
+      )}
+    </g>
+  )
+}
+
 // ─── Flying Document Animation ──────────────────────────────────────────
 function FlyingDocument({ fromPos, toPos, onComplete }) {
   const [progress, setProgress] = React.useState(0)
@@ -548,6 +593,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const coffeeCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.coffee || 0)))
   const stickyCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.sticky || 0)))
   const booksCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.books || 0)))
+  const totalDoneToday = useOfficeStore((s) =>
+    Object.values(s.dailyDoneLedger?.counts || {}).reduce((sum, c) => sum + c, 0)
+  )
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
   const activeEvent = useOfficeStore((s) => s.activeEvent)
@@ -761,6 +809,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <rect x={15} y={170} width={50} height={28} rx={2} fill="#F5F0E0" stroke="#CCC" strokeWidth="0.8" />
       <text x={40} y={184} textAnchor="middle" fontSize="5.5" fill="#7F77DD" fontFamily="monospace">SHIP IT</text>
       <text x={40} y={193} textAnchor="middle" fontSize="4.5" fill="#888" fontFamily="monospace">everyday</text>
+
+      {/* Sprint Kanban board on north wall */}
+      <SprintKanban x={80} y={163} doneCount={totalDoneToday} />
 
       {/* Team area labels */}
       <text x={200} y={200} textAnchor="middle" fontSize="7" fill="#378ADD" fontFamily="monospace" opacity="0.4">PLANNING</text>

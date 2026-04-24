@@ -54,7 +54,10 @@
     "dog-visit": { "name": "Office Dog", "description": "A dog running around the office" },
     "ac-broken": { "name": "AC Broke", "description": "Everyone fanning themselves, sweat drops" },
     "boss-visit": { "name": "Boss Walk-by", "description": "Everyone sits up straight and pretends to be busy" },
-    "group-stretch": { "name": "Group Stretch", "description": "Everyone stretches at the same time" }
+    "group-stretch": { "name": "Group Stretch", "description": "Everyone stretches at the same time" },
+    "dev-arch-disagree": { "name": "Tech Debate", "description": "Dev and Arch disagree on design, argue, then compromise" },
+    "ops-dev-deploy-check": { "name": "Deploy Check", "description": "Ops asks Dev if it's safe to deploy, Dev hesitates then agrees" },
+    "pm-all-meeting": { "name": "Surprise Sync", "description": "PM calls a sudden meeting, everyone grudgingly shows up" }
   },
   "bubbles": {
     "typing": ["hmm...", "this looks ugly...", "almost done!", "forgot a semicolon", "SO save me"],
@@ -104,7 +107,21 @@
     "ac-broken": ["so hot...", "fan me please", "who broke the AC?", "melting..."],
     "ac-fan": "💨 ahhh~",
     "group-stretch": ["stretch~", "my back...", "ahh feels good", "deep breath~"],
-    "lunch-nap": ["zzz...", "food coma~", "nap time", "so sleepy after lunch"]
+    "lunch-nap": ["zzz...", "food coma~", "nap time", "so sleepy after lunch"],
+    "dev-arch-dis-1": ["this design is wrong", "the architecture is off", "I have a better way"],
+    "arch-dis-1": ["stick to the plan", "design is finalized", "trust my judgment"],
+    "dev-arch-dis-2": ["but it'll be slow", "look at this bottleneck", "how does this scale?"],
+    "arch-dis-2": ["then what do you propose?", "hmm...go on", "that's fair, continue"],
+    "dev-arch-dis-3": "...fine, for now",
+    "arch-dis-3": "told you it'd be fine",
+    "ops-dev-check-1": "ready to deploy?",
+    "ops-dev-check-2": "really ready this time?",
+    "ops-dev-check-3": "🚀 deploying!",
+    "dev-ops-check-1": "gimme a sec...almost there",
+    "dev-ops-check-2": "OK! we're good!",
+    "pm-meeting-call": "quick sync everyone! 📢",
+    "pm-meeting-react": ["another meeting...", "seriously?", "ok fine...", "how long?"],
+    "pm-meeting-lead": "listen up everyone~"
   },
   "statusLabels": {
     "working": "Working",

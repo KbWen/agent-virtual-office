@@ -350,6 +350,12 @@ export const useOfficeStore = create((set) => ({
       const agents = { ...s.agents }
       const activities = []
       const dailyDoneLedger = ensureCurrentDailyDoneLedger(s.dailyDoneLedger, now)
+      const dayChanged = s.dailyDoneLedger?.dayKey && dailyDoneLedger.dayKey !== s.dailyDoneLedger.dayKey
+      if (dayChanged) {
+        for (const id of Object.keys(agents)) {
+          agents[id] = { ...agents[id], deskItemCount: { coffee: 0, sticky: 0, books: 0 } }
+        }
+      }
       for (const u of updates) {
         const previousStatus = ext[u.agentId]?.status || agents[u.agentId]?.status || 'idle'
         if (!agents[u.agentId]) {
@@ -426,7 +432,7 @@ export const useOfficeStore = create((set) => ({
           const agent = agents[u.agentId]
           if (agent) {
             const count = { ...agent.deskItemCount }
-            count[growthItem] = ((count[growthItem] || 0) + 1) % 6
+            count[growthItem] = Math.min((count[growthItem] || 0) + 1, 5)
             agents[u.agentId] = { ...agent, deskItemCount: count }
           }
         }
