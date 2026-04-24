@@ -810,8 +810,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <text x={40} y={184} textAnchor="middle" fontSize="5.5" fill="#7F77DD" fontFamily="monospace">SHIP IT</text>
       <text x={40} y={193} textAnchor="middle" fontSize="4.5" fill="#888" fontFamily="monospace">everyday</text>
 
-      {/* Sprint Kanban board on north wall */}
-      <SprintKanban x={80} y={163} doneCount={totalDoneToday} />
+      {/* Sprint Kanban board on north wall, planning area (clear of door at x=88-140) */}
+      <SprintKanban x={160} y={165} doneCount={totalDoneToday} />
 
       {/* Team area labels */}
       <text x={200} y={200} textAnchor="middle" fontSize="7" fill="#378ADD" fontFamily="monospace" opacity="0.4">PLANNING</text>

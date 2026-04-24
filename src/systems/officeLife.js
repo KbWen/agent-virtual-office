@@ -257,6 +257,11 @@ const EVENT_HANDLERS = {
     const s = store.getState()
     if (!s.agents['ops'] || !s.agents['dev']) return
     const devPos = HOME_POSITIONS.dev || { x: 340, y: 364 }
+    // Lock dev in place so doSchedule doesn't move them away while ops walks over
+    s.setAgentGroupEvent('dev', {
+      behavior: 'typing', expression: 'normal',
+      bubble: null, groupTarget: null,
+    })
     s.setAgentGroupEvent('ops', {
       behavior: 'chat', expression: 'normal',
       bubble: eventBubble('ops-dev-check-1'),

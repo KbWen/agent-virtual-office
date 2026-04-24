@@ -306,7 +306,7 @@ export const useOfficeStore = create((set) => ({
       const agent = s.agents[id]
       if (!agent) return s
       const count = { ...agent.deskItemCount }
-      count[item] = ((count[item] || 0) + 1) % 6
+      count[item] = Math.min((count[item] || 0) + 1, 5)
       return { agents: { ...s.agents, [id]: { ...agent, deskItemCount: count } } }
     }),
 
