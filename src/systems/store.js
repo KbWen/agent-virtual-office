@@ -421,19 +421,21 @@ export const useOfficeStore = create((set) => ({
               dailyDoneLedger.seenEventKeys = [...dailyDoneLedger.seenEventKeys, eventKey].slice(-500)
             }
           }
-          // Growth system: accumulate desk items on done events
-          const roleItems = {
-            pm: 'sticky', arch: 'books', dev: 'coffee',
-            qa: 'sticky', ops: 'coffee', res: 'books',
-            gate: 'sticky', designer: 'sticky',
-          }
-          const baseRole = u.agentId.includes('~') ? u.agentId.split('~')[1] : u.agentId
-          const growthItem = roleItems[baseRole] || 'coffee'
-          const agent = agents[u.agentId]
-          if (agent) {
-            const count = { ...agent.deskItemCount }
-            count[growthItem] = Math.min((count[growthItem] || 0) + 1, 5)
-            agents[u.agentId] = { ...agent, deskItemCount: count }
+          // Growth system: accumulate desk items on genuinely new done transitions only
+          if (isFreshDoneTransition) {
+            const roleItems = {
+              pm: 'sticky', arch: 'books', dev: 'coffee',
+              qa: 'sticky', ops: 'coffee', res: 'books',
+              gate: 'sticky', designer: 'sticky',
+            }
+            const baseRole = u.agentId.includes('~') ? u.agentId.split('~')[1] : u.agentId
+            const growthItem = roleItems[baseRole] || 'coffee'
+            const agent = agents[u.agentId]
+            if (agent) {
+              const count = { ...agent.deskItemCount }
+              count[growthItem] = Math.min((count[growthItem] || 0) + 1, 5)
+              agents[u.agentId] = { ...agent, deskItemCount: count }
+            }
           }
         }
       }

@@ -75,7 +75,7 @@ function pickMessage(msgKey) {
   // Try i18n locale first, fall back to officeEvents.json
   const localized = randomBubble(msgKey)
   if (localized) return localized
-  const pool = eventsData.bubbleMessages[msgKey]
+  const pool = eventsData.bubbleMessages?.[msgKey]
   if (!pool || pool.length === 0) return null
   return pool[Math.floor(Math.random() * pool.length)]
 }

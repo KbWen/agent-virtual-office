@@ -864,6 +864,12 @@ function AgentCharacter({ agent }) {
     const watchdog = setInterval(() => {
       const agent = useOfficeStore.getState().agents[id]
       if (!agent) return
+      // Don't fire during group events — officeLife controls behavior and duration
+      if (agent.inGroupEvent) {
+        lastBehaviorRef.behavior = agent.behavior
+        lastBehaviorRef.since = Date.now()
+        return
+      }
       if (agent.behavior !== lastBehaviorRef.behavior) {
         lastBehaviorRef.behavior = agent.behavior
         lastBehaviorRef.since = Date.now()

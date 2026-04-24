@@ -141,6 +141,7 @@ const EVENT_HANDLERS = {
   },
 
   'eureka': (store, participants) => {
+    if (!participants.includes('arch')) return
     const s = store.getState()
     if (!s.agents['arch']) return
     s.setAgentGroupEvent('arch', {
@@ -152,6 +153,7 @@ const EVENT_HANDLERS = {
   },
 
   'review-debate': (store, participants, cancelled) => {
+    if (!participants.includes('dev') || !participants.includes('qa')) return
     const s = store.getState()
     if (!s.agents['dev'] || !s.agents['qa']) return
     const devPos = HOME_POSITIONS.dev || { x: 340, y: 364 }
@@ -185,6 +187,7 @@ const EVENT_HANDLERS = {
   },
 
   'deploy-success': (store, participants, cancelled) => {
+    if (!participants.includes('ops')) return
     const s = store.getState()
     if (!s.agents['ops']) return
     s.setAgentGroupEvent('ops', {
@@ -226,6 +229,7 @@ const EVENT_HANDLERS = {
   },
 
   'dev-arch-disagree': (store, participants, cancelled) => {
+    if (!participants.includes('dev') || !participants.includes('arch')) return
     const s = store.getState()
     if (!s.agents['dev'] || !s.agents['arch']) return
     const meetPoint = { x: 300, y: 305 }
@@ -254,6 +258,7 @@ const EVENT_HANDLERS = {
   },
 
   'ops-dev-deploy-check': (store, participants, cancelled) => {
+    if (!participants.includes('ops') || !participants.includes('dev')) return
     const s = store.getState()
     if (!s.agents['ops'] || !s.agents['dev']) return
     const devPos = HOME_POSITIONS.dev || { x: 340, y: 364 }
