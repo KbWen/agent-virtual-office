@@ -76,32 +76,35 @@ export function toolToAction(task) {
 export function generateContextBubble(agentId, update, allExternalStatus) {
   if (!update) return null
 
+  // Strip worktree session prefix so 'feat-x~dev' resolves to 'dev' templates
+  const baseRole = agentId.includes('~') ? agentId.split('~').pop() : agentId
+
   const { status, task, label, hint } = update
   const ctx = extractContext(label)
   const action = toolToAction(task)
 
   // 1. Error reactions — highest priority, always show
   if (hint === 'error' || status === 'blocked') {
-    const errorBubble = fromTemplate(`${agentId}-error`, ctx)
+    const errorBubble = fromTemplate(`${baseRole}-error`, ctx)
       || fromTemplate('any-error', ctx)
     if (errorBubble) return errorBubble
   }
 
   // 2. Done reactions
   if (status === 'done') {
-    const doneBubble = fromTemplate(`${agentId}-done`, ctx)
+    const doneBubble = fromTemplate(`${baseRole}-done`, ctx)
       || fromTemplate('any-done', ctx)
     if (doneBubble) return doneBubble
   }
 
   // 3. Role × action specific (e.g., dev-edit, qa-search, ops-bash)
   if (action) {
-    const specific = fromTemplate(`${agentId}-${action}`, ctx)
+    const specific = fromTemplate(`${baseRole}-${action}`, ctx)
     if (specific) return specific
   }
 
   // 4. Role generic working
-  const working = fromTemplate(`${agentId}-working`, ctx)
+  const working = fromTemplate(`${baseRole}-working`, ctx)
   if (working) return working
 
   // 5. Cross-agent awareness — react to other agents
