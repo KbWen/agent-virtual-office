@@ -306,7 +306,7 @@ export const useOfficeStore = create((set) => ({
       const agent = s.agents[id]
       if (!agent) return s
       const count = { ...agent.deskItemCount }
-      count[item] = ((count[item] || 0) + 1) % 6
+      count[item] = (count[item] || 0) + 1
       return { agents: { ...s.agents, [id]: { ...agent, deskItemCount: count } } }
     }),
 
@@ -350,6 +350,12 @@ export const useOfficeStore = create((set) => ({
       const agents = { ...s.agents }
       const activities = []
       const dailyDoneLedger = ensureCurrentDailyDoneLedger(s.dailyDoneLedger, now)
+      const dayChanged = s.dailyDoneLedger.dayKey !== dailyDoneLedger.dayKey
+      if (dayChanged) {
+        for (const id of Object.keys(agents)) {
+          if (agents[id]) agents[id] = { ...agents[id], deskItemCount: { coffee: 0, sticky: 0, books: 0 } }
+        }
+      }
       for (const u of updates) {
         const previousStatus = ext[u.agentId]?.status || agents[u.agentId]?.status || 'idle'
         if (!agents[u.agentId]) {
@@ -414,20 +420,20 @@ export const useOfficeStore = create((set) => ({
             if (eventKey) {
               dailyDoneLedger.seenEventKeys = [...dailyDoneLedger.seenEventKeys, eventKey].slice(-500)
             }
-          }
-          // Growth system: accumulate desk items on done events
-          const roleItems = {
-            pm: 'sticky', arch: 'books', dev: 'coffee',
-            qa: 'sticky', ops: 'coffee', res: 'books',
-            gate: 'sticky', designer: 'sticky',
-          }
-          const baseRole = u.agentId.includes('~') ? u.agentId.split('~')[1] : u.agentId
-          const growthItem = roleItems[baseRole] || 'coffee'
-          const agent = agents[u.agentId]
-          if (agent) {
-            const count = { ...agent.deskItemCount }
-            count[growthItem] = ((count[growthItem] || 0) + 1) % 6
-            agents[u.agentId] = { ...agent, deskItemCount: count }
+            // Growth system: accumulate desk items on fresh, deduplicated done events
+            const roleItems = {
+              pm: 'sticky', arch: 'books', dev: 'coffee',
+              qa: 'sticky', ops: 'coffee', res: 'books',
+              gate: 'sticky', designer: 'sticky',
+            }
+            const baseRole = u.agentId.includes('~') ? u.agentId.split('~')[1] : u.agentId
+            const growthItem = roleItems[baseRole] || 'coffee'
+            const agent = agents[u.agentId]
+            if (agent) {
+              const count = { ...agent.deskItemCount }
+              count[growthItem] = (count[growthItem] || 0) + 1
+              agents[u.agentId] = { ...agent, deskItemCount: count }
+            }
           }
         }
       }
