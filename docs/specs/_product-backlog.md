@@ -10,7 +10,7 @@
 
 | # | Feature | Priority | Status | Notes |
 |---|---------|----------|--------|-------|
-| 1 | **角色成長系統** — `done` 事件累積工作量，桌上咖啡杯 / 便利貼 / 書堆跟真實 tool call 次數連動 | P1 | In Progress | spec: docs/specs/character-growth-system.md; 每日重置，4 levels，threshold 0/1/3/6 |
+| 1 | **角色成長系統** — `done` 事件累積工作量，桌上咖啡杯 / 便利貼 / 書堆跟真實 tool call 次數連動 | P1 | Done | shipped 2026-05-16; spec: docs/specs/character-growth-system.md |
 | 2 | **角色間關係動態** — dev×arch「設計不對」、ops×dev「能不能 deploy」、pm×全員「開個小會被翻白眼」等新對話事件 | P2 | Pending | 擴展 `officeEvents.json` + 對應 handler |
 | 3 | **時間感豐富化** — 週五 happy hour、月底 deadline 週（rushing 鎖定 + 便利貼爆炸）、早上有人遲到走進辦公室 | P2 | Pending | 擴展 `officeLife.js` 時間事件分支 |
 

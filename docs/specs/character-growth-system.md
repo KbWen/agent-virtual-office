@@ -1,5 +1,5 @@
 ---
-status: frozen
+status: shipped
 title: Character Growth System
 source: external
 source_doc: docs/specs/_product-backlog.md#1
