@@ -348,6 +348,15 @@ function sortByY(agents) {
   })
 }
 
+// ─── Growth system helpers ────────────────────────────────────────────────
+const GROWTH_LEVELS = [0, 1, 3, 6] // min daily done count for level 0..3
+
+function growthLevel(count) {
+  let lvl = 0
+  for (let i = 0; i < GROWTH_LEVELS.length; i++) if (count >= GROWTH_LEVELS[i]) lvl = i
+  return lvl
+}
+
 // ─── Personalized desk with character-specific items ─────────────────────
 function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0, stickyCount = 0, booksCount = 0, onDeployClick }) {
   const W = 60, H = 38
@@ -401,7 +410,7 @@ function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0, stickyCoun
           {/* Coffee cups everywhere */}
           <CoffeeCup x={x - 26} y={y - 2} />
           <CoffeeCup x={x - 26} y={y + 8} steaming={false} />
-          {coffeeCount >= 1 && <CoffeeCup x={x + 20} y={y + 8} />}
+          {growthLevel(coffeeCount) >= 1 && <CoffeeCup x={x + 20} y={y + 8} />}
         </g>
       )}
       {variant === 'qa' && (
@@ -463,28 +472,28 @@ function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0, stickyCoun
       )}
 
       {/* Extra coffee cups from behavior */}
-      {variant !== 'dev' && coffeeCount >= 1 && <CoffeeCup x={x + 20} y={y + 6} />}
-      {coffeeCount >= 2 && <CoffeeCup x={x + 24} y={y - 2} steaming={false} />}
+      {variant !== 'dev' && growthLevel(coffeeCount) >= 1 && <CoffeeCup x={x + 20} y={y + 6} />}
+      {growthLevel(coffeeCount) >= 2 && <CoffeeCup x={x + 24} y={y - 2} steaming={false} />}
 
-      {/* Growth system: sticky notes accumulate near monitor (max 3, subtle) */}
-      {stickyCount >= 1 && (
+      {/* Growth system: sticky notes accumulate near monitor (max 3) */}
+      {growthLevel(stickyCount) >= 1 && (
         <rect x={x + 10} y={y - 18 + 2} width={6} height={6} fill="#FFE066" opacity="0.7" transform={`rotate(-4, ${x + 13}, ${y - 13})`} />
       )}
-      {stickyCount >= 2 && (
+      {growthLevel(stickyCount) >= 2 && (
         <rect x={x + 3} y={y - 18 + 2} width={6} height={6} fill="#FF9E9E" opacity="0.65" transform={`rotate(6, ${x + 6}, ${y - 13})`} />
       )}
-      {stickyCount >= 3 && (
+      {growthLevel(stickyCount) >= 3 && (
         <rect x={x - 5} y={y - 18 + 2} width={6} height={6} fill="#A8E6CF" opacity="0.6" transform={`rotate(-3, ${x - 2}, ${y - 13})`} />
       )}
 
-      {/* Growth system: book stack below monitor (max 3, tidy pile) */}
-      {booksCount >= 1 && (
+      {/* Growth system: book stack below monitor (max 3) */}
+      {growthLevel(booksCount) >= 1 && (
         <rect x={x - 12} y={y + 12} width={9} height={2.5} rx={0.5} fill="#E24B4A" opacity="0.6" />
       )}
-      {booksCount >= 2 && (
+      {growthLevel(booksCount) >= 2 && (
         <rect x={x - 13} y={y + 9.5} width={10} height={2.5} rx={0.5} fill="#378ADD" opacity="0.6" />
       )}
-      {booksCount >= 3 && (
+      {growthLevel(booksCount) >= 3 && (
         <rect x={x - 11} y={y + 7} width={8} height={2.5} rx={0.5} fill="#1D9E75" opacity="0.6" />
       )}
     </g>

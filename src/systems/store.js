@@ -306,7 +306,7 @@ export const useOfficeStore = create((set) => ({
       const agent = s.agents[id]
       if (!agent) return s
       const count = { ...agent.deskItemCount }
-      count[item] = Math.min((count[item] || 0) + 1, 5)
+      count[item] = (count[item] || 0) + 1
       return { agents: { ...s.agents, [id]: { ...agent, deskItemCount: count } } }
     }),
 
@@ -350,10 +350,10 @@ export const useOfficeStore = create((set) => ({
       const agents = { ...s.agents }
       const activities = []
       const dailyDoneLedger = ensureCurrentDailyDoneLedger(s.dailyDoneLedger, now)
-      const dayChanged = s.dailyDoneLedger?.dayKey && dailyDoneLedger.dayKey !== s.dailyDoneLedger.dayKey
+      const dayChanged = s.dailyDoneLedger.dayKey !== dailyDoneLedger.dayKey
       if (dayChanged) {
         for (const id of Object.keys(agents)) {
-          agents[id] = { ...agents[id], deskItemCount: { coffee: 0, sticky: 0, books: 0 } }
+          if (agents[id]) agents[id] = { ...agents[id], deskItemCount: { coffee: 0, sticky: 0, books: 0 } }
         }
       }
       for (const u of updates) {
@@ -420,9 +420,7 @@ export const useOfficeStore = create((set) => ({
             if (eventKey) {
               dailyDoneLedger.seenEventKeys = [...dailyDoneLedger.seenEventKeys, eventKey].slice(-500)
             }
-          }
-          // Growth system: accumulate desk items on genuinely new done transitions only
-          if (isFreshDoneTransition) {
+            // Growth system: accumulate desk items on fresh, deduplicated done events
             const roleItems = {
               pm: 'sticky', arch: 'books', dev: 'coffee',
               qa: 'sticky', ops: 'coffee', res: 'books',
@@ -433,7 +431,7 @@ export const useOfficeStore = create((set) => ({
             const agent = agents[u.agentId]
             if (agent) {
               const count = { ...agent.deskItemCount }
-              count[growthItem] = Math.min((count[growthItem] || 0) + 1, 5)
+              count[growthItem] = (count[growthItem] || 0) + 1
               agents[u.agentId] = { ...agent, deskItemCount: count }
             }
           }
