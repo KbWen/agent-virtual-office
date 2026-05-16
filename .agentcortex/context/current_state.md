@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-16
-- **Update Sequence**: 4
+- **Update Sequence**: 5
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -29,13 +29,15 @@
     - AgentCortex upgraded to v5.4.0
   - **Done (branch `claude/condescending-raman-1e48a0`, 2026-05-16)**:
     - #1 角色成長系統 — deskItemCount daily reset, 4-level growthLevel(), % 6 bug fixed, shouldCount gate
-  - **Remaining P1**: #7 可點擊辦公室物件
-  - **Branch status**: `claude/condescending-raman-1e48a0` shipped character growth system on 2026-05-16
+    - #7 可點擊辦公室物件 — all three objects clickable (coffee machine→tea-break, whiteboard→eureka, deploy button→deploy-success); shipped in v0.10 (5b79616), closure-documented 2026-05-16
+  - **Remaining P1**: #16 靜態部署無 /api/status (架構限制 — Vite middleware 僅開發時可用)
+  - **Branch status**: `claude/condescending-raman-1e48a0` active
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
   - [feature] docs/specs/agent-inspector-info-enhancement.md [Shipped]
   - [architecture] docs/specs/codex-status-parity-and-done-count.md [Shipped]
   - [feature] docs/specs/character-growth-system.md [Shipped]
+  - [feature] docs/specs/clickable-office-objects.md [Shipped]
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -83,6 +85,10 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### claude-condescending-raman-1e48a0-2026-05-16 (closure)
+
+- Feature closed: #7 可點擊辦公室物件 — all three objects confirmed clickable in existing code (commit 5b79616); spec doc generated as closure record; no new code required.
 
 ### claude-condescending-raman-1e48a0-2026-05-16
 

@@ -30,7 +30,7 @@
 
 | # | Feature | Priority | Status | Notes |
 |---|---------|----------|--------|-------|
-| 7 | **可點擊辦公室物件** — 點咖啡機觸發角色走去拿咖啡、點白板觸發 eureka、點紅色按鈕觸發 deploy-success | P1 | Pending | `PixelOffice.jsx` 加 onClick handler，呼叫 officeLife event |
+| 7 | **可點擊辦公室物件** — 點咖啡機觸發角色走去拿咖啡、點白板觸發 eureka、點紅色按鈕觸發 deploy-success | P1 | Done | shipped in v0.10 (commit 5b79616); spec: docs/specs/clickable-office-objects.md |
 | 8 | **桌面通知** — blocked 超過 30s 發瀏覽器 Notification | P2 | Pending | `Notification API`，需用戶授權；inferStatus.js 加計時 |
 | 9 | **辦公室廣播 Workflow Banner** — `activeWorkflow` 觸發牆上大字動畫 + PM 拿麥克風 | P2 | Pending | `activeWorkflow` 已存 store，需加 SVG 動畫元件 |
 
