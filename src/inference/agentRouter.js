@@ -5,13 +5,13 @@
 
 const ROLE_KEYWORDS = {
   pm:       [/plan/i, /spec/i, /bootstrap/i, /manage/i, /schedule/i, /roadmap/i, /sprint/i, /standup/i, /priorit/i, /backlog/i],
-  arch:     [/architect/i, /brainstorm/i, /decide/i, /diagram/i, /pattern/i, /rfc/i, /structur/i, /schema/i, /system.design/i, /design.system/i],
-  dev:      [/implement/i, /code/i, /develop/i, /build/i, /feature/i, /refactor/i, /fix/i, /write/i, /program/i, /commit/i, /merge/i],
-  qa:       [/test/i, /review/i, /lint/i, /check/i, /verify/i, /validate/i, /quality/i, /bug/i, /assert/i, /coverage/i],
-  ops:      [/deploy/i, /ship/i, /release/i, /ci/i, /cd/i, /infra/i, /monitor/i, /handoff/i, /docker/i, /publish/i],
+  arch:     [/architect/i, /brainstorm/i, /decide/i, /diagram/i, /pattern/i, /\brfc\b/i, /structur/i, /schema/i, /system.design/i, /design.system/i],
+  dev:      [/implement/i, /code/i, /develop/i, /build/i, /feature/i, /refactor/i, /\bfix\b/i, /write/i, /program/i, /commit/i, /merge/i],
+  qa:       [/test/i, /review/i, /\blint\b/i, /check/i, /verify/i, /validate/i, /quality/i, /bug/i, /assert/i, /coverage/i],
+  ops:      [/deploy/i, /ship/i, /release/i, /\bci\b/i, /\bcd\b/i, /infra/i, /monitor/i, /handoff/i, /docker/i, /publish/i],
   res:      [/research/i, /search/i, /explore/i, /learn/i, /analyze/i, /investigate/i, /\bread\b/i, /study/i, /survey/i],
   gate:     [/gate/i, /guard/i, /security/i, /auth/i, /permission/i, /approve/i, /compliance/i, /audit/i, /policy/i],
-  designer: [/design/i, /ui/i, /ux/i, /style/i, /css/i, /layout/i, /visual/i, /brand/i, /icon/i, /figma/i, /sketch/i, /color/i, /font/i, /spacing/i, /typography/i],
+  designer: [/\bdesign\b/i, /\bui\b/i, /\bux\b/i, /style/i, /\bcss\b/i, /layout/i, /visual/i, /brand/i, /icon/i, /figma/i, /sketch/i, /color/i, /font/i, /spacing/i, /typography/i],
 }
 
 // Stable fallback order for activeCount distribution
@@ -118,6 +118,7 @@ export function routeExternalAgents(agents) {
  * @returns {string[]} array of agentIds
  */
 export function distributeFallbackCount(count) {
-  const n = Math.min(Math.max(0, count), FALLBACK_ORDER.length)
+  const num = Number(count)
+  const n = Math.min(Math.max(0, Number.isFinite(num) ? Math.floor(num) : 0), FALLBACK_ORDER.length)
   return FALLBACK_ORDER.slice(0, n)
 }

@@ -216,6 +216,25 @@ describe('normalizePost', () => {
       expect(result.agents).toHaveLength(1)
       expect(result.agents[0].role).toBe('qa')
     })
+
+    it('ghost agent: boolean values must not create agents', () => {
+      expect(normalizePost({ dev: false, qa: 'working' }).agents).toHaveLength(1)
+      expect(normalizePost({ dev: true, qa: 'working' }).agents).toHaveLength(1)
+    })
+
+    it('ghost agent: numeric values must not create agents', () => {
+      expect(normalizePost({ dev: 0, qa: 'working' }).agents).toHaveLength(1)
+      expect(normalizePost({ dev: 42, qa: 'working' }).agents).toHaveLength(1)
+    })
+
+    it('duplicate roles in full format: first occurrence wins', () => {
+      const result = normalizePost({
+        type: 'office-status',
+        agents: [{ role: 'dev', status: 'working' }, { role: 'dev', status: 'done' }],
+      })
+      expect(result.agents).toHaveLength(1)
+      expect(result.agents[0].status).toBe('working')
+    })
   })
 })
 

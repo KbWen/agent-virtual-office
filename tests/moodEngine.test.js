@@ -42,6 +42,21 @@ describe('moodEngine', () => {
       ])
       // Should be computed once — not an error
     })
+
+    it('does not throw on null batch or null entries', () => {
+      expect(() => pushEventBatch(null)).not.toThrow()
+      expect(() => pushEventBatch([null, undefined, 42])).not.toThrow()
+    })
+
+    it('empty batch does not reset idle timer (no side-effects when nothing added)', () => {
+      vi.useFakeTimers()
+      pushEventBatch([{ role: 'dev', status: 'working', task: 'Edit', hint: null }])
+      const moodBefore = getMood()
+      // Empty batch: no new events, idle timer should not be reset
+      pushEventBatch([])
+      expect(getMood()).toBe(moodBefore) // mood unchanged
+      vi.useRealTimers()
+    })
   })
 
   describe('rushing detection', () => {
@@ -124,13 +139,31 @@ describe('moodEngine', () => {
       expect(getMood()).toBe('frustrated')
     })
 
-    it('expires after duration', () => {
+    it('rejects invalid mood — store is not updated', () => {
+      pushEventBatch([{ role: 'dev', status: 'working', task: 'Edit', hint: null }])
+      const before = getMood()
+      setMoodOverride('hacked', 60000)
+      expect(getMood()).toBe(before) // unchanged
+    })
+
+    it('expires after duration via overrideTimer (no manual push needed)', () => {
+      vi.useFakeTimers()
+      setMoodOverride('rushing', 1000)
+      expect(getMood()).toBe('rushing')
+
+      // Timer fires automatically; no manual pushEventBatch needed
+      vi.advanceTimersByTime(1051)
+      expect(getMood()).not.toBe('rushing')
+
+      vi.useRealTimers()
+    })
+
+    it('expires after duration (legacy path: pushEventBatch triggers recompute)', () => {
       vi.useFakeTimers()
       setMoodOverride('rushing', 1000)
       expect(getMood()).toBe('rushing')
 
       vi.advanceTimersByTime(1001)
-      // Need to trigger recomputation
       pushEventBatch([])
       expect(getMood()).not.toBe('rushing')
 

@@ -114,10 +114,12 @@ function resetIdleTimer() {
 export function pushEventBatch(eventList) {
   if (!Array.isArray(eventList)) return
   const now = Date.now()
+  let added = 0
   for (const e of eventList) {
     if (!e || typeof e !== 'object') continue
     const { role, status, task, hint } = e
     events.push({ timestamp: now, role, status, task: task || null, hint: hint || null })
+    added++
   }
 
   // Keep window size bounded
@@ -125,7 +127,7 @@ export function pushEventBatch(eventList) {
     events.shift()
   }
 
-  resetIdleTimer()
+  if (added > 0) resetIdleTimer()
   updateStoreMood()
 }
 

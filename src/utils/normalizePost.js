@@ -10,10 +10,12 @@ export const MAX_MOOD_DURATION = 3_600_000 // 1 hour
 export function normalizePost(body) {
   if (body == null || typeof body !== 'object') body = {}
   if (body.type === 'office-status') {
+    const _seen = new Set()
     const agents = (Array.isArray(body.agents) ? body.agents : [])
       .filter(a => a && typeof a === 'object'
         && VALID_ROLES.includes(a.role)
-        && VALID_STATUSES.includes(a.status))
+        && VALID_STATUSES.includes(a.status)
+        && !_seen.has(a.role) && _seen.add(a.role))
       .slice(0, 50)
       .map(a => ({
         role: a.role,
@@ -39,6 +41,7 @@ export function normalizePost(body) {
     const val = body[key]
     if (val == null) continue
     const isStatus = VALID_STATUSES.includes(val)
+    if (!isStatus && typeof val !== 'string') continue
     agents.push({
       role: key,
       task: isStatus ? null : (typeof val === 'string' ? val.slice(0, 200) : null),

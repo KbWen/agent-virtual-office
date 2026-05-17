@@ -31,8 +31,10 @@ const MAX_MOOD_DURATION = 3_600_000
 function normalizePost(body) {
   if (body == null || typeof body !== 'object') body = {}
   if (body.type === 'office-status') {
+    const _seen = new Set()
     const agents = (Array.isArray(body.agents) ? body.agents : [])
-      .filter(a => a && typeof a === 'object' && VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status))
+      .filter(a => a && typeof a === 'object' && VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status)
+        && !_seen.has(a.role) && _seen.add(a.role))
       .slice(0, 50)
       .map(a => ({
         role: a.role, status: a.status,
@@ -57,6 +59,7 @@ function normalizePost(body) {
     const val = body[key]
     if (val == null) continue
     const isStatus = VALID_STATUSES.includes(val)
+    if (!isStatus && typeof val !== 'string') continue
     agents.push({
       role: key,
       task: isStatus ? null : (typeof val === 'string' ? val.slice(0, 200) : null),
@@ -67,7 +70,7 @@ function normalizePost(body) {
   }
   return {
     _seq: nextSeq(), type: 'office-status', agents,
-    activeCount: agents.filter(a => a.status !== 'done').length,
+    activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
     mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
@@ -301,7 +304,7 @@ function handleStatus(req, res) {
             .sort((a, b) => (PRI[a.status] ?? 9) - (PRI[b.status] ?? 9))[0]
           if (pick) allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
         }
-        merged = { _seq: String(latestSeq || Date.now()), type: 'office-status', agents: allAgents, activeCount: allAgents.filter(a => a.status !== 'done').length, workflow, source: 'multi-session', sessionCount: sessions.length }
+        merged = { _seq: nextSeq(), type: 'office-status', agents: allAgents, activeCount: allAgents.filter(a => a.status === 'working' || a.status === 'blocked').length, workflow, source: 'multi-session', sessionCount: sessions.length }
       }
 
       const data = JSON.stringify(merged)

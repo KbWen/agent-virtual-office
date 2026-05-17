@@ -18,6 +18,9 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 
+let _seqN = Math.floor(Math.random() * 10000)
+function nextSeq() { return `${Date.now()}.${_seqN = (_seqN + 1) % 10000}` }
+
 // ─── Bilingual labels ───
 function detectHookLang() {
   try {
@@ -472,7 +475,7 @@ function processEvent(event) {
             hint: null,
           }))
         const output = {
-          _seq: String(Date.now()),
+          _seq: nextSeq(),
           _stopped: true,
           _cwd: process.cwd(),
           type: 'office-status',
@@ -503,7 +506,7 @@ function processEvent(event) {
           workflow: null,
           source: 'claude-cli',
           _cwd: process.cwd(),
-          _seq: String(Date.now()),
+          _seq: nextSeq(),
           _stopped: true,
         }
         const dir = path.dirname(STATUS_FILE)
@@ -561,7 +564,7 @@ function processEvent(event) {
   const activeCount = newAgents.filter(a => a.status === 'working' || a.status === 'blocked').length
 
   const output = {
-    _seq: String(Date.now()),
+    _seq: nextSeq(),
     _cwd: process.cwd(),
     type: 'office-status',
     agents: newAgents,

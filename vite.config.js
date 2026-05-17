@@ -197,7 +197,7 @@ function officeStatusPlugin() {
                   const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
                   const parsed = JSON.parse(raw)
                   const seq = parseInt(parsed._seq, 10)
-                  if (!seq || now - seq > 300000) continue  // stale or no valid _seq
+                  if (!seq || now - seq > 300000 || seq > now + 60000) continue  // stale, no valid _seq, or crafted future _seq
                   // Skip sessions from other projects (hooks write _cwd).
                   // Slugged files without _cwd are from old hooks — skip them too (bare main is OK as fallback).
                   if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), path.resolve(projectRoot))) continue
@@ -221,7 +221,7 @@ function officeStatusPlugin() {
                   const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
                   const parsed = JSON.parse(raw)
                   const seq = parseInt(parsed._seq, 10)
-                  if (!seq || now - seq > 300000) continue
+                  if (!seq || now - seq > 300000 || seq > now + 60000) continue
                   const slug = file === 'office-status.json' ? 'main'
                     : file.replace(/^office-status-/, '').replace(/\.json$/, '')
                   sessions.push({ slug, data: parsed })

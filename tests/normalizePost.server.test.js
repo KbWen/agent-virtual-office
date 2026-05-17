@@ -18,8 +18,10 @@ const MAX_MOOD_DURATION = 3_600_000
 function serverNormalizePost(body) {
   if (body == null || typeof body !== 'object') body = {}
   if (body.type === 'office-status') {
+    const _seen = new Set()
     const agents = (Array.isArray(body.agents) ? body.agents : [])
-      .filter(a => a && typeof a === 'object' && VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status))
+      .filter(a => a && typeof a === 'object' && VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status)
+        && !_seen.has(a.role) && _seen.add(a.role))
       .slice(0, 50)
       .map(a => ({
         role: a.role, status: a.status,
@@ -43,6 +45,7 @@ function serverNormalizePost(body) {
     const val = body[key]
     if (val == null) continue
     const isStatus = VALID_STATUSES.includes(val)
+    if (!isStatus && typeof val !== 'string') continue
     agents.push({
       role: key,
       task: isStatus ? null : (typeof val === 'string' ? val.slice(0, 200) : null),
@@ -98,6 +101,12 @@ const CASES = [
   // idle agents must NOT be counted as active
   { dev: 'idle', qa: 'working' },
   { type: 'office-status', agents: [{ role: 'dev', status: 'idle' }, { role: 'qa', status: 'working' }] },
+  // ghost agent — boolean/number values must not create agents (N2)
+  { dev: false, qa: 'working' },
+  { dev: 0, qa: 'working' },
+  { dev: true, qa: 'working' },
+  // duplicate roles in full format — first occurrence wins (N3)
+  { type: 'office-status', agents: [{ role: 'dev', status: 'working' }, { role: 'dev', status: 'done' }] },
 ]
 
 describe('normalizePost server/canonical parity', () => {
