@@ -17,22 +17,23 @@ const MAX_MOOD_DURATION = 3_600_000
 
 function serverNormalizePost(body) {
   if (body.type === 'office-status') {
+    const agents = (Array.isArray(body.agents) ? body.agents : [])
+      .filter(a => a && typeof a === 'object' && VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status))
+      .slice(0, 50)
+      .map(a => ({
+        role: a.role, status: a.status,
+        task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
+        label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
+        hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
+      }))
     return {
       type: 'office-status',
-      agents: (Array.isArray(body.agents) ? body.agents : [])
-        .filter(a => a && typeof a === 'object' && VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status))
-        .slice(0, 50)
-        .map(a => ({
-          role: a.role, status: a.status,
-          task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
-          label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
-          hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
-        })),
-      activeCount: typeof body.activeCount === 'number' ? body.activeCount : 0,
+      agents,
+      activeCount: agents.filter(a => a.status !== 'done').length,
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
-      moodDuration: Math.min(Math.max(Number(body.moodDuration) || 60000, 1000), MAX_MOOD_DURATION),
-      source: typeof body.source === 'string' ? body.source.slice(0, 50) : null,
+      moodDuration: body.moodDuration == null ? null : Math.min(Math.max(Number(body.moodDuration) || 60000, 1000), MAX_MOOD_DURATION),
+      source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
       _seq: String(Date.now()),
     }
   }
@@ -88,6 +89,11 @@ const CASES = [
   // moodDuration edge cases — office-status branch
   { type: 'office-status', agents: [], mood: 'rushing', moodDuration: 500 },
   { type: 'office-status', agents: [], mood: 'rushing', moodDuration: 0 },
+  { type: 'office-status', agents: [], mood: 'rushing' },                    // no moodDuration → null
+  // activeCount computed from agents (not trusted from client)
+  { type: 'office-status', agents: [{ role: 'dev', status: 'working' }, { role: 'qa', status: 'done' }], activeCount: 99 },
+  // source defaults to 'api' in both branches
+  { type: 'office-status', agents: [] },
 ]
 
 describe('normalizePost server/canonical parity', () => {

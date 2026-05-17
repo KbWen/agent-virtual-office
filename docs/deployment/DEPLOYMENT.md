@@ -89,10 +89,15 @@ then ships a minimal runtime image). A `docker-compose.yml` is also provided.
 docker build -t agent-virtual-office .
 # Bind to loopback only — safe behind Nginx. For direct LAN without a proxy,
 # change to -p 5174:5174 AND set OFFICE_API_TOKEN to protect the API.
-docker run -p 127.0.0.1:5174:5174 \
+docker run -d --restart unless-stopped \
+  -p 127.0.0.1:5174:5174 \
   -v "${HOME}/.claude:/home/node/.claude:rw" \
+  --read-only --tmpfs /tmp \
+  --security-opt no-new-privileges:true --cap-drop ALL \
+  --memory 256m \
+  --log-opt max-size=10m --log-opt max-file=3 \
   agent-virtual-office
-# or: docker compose up -d
+# or (recommended — all options pre-configured): docker compose up -d
 ```
 
 > **Before first run** ensure `~/.claude` exists and is writable by UID 1000:

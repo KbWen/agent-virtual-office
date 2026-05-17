@@ -61,7 +61,8 @@ function getSessionSlug() {
         // Worktree: .git is a file "gitdir: <path>"
         const ref = fs.readFileSync(gitEntry, 'utf-8').trim()
         const m = ref.match(/^gitdir:\s*(.+)$/)
-        if (m) headContent = fs.readFileSync(path.resolve(process.cwd(), m[1], 'HEAD'), 'utf-8').trim()
+        // Resolve relative to the worktree root (.git file's dir), not process.cwd()
+        if (m) headContent = fs.readFileSync(path.resolve(path.dirname(gitEntry), m[1], 'HEAD'), 'utf-8').trim()
       } else {
         headContent = fs.readFileSync(path.join(gitEntry, 'HEAD'), 'utf-8').trim()
       }
@@ -347,7 +348,7 @@ function saveSkillContext(agentId, role, skillName) {
     const dir = path.dirname(p)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     const json = JSON.stringify({ role, skillName })
-    const tmp = p + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
+    const tmp = p + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
     try {
       fs.writeFileSync(tmp, json)
       fs.renameSync(tmp, p)
@@ -379,23 +380,27 @@ function processEvent(event) {
   const agentId = event.agent_id || null
 
   let role, task, status, label, hint = null
+  let clearWorkflow = false
 
   switch (hookEvent) {
     case 'UserPromptSubmit': {
-      // User sent a message — PM enters thinking/planning mode
+      // New user message — PM enters planning mode.
+      // Also clears _stopped so subsequent PreToolUse/PostToolUse proceed normally.
       role = 'pm'
       task = 'thinking'
       status = 'working'
+      clearWorkflow = true  // reset subagent workflow on each new turn
       label = pick(LANG === 'en'
         ? ['🤔 Thinking...', '📊 Got it, planning', '💡 Good question...', '🧠 Analyzing']
         : ['🤔 想一下...', '📊 收到，規劃中', '💡 好問題...', '🧠 分析中'])
       break
     }
     case 'PreToolUse': {
-      // If Stop fired recently (within 8s), skip — next prompt hasn't started yet
+      // Suppress if Stop fired and no new UserPromptSubmit has fired yet.
+      // _stopped is cleared by UserPromptSubmit's write (which omits the field).
       try {
         const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-        if (cur._stopped && (Date.now() - parseInt(cur._seq, 10) < 8000)) return
+        if (cur._stopped) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       // If inside a subagent with skill context, prefer the skill's role
@@ -408,11 +413,11 @@ function processEvent(event) {
       break
     }
     case 'PostToolUse': {
-      // If Stop fired recently (within 8s), skip — straggler PostToolUse must not
-      // overwrite the authoritative idle state written by Stop.
+      // Suppress straggler PostToolUse events that arrive after Stop.
+      // _stopped is cleared when UserPromptSubmit fires (marking a new turn).
       try {
         const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-        if (cur._stopped && (Date.now() - parseInt(cur._seq, 10) < 8000)) return
+        if (cur._stopped) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       const skillCtx = readSkillContext(agentId)
@@ -442,6 +447,7 @@ function processEvent(event) {
       task = agentType
       status = 'done'
       label = skillLabel(agentType, true)
+      clearWorkflow = true  // subagent workflow ends; reset so it doesn't stick forever
       if (agentId) clearSkillContext(agentId)
       break
     }
@@ -468,7 +474,7 @@ function processEvent(event) {
         const dir = path.dirname(STATUS_FILE)
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
         const json = JSON.stringify(output, null, 2)
-        const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
+        const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
         try {
           fs.writeFileSync(tmp, json)
           fs.renameSync(tmp, STATUS_FILE)
@@ -494,7 +500,7 @@ function processEvent(event) {
         try {
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
           const json = JSON.stringify(output, null, 2)
-          const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
+          const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
           try {
             fs.writeFileSync(tmp, json)
             fs.renameSync(tmp, STATUS_FILE)
@@ -533,14 +539,14 @@ function processEvent(event) {
     type: 'office-status',
     agents: newAgents,
     activeCount,
-    workflow: agentType || existingWorkflow,
+    workflow: clearWorkflow ? null : (agentType || existingWorkflow),
     source: 'claude-cli',
   }
 
   // Write with retry (Windows file locking can cause EBUSY on rename)
   const dir = path.dirname(STATUS_FILE)
   const json = JSON.stringify(output, null, 2)
-  const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
+  const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
   try {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(tmp, json)

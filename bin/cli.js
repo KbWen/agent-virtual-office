@@ -181,8 +181,10 @@ if (command === 'serve') {
   let _hardTimer = null
   child.on('close', (code, signal) => {
     if (_hardTimer) clearTimeout(_hardTimer)
-    // Signal-terminated = clean stop; non-zero code = error
-    process.exit(signal ? 0 : (code || 0))
+    // SIGINT/SIGTERM = user-initiated clean stop → exit 0
+    // SIGKILL/crash signal = abnormal → exit 1 so supervisors restart
+    const cleanSignal = signal === 'SIGINT' || signal === 'SIGTERM'
+    process.exit(cleanSignal ? 0 : (signal ? 1 : (code || 0)))
   })
   // Forward signals to the child; child.on('close') handles actual exit.
   // Hard-exit after 12s in case server.mjs's 10s drain timer never fires.
@@ -196,7 +198,7 @@ if (command === 'serve') {
       try { child.kill(sig) } catch {}
     }
     _hardTimer = setTimeout(() => process.exit(1), 12000)
-    _hardTimer.unref()
+    // no .unref() — this timer must keep the process alive so it can force-exit a stuck child
   }
   process.on('SIGINT',  () => forwardSignal('SIGINT'))
   process.on('SIGTERM', () => forwardSignal('SIGTERM'))

@@ -30,22 +30,24 @@ const MAX_MOOD_DURATION = 3_600_000
 
 function normalizePost(body) {
   if (body.type === 'office-status') {
+    const agents = (Array.isArray(body.agents) ? body.agents : [])
+      .filter(a => a && typeof a === 'object' && VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status))
+      .slice(0, 50)
+      .map(a => ({
+        role: a.role, status: a.status,
+        task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
+        label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
+        hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
+      }))
     return {
       type: 'office-status',
-      agents: (Array.isArray(body.agents) ? body.agents : [])
-        .filter(a => a && typeof a === 'object' && VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status))
-        .slice(0, 50)
-        .map(a => ({
-          role: a.role, status: a.status,
-          task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
-          label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
-          hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
-        })),
-      activeCount: typeof body.activeCount === 'number' ? body.activeCount : 0,
+      agents,
+      activeCount: agents.filter(a => a.status !== 'done').length,
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
-      moodDuration: Math.min(Math.max(Number(body.moodDuration) || 60000, 1000), MAX_MOOD_DURATION),
-      source: typeof body.source === 'string' ? body.source.slice(0, 50) : null,
+      moodDuration: body.moodDuration == null ? null
+        : Math.min(Math.max(Number(body.moodDuration) || 60000, 1000), MAX_MOOD_DURATION),
+      source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
       _seq: nextSeq(),
     }
   }
@@ -63,7 +65,7 @@ function normalizePost(body) {
     })
   }
   return {
-    _seq: String(Date.now()), type: 'office-status', agents,
+    _seq: nextSeq(), type: 'office-status', agents,
     activeCount: agents.filter(a => a.status !== 'done').length,
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
@@ -121,7 +123,7 @@ try {
 // Returns true on success, false if both paths fail.
 // Temp file is always cleaned up (was previously leaked on EBUSY rename).
 function atomicWrite(filePath, content) {
-  const tmp = filePath + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
+  const tmp = filePath + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
   try {
     fs.writeFileSync(tmp, content)
     fs.renameSync(tmp, filePath)
@@ -318,7 +320,7 @@ function handleStatus(req, res) {
     req.on('data', chunk => {
       if (aborted) return
       body += chunk
-      if (body.length > 16384) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Body too large' })); req.destroy() }
+      if (body.length > 16384) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Body too large' })); req.resume() }
     })
     req.on('end', () => {
       if (aborted) return
@@ -348,12 +350,13 @@ function handleLang(req, res) {
   const reqOriginL = req.headers.origin
   if (reqOriginL && !isAllowedOrigin(reqOriginL)) { res.statusCode = 403; return res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })) }
   if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
+  if (!checkRateLimit(req)) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
   req.setEncoding('utf-8')
   let body = '', aborted = false
   req.on('data', chunk => {
     if (aborted) return
     body += chunk
-    if (body.length > 16) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Body too large' })); req.destroy() }
+    if (body.length > 16) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Body too large' })); req.resume() }
   })
   req.on('end', () => {
     if (aborted) return
@@ -403,7 +406,7 @@ function handleEvent(req, res) {
   req.on('data', chunk => {
     if (aborted) return
     body += chunk
-    if (body.length > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.destroy() }
+    if (body.length > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.resume() }
   })
   req.on('end', () => {
     if (aborted) return

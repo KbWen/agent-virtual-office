@@ -132,9 +132,9 @@ Then open `http://localhost:5174`.
 
 The compose file mounts `~/.claude` read-write into the container so the server can both read hook-written status files and accept POST writes.
 
-> **Pre-flight (first run only):** The container runs as UID 1000. If `~/.claude` was created by root, make it writable first:
+> **Pre-flight (first run only):** The container runs as UID 1000. Make `~/.claude` writable by that UID (not `$USER`, which may differ):
 > ```bash
-> mkdir -p ~/.claude && sudo chown $USER ~/.claude
+> mkdir -p ~/.claude && sudo chown 1000 ~/.claude
 > ```
 
 Pass an optional `OFFICE_API_TOKEN` to gate POST/event requests:

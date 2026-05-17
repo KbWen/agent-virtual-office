@@ -50,10 +50,11 @@ TimeoutStopSec=15
 # ── Systemd security hardening ──────────────────────────────────────────────
 NoNewPrivileges=true
 ProtectSystem=strict
-# ProtectHome=read-only (not =true) lets ReadWritePaths punch a writable hole
-# into the otherwise read-only home tree. =true makes the entire home invisible
-# and ReadWritePaths cannot reliably re-expose a subpath beneath it.
-ProtectHome=read-only
+# ProtectHome=true or read-only makes the home tree invisible/read-only; under
+# either value, systemd applies ProtectHome AFTER ReadWritePaths for paths inside
+# the home directory, so ReadWritePaths cannot re-expose ~/.claude as writable.
+# Solution: omit ProtectHome and rely on ProtectSystem=strict + ReadWritePaths
+# to provide equivalent isolation without locking out ~/.claude.
 # server.mjs reads AND writes ~/.claude/office-status*.json.
 ReadWritePaths=%h/.claude
 PrivateTmp=true
