@@ -46,7 +46,7 @@ function normalizePost(body) {
       mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
       moodDuration: Math.min(Math.max(Number(body.moodDuration) || 60000, 1000), MAX_MOOD_DURATION),
       source: typeof body.source === 'string' ? body.source.slice(0, 50) : null,
-      _seq: String(Date.now()),
+      _seq: nextSeq(),
     }
   }
   const agents = []
@@ -68,7 +68,8 @@ function normalizePost(body) {
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
     mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
-    moodDuration: body.moodDuration ? Math.min(Number(body.moodDuration) || 60000, MAX_MOOD_DURATION) : null,
+    moodDuration: body.moodDuration == null ? null
+      : Math.min(Math.max(Number(body.moodDuration) || 60000, 1000), MAX_MOOD_DURATION),
   }
 }
 
@@ -77,7 +78,10 @@ const dist = path.join(__dirname, 'dist')
 
 // ─── Args ───────────────────────────────────────────────────────────────────
 const rawArgs = process.argv.slice(2)
-function argVal(prefix) { return rawArgs.find(a => a.startsWith(prefix))?.split('=')[1] }
+function argVal(prefix) {
+  const hit = rawArgs.find(a => a.startsWith(prefix))
+  return hit ? hit.slice(prefix.length) : undefined
+}
 
 const rawPort = argVal('--port=') || '5174'
 const _parsedPort = parseInt(rawPort, 10)
@@ -88,6 +92,10 @@ if (!/^\d+$/.test(rawPort) || isNaN(_parsedPort) || _parsedPort < 1 || _parsedPo
 const port = _parsedPort
 const bindHost = rawArgs.includes('--host') ? '0.0.0.0' : '127.0.0.1'
 const lang = argVal('--lang=')
+if (lang && !/^[a-zA-Z-]{2,10}$/.test(lang)) {
+  console.error(`\n  Invalid --lang "${lang}". Use "en" or "zh-TW".\n`)
+  process.exit(1)
+}
 const openBrowser = !rawArgs.includes('--no-open')
 
 if (!fs.existsSync(path.join(dist, 'index.html'))) {
@@ -98,9 +106,20 @@ if (!fs.existsSync(path.join(dist, 'index.html'))) {
 // ─── Shared paths ────────────────────────────────────────────────────────────
 const STATUS_PATH = path.join(os.homedir(), '.claude', 'office-status.json')
 
+// Fail fast if the state directory is not writable (catches Docker bind-mount misconfiguration).
+try {
+  fs.mkdirSync(path.dirname(STATUS_PATH), { recursive: true })
+  fs.accessSync(path.dirname(STATUS_PATH), fs.constants.W_OK)
+} catch {
+  console.error(`\n  FATAL: ${path.dirname(STATUS_PATH)} is not writable.`)
+  console.error('  Docker: run "mkdir -p ~/.claude && sudo chown 1000 ~/.claude" on the host first.\n')
+  process.exit(1)
+}
+
 // Atomic write: write to a temp file then rename so concurrent readers
 // never see a partial file. Falls back to direct write on Windows EBUSY.
 // Returns true on success, false if both paths fail.
+// Temp file is always cleaned up (was previously leaked on EBUSY rename).
 function atomicWrite(filePath, content) {
   const tmp = filePath + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
   try {
@@ -108,11 +127,17 @@ function atomicWrite(filePath, content) {
     fs.renameSync(tmp, filePath)
     return true
   } catch {
-    try { fs.writeFileSync(filePath, content); return true } catch {}
+    let ok = false
+    try { fs.writeFileSync(filePath, content); ok = true } catch {}
     try { fs.unlinkSync(tmp) } catch {}
-    return false
+    return ok
   }
 }
+
+// Monotonic _seq: ms timestamp + per-process counter avoids same-ms collisions.
+// parseInt(_seq, 10) still yields the timestamp for staleness checks (stops at '.').
+let _seqN = 0
+function nextSeq() { return `${Date.now()}.${_seqN = (_seqN + 1) % 10000}` }
 const isWin = process.platform === 'win32'
 function pathsEqual(a, b) { return isWin ? a.toLowerCase() === b.toLowerCase() : a === b }
 
@@ -147,7 +172,8 @@ function getAllowedOriginHeader(origin) {
 }
 
 function safeEqual(a, b) {
-  const ba = Buffer.from(a), bb = Buffer.from(b)
+  if (typeof a !== 'string' || typeof b !== 'string') return false
+  const ba = Buffer.from(a, 'utf8'), bb = Buffer.from(b, 'utf8')
   if (ba.length !== bb.length) return false
   return timingSafeEqual(ba, bb)
 }
@@ -156,7 +182,7 @@ function isAuthorized(req) {
   if (!apiToken) return true
   const h = req.headers['x-office-token']
   const a = req.headers.authorization
-  return (h != null && safeEqual(h, apiToken)) ||
+  return (typeof h === 'string' && safeEqual(h, apiToken)) ||
          (typeof a === 'string' && safeEqual(a, `Bearer ${apiToken}`))
 }
 
@@ -175,11 +201,12 @@ function checkRateLimit(req) {
   const now = Date.now()
   const entry = postCounts.get(ip)
   if (!entry || now - entry.start > RATE_WINDOW) {
-    if (postCounts.size > 50) for (const [k, v] of postCounts) if (now - v.start > RATE_WINDOW) postCounts.delete(k)
     postCounts.set(ip, { start: now, count: 1 })
     return true
   }
-  return ++entry.count <= RATE_LIMIT
+  if (entry.count >= RATE_LIMIT) return false  // don't inflate counter past limit
+  entry.count++
+  return true
 }
 
 // ─── CORS headers ─────────────────────────────────────────────────────────────
@@ -196,6 +223,7 @@ function handlePreflight(req, res) {
     res.statusCode = 403
     return res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
   }
+  res.setHeader('Access-Control-Max-Age', '600')
   res.statusCode = 204
   return res.end()
 }
@@ -282,6 +310,8 @@ function handleStatus(req, res) {
   }
 
   if (req.method === 'POST') {
+    const reqOrigin = req.headers.origin
+    if (reqOrigin && !isAllowedOrigin(reqOrigin)) { res.statusCode = 403; return res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })) }
     if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
     req.setEncoding('utf-8')
     let body = '', aborted = false
@@ -294,9 +324,8 @@ function handleStatus(req, res) {
       if (aborted) return
       try {
         const normalized = normalizePost(JSON.parse(body))
-        normalized._cwd = process.cwd()
-        const dir = path.dirname(STATUS_PATH)
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+        // _cwd omitted intentionally: POST-pushed status is not project-scoped;
+        // scanSessions always includes the bare office-status.json regardless of CWD.
         if (!atomicWrite(STATUS_PATH, JSON.stringify(normalized, null, 2))) {
           res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
         }
@@ -316,6 +345,8 @@ function handleLang(req, res) {
   setCors(res, req.headers.origin, 'POST, OPTIONS')
   if (req.method === 'OPTIONS') return handlePreflight(req, res)
   if (req.method !== 'POST') { res.statusCode = 405; return res.end() }
+  const reqOriginL = req.headers.origin
+  if (reqOriginL && !isAllowedOrigin(reqOriginL)) { res.statusCode = 403; return res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })) }
   if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
   req.setEncoding('utf-8')
   let body = '', aborted = false
@@ -363,6 +394,8 @@ function handleEvent(req, res) {
   setCors(res, req.headers.origin, 'POST, OPTIONS')
   if (req.method === 'OPTIONS') return handlePreflight(req, res)
   if (req.method !== 'POST') { res.statusCode = 405; return res.end(JSON.stringify({ error: 'Method not allowed' })) }
+  const reqOriginE = req.headers.origin
+  if (reqOriginE && !isAllowedOrigin(reqOriginE)) { res.statusCode = 403; return res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })) }
   if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
   if (!checkRateLimit(req)) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
   req.setEncoding('utf-8')
@@ -389,14 +422,12 @@ function handleEvent(req, res) {
         if (parsed.label) agents = agents.map((a, i) => i === 0 ? { ...a, label: String(parsed.label).slice(0, 200) } : a)
       }
       const output = {
-        _seq: String(Date.now()), _cwd: process.cwd(),
+        _seq: nextSeq(),
         type: 'office-status', agents,
         activeCount: agents.filter(a => a.status !== 'done').length,
         workflow: parsed.workflow ? String(parsed.workflow).slice(0, 200) : eventName,
         source: 'webhook',
       }
-      const dir = path.dirname(STATUS_PATH)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
       if (!atomicWrite(STATUS_PATH, JSON.stringify(output, null, 2))) {
         res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
       }
@@ -417,6 +448,8 @@ const MIME = {
 function serveStatic(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; return res.end() }
   const urlPath = new URL(req.url, 'http://x').pathname
+  // Reject NUL bytes which can cause filesystem misbehavior on some platforms.
+  if (urlPath.includes('\0')) { res.statusCode = 400; return res.end('Bad Request') }
   let target = path.join(dist, urlPath)
 
   // Path traversal guard — use sep to prevent dist-single/dist-evil siblings matching
@@ -445,6 +478,9 @@ function serveStatic(req, res) {
 const SERVER_START = Date.now()
 
 const server = http.createServer((req, res) => {
+  // Swallow client-abort / ECONNRESET so they don't crash the process.
+  req.on('error', () => {})
+  res.on('error', () => {})
   const url = new URL(req.url, 'http://x')
   if (url.pathname === '/api/status') return handleStatus(req, res)
   if (url.pathname === '/api/lang')   return handleLang(req, res)
@@ -458,8 +494,13 @@ const server = http.createServer((req, res) => {
   return serveStatic(req, res)
 })
 
-// Close keep-alive connections that go silent for 30s (slow-client DoS guard)
+// Timeout hardening: headersTimeout defends against slowloris; requestTimeout
+// catches hung uploads; keepAliveTimeout bounds idle keep-alive sockets.
 server.setTimeout(30000)
+server.headersTimeout = 15000   // headers must arrive within 15s
+server.requestTimeout = 30000   // full request within 30s
+server.keepAliveTimeout = 10000
+server.maxHeadersCount = 100
 
 server.listen(port, bindHost, () => {
   const displayHost = bindHost === '0.0.0.0' ? 'localhost' : bindHost
@@ -510,21 +551,29 @@ setInterval(() => {
     const dir = path.dirname(STATUS_PATH)
     if (!fs.existsSync(dir)) return
     const now = Date.now()
+
+    // Sweep rate-limiter map while we're here (avoids unbounded growth under IP rotation).
+    const cutoff = now - RATE_WINDOW
+    for (const [k, v] of postCounts) if (v.start < cutoff) postCounts.delete(k)
+
     for (const file of fs.readdirSync(dir)) {
       if (file === 'office-status.json') continue           // never auto-delete main
       const isStatus = /^office-status-[^.]+\.json$/.test(file)
       const isSkill  = /^office-skill-[^.]+\.json$/.test(file)
-      if (!isStatus && !isSkill) continue
+      // Clean up orphan temp files left by EBUSY rename failures.
+      const isTmp = /^office-(?:status|skill|lang).*\.tmp\.\d+\.[a-z0-9]+$/.test(file)
+      if (!isStatus && !isSkill && !isTmp) continue
       try {
-        if (isSkill) {
-          // skill files have no _seq — use mtime
+        if (isTmp || isSkill) {
+          // skill/tmp files have no _seq — use mtime (10-min TTL for tmp, 1h for skill)
           const { mtimeMs } = fs.statSync(path.join(dir, file))
-          if (now - mtimeMs > 3_600_000) fs.unlinkSync(path.join(dir, file))
+          const ttl = isTmp ? 600_000 : 3_600_000
+          if (now - mtimeMs > ttl) fs.unlinkSync(path.join(dir, file))
         } else {
-          const { _seq } = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'))
-          if (parseInt(_seq, 10) && now - parseInt(_seq, 10) > 3_600_000) {
-            fs.unlinkSync(path.join(dir, file))
-          }
+          let seq = NaN
+          try { seq = parseInt(JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'))._seq, 10) } catch {}
+          const age = Number.isFinite(seq) ? now - seq : now - fs.statSync(path.join(dir, file)).mtimeMs
+          if (age > 3_600_000) fs.unlinkSync(path.join(dir, file))
         }
       } catch {}
     }
@@ -554,11 +603,12 @@ function gracefulShutdown(signal) {
 
   // Hard cap: if requests don't finish in 10s, force exit so the orchestrator's
   // own SIGKILL timeout (systemd TimeoutStopSec=15, PM2 kill_timeout:15000)
-  // isn't the first line of defence.
+  // isn't the first line of defence. NOT unref()'d — this timer MUST fire.
   setTimeout(() => {
     console.error('  Drain timed out (10s) — forcing exit.')
+    server.closeAllConnections?.()
     process.exit(1)
-  }, 10_000).unref()
+  }, 10_000)
 }
 
 process.on('SIGINT',  () => gracefulShutdown('SIGINT'))

@@ -162,15 +162,10 @@ if (command === 'serve') {
     console.error('    npm install -g agent-virtual-office')
     process.exit(1)
   }
-  // Auto-build if dist/ doesn't exist
   if (!fs.existsSync(path.join(root, 'dist', 'index.html'))) {
-    console.log('  Building production bundle first...')
-    try {
-      execSync('npm run build', { cwd: root, stdio: 'inherit' })
-    } catch {
-      console.error('  Build failed. Fix errors above and try again.')
-      process.exit(1)
-    }
+    console.error('  Error: production bundle not found. Build first:')
+    console.error('    npm run build')
+    process.exit(1)
   }
   // Forward remaining flags to server.mjs
   const serverArgs = process.argv.slice(3)
@@ -183,16 +178,25 @@ if (command === 'serve') {
     console.error(`\n  Failed to start production server: ${err.message}\n`)
     process.exit(1)
   })
-  child.on('close', (code) => process.exit(code || 0))
-  // Forward signals to the child process; child.on('close') handles the actual exit.
+  let _hardTimer = null
+  child.on('close', (code, signal) => {
+    if (_hardTimer) clearTimeout(_hardTimer)
+    // Signal-terminated = clean stop; non-zero code = error
+    process.exit(signal ? 0 : (code || 0))
+  })
+  // Forward signals to the child; child.on('close') handles actual exit.
   // Hard-exit after 12s in case server.mjs's 10s drain timer never fires.
+  let _forwarding = false
   function forwardSignal(sig) {
+    if (_forwarding) return
+    _forwarding = true
     if (process.platform === 'win32') {
       try { execSync(`taskkill /T /F /PID ${child.pid}`, { stdio: 'ignore' }) } catch {}
     } else {
       try { child.kill(sig) } catch {}
     }
-    setTimeout(() => process.exit(1), 12000).unref()
+    _hardTimer = setTimeout(() => process.exit(1), 12000)
+    _hardTimer.unref()
   }
   process.on('SIGINT',  () => forwardSignal('SIGINT'))
   process.on('SIGTERM', () => forwardSignal('SIGTERM'))

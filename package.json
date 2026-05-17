@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "vite",
+    "start": "node server.mjs",
     "build:single": "vite build --outDir dist-single",
     "serve": "node server.mjs",
     "test": "vitest run",

@@ -55,17 +55,10 @@ function serverNormalizePost(body) {
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
     mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
-    moodDuration: body.moodDuration ? Math.min(Number(body.moodDuration) || 60000, MAX_MOOD_DURATION) : null,
+    moodDuration: body.moodDuration == null ? null : Math.min(Math.max(Number(body.moodDuration) || 60000, 1000), MAX_MOOD_DURATION),
   }
 }
 // ── End inline copy ────────────────────────────────────────────────────────
-
-function cmp(a, b) {
-  // Compare everything except _seq (timestamp differs between calls)
-  const { _seq: _a, ...ra } = a
-  const { _seq: _b, ...rb } = b
-  return JSON.stringify(ra) === JSON.stringify(rb)
-}
 
 const CASES = [
   { dev: 'working' },
@@ -88,6 +81,13 @@ const CASES = [
   { type: 'office-status', agents: [{ role: 'dev', status: 'working', hint: 'y'.repeat(300) }] },
   { type: 'office-status', agents: [], mood: 'rushing', moodDuration: 999_999_999 },
   { type: 'office-status', agents: [], mood: '<script>' },
+  // moodDuration edge cases — shorthand branch
+  { dev: 'working', mood: 'rushing', moodDuration: 500 },       // sub-minimum → clamp to 1000
+  { dev: 'working', mood: 'rushing', moodDuration: 0 },         // falsy zero → was null before fix
+  { dev: 'working', mood: 'rushing', moodDuration: null },      // explicit null → null
+  // moodDuration edge cases — office-status branch
+  { type: 'office-status', agents: [], mood: 'rushing', moodDuration: 500 },
+  { type: 'office-status', agents: [], mood: 'rushing', moodDuration: 0 },
 ]
 
 describe('normalizePost server/canonical parity', () => {
@@ -95,7 +95,9 @@ describe('normalizePost server/canonical parity', () => {
     it(JSON.stringify(input).slice(0, 80), () => {
       const a = canonical(input)
       const b = serverNormalizePost(input)
-      expect(cmp(a, b)).toBe(true)
+      const { _seq: _a, ...ra } = a
+      const { _seq: _b, ...rb } = b
+      expect(ra).toEqual(rb)
     })
   }
 })

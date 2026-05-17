@@ -99,7 +99,7 @@ npx agent-virtual-office serve
 npm run serve
 ```
 
-The `serve` command auto-builds if `dist/` doesn't exist yet. Options:
+The `serve` command requires a pre-built `dist/` — run `npm run build` first (it will exit with an error if `dist/` is missing). Options:
 ```
 --port=PORT    Port number (default: 5174)
 --host         Expose to LAN (default: localhost only)
@@ -130,7 +130,14 @@ docker compose up -d
 
 Then open `http://localhost:5174`.
 
-The compose file mounts `~/.claude` read-write into the container so the server can both read hook-written status files and accept POST writes. Pass an optional `OFFICE_API_TOKEN` to gate POST/event requests:
+The compose file mounts `~/.claude` read-write into the container so the server can both read hook-written status files and accept POST writes.
+
+> **Pre-flight (first run only):** The container runs as UID 1000. If `~/.claude` was created by root, make it writable first:
+> ```bash
+> mkdir -p ~/.claude && sudo chown $USER ~/.claude
+> ```
+
+Pass an optional `OFFICE_API_TOKEN` to gate POST/event requests:
 
 ```bash
 OFFICE_API_TOKEN=secret docker compose up -d

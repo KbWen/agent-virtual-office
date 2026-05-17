@@ -67,9 +67,8 @@ function getSessionSlug() {
       }
     }
     if (headContent) {
-      const branch = headContent.startsWith('ref: refs/heads/')
-        ? headContent.slice('ref: refs/heads/'.length)
-        : null  // detached HEAD — fall through to CWD slug
+      const refMatch = headContent.match(/^ref:\s+refs\/heads\/(.+)$/)
+      const branch = refMatch ? refMatch[1] : null  // null = detached HEAD → fall through
       if (branch) {
         const slug = branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) || 'default'
         return `${slug}-${cwdHash}`
@@ -347,7 +346,15 @@ function saveSkillContext(agentId, role, skillName) {
     const p = skillContextPath(agentId)
     const dir = path.dirname(p)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(p, JSON.stringify({ role, skillName }))
+    const json = JSON.stringify({ role, skillName })
+    const tmp = p + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
+    try {
+      fs.writeFileSync(tmp, json)
+      fs.renameSync(tmp, p)
+    } catch {
+      try { fs.writeFileSync(p, json) } catch {}
+      try { fs.unlinkSync(tmp) } catch {}
+    }
   } catch {}
 }
 
@@ -385,6 +392,11 @@ function processEvent(event) {
       break
     }
     case 'PreToolUse': {
+      // If Stop fired recently (within 8s), skip — next prompt hasn't started yet
+      try {
+        const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+        if (cur._stopped && (Date.now() - parseInt(cur._seq, 10) < 8000)) return
+      } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       // If inside a subagent with skill context, prefer the skill's role
       const skillCtx = readSkillContext(agentId)
@@ -396,11 +408,11 @@ function processEvent(event) {
       break
     }
     case 'PostToolUse': {
-      // If Stop already fired this turn, skip — straggler PostToolUse must not
+      // If Stop fired recently (within 8s), skip — straggler PostToolUse must not
       // overwrite the authoritative idle state written by Stop.
       try {
         const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-        if (cur._stopped) return
+        if (cur._stopped && (Date.now() - parseInt(cur._seq, 10) < 8000)) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       const skillCtx = readSkillContext(agentId)
