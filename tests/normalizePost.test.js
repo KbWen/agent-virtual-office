@@ -7,13 +7,14 @@ describe('normalizePost', () => {
       const result = normalizePost({ dev: 'working' })
       expect(result.type).toBe('office-status')
       expect(result.agents).toHaveLength(1)
-      expect(result.agents[0]).toMatchObject({ role: 'dev', status: 'working', task: null })
+      // toEqual pins the complete agent shape — label/hint presence is part of the contract
+      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: null, label: null, hint: null })
       expect(result.activeCount).toBe(1)
     })
 
     it('treats non-status values as tasks with status "working"', () => {
       const result = normalizePost({ dev: 'writing tests' })
-      expect(result.agents[0]).toMatchObject({ role: 'dev', status: 'working', task: 'writing tests' })
+      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: 'writing tests', label: null, hint: null })
     })
 
     it('handles multiple agents', () => {
@@ -138,6 +139,14 @@ describe('normalizePost', () => {
     it('rejects invalid moods in full format', () => {
       const result = normalizePost({ type: 'office-status', agents: [], mood: '<script>' })
       expect(result.mood).toBeNull()
+    })
+
+    it('nulls moodDuration when mood is invalid — orphan duration must not be shipped', () => {
+      const r1 = normalizePost({ dev: 'working', mood: 'hacked', moodDuration: 5000 })
+      expect(r1.mood).toBeNull()
+      expect(r1.moodDuration).toBeNull()
+      const r2 = normalizePost({ type: 'office-status', agents: [], mood: '<bad>', moodDuration: 30000 })
+      expect(r2.moodDuration).toBeNull()
     })
   })
 

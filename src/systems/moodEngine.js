@@ -12,6 +12,7 @@
  */
 
 import { useOfficeStore } from './store'
+import { VALID_MOODS } from './constants'
 
 const MAX_EVENTS = 20
 const IDLE_TIMEOUT = 180000     // 3 minutes of silence → idle
@@ -24,7 +25,6 @@ const SMOOTH_STREAK = 5         // 5+ consecutive done → smooth
 const INTENSE_ROLES = 3         // 3+ distinct roles active in 30s → intense
 const INTENSE_WINDOW = 30000
 
-const VALID_MOODS_ENGINE = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
 const events = []
 let idleTimer = null
 let overrideTimer = null
@@ -33,9 +33,9 @@ let overrideExpiry = null
 
 function pruneStale() {
   const cutoff = Date.now() - STALE_CUTOFF
-  while (events.length > 0 && events[0].timestamp < cutoff) {
-    events.shift()
-  }
+  const firstFresh = events.findIndex(e => e.timestamp >= cutoff)
+  if (firstFresh > 0) events.splice(0, firstFresh)
+  else if (firstFresh === -1) events.length = 0
 }
 
 function computeMood() {
@@ -122,10 +122,8 @@ export function pushEventBatch(eventList) {
     added++
   }
 
-  // Keep window size bounded
-  while (events.length > MAX_EVENTS) {
-    events.shift()
-  }
+  // Keep window size bounded — one splice is O(n) vs a shift loop's O(k·n)
+  if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS)
 
   if (added > 0) resetIdleTimer()
   updateStoreMood()
@@ -136,7 +134,7 @@ export function pushEventBatch(eventList) {
  * Expires after durationMs (default 60s) and falls back to computed mood.
  */
 export function setMoodOverride(mood, durationMs = 60000) {
-  if (!VALID_MOODS_ENGINE.includes(mood)) return
+  if (!VALID_MOODS.includes(mood)) return
   if (overrideTimer) clearTimeout(overrideTimer)
   const clampedMs = Math.max(durationMs, 1000)
   overrideMood = mood
@@ -158,4 +156,13 @@ export function resetMood() {
   overrideExpiry = null
   if (idleTimer) { clearTimeout(idleTimer); idleTimer = null }
   if (overrideTimer) { clearTimeout(overrideTimer); overrideTimer = null }
+}
+
+// HMR: clear timers on module hot-replacement so orphaned handles don't fire
+// against stale closures after Vite replaces this module.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    if (idleTimer) clearTimeout(idleTimer)
+    if (overrideTimer) clearTimeout(overrideTimer)
+  })
 }

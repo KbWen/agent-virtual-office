@@ -9,19 +9,39 @@ import { describe, it, expect } from 'vitest'
 import { normalizePost as canonical } from '../src/utils/normalizePost.js'
 
 // ── Inline copy from server.mjs ────────────────────────────────────────────
-// Keep this in sync with the `normalizePost` function at the top of server.mjs.
+// MUST stay byte-for-byte identical to the normalizePost function in server.mjs.
+// Differences in _seq format, filter logic, or field handling will be caught
+// by the _seq format assertion below (toMatch(/^\d+$/)) and the toEqual comparison.
 const VALID_ROLES    = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
 const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
 const VALID_MOODS    = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
 const MAX_MOOD_DURATION = 3_600_000
 
+function clampMoodDuration(raw) {
+  if (raw == null) return null
+  const n = Number(raw)
+  return Math.min(Math.max(Number.isFinite(n) ? n : 60000, 1000), MAX_MOOD_DURATION)
+}
+
+let _seqLast = 0
+function nextSeq() {
+  const now = Date.now()
+  _seqLast = now > _seqLast ? now : _seqLast + 1
+  return String(_seqLast)
+}
+
 function serverNormalizePost(body) {
   if (body == null || typeof body !== 'object') body = {}
   if (body.type === 'office-status') {
-    const _seen = new Set()
+    const seen = new Set()
     const agents = (Array.isArray(body.agents) ? body.agents : [])
-      .filter(a => a && typeof a === 'object' && VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status)
-        && !_seen.has(a.role) && _seen.add(a.role))
+      .filter(a => {
+        if (!a || typeof a !== 'object') return false
+        if (!VALID_ROLES.includes(a.role) || !VALID_STATUSES.includes(a.status)) return false
+        if (seen.has(a.role)) return false
+        seen.add(a.role)
+        return true
+      })
       .slice(0, 50)
       .map(a => ({
         role: a.role, status: a.status,
@@ -29,15 +49,16 @@ function serverNormalizePost(body) {
         label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
         hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
       }))
+    const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
     return {
       type: 'office-status',
       agents,
       activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
-      mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
-      moodDuration: body.moodDuration == null ? null : Math.min(Math.max(Number.isFinite(Number(body.moodDuration)) ? Number(body.moodDuration) : 60000, 1000), MAX_MOOD_DURATION),
+      mood,
+      moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
       source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
-      _seq: String(Date.now()),
+      _seq: nextSeq(),
     }
   }
   const agents = []
@@ -48,19 +69,20 @@ function serverNormalizePost(body) {
     if (!isStatus && typeof val !== 'string') continue
     agents.push({
       role: key,
-      task: isStatus ? null : (typeof val === 'string' ? val.slice(0, 200) : null),
+      task: isStatus ? null : val.slice(0, 200),
       status: isStatus ? val : 'working',
       label: typeof body.label === 'string' ? body.label.slice(0, 200) : null,
       hint: typeof body.hint === 'string' ? body.hint.slice(0, 200) : null,
     })
   }
+  const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
   return {
-    _seq: String(Date.now()), type: 'office-status', agents,
+    _seq: nextSeq(), type: 'office-status', agents,
     activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
-    mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
-    moodDuration: body.moodDuration == null ? null : Math.min(Math.max(Number.isFinite(Number(body.moodDuration)) ? Number(body.moodDuration) : 60000, 1000), MAX_MOOD_DURATION),
+    mood,
+    moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
   }
 }
 // ── End inline copy ────────────────────────────────────────────────────────
@@ -117,11 +139,11 @@ describe('normalizePost server/canonical parity', () => {
       const { _seq: _a, ...ra } = a
       const { _seq: _b, ...rb } = b
       expect(ra).toEqual(rb)
-      // _seq must be a non-empty string (both copies)
-      expect(typeof _a).toBe('string')
-      expect(_a.length).toBeGreaterThan(0)
-      expect(typeof _b).toBe('string')
-      expect(_b.length).toBeGreaterThan(0)
+      // _seq must be a plain integer string (no '.counter' suffix) in both copies.
+      // This assertion would catch format divergence between server.mjs and src/utils/normalizePost.js.
+      const SEQ_RE = /^\d+$/
+      expect(_a).toMatch(SEQ_RE)
+      expect(_b).toMatch(SEQ_RE)
     })
   }
 })

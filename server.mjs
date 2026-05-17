@@ -28,13 +28,24 @@ const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
 const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
 const MAX_MOOD_DURATION = 3_600_000
 
+function clampMoodDuration(raw) {
+  if (raw == null) return null
+  const n = Number(raw)
+  return Math.min(Math.max(Number.isFinite(n) ? n : 60000, 1000), MAX_MOOD_DURATION)
+}
+
 function normalizePost(body) {
   if (body == null || typeof body !== 'object') body = {}
   if (body.type === 'office-status') {
-    const _seen = new Set()
+    const seen = new Set()
     const agents = (Array.isArray(body.agents) ? body.agents : [])
-      .filter(a => a && typeof a === 'object' && VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status)
-        && !_seen.has(a.role) && _seen.add(a.role))
+      .filter(a => {
+        if (!a || typeof a !== 'object') return false
+        if (!VALID_ROLES.includes(a.role) || !VALID_STATUSES.includes(a.status)) return false
+        if (seen.has(a.role)) return false
+        seen.add(a.role)
+        return true
+      })
       .slice(0, 50)
       .map(a => ({
         role: a.role, status: a.status,
@@ -42,14 +53,14 @@ function normalizePost(body) {
         label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
         hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
       }))
+    const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
     return {
       type: 'office-status',
       agents,
       activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
-      mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
-      moodDuration: body.moodDuration == null ? null
-        : Math.min(Math.max(Number.isFinite(Number(body.moodDuration)) ? Number(body.moodDuration) : 60000, 1000), MAX_MOOD_DURATION),
+      mood,
+      moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
       source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
       _seq: nextSeq(),
     }
@@ -62,20 +73,20 @@ function normalizePost(body) {
     if (!isStatus && typeof val !== 'string') continue
     agents.push({
       role: key,
-      task: isStatus ? null : (typeof val === 'string' ? val.slice(0, 200) : null),
+      task: isStatus ? null : val.slice(0, 200),
       status: isStatus ? val : 'working',
       label: typeof body.label === 'string' ? body.label.slice(0, 200) : null,
       hint: typeof body.hint === 'string' ? body.hint.slice(0, 200) : null,
     })
   }
+  const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
   return {
     _seq: nextSeq(), type: 'office-status', agents,
     activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
-    mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
-    moodDuration: body.moodDuration == null ? null
-      : Math.min(Math.max(Number.isFinite(Number(body.moodDuration)) ? Number(body.moodDuration) : 60000, 1000), MAX_MOOD_DURATION),
+    mood,
+    moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
   }
 }
 
@@ -140,10 +151,14 @@ function atomicWrite(filePath, content) {
   }
 }
 
-// Monotonic _seq: ms timestamp + per-process counter avoids same-ms collisions.
-// parseInt(_seq, 10) still yields the timestamp for staleness checks (stops at '.').
-let _seqN = 0
-function nextSeq() { return `${Date.now()}.${_seqN = (_seqN + 1) % 10000}` }
+// Monotonic _seq: plain integer string, always >= the previous value in this process.
+// Number(_seq) / parseInt(_seq,10) both work identically; no suffix to truncate.
+let _seqLast = 0
+function nextSeq() {
+  const now = Date.now()
+  _seqLast = now > _seqLast ? now : _seqLast + 1
+  return String(_seqLast)
+}
 const isWin = process.platform === 'win32'
 function pathsEqual(a, b) { return isWin ? a.toLowerCase() === b.toLowerCase() : a === b }
 
@@ -188,16 +203,19 @@ function isAuthorized(req) {
   if (!apiToken) return true
   const h = req.headers['x-office-token']
   const a = req.headers.authorization
-  return (typeof h === 'string' && safeEqual(h, apiToken)) ||
-         (typeof a === 'string' && safeEqual(a, `Bearer ${apiToken}`))
+  // Evaluate both before OR-ing — avoids timing oracle from short-circuit evaluation.
+  const m1 = typeof h === 'string' && safeEqual(h, apiToken)
+  const m2 = typeof a === 'string' && safeEqual(a, `Bearer ${apiToken}`)
+  return m1 || m2
 }
 
-// ─── Rate limiter ─────────────────────────────────────────────────────────────
+// ─── Rate limiter (sliding window) ───────────────────────────────────────────
 // Note: keys on req.socket.remoteAddress. Behind a reverse proxy (Nginx/Caddy)
 // every request arrives from 127.0.0.1, so this becomes a global aggregate cap
 // (30 POST / 10s total) rather than a per-client limit. In that case Nginx's
 // limit_req (docs/deployment/nginx.conf) is the real per-client rate limiter.
 // This layer defends the loopback surface on non-proxied deployments.
+// Sliding window (per-IP timestamp array) eliminates the fixed-window 2× burst flaw.
 const postCounts = new Map()
 const RATE_WINDOW = 10000, RATE_LIMIT = 30
 
@@ -205,13 +223,11 @@ function checkRateLimit(req) {
   if (req.method !== 'POST') return true
   const ip = req.socket?.remoteAddress || 'unknown'
   const now = Date.now()
-  const entry = postCounts.get(ip)
-  if (!entry || now - entry.start > RATE_WINDOW) {
-    postCounts.set(ip, { start: now, count: 1 })
-    return true
-  }
-  if (entry.count >= RATE_LIMIT) return false  // don't inflate counter past limit
-  entry.count++
+  const ts = postCounts.get(ip) || []
+  const fresh = ts.filter(t => now - t < RATE_WINDOW)
+  if (fresh.length >= RATE_LIMIT) { postCounts.set(ip, fresh); return false }
+  fresh.push(now)
+  postCounts.set(ip, fresh)
   return true
 }
 
@@ -465,7 +481,16 @@ function serveStatic(req, res) {
   if (target !== dist && !target.startsWith(dist + path.sep)) { res.statusCode = 403; return res.end('Forbidden') }
 
   if (fs.existsSync(target) && fs.statSync(target).isDirectory()) target = path.join(target, 'index.html')
-  if (!fs.existsSync(target)) target = path.join(dist, 'index.html')  // SPA fallback
+  if (!fs.existsSync(target)) {
+    // 404 for missing files with extensions (hashed chunk deploy-skew) — SPA fallback only for routes
+    if (path.extname(urlPath)) { res.statusCode = 404; return res.end('Not Found') }
+    target = path.join(dist, 'index.html')
+  }
+
+  // Resolve symlinks and re-check containment to block symlink traversal inside dist/
+  let realTarget = target
+  try { realTarget = fs.realpathSync(target) } catch { /* keep original path if realpathSync fails */ }
+  if (realTarget !== dist && !realTarget.startsWith(dist + path.sep)) { res.statusCode = 403; return res.end('Forbidden') }
 
   const ext = path.extname(target).toLowerCase()
   const mime = MIME[ext] || 'application/octet-stream'

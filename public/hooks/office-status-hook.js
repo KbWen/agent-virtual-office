@@ -18,8 +18,15 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 
-let _seqN = Math.floor(Math.random() * 10000)
-function nextSeq() { return `${Date.now()}.${_seqN = (_seqN + 1) % 10000}` }
+// Monotonic _seq: plain integer, matches server.mjs / vite.config.js canonical form.
+// Monotonic within a process run; two runs in the same ms can produce equal values,
+// which is acceptable — staleness is checked against a 300s window, not 1ms precision.
+let _seqLast = 0
+function nextSeq() {
+  const now = Date.now()
+  _seqLast = now > _seqLast ? now : _seqLast + 1
+  return String(_seqLast)
+}
 
 // ─── Bilingual labels ───
 function detectHookLang() {

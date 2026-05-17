@@ -42,12 +42,13 @@ function getServerIPs() {
 
 const SERVER_IPS = getServerIPs()
 
-// Monotonic sequence: timestamp + counter suffix, same as server.mjs.
-// Prevents same-ms _seq collisions in dedup / multi-session merge.
-let _seqCounter = 0
+// Monotonic _seq: plain integer string, identical implementation as server.mjs.
+// Number(_seq) and parseInt(_seq,10) both work identically; no suffix to truncate.
+let _seqLast = 0
 function nextSeq() {
-  _seqCounter = (_seqCounter + 1) % 10000
-  return `${Date.now()}.${String(_seqCounter).padStart(4, '0')}`
+  const now = Date.now()
+  _seqLast = now > _seqLast ? now : _seqLast + 1
+  return String(_seqLast)
 }
 
 // Constant-time token comparison — prevents timing oracle attacks.
@@ -128,20 +129,11 @@ function officeStatusPlugin() {
     if (req.method !== 'POST') return true
     const ip = req.socket?.remoteAddress || 'unknown'
     const now = Date.now()
-    const entry = postCounts.get(ip)
-    if (!entry || now - entry.start > RATE_WINDOW) {
-      // Clean up stale entries periodically (every 100 checks)
-      if (postCounts.size > 50) {
-        for (const [k, v] of postCounts) {
-          if (now - v.start > RATE_WINDOW) postCounts.delete(k)
-        }
-      }
-      postCounts.set(ip, { start: now, count: 1 })
-      return true
-    }
-    // Don't inflate counter past limit — prevents unbounded growth under sustained flood
-    if (entry.count >= RATE_LIMIT) return false
-    entry.count++
+    const ts = postCounts.get(ip) || []
+    const fresh = ts.filter(t => now - t < RATE_WINDOW)
+    if (fresh.length >= RATE_LIMIT) { postCounts.set(ip, fresh); return false }
+    fresh.push(now)
+    postCounts.set(ip, fresh)
     return true
   }
 

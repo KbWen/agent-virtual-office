@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock zustand store before importing moodEngine
 vi.mock('../src/systems/store', () => {
@@ -22,8 +22,16 @@ function getMood() {
 
 describe('moodEngine', () => {
   beforeEach(() => {
+    // Fake timers globally: prevents wall-clock dependency and timer leakage between tests.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
     resetMood()
-    vi.restoreAllMocks()
+  })
+
+  afterEach(() => {
+    // Drain pending timers so they don't bleed into the next test's fake-timer queue.
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
   })
 
   describe('pushEventBatch', () => {
@@ -32,15 +40,14 @@ describe('moodEngine', () => {
       expect(getMood()).toBe('normal')
     })
 
-    it('computes mood only once per batch (not N times)', () => {
-      // If pushEventBatch called updateStoreMood N times, the mood
-      // would be recomputed unnecessarily. We just verify it doesn't throw.
+    it('computes mood only once per batch — result is the expected final mood', () => {
       pushEventBatch([
         { role: 'dev', status: 'done', task: 'Edit', hint: null },
         { role: 'qa', status: 'done', task: 'Bash', hint: null },
         { role: 'ops', status: 'done', task: 'Bash', hint: null },
       ])
-      // Should be computed once — not an error
+      // 3 done events (3 < SMOOTH_STREAK=5, 3 < RUSHING_THRESHOLD=5) → normal
+      expect(getMood()).toBe('normal')
     })
 
     it('does not throw on null batch or null entries', () => {
@@ -49,20 +56,17 @@ describe('moodEngine', () => {
     })
 
     it('empty batch does not reset idle timer (no side-effects when nothing added)', () => {
-      vi.useFakeTimers()
       pushEventBatch([{ role: 'dev', status: 'working', task: 'Edit', hint: null }])
       const moodBefore = getMood()
-      // Empty batch: no new events, idle timer should not be reset
       pushEventBatch([])
-      expect(getMood()).toBe(moodBefore) // mood unchanged
-      vi.useRealTimers()
+      expect(getMood()).toBe(moodBefore) // mood unchanged by empty batch
     })
   })
 
   describe('rushing detection', () => {
     it('detects rushing when 5+ events in 10s window', () => {
       const events = Array.from({ length: 6 }, (_, i) => ({
-        role: `dev`, status: 'working', task: `task${i}`, hint: null,
+        role: 'dev', status: 'working', task: `task${i}`, hint: null,
       }))
       pushEventBatch(events)
       expect(getMood()).toBe('rushing')
@@ -71,11 +75,7 @@ describe('moodEngine', () => {
 
   describe('frustrated detection', () => {
     it('detects frustrated when last 3 events are blocked', () => {
-      // First add some normal events to avoid rushing
-      pushEventBatch([
-        { role: 'dev', status: 'blocked', task: 'Edit', hint: 'error' },
-      ])
-      // Space them out by pushing one at a time
+      pushEventBatch([{ role: 'dev', status: 'blocked', task: 'Edit', hint: 'error' }])
       pushEventBatch([{ role: 'dev', status: 'blocked', task: 'Bash', hint: 'error' }])
       pushEventBatch([{ role: 'dev', status: 'blocked', task: 'Read', hint: 'error' }])
       expect(getMood()).toBe('frustrated')
@@ -84,27 +84,22 @@ describe('moodEngine', () => {
 
   describe('smooth detection', () => {
     it('detects smooth when last 5 events are done', () => {
-      vi.useFakeTimers()
-      // Space events 3s apart to avoid rushing threshold (5+ in 10s)
+      // Space events 3s apart to stay below the rushing threshold (5+ events in 10s)
       for (let i = 0; i < 5; i++) {
         vi.advanceTimersByTime(3000)
         pushEventBatch([{ role: 'dev', status: 'done', task: `task${i}`, hint: null }])
       }
       expect(getMood()).toBe('smooth')
-      vi.useRealTimers()
     })
   })
 
   describe('stuck detection', () => {
     it('detects stuck when same task appears 5+ times', () => {
-      vi.useFakeTimers()
-      // Space events 3s apart to avoid rushing threshold
       for (let i = 0; i < 5; i++) {
         vi.advanceTimersByTime(3000)
         pushEventBatch([{ role: 'dev', status: 'working', task: 'Edit', hint: null }])
       }
       expect(getMood()).toBe('stuck')
-      vi.useRealTimers()
     })
   })
 
@@ -115,18 +110,13 @@ describe('moodEngine', () => {
         { role: 'qa', status: 'working', task: 'Bash', hint: null },
         { role: 'ops', status: 'working', task: 'Bash', hint: null },
       ])
-      // 3 events in batch triggers rushing (>=5 threshold not met with 3),
-      // but 3 distinct roles should trigger intense
-      // Note: rushing check (5+ events in 10s) runs before intense (3+ roles)
-      // With only 3 events, rushing won't trigger, so intense should
+      // 3 events < RUSHING_THRESHOLD(5); 3 distinct working roles within INTENSE_WINDOW(30s) → intense
       expect(getMood()).toBe('intense')
     })
   })
 
   describe('idle detection', () => {
     it('returns idle when no events', () => {
-      resetMood()
-      // pushEventBatch with empty array doesn't add events but still calls computeMood
       pushEventBatch([])
       expect(getMood()).toBe('idle')
     })
@@ -147,39 +137,30 @@ describe('moodEngine', () => {
     })
 
     it('expires after duration via overrideTimer (no manual push needed)', () => {
-      vi.useFakeTimers()
       setMoodOverride('rushing', 1000)
       expect(getMood()).toBe('rushing')
-
-      // Timer fires automatically; no manual pushEventBatch needed
+      // Timer fires automatically — no manual pushEventBatch needed
       vi.advanceTimersByTime(1051)
       expect(getMood()).not.toBe('rushing')
-
-      vi.useRealTimers()
     })
 
-    it('expires after duration (legacy path: pushEventBatch triggers recompute)', () => {
-      vi.useFakeTimers()
+    it('expires after duration (pushEventBatch also triggers recompute)', () => {
       setMoodOverride('rushing', 1000)
       expect(getMood()).toBe('rushing')
-
       vi.advanceTimersByTime(1001)
       pushEventBatch([])
       expect(getMood()).not.toBe('rushing')
-
-      vi.useRealTimers()
     })
   })
 
   describe('resetMood', () => {
     it('clears all state', () => {
-      pushEventBatch([
-        { role: 'dev', status: 'done', task: 'Edit', hint: null },
-        { role: 'dev', status: 'done', task: 'Edit', hint: null },
-        { role: 'dev', status: 'done', task: 'Edit', hint: null },
-        { role: 'dev', status: 'done', task: 'Edit', hint: null },
-        { role: 'dev', status: 'done', task: 'Edit', hint: null },
-      ])
+      // Push 5 done events with distinct tasks (same task would trigger stuck before smooth)
+      for (let i = 0; i < 5; i++) {
+        vi.advanceTimersByTime(3000)
+        pushEventBatch([{ role: 'dev', status: 'done', task: `task${i}`, hint: null }])
+      }
+      expect(getMood()).toBe('smooth')
       resetMood()
       pushEventBatch([])
       expect(getMood()).toBe('idle')

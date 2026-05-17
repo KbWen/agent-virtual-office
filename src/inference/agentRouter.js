@@ -3,6 +3,8 @@
  * Three-tier routing: explicit role → keyword match → round-robin fallback
  */
 
+import { VALID_STATUSES } from '../systems/constants.js'
+
 const ROLE_KEYWORDS = {
   pm:       [/plan/i, /spec/i, /bootstrap/i, /manage/i, /schedule/i, /roadmap/i, /sprint/i, /standup/i, /priorit/i, /backlog/i],
   arch:     [/architect/i, /brainstorm/i, /decide/i, /diagram/i, /pattern/i, /\brfc\b/i, /structur/i, /schema/i, /system.design/i, /design.system/i],
@@ -10,7 +12,7 @@ const ROLE_KEYWORDS = {
   qa:       [/test/i, /review/i, /\blint\b/i, /check/i, /verify/i, /validate/i, /quality/i, /bug/i, /assert/i, /coverage/i],
   ops:      [/deploy/i, /ship/i, /release/i, /\bci\b/i, /\bcd\b/i, /infra/i, /monitor/i, /handoff/i, /docker/i, /publish/i],
   res:      [/research/i, /search/i, /explore/i, /learn/i, /analyze/i, /investigate/i, /\bread\b/i, /study/i, /survey/i],
-  gate:     [/gate/i, /guard/i, /security/i, /auth/i, /permission/i, /approve/i, /compliance/i, /audit/i, /policy/i],
+  gate:     [/gate/i, /guard/i, /security/i, /\bauth\w*/i, /permission/i, /approve/i, /compliance/i, /audit/i, /policy/i],
   designer: [/\bdesign\b/i, /\bui\b/i, /\bux\b/i, /style/i, /\bcss\b/i, /layout/i, /visual/i, /brand/i, /icon/i, /figma/i, /sketch/i, /color/i, /font/i, /spacing/i, /typography/i],
 }
 
@@ -40,10 +42,15 @@ export function routeTaskToAgent(task) {
     return COMMAND_TO_AGENT[task]
   }
 
+  // Iterate FALLBACK_ORDER so tie-breaks use the same explicit priority as tier-3.
+  // Object.entries() insertion order is spec-guaranteed but undocumented — use FALLBACK_ORDER
+  // as the single documented source of role priority.
   let bestRole = null
   let bestScore = 0
 
-  for (const [role, patterns] of Object.entries(ROLE_KEYWORDS)) {
+  for (const role of FALLBACK_ORDER) {
+    const patterns = ROLE_KEYWORDS[role]
+    if (!patterns) continue
     let score = 0
     for (const pattern of patterns) {
       if (pattern.test(task)) score++
@@ -63,8 +70,6 @@ export function routeTaskToAgent(task) {
  * @param {Array<{role, task, status, label}>} agents
  * @returns {Array<{agentId, status, task, label}>}
  */
-const VALID_AGENT_STATUSES = ['idle', 'working', 'blocked', 'done']
-
 export function routeExternalAgents(agents) {
   if (!agents || agents.length === 0) return []
 
@@ -100,7 +105,7 @@ export function routeExternalAgents(agents) {
       assigned.add(agentId)
       results.push({
         agentId,
-        status: VALID_AGENT_STATUSES.includes(entry.status) ? entry.status : 'working',
+        status: VALID_STATUSES.includes(entry.status) ? entry.status : 'working',
         task: entry.task || null,
         label: entry.label || null,
         hint: entry.hint || null,
