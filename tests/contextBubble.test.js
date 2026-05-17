@@ -50,6 +50,7 @@ describe('extractContext', () => {
   it('strips keycap emoji prefix (digit + VS16 + enclosing keycap)', () => {
     expect(extractContext('1️⃣ first task')).toBe('first task')
     expect(extractContext('#️⃣ hashtag')).toBe('hashtag')
+    expect(extractContext('*️⃣ wildcard')).toBe('wildcard')
   })
 })
 
@@ -74,5 +75,9 @@ describe('toolToAction', () => {
   it('returns "generic" for unknown tools', () => {
     expect(toolToAction('UnknownTool')).toBe('generic')
     expect(toolToAction('TodoWrite')).toBe('generic')
+  })
+
+  it('maps NotebookEdit to "edit"', () => {
+    expect(toolToAction('NotebookEdit')).toBe('edit')
   })
 })

@@ -185,6 +185,7 @@ describe('routeExternalAgents', () => {
   it('tier 1: rejects __proto__ role injection', () => {
     const result = routeExternalAgents([{ role: '__proto__', status: 'working' }])
     expect(result[0].agentId).not.toBe('__proto__')
+    expect(['dev', 'qa', 'pm', 'ops', 'arch', 'res', 'designer', 'gate']).toContain(result[0].agentId)
   })
 })
 
@@ -209,5 +210,13 @@ describe('distributeFallbackCount', () => {
 
   it('returns stable order across calls', () => {
     expect(distributeFallbackCount(4)).toEqual(distributeFallbackCount(4))
+  })
+
+  it('handles NaN count as 0', () => {
+    expect(distributeFallbackCount(NaN)).toEqual([])
+  })
+
+  it('floors float inputs', () => {
+    expect(distributeFallbackCount(2.9)).toEqual(['dev', 'qa'])
   })
 })

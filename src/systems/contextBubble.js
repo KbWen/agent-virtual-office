@@ -61,6 +61,7 @@ export function toolToAction(task) {
     case 'Grep': case 'Glob': return 'search'
     case 'Agent': return 'delegate'
     case 'WebFetch': case 'WebSearch': return 'web'
+    case 'NotebookEdit': return 'edit'
     default: return 'generic'
   }
 }

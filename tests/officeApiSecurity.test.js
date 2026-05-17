@@ -37,4 +37,17 @@ describe('office API security helpers', () => {
     expect(isAuthorizedOfficeRequest({ headers: { authorization: 'Bearer secret-123' } }, config)).toBe(true)
     expect(isAuthorizedOfficeRequest({ headers: { authorization: 'Bearer wrong' } }, config)).toBe(false)
   })
+
+  it('rejects non-string header values even when token is configured', () => {
+    const config = getOfficeApiConfig({ OFFICE_API_TOKEN: 'secret' })
+    expect(isAuthorizedOfficeRequest({ headers: { 'x-office-token': null } }, config)).toBe(false)
+    expect(isAuthorizedOfficeRequest({ headers: { 'x-office-token': 42 } }, config)).toBe(false)
+    expect(isAuthorizedOfficeRequest({ headers: {} }, config)).toBe(false)
+  })
+
+  it('returns null for disallowed origins with explicit allowlist config', () => {
+    const config = getOfficeApiConfig({ OFFICE_API_ALLOWED_ORIGINS: 'https://office.example' })
+    expect(getAllowedOriginHeader('http://localhost:5173', config)).toBeNull()
+    expect(getAllowedOriginHeader('https://office.example', config)).toBe('https://office.example')
+  })
 })

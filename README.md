@@ -364,7 +364,7 @@ npx agent-virtual-office --no-host
 ```
 
 ### Node.js version error
-Requires Node.js 20 or higher:
+Requires Node.js 22 or higher:
 ```bash
 node --version  # must be >= 22
 ```

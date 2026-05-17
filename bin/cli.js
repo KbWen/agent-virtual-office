@@ -119,7 +119,7 @@ if (command === 'uninstall') {
     for (const file of files) {
       if (/^office-status(-[^.]+)?\.json(\.tmp\.\d+\.[a-z0-9]+)?$/.test(file) ||
           /^office-skill-[^.]+\.json(\.tmp\.\d+\.[a-z0-9]+)?$/.test(file) ||
-          file === 'office-lang') {
+          /^office-lang(\.tmp\.\d+\.[a-z0-9]+)?$/.test(file)) {
         const filePath = path.join(claudeDir, file)
         fs.unlinkSync(filePath)
         console.log('  Removed: ' + filePath)
@@ -217,7 +217,7 @@ if (!/^\d+$/.test(port) || parseInt(port, 10) < 1 || parseInt(port, 10) > 65535)
   process.exit(1)
 }
 const lang = args.find(a => a.startsWith('--lang='))?.split('=')[1]
-if (lang && !/^[a-zA-Z-]{2,10}$/.test(lang)) {
+if (lang && lang !== 'en' && lang !== 'zh-TW') {
   console.error('  Invalid --lang: ' + lang + '. Use "en" or "zh-TW".')
   process.exit(1)
 }

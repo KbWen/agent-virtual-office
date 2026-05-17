@@ -301,7 +301,7 @@ function handleStatus(req, res) {
             .sort((a, b) => (PRI[a.status] ?? 9) - (PRI[b.status] ?? 9))[0]
           if (pick) allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
         }
-        merged = { _seq: String(latestSeq), type: 'office-status', agents: allAgents, activeCount: allAgents.filter(a => a.status !== 'done').length, workflow, source: 'multi-session', sessionCount: sessions.length }
+        merged = { _seq: String(latestSeq || Date.now()), type: 'office-status', agents: allAgents, activeCount: allAgents.filter(a => a.status !== 'done').length, workflow, source: 'multi-session', sessionCount: sessions.length }
       }
 
       const data = JSON.stringify(merged)
@@ -321,7 +321,7 @@ function handleStatus(req, res) {
     req.on('data', chunk => {
       if (aborted) return
       body += chunk
-      if (body.length > 16384) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Body too large' })); req.resume() }
+      if (Buffer.byteLength(body, 'utf8') > 16384) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Body too large' })); req.resume() }
     })
     req.on('end', () => {
       if (aborted) return
@@ -345,6 +345,7 @@ function handleStatus(req, res) {
 // ─── /api/lang ────────────────────────────────────────────────────────────────
 function handleLang(req, res) {
   res.setHeader('Content-Type', 'application/json')
+  res.setHeader('Cache-Control', 'no-store')
   setCors(res, req.headers.origin, 'POST, OPTIONS')
   if (req.method === 'OPTIONS') return handlePreflight(req, res)
   if (req.method !== 'POST') { res.statusCode = 405; return res.end() }
@@ -357,7 +358,7 @@ function handleLang(req, res) {
   req.on('data', chunk => {
     if (aborted) return
     body += chunk
-    if (body.length > 16) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Body too large' })); req.resume() }
+    if (Buffer.byteLength(body, 'utf8') > 16) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Body too large' })); req.resume() }
   })
   req.on('end', () => {
     if (aborted) return
@@ -395,6 +396,7 @@ const EVENT_TO_STATUS = {
 
 function handleEvent(req, res) {
   res.setHeader('Content-Type', 'application/json')
+  res.setHeader('Cache-Control', 'no-store')
   setCors(res, req.headers.origin, 'POST, OPTIONS')
   if (req.method === 'OPTIONS') return handlePreflight(req, res)
   if (req.method !== 'POST') { res.statusCode = 405; return res.end(JSON.stringify({ error: 'Method not allowed' })) }
@@ -407,13 +409,13 @@ function handleEvent(req, res) {
   req.on('data', chunk => {
     if (aborted) return
     body += chunk
-    if (body.length > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.resume() }
+    if (Buffer.byteLength(body, 'utf8') > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.resume() }
   })
   req.on('end', () => {
     if (aborted) return
     try {
       const parsed = JSON.parse(body)
-      const eventName = parsed.event || ''
+      const eventName = typeof parsed.event === 'string' ? parsed.event : ''
       let agents
       if (eventName === 'custom' && parsed.role && parsed.status) {
         if (!VALID_ROLES.includes(parsed.role) || !VALID_STATUSES.includes(parsed.status)) {

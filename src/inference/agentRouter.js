@@ -63,6 +63,8 @@ export function routeTaskToAgent(task) {
  * @param {Array<{role, task, status, label}>} agents
  * @returns {Array<{agentId, status, task, label}>}
  */
+const VALID_AGENT_STATUSES = ['idle', 'working', 'blocked', 'done']
+
 export function routeExternalAgents(agents) {
   if (!agents || agents.length === 0) return []
 
@@ -71,14 +73,17 @@ export function routeExternalAgents(agents) {
 
   for (const entry of agents) {
     let agentId = null
+    const hasExplicitRole = !!(entry.role && FALLBACK_ORDER.includes(entry.role))
 
     // Tier 1: explicit role
-    if (entry.role && FALLBACK_ORDER.includes(entry.role) && !assigned.has(entry.role)) {
+    if (hasExplicitRole && !assigned.has(entry.role)) {
       agentId = entry.role
     }
 
-    // Tier 2: keyword match
-    if (!agentId) {
+    // Tier 2: keyword match — only when no explicit valid role was specified;
+    // an explicit role that happens to be taken should fall to tier 3, not reroute
+    // the entry to a different character based on its task keywords.
+    if (!agentId && !hasExplicitRole) {
       const matched = routeTaskToAgent(entry.task)
       if (matched && !assigned.has(matched)) {
         agentId = matched
@@ -94,7 +99,7 @@ export function routeExternalAgents(agents) {
       assigned.add(agentId)
       results.push({
         agentId,
-        status: entry.status || 'working',
+        status: VALID_AGENT_STATUSES.includes(entry.status) ? entry.status : 'working',
         task: entry.task || null,
         label: entry.label || null,
         hint: entry.hint || null,

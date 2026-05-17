@@ -272,7 +272,7 @@ function officeStatusPlugin() {
                 if (pick) allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
               }
               merged = {
-                _seq: String(latestSeq),
+                _seq: String(latestSeq || Date.now()),
                 type: 'office-status',
                 agents: allAgents,
                 activeCount: allAgents.filter(a => a.status !== 'done').length,
@@ -313,7 +313,7 @@ function officeStatusPlugin() {
           req.on('data', chunk => {
             if (aborted) return
             body += chunk
-            if (body.length > MAX_BODY) {
+            if (Buffer.byteLength(body, 'utf8') > MAX_BODY) {
               aborted = true
               res.statusCode = 413
               res.end(JSON.stringify({ ok: false, error: 'Body too large' }))
@@ -412,7 +412,7 @@ function officeStatusPlugin() {
           req.on('data', chunk => {
             if (langAborted) return
             body += chunk
-            if (body.length > MAX_LANG_BODY) {
+            if (Buffer.byteLength(body, 'utf8') > MAX_LANG_BODY) {
               langAborted = true
               res.statusCode = 413
               res.end(JSON.stringify({ ok: false, error: 'Body too large' }))
@@ -506,13 +506,13 @@ function officeStatusPlugin() {
         req.on('data', chunk => {
           if (aborted) return
           body += chunk
-          if (body.length > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.resume() }
+          if (Buffer.byteLength(body, 'utf8') > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.resume() }
         })
         req.on('end', () => {
           if (aborted) return
           try {
             const parsed = JSON.parse(body)
-            const eventName = parsed.event || ''
+            const eventName = typeof parsed.event === 'string' ? parsed.event : ''
 
             let agents
             if (eventName === 'custom' && parsed.role && parsed.status) {
