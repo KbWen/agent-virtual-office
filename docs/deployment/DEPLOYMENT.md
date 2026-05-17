@@ -32,6 +32,25 @@ Edit `server_name` in the config to match your domain. The block proxies to
 `listen` directive to `443 ssl` and add your certificates (commented hints
 are in `nginx.conf`).
 
+## TLS certificates (Let's Encrypt)
+
+After setting up Nginx on port 80, obtain a free certificate:
+
+```bash
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d office.example.com
+```
+
+Certbot edits `nginx.conf` to add the `443 ssl` block and installs a systemd
+timer that auto-renews certificates. Test renewal at any time with:
+
+```bash
+sudo certbot renew --dry-run
+```
+
+Once HTTPS is working, uncomment the `Strict-Transport-Security` header in
+`docs/deployment/nginx.conf` and reload Nginx.
+
 ## PM2 process manager
 
 PM2 keeps the server alive and restarts it on crash or reboot.
@@ -71,6 +90,61 @@ docker run -p 5174:5174 agent-virtual-office
 # or: docker compose up -d
 ```
 
+## Firewall
+
+`server.mjs` binds to `127.0.0.1:5174` by default (loopback). When running
+behind Nginx **do not add `--host`** and do not open port 5174 externally —
+only ports 80 and 443 should be reachable from the internet.
+
+```bash
+# Ubuntu / Debian (ufw)
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+# Port 5174 should never be opened when Nginx is the front door.
+sudo ufw enable
+
+# CentOS / RHEL (firewalld)
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload
+```
+
+If you are running `server.mjs` **without** Nginx (direct access), add `--host`
+to expose it to the LAN and open port 5174 instead:
+
+```bash
+sudo ufw allow 5174/tcp
+```
+
+## Updating
+
+**PM2 / systemd:**
+
+```bash
+cd /path/to/agent-virtual-office
+git pull
+npm ci
+npm run build                            # regenerate dist/
+pm2 restart agent-virtual-office         # PM2
+# — or —
+sudo systemctl restart office.service    # systemd
+```
+
+**Docker:**
+
+```bash
+git pull
+docker compose up -d --build             # rebuild image and recreate container
+```
+
+## Log rotation
+
+| Method | How logs are stored | Rotation |
+|--------|--------------------|------------------------------------|
+| **PM2** | `logs/office-*.log` in project dir | `pm2 install pm2-logrotate` (run once) |
+| **systemd** | systemd journal (`journalctl -u office`) | Auto-rotated; cap size via `SystemMaxUse=200M` in `/etc/systemd/journald.conf` |
+| **Docker** | JSON files managed by Docker daemon | Set in `docker-compose.yml` (`max-size: "10m"`, `max-file: "3"`) — already configured |
+
 ## Environment variables
 
 | Variable | Required | Description |
@@ -97,3 +171,10 @@ This means:
   `/api/status` endpoint instead of (or in addition to) writing local files.
   If the remote server has `OFFICE_API_TOKEN` set, the hook's POST must include
   that token header.
+
+> **Note:** Hooks (Claude Code, Codex, etc.) always run on the **same machine
+> as the developer** and write status files to `~/.claude/` locally. If the
+> office server runs on a remote machine, hooks must `POST` to the remote
+> server's `/api/status` endpoint — the hook script must know the server URL
+> and optionally the `OFFICE_API_TOKEN`. The file-read path (`~/.claude/`) is
+> only relevant when server and hooks share a filesystem.

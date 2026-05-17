@@ -16,6 +16,5 @@ test-results
 # Packaged tarball
 *.tgz
 
-# Docs — keep only what the build needs (none); exclude the rest
+# Docs are not needed by the Vite build.
 *.md
-!package.json

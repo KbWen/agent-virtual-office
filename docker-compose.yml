@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   office:
     build:
@@ -7,13 +5,32 @@ services:
       dockerfile: Dockerfile
     image: agent-virtual-office
     ports:
-      - "5174:5174"
+      # Loopback only — safe behind Nginx. For direct LAN access without
+      # a reverse proxy, change to "5174:5174".
+      - "127.0.0.1:5174:5174"
     environment:
-      # Optional token gating POST/event requests; inherited from host env.
       OFFICE_API_TOKEN: ${OFFICE_API_TOKEN:-}
       NODE_ENV: production
     volumes:
-      # Read-only mount so the container can see hook-written status files
-      # (~/.claude/office-status-*.json) from the host.
-      - ${HOME}/.claude:/root/.claude:ro
+      # :rw so the server can write office-status.json (POST /api/status).
+      # Hooks on the host write directly to this directory too.
+      - ${HOME}/.claude:/home/node/.claude:rw
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5174/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

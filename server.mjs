@@ -467,5 +467,35 @@ server.on('error', (err) => {
   process.exit(1)
 })
 
-process.on('SIGINT', () => { server.close(); process.exit(0) })
-process.on('SIGTERM', () => { server.close(); process.exit(0) })
+// ─── Graceful shutdown ────────────────────────────────────────────────────────
+// server.close() stops accepting new connections but is async — it fires its
+// callback only after all in-flight requests finish. closeIdleConnections()
+// (Node >= 18.2) immediately frees idle keep-alive sockets so close() doesn't
+// hang waiting for them. The hard-exit timer guards against requests that never
+// complete (e.g. a hung upstream or a client that never reads its response).
+let _shuttingDown = false
+function gracefulShutdown(signal) {
+  if (_shuttingDown) return
+  _shuttingDown = true
+  console.log(`\n  ${signal} received — draining in-flight requests...`)
+
+  server.close((err) => {
+    if (err) { console.error('  Server close error:', err.message); process.exit(1) }
+    console.log('  All connections drained. Exiting cleanly.')
+    process.exit(0)
+  })
+
+  // Drop idle keep-alive sockets so server.close() can actually complete.
+  server.closeIdleConnections?.()
+
+  // Hard cap: if requests don't finish in 10s, force exit so the orchestrator's
+  // own SIGKILL timeout (systemd TimeoutStopSec=15, PM2 kill_timeout:15000)
+  // isn't the first line of defence.
+  setTimeout(() => {
+    console.error('  Drain timed out (10s) — forcing exit.')
+    process.exit(1)
+  }, 10_000).unref()
+}
+
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'))
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))

@@ -1,19 +1,23 @@
 # systemd service unit for agent-virtual-office.
-#
 # Install:
-#   sudo cp office.service /etc/systemd/system/office.service
+#   sudo cp docs/deployment/office.service /etc/systemd/system/office.service
 #   sudo systemctl daemon-reload
-#   sudo systemctl enable office.service     # start on boot
-#   sudo systemctl start office.service      # start now
+#   sudo systemctl enable --now office.service
+#
+# Secrets (e.g. OFFICE_API_TOKEN):
+#   sudo mkdir /etc/agent-virtual-office
+#   echo "OFFICE_API_TOKEN=your-secret" | sudo tee /etc/agent-virtual-office/office.env
+#   sudo chmod 600 /etc/agent-virtual-office/office.env
+#
+# Update workflow:
+#   cd /path/to/agent-virtual-office && git pull && npm ci && npm run build
+#   sudo systemctl restart office.service
 #
 # Manage:
-#   sudo systemctl status office.service
+#   sudo systemctl status  office.service
+#   sudo journalctl -u     office.service -f
 #   sudo systemctl restart office.service
-#   journalctl -u office.service -f          # tail logs
-#
-# Before installing, replace the placeholders below:
-#   - User: the account that runs the agent (its ~/.claude/ holds the status files)
-#   - WorkingDirectory / ExecStart: the absolute path to your checkout
+#   sudo systemctl stop    office.service
 
 [Unit]
 Description=Agent Virtual Office
@@ -21,14 +25,45 @@ After=network.target
 
 [Service]
 Type=simple
-# Change to the user whose ~/.claude/ contains office-status-*.json.
+# Replace 'youruser' with the OS user who owns the project directory.
 User=youruser
-# Absolute path to the agent-virtual-office checkout.
+Group=youruser
 WorkingDirectory=/path/to/agent-virtual-office
-ExecStart=/usr/bin/node /path/to/agent-virtual-office/server.mjs --host --no-open
+# Runs on 127.0.0.1 (loopback) by default — Nginx terminates external traffic.
+# Add --host only for direct LAN access without a reverse proxy.
+ExecStart=/usr/bin/node /path/to/agent-virtual-office/server.mjs --no-open
+
 Environment=NODE_ENV=production
+# Load secrets from a 0600-mode file so they are not visible in `systemctl show`.
+# Create the file per the instructions above; the leading '-' means missing file is OK.
+EnvironmentFile=-/etc/agent-virtual-office/office.env
+
 Restart=on-failure
 RestartSec=5
+
+# Graceful shutdown: send SIGTERM first, wait up to 15 s for drain, then SIGKILL.
+# TimeoutStopSec must exceed server.mjs's 10 s hard-exit timer.
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+# ── Systemd security hardening ──────────────────────────────────────────────
+NoNewPrivileges=true
+ProtectSystem=strict
+# server.mjs reads AND writes ~/.claude/office-status*.json,
+# so grant rw access to that specific path only.
+ProtectHome=true
+ReadWritePaths=%h/.claude
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictSUIDSGID=true
 
 [Install]
 WantedBy=multi-user.target

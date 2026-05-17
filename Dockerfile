@@ -11,9 +11,17 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --prefer-offline --no-audit --no-fund
 
-# Copy the rest of the source and build the static bundle.
-COPY . .
+# Copy only what the Vite build needs so unrelated file changes don't
+# bust this layer.
+COPY src ./src
+COPY public ./public
+COPY index.html .
+COPY vite.config.js .
 RUN npm run build
+
+# server.mjs is copied last (it is not a Vite input) so the runner
+# stage can pull it from /app without an extra build context.
+COPY server.mjs .
 
 # ─── Stage 2: runner ───────────────────────────────────────────────
 # Minimal runtime image: only the built assets and the standalone
@@ -26,10 +34,16 @@ WORKDIR /app
 
 # server.mjs is pure ESM and uses only Node built-ins, but package.json
 # is kept so tooling can resolve the package metadata / "type" field.
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server.mjs ./server.mjs
-COPY --from=builder /app/package.json ./package.json
+COPY --chown=node:node --from=builder /app/dist ./dist
+COPY --chown=node:node --from=builder /app/server.mjs ./server.mjs
+COPY --chown=node:node --from=builder /app/package.json ./package.json
+
+# Drop root for the runtime process.
+USER node
 
 EXPOSE 5174
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:5174/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "server.mjs", "--host", "--no-open"]
