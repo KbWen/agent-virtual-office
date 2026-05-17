@@ -418,7 +418,7 @@ function serveStatic(req, res) {
     res.setHeader('ETag', etag)
     // Immutable cache for hashed assets, no-cache for HTML
     if (mime.startsWith('text/html')) res.setHeader('Cache-Control', 'no-cache')
-    else if (/\.[0-9a-f]{8,}\./.test(path.basename(target))) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+    else if (/[._-][A-Za-z0-9_-]{8,}\./.test(path.basename(target))) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
     res.statusCode = 200
     return req.method === 'HEAD' ? res.end() : res.end(content)
   } catch { res.statusCode = 500; return res.end('Internal Error') }
