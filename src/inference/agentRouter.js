@@ -33,7 +33,7 @@ const COMMAND_TO_AGENT = {
  * @returns {string|null} agentId or null
  */
 export function routeTaskToAgent(task) {
-  if (!task) return null
+  if (!task || typeof task !== 'string') return null
 
   // Check legacy command mapping first
   if (task.startsWith('/') && COMMAND_TO_AGENT[task]) {
@@ -72,6 +72,7 @@ export function routeExternalAgents(agents) {
   const results = []
 
   for (const entry of agents) {
+    if (!entry || typeof entry !== 'object') continue
     let agentId = null
     const hasExplicitRole = !!(entry.role && FALLBACK_ORDER.includes(entry.role))
 

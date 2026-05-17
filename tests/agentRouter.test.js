@@ -79,6 +79,13 @@ describe('routeTaskToAgent', () => {
     expect(routeTaskToAgent('do something unrecognizable xyz123')).toBeNull()
   })
 
+  it('returns null for non-string truthy inputs (no crash)', () => {
+    expect(routeTaskToAgent(42)).toBeNull()
+    expect(routeTaskToAgent({})).toBeNull()
+    expect(routeTaskToAgent([])).toBeNull()
+    expect(routeTaskToAgent(true)).toBeNull()
+  })
+
   it('does not match res for words that only contain "read" as substring', () => {
     expect(routeTaskToAgent('thread the needle')).not.toBe('res')
     expect(routeTaskToAgent('already done')).not.toBe('res')
@@ -173,6 +180,12 @@ describe('routeExternalAgents', () => {
     expect(result).toHaveLength(8)
     const ids = result.map(r => r.agentId)
     expect(new Set(ids).size).toBe(8)
+  })
+
+  it('silently skips null/non-object entries without crashing', () => {
+    const result = routeExternalAgents([null, undefined, 42, { role: 'dev', status: 'working' }])
+    expect(result).toHaveLength(1)
+    expect(result[0].agentId).toBe('dev')
   })
 
   it('tier 1: rejects role not in FALLBACK_ORDER, falls through to tier 2/3', () => {

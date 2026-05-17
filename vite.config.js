@@ -428,7 +428,11 @@ function officeStatusPlugin() {
               try {
                 const dir = path.dirname(langFile)
                 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-                atomicWrite(langFile, lang)
+                if (!atomicWrite(langFile, lang)) {
+                  res.statusCode = 500
+                  res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
+                  return
+                }
                 res.statusCode = 200
                 res.end(JSON.stringify({ ok: true }))
               } catch {
@@ -521,7 +525,7 @@ function officeStatusPlugin() {
                 res.end(JSON.stringify({ ok: false, error: `Invalid role or status` }))
                 return
               }
-              agents = [{ role: parsed.role, status: parsed.status, label: (typeof parsed.label === 'string' ? parsed.label.slice(0, 200) : eventName) }]
+              agents = [{ role: parsed.role, status: parsed.status, label: (typeof parsed.label === 'string' ? parsed.label.slice(0, 200) : eventName.slice(0, 200)) }]
             } else {
               agents = Object.prototype.hasOwnProperty.call(EVENT_TO_STATUS, eventName) ? EVENT_TO_STATUS[eventName] : undefined
               if (!agents) {
@@ -544,7 +548,11 @@ function officeStatusPlugin() {
             }
             const dir = path.dirname(statusPath)
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-            atomicWrite(statusPath, JSON.stringify(output, null, 2))
+            if (!atomicWrite(statusPath, JSON.stringify(output, null, 2))) {
+              res.statusCode = 500
+              res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
+              return
+            }
             res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
           } catch {
             res.statusCode = 400
@@ -605,7 +613,7 @@ function fileWatcherFallbackPlugin() {
     }
 
     const output = {
-      _seq: String(now),
+      _seq: nextSeq(),
       type: 'office-status',
       agents,
       activeCount: agents.length,

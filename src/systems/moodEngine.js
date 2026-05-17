@@ -24,8 +24,10 @@ const SMOOTH_STREAK = 5         // 5+ consecutive done → smooth
 const INTENSE_ROLES = 3         // 3+ distinct roles active in 30s → intense
 const INTENSE_WINDOW = 30000
 
+const VALID_MOODS_ENGINE = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
 const events = []
 let idleTimer = null
+let overrideTimer = null
 let overrideMood = null
 let overrideExpiry = null
 
@@ -110,8 +112,11 @@ function resetIdleTimer() {
  * Push multiple events at once — only recomputes mood once after all are queued.
  */
 export function pushEventBatch(eventList) {
+  if (!Array.isArray(eventList)) return
   const now = Date.now()
-  for (const { role, status, task, hint } of eventList) {
+  for (const e of eventList) {
+    if (!e || typeof e !== 'object') continue
+    const { role, status, task, hint } = e
     events.push({ timestamp: now, role, status, task: task || null, hint: hint || null })
   }
 
@@ -129,9 +134,17 @@ export function pushEventBatch(eventList) {
  * Expires after durationMs (default 60s) and falls back to computed mood.
  */
 export function setMoodOverride(mood, durationMs = 60000) {
+  if (!VALID_MOODS_ENGINE.includes(mood)) return
+  if (overrideTimer) clearTimeout(overrideTimer)
+  const clampedMs = Math.max(durationMs, 1000)
   overrideMood = mood
-  overrideExpiry = Date.now() + Math.max(durationMs, 1000)
+  overrideExpiry = Date.now() + clampedMs
   updateStoreMood()
+  // Guarantee the override expires even without incoming events
+  overrideTimer = setTimeout(() => {
+    overrideTimer = null
+    updateStoreMood()
+  }, clampedMs + 50)
 }
 
 /**
@@ -142,4 +155,5 @@ export function resetMood() {
   overrideMood = null
   overrideExpiry = null
   if (idleTimer) { clearTimeout(idleTimer); idleTimer = null }
+  if (overrideTimer) { clearTimeout(overrideTimer); overrideTimer = null }
 }

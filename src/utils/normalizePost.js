@@ -25,7 +25,7 @@ export function normalizePost(body) {
     return {
       type: 'office-status',
       agents,
-      activeCount: agents.filter(a => a.status !== 'done').length,
+      activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
       moodDuration: body.moodDuration == null ? null
@@ -51,7 +51,7 @@ export function normalizePost(body) {
     _seq: String(Date.now()),
     type: 'office-status',
     agents,
-    activeCount: agents.filter(a => a.status !== 'done').length,
+    activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
     mood: VALID_MOODS.includes(body.mood) ? body.mood : null,

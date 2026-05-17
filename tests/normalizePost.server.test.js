@@ -30,7 +30,7 @@ function serverNormalizePost(body) {
     return {
       type: 'office-status',
       agents,
-      activeCount: agents.filter(a => a.status !== 'done').length,
+      activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
       moodDuration: body.moodDuration == null ? null : Math.min(Math.max(Number.isFinite(Number(body.moodDuration)) ? Number(body.moodDuration) : 60000, 1000), MAX_MOOD_DURATION),
@@ -53,7 +53,7 @@ function serverNormalizePost(body) {
   }
   return {
     _seq: String(Date.now()), type: 'office-status', agents,
-    activeCount: agents.filter(a => a.status !== 'done').length,
+    activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
     mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
@@ -95,6 +95,9 @@ const CASES = [
   { type: 'office-status', agents: [{ role: 'dev', status: 'working' }, { role: 'qa', status: 'done' }], activeCount: 99 },
   // source defaults to 'api' in both branches
   { type: 'office-status', agents: [] },
+  // idle agents must NOT be counted as active
+  { dev: 'idle', qa: 'working' },
+  { type: 'office-status', agents: [{ role: 'dev', status: 'idle' }, { role: 'qa', status: 'working' }] },
 ]
 
 describe('normalizePost server/canonical parity', () => {
@@ -105,6 +108,11 @@ describe('normalizePost server/canonical parity', () => {
       const { _seq: _a, ...ra } = a
       const { _seq: _b, ...rb } = b
       expect(ra).toEqual(rb)
+      // _seq must be a non-empty string (both copies)
+      expect(typeof _a).toBe('string')
+      expect(_a.length).toBeGreaterThan(0)
+      expect(typeof _b).toBe('string')
+      expect(_b.length).toBeGreaterThan(0)
     })
   }
 })

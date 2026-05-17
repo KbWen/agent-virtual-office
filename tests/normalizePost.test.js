@@ -22,6 +22,11 @@ describe('normalizePost', () => {
       expect(result.activeCount).toBe(2) // dev + qa, not ops (done)
     })
 
+    it('does not count idle agents as active', () => {
+      const result = normalizePost({ dev: 'idle', qa: 'working' })
+      expect(result.activeCount).toBe(1) // only qa (working), not dev (idle)
+    })
+
     it('ignores unknown roles', () => {
       const result = normalizePost({ dev: 'working', hacker: 'evil' })
       expect(result.agents).toHaveLength(1)

@@ -43,7 +43,7 @@ function normalizePost(body) {
     return {
       type: 'office-status',
       agents,
-      activeCount: agents.filter(a => a.status !== 'done').length,
+      activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
       moodDuration: body.moodDuration == null ? null
@@ -255,7 +255,7 @@ function handleStatus(req, res) {
             const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
             const parsed = JSON.parse(raw)
             const seq = parseInt(parsed._seq, 10)
-            if (!seq || now - seq > 300000) continue
+            if (!seq || now - seq > 300000 || seq > now + 60000) continue
             if (strict) {
               if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), path.resolve(process.cwd()))) continue
               if (!parsed._cwd && file !== 'office-status.json') continue
@@ -421,7 +421,7 @@ function handleEvent(req, res) {
         if (!VALID_ROLES.includes(parsed.role) || !VALID_STATUSES.includes(parsed.status)) {
           res.statusCode = 400; return res.end(JSON.stringify({ ok: false, error: 'Invalid role or status' }))
         }
-        agents = [{ role: parsed.role, status: parsed.status, label: typeof parsed.label === 'string' ? parsed.label.slice(0, 200) : eventName }]
+        agents = [{ role: parsed.role, status: parsed.status, label: typeof parsed.label === 'string' ? parsed.label.slice(0, 200) : eventName.slice(0, 200) }]
       } else {
         agents = Object.prototype.hasOwnProperty.call(EVENT_TO_STATUS, eventName) ? EVENT_TO_STATUS[eventName] : undefined
         if (!agents) { res.statusCode = 400; return res.end(JSON.stringify({ ok: false, error: 'Unknown event' })) }
@@ -430,7 +430,7 @@ function handleEvent(req, res) {
       const output = {
         _seq: nextSeq(),
         type: 'office-status', agents,
-        activeCount: agents.filter(a => a.status !== 'done').length,
+        activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
         workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : eventName,
         source: 'webhook',
       }
@@ -497,6 +497,7 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/api/event')  return handleEvent(req, res)
   if (url.pathname === '/api/health') {
     res.setHeader('Content-Type', 'application/json')
+    res.setHeader('Cache-Control', 'no-store')
     setCors(res, req.headers.origin)
     if (req.method === 'OPTIONS') return handlePreflight(req, res)
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; return res.end() }

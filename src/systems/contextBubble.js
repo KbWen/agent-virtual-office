@@ -75,7 +75,7 @@ export function toolToAction(task) {
  * @returns {string|null} bubble text
  */
 export function generateContextBubble(agentId, update, allExternalStatus) {
-  if (!update) return null
+  if (!update || typeof agentId !== 'string') return null
 
   // Strip worktree session prefix so 'feat-x~dev' resolves to 'dev' templates
   const baseRole = agentId.includes('~') ? agentId.split('~').pop() : agentId

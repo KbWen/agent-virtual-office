@@ -48,7 +48,8 @@ if (command === 'setup') {
   let settings = {}
   if (fs.existsSync(settingsPath)) {
     try {
-      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
+      const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
+      settings = (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {}
     } catch (e) {
       console.error('  Error: ' + settingsPath + ' contains invalid JSON.')
       console.error('  Please fix or back up the file, then re-run setup.')
@@ -61,26 +62,34 @@ if (command === 'setup') {
   const hookEntry = { type: 'command', command: hookCmd }
 
   // Add hooks for all relevant events
-  if (!settings.hooks) settings.hooks = {}
+  if (!settings.hooks || typeof settings.hooks !== 'object' || Array.isArray(settings.hooks)) settings.hooks = {}
   for (const event of ['PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'UserPromptSubmit', 'Stop']) {
     if (!Array.isArray(settings.hooks[event])) settings.hooks[event] = []
     // Check if already installed (avoid duplicates)
     const existing = settings.hooks[event]
     const hasHook = existing.some(h =>
-      (h.hooks || []).some(hh => hh.command && hh.command.includes('office-status-hook'))
+      h && typeof h === 'object' && (h.hooks || []).some(hh => hh && hh.command && hh.command.includes('office-status-hook'))
     )
     if (!hasHook) {
       existing.push({ hooks: [hookEntry] })
     }
   }
 
-  // Write back
+  // Write back atomically to prevent corruption on crash/disk-full
+  const settingsTmp = settingsPath + '.tmp.' + process.pid
   try {
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
+    fs.writeFileSync(settingsTmp, JSON.stringify(settings, null, 2))
+    fs.renameSync(settingsTmp, settingsPath)
   } catch (e) {
-    console.error('  Error: Cannot write to ' + settingsPath)
-    console.error('  Check file permissions for ~/.claude/')
-    process.exit(1)
+    try { fs.unlinkSync(settingsTmp) } catch {}
+    // Fallback: direct write (e.g. Windows EBUSY on rename)
+    try {
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
+    } catch {
+      console.error('  Error: Cannot write to ' + settingsPath)
+      console.error('  Check file permissions for ~/.claude/')
+      process.exit(1)
+    }
   }
 
   console.log(`

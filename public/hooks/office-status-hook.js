@@ -402,7 +402,7 @@ function processEvent(event) {
       try {
         const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
         const seq = parseInt(cur._seq, 10)
-        if (cur._stopped && (Number.isNaN(seq) || Date.now() - seq < 30_000)) return
+        if (cur._stopped && !Number.isNaN(seq) && Date.now() - seq < 30_000) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       // If inside a subagent with skill context, prefer the skill's role
@@ -420,7 +420,7 @@ function processEvent(event) {
       try {
         const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
         const seq = parseInt(cur._seq, 10)
-        if (cur._stopped && (Number.isNaN(seq) || Date.now() - seq < 30_000)) return
+        if (cur._stopped && !Number.isNaN(seq) && Date.now() - seq < 30_000) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       const skillCtx = readSkillContext(agentId)
@@ -527,21 +527,38 @@ function processEvent(event) {
   }
 
   // Read existing status to merge (keep other agents' states + workflow)
+  const VALID_MERGE_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
   let existing = []
   let existingWorkflow = null
   try {
     const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-    existing = Array.isArray(data.agents) ? data.agents.filter(a => a && typeof a === 'object') : []
+    existing = Array.isArray(data.agents)
+      ? data.agents
+          .filter(a => a && typeof a === 'object' && VALID_MERGE_ROLES.includes(a.role))
+          .map(a => ({
+            role: a.role,
+            status: typeof a.status === 'string' ? a.status : 'working',
+            task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
+            label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
+            hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
+          }))
+      : []
     existingWorkflow = typeof data.workflow === 'string' ? data.workflow.slice(0, 200) : null
   } catch {}
 
   // Replace agent with same role, or add new
   const newAgents = [
     ...existing.filter(a => a.role !== role),
-    { role, task, status, label, hint },
+    {
+      role,
+      task: typeof task === 'string' ? task.slice(0, 200) : null,
+      status,
+      label: typeof label === 'string' ? label.slice(0, 200) : null,
+      hint: typeof hint === 'string' ? hint.slice(0, 200) : null,
+    },
   ]
 
-  const activeCount = newAgents.filter(a => a.status !== 'done').length
+  const activeCount = newAgents.filter(a => a.status === 'working' || a.status === 'blocked').length
 
   const output = {
     _seq: String(Date.now()),
