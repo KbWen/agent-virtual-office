@@ -46,7 +46,7 @@ function normalizePost(body) {
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
       moodDuration: body.moodDuration == null ? null
-        : Math.min(Math.max(Number(body.moodDuration) || 60000, 1000), MAX_MOOD_DURATION),
+        : Math.min(Math.max(Number.isFinite(Number(body.moodDuration)) ? Number(body.moodDuration) : 60000, 1000), MAX_MOOD_DURATION),
       source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
       _seq: nextSeq(),
     }
@@ -71,7 +71,7 @@ function normalizePost(body) {
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
     mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
     moodDuration: body.moodDuration == null ? null
-      : Math.min(Math.max(Number(body.moodDuration) || 60000, 1000), MAX_MOOD_DURATION),
+      : Math.min(Math.max(Number.isFinite(Number(body.moodDuration)) ? Number(body.moodDuration) : 60000, 1000), MAX_MOOD_DURATION),
   }
 }
 
@@ -496,6 +496,7 @@ const server = http.createServer((req, res) => {
     res.setHeader('Content-Type', 'application/json')
     setCors(res, req.headers.origin)
     if (req.method === 'OPTIONS') return handlePreflight(req, res)
+    if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; return res.end() }
     return res.end(JSON.stringify({ ok: true, uptime: Math.floor((Date.now() - SERVER_START) / 1000) }))
   }
   return serveStatic(req, res)

@@ -193,7 +193,9 @@ if (command === 'serve') {
     if (_forwarding) return
     _forwarding = true
     if (process.platform === 'win32') {
-      try { execSync(`taskkill /T /F /PID ${child.pid}`, { stdio: 'ignore' }) } catch {}
+      if (child.exitCode === null && child.signalCode === null) {
+        try { execSync(`taskkill /T /F /PID ${child.pid}`, { stdio: 'ignore' }) } catch {}
+      }
     } else {
       try { child.kill(sig) } catch {}
     }

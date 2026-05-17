@@ -28,7 +28,7 @@ export function normalizePost(body) {
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
       moodDuration: body.moodDuration == null ? null
-        : Math.min(Math.max(Number(body.moodDuration) || 60000, 1000), MAX_MOOD_DURATION),
+        : Math.min(Math.max(Number.isFinite(Number(body.moodDuration)) ? Number(body.moodDuration) : 60000, 1000), MAX_MOOD_DURATION),
       source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
       _seq: String(Date.now()),
     }
@@ -54,6 +54,6 @@ export function normalizePost(body) {
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
     mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
-    moodDuration: body.moodDuration == null ? null : Math.min(Math.max(Number(body.moodDuration) || 60000, 1000), MAX_MOOD_DURATION),
+    moodDuration: body.moodDuration == null ? null : Math.min(Math.max(Number.isFinite(Number(body.moodDuration)) ? Number(body.moodDuration) : 60000, 1000), MAX_MOOD_DURATION),
   }
 }

@@ -24,7 +24,7 @@ services:
       # ${HOME} resolves to the *current user's* home. If you run docker compose
       # under sudo, ${HOME} becomes /root — set it explicitly instead:
       #   COMPOSE_FILE=docker-compose.yml HOME=/home/youruser docker compose up -d
-      - ${HOME}/.claude:/home/node/.claude:rw
+      - ${HOME:?HOME must be set (e.g. export HOME=/home/youruser)}/.claude:/home/node/.claude:rw
     mem_limit: 256m
     init: true
     restart: unless-stopped

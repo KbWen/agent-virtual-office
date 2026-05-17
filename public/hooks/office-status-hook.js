@@ -401,7 +401,8 @@ function processEvent(event) {
       // wedge the guard — it self-heals once 30s have elapsed since _seq was written.
       try {
         const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-        if (cur._stopped && (Date.now() - parseInt(cur._seq, 10)) < 30_000) return
+        const seq = parseInt(cur._seq, 10)
+        if (cur._stopped && (Number.isNaN(seq) || Date.now() - seq < 30_000)) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       // If inside a subagent with skill context, prefer the skill's role
@@ -418,7 +419,8 @@ function processEvent(event) {
       // Use a 30s window (not a strict boolean) — same rationale as PreToolUse.
       try {
         const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-        if (cur._stopped && (Date.now() - parseInt(cur._seq, 10)) < 30_000) return
+        const seq = parseInt(cur._seq, 10)
+        if (cur._stopped && (Number.isNaN(seq) || Date.now() - seq < 30_000)) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       const skillCtx = readSkillContext(agentId)
@@ -540,7 +542,7 @@ function processEvent(event) {
     type: 'office-status',
     agents: newAgents,
     activeCount,
-    workflow: clearWorkflow ? null : (agentType || existingWorkflow),
+    workflow: clearWorkflow ? null : ((agentType && agentType.slice(0, 200)) || existingWorkflow),
     source: 'claude-cli',
   }
 

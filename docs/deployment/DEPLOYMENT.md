@@ -6,7 +6,7 @@ serves the built `dist/` bundle and the `/api/*` endpoints on port `5174`.
 
 ## Prerequisites
 
-- Node.js **>= 20** (see `engines` in `package.json`).
+- Node.js **>= 22** (see `engines` in `package.json`).
 - Build the static bundle first — `server.mjs` refuses to start without it:
 
   ```bash

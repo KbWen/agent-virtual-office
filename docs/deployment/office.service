@@ -5,7 +5,7 @@
 #   sudo systemctl enable --now office.service
 #
 # Secrets (e.g. OFFICE_API_TOKEN):
-#   sudo mkdir /etc/agent-virtual-office
+#   sudo mkdir -p /etc/agent-virtual-office
 #   echo "OFFICE_API_TOKEN=your-secret" | sudo tee /etc/agent-virtual-office/office.env
 #   sudo chmod 600 /etc/agent-virtual-office/office.env
 #
@@ -65,7 +65,7 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 CapabilityBoundingSet=
 LockPersonality=true
 # MemoryDenyWriteExecute can crash Node's JIT on some kernels (V8 mprotect).
-# Node 20 usually survives it (W^X), but it is not guaranteed. Uncomment only
+# Node 22 usually survives it (W^X), but it is not guaranteed. Uncomment only
 # after confirming the service starts and stays up under your kernel:
 #MemoryDenyWriteExecute=true
 RestrictSUIDSGID=true
