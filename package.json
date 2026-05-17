@@ -45,7 +45,9 @@
     "index.html",
     "vite.config.js",
     "server.mjs",
-    "package.json"
+    "package.json",
+    "Dockerfile",
+    "docker-compose.yml"
   ],
   "dependencies": {
     "@tailwindcss/vite": "^4.2.1",

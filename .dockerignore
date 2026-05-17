@@ -1,0 +1,21 @@
+# Dependencies & build artifacts (rebuilt inside the image)
+node_modules
+dist
+dist-single
+output
+test-results
+
+# Version control & framework state
+.git
+.gitignore
+.claude
+.agent
+.agentcortex
+.agents
+
+# Packaged tarball
+*.tgz
+
+# Docs — keep only what the build needs (none); exclude the rest
+*.md
+!package.json

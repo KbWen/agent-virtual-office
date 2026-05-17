@@ -117,6 +117,24 @@ OFFICE_API_TOKEN=secret npx agent-virtual-office serve --host
 
 **Health check:** `GET /api/health` returns `{ ok: true, uptime: <seconds> }`.
 
+### Option 4: Docker
+
+Run the production server in a container. The build is multi-stage — Vite compiles `dist/` in a builder image, and the runtime image ships only `server.mjs` (zero runtime dependencies).
+
+```bash
+docker compose up -d
+```
+
+Then open `http://localhost:5174`.
+
+The compose file mounts `~/.claude` read-only into the container so it can read hook-written status files (`office-status-*.json`). Pass an optional `OFFICE_API_TOKEN` to gate POST/event requests:
+
+```bash
+OFFICE_API_TOKEN=secret docker compose up -d
+```
+
+> For Nginx reverse proxy, PM2, and systemd service instructions, see [docs/deployment/DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md).
+
 ---
 
 ## Status API

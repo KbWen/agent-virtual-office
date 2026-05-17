@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  office:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agent-virtual-office
+    ports:
+      - "5174:5174"
+    environment:
+      # Optional token gating POST/event requests; inherited from host env.
+      OFFICE_API_TOKEN: ${OFFICE_API_TOKEN:-}
+      NODE_ENV: production
+    volumes:
+      # Read-only mount so the container can see hook-written status files
+      # (~/.claude/office-status-*.json) from the host.
+      - ${HOME}/.claude:/root/.claude:ro
+    restart: unless-stopped

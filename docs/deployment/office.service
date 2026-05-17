@@ -1,0 +1,34 @@
+# systemd service unit for agent-virtual-office.
+#
+# Install:
+#   sudo cp office.service /etc/systemd/system/office.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable office.service     # start on boot
+#   sudo systemctl start office.service      # start now
+#
+# Manage:
+#   sudo systemctl status office.service
+#   sudo systemctl restart office.service
+#   journalctl -u office.service -f          # tail logs
+#
+# Before installing, replace the placeholders below:
+#   - User: the account that runs the agent (its ~/.claude/ holds the status files)
+#   - WorkingDirectory / ExecStart: the absolute path to your checkout
+
+[Unit]
+Description=Agent Virtual Office
+After=network.target
+
+[Service]
+Type=simple
+# Change to the user whose ~/.claude/ contains office-status-*.json.
+User=youruser
+# Absolute path to the agent-virtual-office checkout.
+WorkingDirectory=/path/to/agent-virtual-office
+ExecStart=/usr/bin/node /path/to/agent-virtual-office/server.mjs --host --no-open
+Environment=NODE_ENV=production
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

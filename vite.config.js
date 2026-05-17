@@ -274,6 +274,7 @@ function officeStatusPlugin() {
             res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
             return
           }
+          req.setEncoding('utf-8')
           let body = ''
           let aborted = false
           const MAX_BODY = 16 * 1024
@@ -335,10 +336,11 @@ function officeStatusPlugin() {
       }
 
       server.middlewares.use('/api/lang', (req, res) => {
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Cache-Control', 'no-cache')
         if (req.method === 'OPTIONS') {
           if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
             res.statusCode = 403
-            res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
             return
           }
@@ -352,10 +354,10 @@ function officeStatusPlugin() {
         if (req.method === 'POST') {
           if (!isAuthorizedOfficeRequest(req, apiConfig)) {
             res.statusCode = 401
-            res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
             return
           }
+          req.setEncoding('utf-8')
           let body = ''
           const MAX_LANG_BODY = 16  // lang codes are tiny
           let langAborted = false
@@ -443,6 +445,7 @@ function officeStatusPlugin() {
           return
         }
 
+        req.setEncoding('utf-8')
         let body = ''
         let aborted = false
         req.on('data', chunk => {
