@@ -96,6 +96,19 @@ if (!fs.existsSync(path.join(dist, 'index.html'))) {
 
 // ─── Shared paths ────────────────────────────────────────────────────────────
 const STATUS_PATH = path.join(os.homedir(), '.claude', 'office-status.json')
+
+// Atomic write: write to a temp file then rename so concurrent readers
+// never see a partial file. Falls back to direct write on Windows EBUSY.
+function atomicWrite(filePath, content) {
+  const tmp = filePath + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
+  try {
+    fs.writeFileSync(tmp, content)
+    fs.renameSync(tmp, filePath)
+  } catch {
+    try { fs.writeFileSync(filePath, content) } catch {}
+    try { fs.unlinkSync(tmp) } catch {}
+  }
+}
 const isWin = process.platform === 'win32'
 function pathsEqual(a, b) { return isWin ? a.toLowerCase() === b.toLowerCase() : a === b }
 
@@ -207,12 +220,7 @@ function handleStatus(req, res) {
             const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
             const parsed = JSON.parse(raw)
             const seq = parseInt(parsed._seq, 10)
-            if (!seq || now - seq > 300000) {
-              if (seq && now - seq > 3600000 && file !== 'office-status.json') {
-                try { fs.unlinkSync(path.join(dir, file)) } catch {}
-              }
-              continue
-            }
+            if (!seq || now - seq > 300000) continue
             if (strict) {
               if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), path.resolve(process.cwd()))) continue
               if (!parsed._cwd && file !== 'office-status.json') continue
@@ -285,7 +293,7 @@ function handleStatus(req, res) {
         normalized._cwd = process.cwd()
         const dir = path.dirname(STATUS_PATH)
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-        fs.writeFileSync(STATUS_PATH, JSON.stringify(normalized, null, 2))
+        atomicWrite(STATUS_PATH, JSON.stringify(normalized, null, 2))
         res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
       } catch { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' })) }
     })
@@ -318,7 +326,7 @@ function handleLang(req, res) {
     try {
       const dir = path.dirname(langFile)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(langFile, l)
+      atomicWrite(langFile, l)
       res.end(JSON.stringify({ ok: true }))
     } catch { res.statusCode = 500; res.end(JSON.stringify({ ok: false })) }
   })
@@ -383,7 +391,7 @@ function handleEvent(req, res) {
       }
       const dir = path.dirname(STATUS_PATH)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(STATUS_PATH, JSON.stringify(output, null, 2))
+      atomicWrite(STATUS_PATH, JSON.stringify(output, null, 2))
       res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
     } catch { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' })) }
   })
@@ -485,6 +493,25 @@ server.on('error', (err) => {
   else console.error('\n  Server error:', err.message, '\n')
   process.exit(1)
 })
+
+// ─── Stale session cleanup (runs every 10 min, not in the GET hot path) ──────
+setInterval(() => {
+  try {
+    const dir = path.dirname(STATUS_PATH)
+    if (!fs.existsSync(dir)) return
+    const now = Date.now()
+    for (const file of fs.readdirSync(dir)) {
+      if (file === 'office-status.json') continue           // never auto-delete main
+      if (!file.match(/^office-status-[^.]+\.json$/)) continue
+      try {
+        const { _seq } = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'))
+        if (parseInt(_seq, 10) && now - parseInt(_seq, 10) > 3_600_000) {
+          fs.unlinkSync(path.join(dir, file))
+        }
+      } catch {}
+    }
+  } catch {}
+}, 600_000).unref()
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
 // server.close() stops accepting new connections but is async — it fires its

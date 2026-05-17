@@ -14,8 +14,6 @@
 
 const HOOK_VERSION = '1.0.0'
 
-let _seqCounter = 0
-
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
@@ -422,7 +420,7 @@ function processEvent(event) {
             : ['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了'])
         }))
         const output = {
-          _seq: `${Date.now()}-${++_seqCounter}`,
+          _seq: String(Date.now()),
           _cwd: process.cwd(),
           type: 'office-status',
           agents: doneAgents,
@@ -433,7 +431,7 @@ function processEvent(event) {
         const dir = path.dirname(STATUS_FILE)
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
         const json = JSON.stringify(output, null, 2)
-        const tmp = STATUS_FILE + '.tmp.' + process.pid
+        const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
         try {
           fs.writeFileSync(tmp, json)
           fs.renameSync(tmp, STATUS_FILE)
@@ -452,13 +450,13 @@ function processEvent(event) {
           workflow: null,
           source: 'claude-cli',
           _cwd: process.cwd(),
-          _seq: `${Date.now()}-${++_seqCounter}`,
+          _seq: String(Date.now()),
         }
         const dir = path.dirname(STATUS_FILE)
         try {
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
           const json = JSON.stringify(output, null, 2)
-          const tmp = STATUS_FILE + '.tmp.' + process.pid
+          const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
           try {
             fs.writeFileSync(tmp, json)
             fs.renameSync(tmp, STATUS_FILE)
@@ -492,7 +490,7 @@ function processEvent(event) {
   const activeCount = newAgents.filter(a => a.status !== 'done').length
 
   const output = {
-    _seq: `${Date.now()}-${++_seqCounter}`,
+    _seq: String(Date.now()),
     _cwd: process.cwd(),
     type: 'office-status',
     agents: newAgents,
@@ -504,7 +502,7 @@ function processEvent(event) {
   // Write with retry (Windows file locking can cause EBUSY on rename)
   const dir = path.dirname(STATUS_FILE)
   const json = JSON.stringify(output, null, 2)
-  const tmp = STATUS_FILE + '.tmp.' + process.pid
+  const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
   try {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(tmp, json)
