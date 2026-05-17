@@ -50,9 +50,11 @@ TimeoutStopSec=15
 # ── Systemd security hardening ──────────────────────────────────────────────
 NoNewPrivileges=true
 ProtectSystem=strict
-# server.mjs reads AND writes ~/.claude/office-status*.json,
-# so grant rw access to that specific path only.
-ProtectHome=true
+# ProtectHome=read-only (not =true) lets ReadWritePaths punch a writable hole
+# into the otherwise read-only home tree. =true makes the entire home invisible
+# and ReadWritePaths cannot reliably re-expose a subpath beneath it.
+ProtectHome=read-only
+# server.mjs reads AND writes ~/.claude/office-status*.json.
 ReadWritePaths=%h/.claude
 PrivateTmp=true
 PrivateDevices=true
@@ -62,8 +64,13 @@ ProtectControlGroups=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 CapabilityBoundingSet=
 LockPersonality=true
+# MemoryDenyWriteExecute may crash Node's JIT on older kernels (V8 needs mprotect).
+# Node 20 uses W^X and generally survives this — test on your kernel before shipping.
+# Remove this line if the service crashes immediately on start.
 MemoryDenyWriteExecute=true
 RestrictSUIDSGID=true
+# OOM ceiling — matches PM2 max_memory_restart.
+MemoryMax=256M
 
 [Install]
 WantedBy=multi-user.target

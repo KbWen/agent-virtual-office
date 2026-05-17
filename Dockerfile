@@ -46,4 +46,8 @@ EXPOSE 5174
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:5174/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
+# --host binds 0.0.0.0 inside the container so Docker's port forwarding
+# can reach the server. External access is still restricted to 127.0.0.1
+# by the "127.0.0.1:5174:5174" port mapping in docker-compose.yml.
+# (Native PM2/systemd deployments behind Nginx do NOT use --host.)
 CMD ["node", "server.mjs", "--host", "--no-open"]

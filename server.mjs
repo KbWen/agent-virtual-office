@@ -16,7 +16,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { createHash } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 
@@ -128,14 +128,26 @@ function getAllowedOriginHeader(origin) {
   return origin && isAllowedOrigin(origin) ? origin : null
 }
 
+function safeEqual(a, b) {
+  const ba = Buffer.from(a), bb = Buffer.from(b)
+  if (ba.length !== bb.length) return false
+  return timingSafeEqual(ba, bb)
+}
+
 function isAuthorized(req) {
   if (!apiToken) return true
   const h = req.headers['x-office-token']
   const a = req.headers.authorization
-  return h === apiToken || (typeof a === 'string' && a === `Bearer ${apiToken}`)
+  return (h != null && safeEqual(h, apiToken)) ||
+         (typeof a === 'string' && safeEqual(a, `Bearer ${apiToken}`))
 }
 
 // ─── Rate limiter ─────────────────────────────────────────────────────────────
+// Note: keys on req.socket.remoteAddress. Behind a reverse proxy (Nginx/Caddy)
+// every request arrives from 127.0.0.1, so this becomes a global aggregate cap
+// (30 POST / 10s total) rather than a per-client limit. In that case Nginx's
+// limit_req (docs/deployment/nginx.conf) is the real per-client rate limiter.
+// This layer defends the loopback surface on non-proxied deployments.
 const postCounts = new Map()
 const RATE_WINDOW = 10000, RATE_LIMIT = 30
 
@@ -390,8 +402,8 @@ function serveStatic(req, res) {
   const urlPath = new URL(req.url, 'http://x').pathname
   let target = path.join(dist, urlPath)
 
-  // Path traversal guard
-  if (!target.startsWith(dist)) { res.statusCode = 403; return res.end('Forbidden') }
+  // Path traversal guard — use sep to prevent dist-single/dist-evil siblings matching
+  if (target !== dist && !target.startsWith(dist + path.sep)) { res.statusCode = 403; return res.end('Forbidden') }
 
   if (fs.existsSync(target) && fs.statSync(target).isDirectory()) target = path.join(target, 'index.html')
   if (!fs.existsSync(target)) target = path.join(dist, 'index.html')  // SPA fallback

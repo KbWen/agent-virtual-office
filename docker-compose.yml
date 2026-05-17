@@ -14,7 +14,16 @@ services:
     volumes:
       # :rw so the server can write office-status.json (POST /api/status).
       # Hooks on the host write directly to this directory too.
+      #
+      # IMPORTANT — before first run, ensure the directory exists and is owned
+      # by UID 1000 (the container's "node" user) so writes succeed:
+      #   mkdir -p ~/.claude && sudo chown 1000 ~/.claude
+      #
+      # ${HOME} resolves to the *current user's* home. If you run docker compose
+      # under sudo, ${HOME} becomes /root — set it explicitly instead:
+      #   COMPOSE_FILE=docker-compose.yml HOME=/home/youruser docker compose up -d
       - ${HOME}/.claude:/home/node/.claude:rw
+    mem_limit: 256m
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

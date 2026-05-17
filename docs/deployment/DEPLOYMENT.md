@@ -14,8 +14,9 @@ serves the built `dist/` bundle and the `/api/*` endpoints on port `5174`.
   npm run build      # produces dist/
   ```
 
-- Verify the server runs: `node server.mjs --host --no-open`, then
+- Verify the server runs: `node server.mjs --no-open`, then
   `curl http://localhost:5174/api/health` → `{ "ok": true, "uptime": <seconds> }`.
+  (Add `--host` only if you need LAN access without a reverse proxy.)
 
 ## Nginx reverse proxy
 
@@ -86,9 +87,20 @@ then ships a minimal runtime image). A `docker-compose.yml` is also provided.
 
 ```bash
 docker build -t agent-virtual-office .
-docker run -p 5174:5174 agent-virtual-office
+# Bind to loopback only — safe behind Nginx. For direct LAN without a proxy,
+# change to -p 5174:5174 AND set OFFICE_API_TOKEN to protect the API.
+docker run -p 127.0.0.1:5174:5174 \
+  -v "${HOME}/.claude:/home/node/.claude:rw" \
+  agent-virtual-office
 # or: docker compose up -d
 ```
+
+> **Before first run** ensure `~/.claude` exists and is writable by UID 1000:
+> ```bash
+> mkdir -p ~/.claude && sudo chown 1000 ~/.claude
+> ```
+> If you run `docker compose` under `sudo`, `${HOME}` resolves to `/root`.
+> Set it explicitly: `HOME=/home/youruser docker compose up -d`
 
 ## Firewall
 
@@ -149,7 +161,7 @@ docker compose up -d --build             # rebuild image and recreate container
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `OFFICE_API_TOKEN` | No | If set, all API writes (and reads) require this token via the `X-Office-Token` header or `Authorization: Bearer <token>`. Leave unset for trusted local networks. |
+| `OFFICE_API_TOKEN` | No | If set, all API **write** endpoints (POST) require this token via the `X-Office-Token` header or `Authorization: Bearer <token>`. GET `/api/status` is always readable (status data only, no secrets). Leave unset for trusted local networks. |
 | `OFFICE_API_ALLOWED_ORIGINS` | No | Comma-separated list of allowed CORS origins (e.g. `https://office.example.com`). If unset, only loopback and the server's own IPs are accepted. |
 
 ## Hook integration note
