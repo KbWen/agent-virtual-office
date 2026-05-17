@@ -2,7 +2,7 @@
 
 # ─── Stage 1: builder ──────────────────────────────────────────────
 # Installs full deps and compiles the Vite bundle into dist/.
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -26,7 +26,7 @@ COPY server.mjs .
 # ─── Stage 2: runner ───────────────────────────────────────────────
 # Minimal runtime image: only the built assets and the standalone
 # zero-dependency Node server. No node_modules required at runtime.
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 ENV NODE_ENV=production
 

@@ -50,13 +50,12 @@ TimeoutStopSec=15
 # ── Systemd security hardening ──────────────────────────────────────────────
 NoNewPrivileges=true
 ProtectSystem=strict
-# ProtectHome=true or read-only makes the home tree invisible/read-only; under
-# either value, systemd applies ProtectHome AFTER ReadWritePaths for paths inside
-# the home directory, so ReadWritePaths cannot re-expose ~/.claude as writable.
-# Solution: omit ProtectHome and rely on ProtectSystem=strict + ReadWritePaths
-# to provide equivalent isolation without locking out ~/.claude.
-# server.mjs reads AND writes ~/.claude/office-status*.json.
-ReadWritePaths=%h/.claude
+# ProtectHome=tmpfs hides the entire home tree (replaces it with a tmpfs overlay)
+# then BindPaths re-exposes only ~/.claude as a read-write bind mount.
+# This is the documented pattern from systemd.exec(5) for exposing a single
+# subdirectory without granting access to the rest of the home tree.
+ProtectHome=tmpfs
+BindPaths=%h/.claude
 PrivateTmp=true
 PrivateDevices=true
 ProtectKernelTunables=true
@@ -70,7 +69,9 @@ LockPersonality=true
 # after confirming the service starts and stays up under your kernel:
 #MemoryDenyWriteExecute=true
 RestrictSUIDSGID=true
-# OOM ceiling — matches PM2 max_memory_restart.
+# Two-tier memory control per systemd.resource-control(5):
+# MemoryHigh throttles allocation gradually; MemoryMax is the hard OOM ceiling.
+MemoryHigh=224M
 MemoryMax=256M
 
 [Install]

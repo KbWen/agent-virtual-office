@@ -30,7 +30,7 @@
   "author": "KbWen",
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "homepage": "https://github.com/KbWen/agent-virtual-office#readme",
   "repository": {

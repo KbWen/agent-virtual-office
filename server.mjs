@@ -470,7 +470,10 @@ function serveStatic(req, res) {
     res.setHeader('Content-Type', mime)
     res.setHeader('ETag', etag)
     // Immutable cache for hashed assets, no-cache for HTML
-    if (mime.startsWith('text/html')) res.setHeader('Cache-Control', 'no-cache')
+    if (mime.startsWith('text/html')) {
+      res.setHeader('Cache-Control', 'no-cache')
+      res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'")
+    }
     else if (/[._-][A-Za-z0-9_-]{8,}\./.test(path.basename(target))) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
     res.statusCode = 200
     return req.method === 'HEAD' ? res.end() : res.end(content)
@@ -484,6 +487,7 @@ const server = http.createServer((req, res) => {
   // Swallow client-abort / ECONNRESET so they don't crash the process.
   req.on('error', () => {})
   res.on('error', () => {})
+  res.setHeader('X-Content-Type-Options', 'nosniff')
   const url = new URL(req.url, 'http://x')
   if (url.pathname === '/api/status') return handleStatus(req, res)
   if (url.pathname === '/api/lang')   return handleLang(req, res)

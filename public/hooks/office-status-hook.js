@@ -397,10 +397,11 @@ function processEvent(event) {
     }
     case 'PreToolUse': {
       // Suppress if Stop fired and no new UserPromptSubmit has fired yet.
-      // _stopped is cleared by UserPromptSubmit's write (which omits the field).
+      // Use a 30s window (not a strict boolean) so a failed write can't permanently
+      // wedge the guard — it self-heals once 30s have elapsed since _seq was written.
       try {
         const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-        if (cur._stopped) return
+        if (cur._stopped && (Date.now() - parseInt(cur._seq, 10)) < 30_000) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       // If inside a subagent with skill context, prefer the skill's role
@@ -414,10 +415,10 @@ function processEvent(event) {
     }
     case 'PostToolUse': {
       // Suppress straggler PostToolUse events that arrive after Stop.
-      // _stopped is cleared when UserPromptSubmit fires (marking a new turn).
+      // Use a 30s window (not a strict boolean) — same rationale as PreToolUse.
       try {
         const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-        if (cur._stopped) return
+        if (cur._stopped && (Date.now() - parseInt(cur._seq, 10)) < 30_000) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       const skillCtx = readSkillContext(agentId)

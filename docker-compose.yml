@@ -26,6 +26,7 @@ services:
       #   COMPOSE_FILE=docker-compose.yml HOME=/home/youruser docker compose up -d
       - ${HOME}/.claude:/home/node/.claude:rw
     mem_limit: 256m
+    init: true
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
