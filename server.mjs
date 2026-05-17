@@ -79,11 +79,12 @@ const rawArgs = process.argv.slice(2)
 function argVal(prefix) { return rawArgs.find(a => a.startsWith(prefix))?.split('=')[1] }
 
 const rawPort = argVal('--port=') || '5174'
-const port = Math.max(1, Math.min(65535, parseInt(rawPort, 10) || 5174))
-if (String(port) !== rawPort && !/^\d+$/.test(rawPort)) {
+const _parsedPort = parseInt(rawPort, 10)
+if (!/^\d+$/.test(rawPort) || isNaN(_parsedPort) || _parsedPort < 1 || _parsedPort > 65535) {
   console.error(`\n  Invalid port "${rawPort}". Must be 1–65535.\n`)
   process.exit(1)
 }
+const port = _parsedPort
 const bindHost = rawArgs.includes('--host') ? '0.0.0.0' : '127.0.0.1'
 const lang = argVal('--lang=')
 const openBrowser = !rawArgs.includes('--no-open')
@@ -458,6 +459,12 @@ server.listen(port, bindHost, () => {
 
   Use Ctrl+C to stop.
   `)
+
+  if (bindHost === '0.0.0.0' && !apiToken) {
+    console.warn('  WARNING: --host is set but OFFICE_API_TOKEN is not.')
+    console.warn('  Anyone on the network can write to /api/status without authentication.')
+    console.warn('  Set OFFICE_API_TOKEN=<secret> to require a token for writes.\n')
+  }
 
   // Open browser
   if (openBrowser) {

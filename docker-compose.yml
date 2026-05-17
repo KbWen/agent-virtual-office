@@ -5,8 +5,10 @@ services:
       dockerfile: Dockerfile
     image: agent-virtual-office
     ports:
-      # Loopback only — safe behind Nginx. For direct LAN access without
-      # a reverse proxy, change to "5174:5174".
+      # Loopback only — safe behind Nginx.
+      # For direct LAN access without a reverse proxy, change to "5174:5174"
+      # AND set OFFICE_API_TOKEN in the environment block below — otherwise
+      # the write API is unauthenticated and reachable by anyone on the LAN.
       - "127.0.0.1:5174:5174"
     environment:
       OFFICE_API_TOKEN: ${OFFICE_API_TOKEN:-}

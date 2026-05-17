@@ -219,7 +219,9 @@ if (help) {
     --port=PORT    Port number (default: 5174)
     --lang=LANG    Language: en, zh-TW (default: auto-detect)
     --no-open      Don't open browser automatically
-    --no-host      Don't expose to network (localhost only)
+    --no-host      Dev mode only: don't expose to LAN (dev server binds 0.0.0.0 by
+                   default; serve mode is loopback-only by default, so --no-host is
+                   a no-op there)
     --help, -h     Show this help
 
   Quick start:
