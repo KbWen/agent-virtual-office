@@ -78,6 +78,17 @@ describe('routeTaskToAgent', () => {
   it('returns null for unrecognized task with no matches', () => {
     expect(routeTaskToAgent('do something unrecognizable xyz123')).toBeNull()
   })
+
+  it('does not match res for words that only contain "read" as substring', () => {
+    expect(routeTaskToAgent('thread the needle')).not.toBe('res')
+    expect(routeTaskToAgent('already done')).not.toBe('res')
+    expect(routeTaskToAgent('spread the load')).not.toBe('res')
+  })
+
+  it('matches res for "read" as a standalone word', () => {
+    expect(routeTaskToAgent('read the documentation')).toBe('res')
+    expect(routeTaskToAgent('read and study the codebase')).toBe('res')
+  })
 })
 
 describe('routeExternalAgents', () => {
@@ -162,6 +173,18 @@ describe('routeExternalAgents', () => {
     expect(result).toHaveLength(8)
     const ids = result.map(r => r.agentId)
     expect(new Set(ids).size).toBe(8)
+  })
+
+  it('tier 1: rejects role not in FALLBACK_ORDER, falls through to tier 2/3', () => {
+    const result = routeExternalAgents([{ role: 'hacker', task: 'xyz', status: 'working' }])
+    expect(result).toHaveLength(1)
+    expect(result[0].agentId).not.toBe('hacker')
+    expect(result[0].agentId).toBe('dev')  // tier 3 fallback (no keyword match)
+  })
+
+  it('tier 1: rejects __proto__ role injection', () => {
+    const result = routeExternalAgents([{ role: '__proto__', status: 'working' }])
+    expect(result[0].agentId).not.toBe('__proto__')
   })
 })
 

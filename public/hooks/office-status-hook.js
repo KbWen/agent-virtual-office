@@ -458,12 +458,19 @@ function processEvent(event) {
       // Claude's turn is over — mark all current agents as done.
       // _stopped: true prevents straggler PostToolUse events from overwriting this idle state.
       try {
+        const VALID_HOOK_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
         const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-        const doneAgents = (data.agents || []).map(a => ({
-          ...a, status: 'done', label: pick(LANG === 'en'
-            ? ['✅ All done', '✅ Round complete', '✅ Over to you']
-            : ['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了'])
-        }))
+        const doneAgents = (Array.isArray(data.agents) ? data.agents : [])
+          .filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
+          .map(a => ({
+            role: a.role,
+            task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
+            status: 'done',
+            label: pick(LANG === 'en'
+              ? ['✅ All done', '✅ Round complete', '✅ Over to you']
+              : ['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了']),
+            hint: null,
+          }))
         const output = {
           _seq: String(Date.now()),
           _stopped: true,
@@ -524,8 +531,8 @@ function processEvent(event) {
   let existingWorkflow = null
   try {
     const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-    existing = data.agents || []
-    existingWorkflow = data.workflow || null
+    existing = Array.isArray(data.agents) ? data.agents.filter(a => a && typeof a === 'object') : []
+    existingWorkflow = typeof data.workflow === 'string' ? data.workflow.slice(0, 200) : null
   } catch {}
 
   // Replace agent with same role, or add new

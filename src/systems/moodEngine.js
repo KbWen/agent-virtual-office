@@ -130,7 +130,7 @@ export function pushEventBatch(eventList) {
  */
 export function setMoodOverride(mood, durationMs = 60000) {
   overrideMood = mood
-  overrideExpiry = Date.now() + durationMs
+  overrideExpiry = Date.now() + Math.max(durationMs, 1000)
   updateStoreMood()
 }
 

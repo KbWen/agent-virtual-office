@@ -30,7 +30,7 @@ export function extractContext(label) {
   // Strip emoji prefix: "✏️ 改 App.jsx" → "改 App.jsx" → "App.jsx"
   // Pattern: optional emoji(s) + optional Chinese verb + space + context
   const stripped = label
-    .replace(/^[\p{Extended_Pictographic}\u200d\ufe0f\s]+/u, '') // leading emoji
+    .replace(/^(?:[\p{Extended_Pictographic}\u200d\ufe0f]|[0-9#*]\ufe0f?\u20e3|\s)+/u, '') // leading emoji
     .replace(/^(改|寫|讀|找|搜|跑|派)\s*/u, '')                     // zh verb
     .replace(/^(editing|writing|reading|searching|running)\s*/i, '') // en verb
     .trim()

@@ -8,6 +8,7 @@ export const MAX_MOOD_DURATION = 3_600_000 // 1 hour
  * Handles both shorthand ({ dev: "working" }) and full format ({ type: "office-status", agents: [...] }).
  */
 export function normalizePost(body) {
+  if (body == null || typeof body !== 'object') body = {}
   if (body.type === 'office-status') {
     const agents = (Array.isArray(body.agents) ? body.agents : [])
       .filter(a => a && typeof a === 'object'

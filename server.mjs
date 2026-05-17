@@ -29,6 +29,7 @@ const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'inte
 const MAX_MOOD_DURATION = 3_600_000
 
 function normalizePost(body) {
+  if (body == null || typeof body !== 'object') body = {}
   if (body.type === 'office-status') {
     const agents = (Array.isArray(body.agents) ? body.agents : [])
       .filter(a => a && typeof a === 'object' && VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status))
@@ -175,9 +176,9 @@ function getAllowedOriginHeader(origin) {
 
 function safeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false
-  const ba = Buffer.from(a, 'utf8'), bb = Buffer.from(b, 'utf8')
-  if (ba.length !== bb.length) return false
-  return timingSafeEqual(ba, bb)
+  const ha = createHash('sha256').update(a).digest()
+  const hb = createHash('sha256').update(b).digest()
+  return timingSafeEqual(ha, hb)
 }
 
 function isAuthorized(req) {
@@ -418,17 +419,17 @@ function handleEvent(req, res) {
         if (!VALID_ROLES.includes(parsed.role) || !VALID_STATUSES.includes(parsed.status)) {
           res.statusCode = 400; return res.end(JSON.stringify({ ok: false, error: 'Invalid role or status' }))
         }
-        agents = [{ role: parsed.role, status: parsed.status, label: parsed.label ? String(parsed.label).slice(0, 200) : eventName }]
+        agents = [{ role: parsed.role, status: parsed.status, label: typeof parsed.label === 'string' ? parsed.label.slice(0, 200) : eventName }]
       } else {
-        agents = EVENT_TO_STATUS[eventName]
+        agents = Object.prototype.hasOwnProperty.call(EVENT_TO_STATUS, eventName) ? EVENT_TO_STATUS[eventName] : undefined
         if (!agents) { res.statusCode = 400; return res.end(JSON.stringify({ ok: false, error: 'Unknown event' })) }
-        if (parsed.label) agents = agents.map((a, i) => i === 0 ? { ...a, label: String(parsed.label).slice(0, 200) } : a)
+        if (typeof parsed.label === 'string') agents = agents.map((a, i) => i === 0 ? { ...a, label: parsed.label.slice(0, 200) } : a)
       }
       const output = {
         _seq: nextSeq(),
         type: 'office-status', agents,
         activeCount: agents.filter(a => a.status !== 'done').length,
-        workflow: parsed.workflow ? String(parsed.workflow).slice(0, 200) : eventName,
+        workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : eventName,
         source: 'webhook',
       }
       if (!atomicWrite(STATUS_PATH, JSON.stringify(output, null, 2))) {

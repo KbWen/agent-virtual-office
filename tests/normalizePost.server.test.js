@@ -16,6 +16,7 @@ const VALID_MOODS    = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'i
 const MAX_MOOD_DURATION = 3_600_000
 
 function serverNormalizePost(body) {
+  if (body == null || typeof body !== 'object') body = {}
   if (body.type === 'office-status') {
     const agents = (Array.isArray(body.agents) ? body.agents : [])
       .filter(a => a && typeof a === 'object' && VALID_ROLES.includes(a.role) && VALID_STATUSES.includes(a.status))

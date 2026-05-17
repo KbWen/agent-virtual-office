@@ -56,6 +56,7 @@ ProtectSystem=strict
 # subdirectory without granting access to the rest of the home tree.
 ProtectHome=tmpfs
 BindPaths=%h/.claude
+ReadWritePaths=%h/.claude
 PrivateTmp=true
 PrivateDevices=true
 ProtectKernelTunables=true

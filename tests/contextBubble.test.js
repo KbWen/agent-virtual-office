@@ -41,6 +41,16 @@ describe('extractContext', () => {
     expect(extractContext('App.jsx')).toBe('App.jsx')
     expect(extractContext('npm test')).toBe('npm test')
   })
+
+  it('preserves plain ASCII digits (not treated as emoji)', () => {
+    expect(extractContext('3 files changed')).toBe('3 files changed')
+    expect(extractContext('42 errors found')).toBe('42 errors found')
+  })
+
+  it('strips keycap emoji prefix (digit + VS16 + enclosing keycap)', () => {
+    expect(extractContext('1️⃣ first task')).toBe('first task')
+    expect(extractContext('#️⃣ hashtag')).toBe('hashtag')
+  })
 })
 
 describe('toolToAction', () => {

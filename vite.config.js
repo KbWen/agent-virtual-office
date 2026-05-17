@@ -53,9 +53,9 @@ function nextSeq() {
 // Constant-time token comparison — prevents timing oracle attacks.
 function safeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false
-  const ba = Buffer.from(a, 'utf8'), bb = Buffer.from(b, 'utf8')
-  if (ba.length !== bb.length) return false
-  return timingSafeEqual(ba, bb)
+  const ha = createHash('sha256').update(a).digest()
+  const hb = createHash('sha256').update(b).digest()
+  return timingSafeEqual(ha, hb)
 }
 
 // Atomic write: temp file + rename to prevent partial-read corruption.
@@ -197,13 +197,7 @@ function officeStatusPlugin() {
                   const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
                   const parsed = JSON.parse(raw)
                   const seq = parseInt(parsed._seq, 10)
-                  if (!seq || now - seq > 300000) {  // stale or no valid _seq
-                    // Clean up very old files (>1 hour) to prevent ~/.claude/ clutter
-                    if (seq && now - seq > 3600000 && file !== 'office-status.json') {
-                      try { fs.unlinkSync(path.join(dir, file)) } catch {}
-                    }
-                    continue
-                  }
+                  if (!seq || now - seq > 300000) continue  // stale or no valid _seq
                   // Skip sessions from other projects (hooks write _cwd).
                   // Slugged files without _cwd are from old hooks — skip them too (bare main is OK as fallback).
                   if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), path.resolve(projectRoot))) continue
@@ -382,14 +376,14 @@ function officeStatusPlugin() {
         res.setHeader('Vary', 'Origin')
         const allowedOriginL = getAllowedOriginHeader(req.headers.origin, apiConfig)
         if (allowedOriginL) res.setHeader('Access-Control-Allow-Origin', allowedOriginL)
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Office-Token, Authorization')
         if (req.method === 'OPTIONS') {
           if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
             res.statusCode = 403
             res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
             return
           }
-          res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Office-Token, Authorization')
           res.statusCode = 204
           res.end()
           return
@@ -527,16 +521,16 @@ function officeStatusPlugin() {
                 res.end(JSON.stringify({ ok: false, error: `Invalid role or status` }))
                 return
               }
-              agents = [{ role: parsed.role, status: parsed.status, label: (parsed.label ? String(parsed.label).slice(0, 200) : eventName) }]
+              agents = [{ role: parsed.role, status: parsed.status, label: (typeof parsed.label === 'string' ? parsed.label.slice(0, 200) : eventName) }]
             } else {
-              agents = EVENT_TO_STATUS[eventName]
+              agents = Object.prototype.hasOwnProperty.call(EVENT_TO_STATUS, eventName) ? EVENT_TO_STATUS[eventName] : undefined
               if (!agents) {
                 res.statusCode = 400
                 res.end(JSON.stringify({ ok: false, error: 'Unknown event' }))
                 return
               }
               // Allow label override
-              if (parsed.label) agents = agents.map((a, i) => i === 0 ? { ...a, label: String(parsed.label).slice(0, 200) } : a)
+              if (typeof parsed.label === 'string') agents = agents.map((a, i) => i === 0 ? { ...a, label: parsed.label.slice(0, 200) } : a)
             }
 
             const output = {
@@ -545,7 +539,7 @@ function officeStatusPlugin() {
               type: 'office-status',
               agents,
               activeCount: agents.filter(a => a.status !== 'done').length,
-              workflow: parsed.workflow ? String(parsed.workflow).slice(0, 200) : eventName,
+              workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : eventName,
               source: 'webhook',
             }
             const dir = path.dirname(statusPath)
