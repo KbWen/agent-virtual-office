@@ -81,6 +81,42 @@ npm run dev
 
 Open your browser and watch your agents work. That's it. No backend, no database, no WebSocket.
 
+### Option 3: Production build (serve dist/)
+
+Use this when you want to host the compiled office on a server or share it with teammates, without needing Vite running.
+
+```bash
+# Build once
+npm run build
+
+# Start the standalone production server (serves dist/ + /api/status)
+npx agent-virtual-office serve
+
+# Or use the npm script
+npm run serve
+```
+
+The `serve` command auto-builds if `dist/` doesn't exist yet. Options:
+```
+--port=PORT    Port number (default: 5174)
+--host         Expose to LAN (default: localhost only)
+--no-open      Don't open browser automatically
+--lang=LANG    Language: en, zh-TW
+```
+
+**Environment variables** (optional):
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `OFFICE_API_TOKEN` | Token required in `X-Office-Token` or `Authorization: Bearer` header for POST/event requests | `mysecret123` |
+| `OFFICE_API_ALLOWED_ORIGINS` | Comma-separated allowed CORS origins (default: loopback + server IPs) | `http://office.internal:5174` |
+
+```bash
+OFFICE_API_TOKEN=secret npx agent-virtual-office serve --host
+```
+
+**Health check:** `GET /api/health` returns `{ ok: true, uptime: <seconds> }`.
+
 ---
 
 ## Status API

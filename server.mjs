@@ -258,6 +258,7 @@ function handleStatus(req, res) {
 
   if (req.method === 'POST') {
     if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
+    req.setEncoding('utf-8')
     let body = '', aborted = false
     req.on('data', chunk => {
       if (aborted) return
@@ -289,7 +290,7 @@ function handleLang(req, res) {
   if (req.method === 'OPTIONS') return handlePreflight(req, res)
   if (req.method !== 'POST') { res.statusCode = 405; return res.end() }
   if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
-
+  req.setEncoding('utf-8')
   let body = '', aborted = false
   req.on('data', chunk => {
     if (aborted) return
@@ -337,7 +338,7 @@ function handleEvent(req, res) {
   if (req.method !== 'POST') { res.statusCode = 405; return res.end(JSON.stringify({ error: 'Method not allowed' })) }
   if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
   if (!checkRateLimit(req)) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
-
+  req.setEncoding('utf-8')
   let body = '', aborted = false
   req.on('data', chunk => {
     if (aborted) return
@@ -412,13 +413,22 @@ function serveStatic(req, res) {
 }
 
 // ─── HTTP server ──────────────────────────────────────────────────────────────
+const SERVER_START = Date.now()
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x')
   if (url.pathname === '/api/status') return handleStatus(req, res)
   if (url.pathname === '/api/lang')   return handleLang(req, res)
   if (url.pathname === '/api/event')  return handleEvent(req, res)
+  if (url.pathname === '/api/health') {
+    res.setHeader('Content-Type', 'application/json')
+    return res.end(JSON.stringify({ ok: true, uptime: Math.floor((Date.now() - SERVER_START) / 1000) }))
+  }
   return serveStatic(req, res)
 })
+
+// Close keep-alive connections that go silent for 30s (slow-client DoS guard)
+server.setTimeout(30000)
 
 server.listen(port, bindHost, () => {
   const displayHost = bindHost === '0.0.0.0' ? 'localhost' : bindHost
