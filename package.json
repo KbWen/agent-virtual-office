@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "start": "vite",
     "build:single": "vite build --outDir dist-single",
+    "serve": "node server.mjs",
     "test": "vitest run",
     "prepublishOnly": "npm test"
   },
@@ -43,6 +44,7 @@
     "src/",
     "index.html",
     "vite.config.js",
+    "server.mjs",
     "package.json"
   ],
   "dependencies": {

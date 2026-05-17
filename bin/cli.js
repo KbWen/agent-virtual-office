@@ -154,6 +154,47 @@ if (command === 'uninstall') {
   process.exit(0)
 }
 
+// ─── serve: production static server ───────────────────────────────────────
+if (command === 'serve') {
+  const serverScript = path.join(root, 'server.mjs')
+  if (!fs.existsSync(serverScript)) {
+    console.error('  Error: server.mjs not found. Your installation may be corrupted.')
+    console.error('    npm install -g agent-virtual-office')
+    process.exit(1)
+  }
+  // Auto-build if dist/ doesn't exist
+  if (!fs.existsSync(path.join(root, 'dist', 'index.html'))) {
+    console.log('  Building production bundle first...')
+    try {
+      execSync('npm run build', { cwd: root, stdio: 'inherit' })
+    } catch {
+      console.error('  Build failed. Fix errors above and try again.')
+      process.exit(1)
+    }
+  }
+  // Forward remaining flags to server.mjs
+  const serverArgs = process.argv.slice(3)
+  const child = spawn(process.execPath, [serverScript, ...serverArgs], {
+    cwd: root,
+    stdio: 'inherit',
+    shell: false,
+  })
+  child.on('error', (err) => {
+    console.error(`\n  Failed to start production server: ${err.message}\n`)
+    process.exit(1)
+  })
+  child.on('close', (code) => process.exit(code || 0))
+  process.on('SIGINT', () => { try { child.kill() } catch {} ; process.exit(0) })
+  if (process.platform === 'win32') {
+    process.on('SIGTERM', () => {
+      try { execSync(`taskkill /T /F /PID ${child.pid}`, { stdio: 'ignore' }) } catch {}
+      process.exit(0)
+    })
+  }
+  // Don't fall through to dev server
+  return
+}
+
 // Parse flags
 const port = args.find(a => a.startsWith('--port='))?.split('=')[1] || '5174'
 if (!/^\d+$/.test(port) || parseInt(port, 10) < 1 || parseInt(port, 10) > 65535) {
@@ -172,6 +213,7 @@ if (help) {
     npx agent-virtual-office [options]
     npx agent-virtual-office setup       Install Claude Code hooks (one-time)
     npx agent-virtual-office uninstall   Remove hooks
+    npx agent-virtual-office serve       Serve production build (no Vite needed)
 
   Options:
     --port=PORT    Port number (default: 5174)
@@ -182,7 +224,11 @@ if (help) {
 
   Quick start:
     npx agent-virtual-office setup   # one-time: install hooks
-    npx agent-virtual-office         # start the office
+    npx agent-virtual-office         # start the office (dev mode)
+
+  Production / static deploy:
+    npm run build                    # build to dist/
+    npx agent-virtual-office serve   # serve dist/ + /api/status
 
   Then use Claude Code in any project — the office lights up automatically.
 `)
