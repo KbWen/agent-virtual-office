@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { createHash } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -42,6 +42,35 @@ function getServerIPs() {
 
 const SERVER_IPS = getServerIPs()
 
+// Monotonic sequence: timestamp + counter suffix, same as server.mjs.
+// Prevents same-ms _seq collisions in dedup / multi-session merge.
+let _seqCounter = 0
+function nextSeq() {
+  _seqCounter = (_seqCounter + 1) % 10000
+  return `${Date.now()}.${String(_seqCounter).padStart(4, '0')}`
+}
+
+// Constant-time token comparison — prevents timing oracle attacks.
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false
+  const ba = Buffer.from(a, 'utf8'), bb = Buffer.from(b, 'utf8')
+  if (ba.length !== bb.length) return false
+  return timingSafeEqual(ba, bb)
+}
+
+// Atomic write: temp file + rename to prevent partial-read corruption.
+function atomicWrite(filePath, data) {
+  const tmp = filePath + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+  try {
+    fs.writeFileSync(tmp, data)
+    fs.renameSync(tmp, filePath)
+    return true
+  } catch {
+    try { fs.unlinkSync(tmp) } catch {}
+    try { fs.writeFileSync(filePath, data); return true } catch { return false }
+  }
+}
+
 export function getOfficeApiConfig(env = process.env) {
   const token = env.OFFICE_API_TOKEN?.trim() || null
   const allowedOrigins = (env.OFFICE_API_ALLOWED_ORIGINS || '')
@@ -75,8 +104,8 @@ export function isAuthorizedOfficeRequest(req, config = getOfficeApiConfig()) {
   if (!config.token) return true
   const header = req.headers['x-office-token']
   const auth = req.headers.authorization
-  if (header === config.token) return true
-  if (typeof auth === 'string' && auth === `Bearer ${config.token}`) return true
+  if (safeEqual(header, config.token)) return true
+  if (typeof auth === 'string' && safeEqual(auth, `Bearer ${config.token}`)) return true
   return false
 }
 
@@ -110,8 +139,10 @@ function officeStatusPlugin() {
       postCounts.set(ip, { start: now, count: 1 })
       return true
     }
+    // Don't inflate counter past limit — prevents unbounded growth under sustained flood
+    if (entry.count >= RATE_LIMIT) return false
     entry.count++
-    return entry.count <= RATE_LIMIT
+    return true
   }
 
   return {
@@ -120,6 +151,7 @@ function officeStatusPlugin() {
       server.middlewares.use('/api/status', (req, res) => {
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('X-Content-Type-Options', 'nosniff')
         const allowedOrigin = getAllowedOriginHeader(req.headers.origin, apiConfig)
         if (allowedOrigin) res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -269,6 +301,12 @@ function officeStatusPlugin() {
 
         // POST → update status (16KB limit to prevent abuse)
         if (req.method === 'POST') {
+          const reqOrigin = req.headers.origin
+          if (reqOrigin && !isAllowedOrigin(reqOrigin, apiConfig)) {
+            res.statusCode = 403
+            res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
+            return
+          }
           if (!isAuthorizedOfficeRequest(req, apiConfig)) {
             res.statusCode = 401
             res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
@@ -285,7 +323,7 @@ function officeStatusPlugin() {
               aborted = true
               res.statusCode = 413
               res.end(JSON.stringify({ ok: false, error: 'Body too large' }))
-              req.destroy()
+              req.resume()
             }
           })
           req.on('end', () => {
@@ -293,12 +331,14 @@ function officeStatusPlugin() {
             try {
               const parsed = JSON.parse(body)
               const normalized = normalizePost(parsed)
+              normalized._seq = nextSeq()
               normalized._cwd = process.cwd()
-              // Ensure directory exists
               const dir = path.dirname(statusPath)
               if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-              const json = JSON.stringify(normalized, null, 2)
-              fs.writeFileSync(statusPath, json)
+              if (!atomicWrite(statusPath, JSON.stringify(normalized, null, 2))) {
+                res.statusCode = 500
+                return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
+              }
               res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
             } catch {
               res.statusCode = 400
@@ -338,23 +378,37 @@ function officeStatusPlugin() {
       server.middlewares.use('/api/lang', (req, res) => {
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('X-Content-Type-Options', 'nosniff')
+        res.setHeader('Vary', 'Origin')
+        const allowedOriginL = getAllowedOriginHeader(req.headers.origin, apiConfig)
+        if (allowedOriginL) res.setHeader('Access-Control-Allow-Origin', allowedOriginL)
         if (req.method === 'OPTIONS') {
           if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
             res.statusCode = 403
             res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
             return
           }
-          res.statusCode = 204
-          res.setHeader('Access-Control-Allow-Origin', getAllowedOriginHeader(req.headers.origin, apiConfig))
           res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
           res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Office-Token, Authorization')
+          res.statusCode = 204
           res.end()
           return
         }
         if (req.method === 'POST') {
+          const reqOriginL = req.headers.origin
+          if (reqOriginL && !isAllowedOrigin(reqOriginL, apiConfig)) {
+            res.statusCode = 403
+            res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
+            return
+          }
           if (!isAuthorizedOfficeRequest(req, apiConfig)) {
             res.statusCode = 401
             res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
+            return
+          }
+          if (!checkRateLimit(req)) {
+            res.statusCode = 429
+            res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
             return
           }
           req.setEncoding('utf-8')
@@ -368,7 +422,7 @@ function officeStatusPlugin() {
               langAborted = true
               res.statusCode = 413
               res.end(JSON.stringify({ ok: false, error: 'Body too large' }))
-              req.destroy()
+              req.resume()
               return
             }
           })
@@ -380,7 +434,7 @@ function officeStatusPlugin() {
               try {
                 const dir = path.dirname(langFile)
                 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-                fs.writeFileSync(langFile, lang)
+                atomicWrite(langFile, lang)
                 res.statusCode = 200
                 res.end(JSON.stringify({ ok: true }))
               } catch {
@@ -413,6 +467,7 @@ function officeStatusPlugin() {
 
       server.middlewares.use('/api/event', (req, res) => {
         res.setHeader('Content-Type', 'application/json')
+        res.setHeader('X-Content-Type-Options', 'nosniff')
         const allowedOrigin = getAllowedOriginHeader(req.headers.origin, apiConfig)
         if (allowedOrigin) res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
         res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -434,6 +489,12 @@ function officeStatusPlugin() {
           res.end(JSON.stringify({ error: 'Method not allowed' }))
           return
         }
+        const reqOriginE = req.headers.origin
+        if (reqOriginE && !isAllowedOrigin(reqOriginE, apiConfig)) {
+          res.statusCode = 403
+          res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
+          return
+        }
         if (!isAuthorizedOfficeRequest(req, apiConfig)) {
           res.statusCode = 401
           res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
@@ -451,7 +512,7 @@ function officeStatusPlugin() {
         req.on('data', chunk => {
           if (aborted) return
           body += chunk
-          if (body.length > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.destroy() }
+          if (body.length > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.resume() }
         })
         req.on('end', () => {
           if (aborted) return
@@ -479,7 +540,7 @@ function officeStatusPlugin() {
             }
 
             const output = {
-              _seq: String(Date.now()),
+              _seq: nextSeq(),
               _cwd: process.cwd(),
               type: 'office-status',
               agents,
@@ -489,7 +550,7 @@ function officeStatusPlugin() {
             }
             const dir = path.dirname(statusPath)
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-            fs.writeFileSync(statusPath, JSON.stringify(output, null, 2))
+            atomicWrite(statusPath, JSON.stringify(output, null, 2))
             res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
           } catch {
             res.statusCode = 400
@@ -560,7 +621,7 @@ function fileWatcherFallbackPlugin() {
     try {
       const dir = path.dirname(statusPath)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(statusPath, JSON.stringify(output, null, 2))
+      atomicWrite(statusPath, JSON.stringify(output, null, 2))
     } catch {}
   }
 

@@ -9,7 +9,7 @@ const ROLE_KEYWORDS = {
   dev:      [/implement/i, /code/i, /develop/i, /build/i, /feature/i, /refactor/i, /fix/i, /write/i, /program/i, /commit/i, /merge/i],
   qa:       [/test/i, /review/i, /lint/i, /check/i, /verify/i, /validate/i, /quality/i, /bug/i, /assert/i, /coverage/i],
   ops:      [/deploy/i, /ship/i, /release/i, /ci/i, /cd/i, /infra/i, /monitor/i, /handoff/i, /docker/i, /publish/i],
-  res:      [/research/i, /search/i, /explore/i, /learn/i, /analyze/i, /investigate/i, /read/i, /study/i, /survey/i],
+  res:      [/research/i, /search/i, /explore/i, /learn/i, /analyze/i, /investigate/i, /\bread\b/i, /study/i, /survey/i],
   gate:     [/gate/i, /guard/i, /security/i, /auth/i, /permission/i, /approve/i, /compliance/i, /audit/i, /policy/i],
   designer: [/design/i, /ui/i, /ux/i, /style/i, /css/i, /layout/i, /visual/i, /brand/i, /icon/i, /figma/i, /sketch/i, /color/i, /font/i, /spacing/i, /typography/i],
 }
@@ -73,7 +73,7 @@ export function routeExternalAgents(agents) {
     let agentId = null
 
     // Tier 1: explicit role
-    if (entry.role && !assigned.has(entry.role)) {
+    if (entry.role && FALLBACK_ORDER.includes(entry.role) && !assigned.has(entry.role)) {
       agentId = entry.role
     }
 

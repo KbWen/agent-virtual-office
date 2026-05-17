@@ -160,6 +160,43 @@ describe('normalizePost', () => {
       })
       expect(result.moodDuration).toBe(30000)
     })
+
+    it('clamps zero to floor (1000)', () => {
+      const result = normalizePost({
+        type: 'office-status', agents: [],
+        mood: 'rushing', moodDuration: 0,
+      })
+      expect(result.moodDuration).toBe(1000)
+    })
+
+    it('clamps negative to floor (1000)', () => {
+      const result = normalizePost({
+        type: 'office-status', agents: [],
+        mood: 'rushing', moodDuration: -5,
+      })
+      expect(result.moodDuration).toBe(1000)
+    })
+
+    it('clamps sub-floor value to 1000', () => {
+      const result = normalizePost({
+        type: 'office-status', agents: [],
+        mood: 'rushing', moodDuration: 500,
+      })
+      expect(result.moodDuration).toBe(1000)
+    })
+
+    it('clamps zero in shorthand format to floor (1000)', () => {
+      const result = normalizePost({ dev: 'working', mood: 'rushing', moodDuration: 0 })
+      expect(result.moodDuration).toBe(1000)
+    })
+
+    it('returns null when moodDuration is null', () => {
+      const result = normalizePost({
+        type: 'office-status', agents: [],
+        mood: 'rushing', moodDuration: null,
+      })
+      expect(result.moodDuration).toBeNull()
+    })
   })
 
   describe('edge cases', () => {
