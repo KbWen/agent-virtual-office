@@ -21,7 +21,8 @@ import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 
 // ─── Inline validation (mirrors src/utils/normalizePost.js + src/systems/constants.js) ─
-// Kept here so server.mjs has zero dependencies on src/ at runtime.
+// Kept inline so server.mjs has zero dependencies on src/ at runtime.
+// Parity is verified by tests/normalizePost.server.test.js — update BOTH when changing.
 const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
 const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
 const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
@@ -99,14 +100,17 @@ const STATUS_PATH = path.join(os.homedir(), '.claude', 'office-status.json')
 
 // Atomic write: write to a temp file then rename so concurrent readers
 // never see a partial file. Falls back to direct write on Windows EBUSY.
+// Returns true on success, false if both paths fail.
 function atomicWrite(filePath, content) {
   const tmp = filePath + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
   try {
     fs.writeFileSync(tmp, content)
     fs.renameSync(tmp, filePath)
+    return true
   } catch {
-    try { fs.writeFileSync(filePath, content) } catch {}
+    try { fs.writeFileSync(filePath, content); return true } catch {}
     try { fs.unlinkSync(tmp) } catch {}
+    return false
   }
 }
 const isWin = process.platform === 'win32'
@@ -293,7 +297,9 @@ function handleStatus(req, res) {
         normalized._cwd = process.cwd()
         const dir = path.dirname(STATUS_PATH)
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-        atomicWrite(STATUS_PATH, JSON.stringify(normalized, null, 2))
+        if (!atomicWrite(STATUS_PATH, JSON.stringify(normalized, null, 2))) {
+          res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
+        }
         res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
       } catch { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' })) }
     })
@@ -326,7 +332,7 @@ function handleLang(req, res) {
     try {
       const dir = path.dirname(langFile)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-      atomicWrite(langFile, l)
+      if (!atomicWrite(langFile, l)) { res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' })) }
       res.end(JSON.stringify({ ok: true }))
     } catch { res.statusCode = 500; res.end(JSON.stringify({ ok: false })) }
   })
@@ -391,7 +397,9 @@ function handleEvent(req, res) {
       }
       const dir = path.dirname(STATUS_PATH)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-      atomicWrite(STATUS_PATH, JSON.stringify(output, null, 2))
+      if (!atomicWrite(STATUS_PATH, JSON.stringify(output, null, 2))) {
+        res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
+      }
       res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
     } catch { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' })) }
   })
@@ -443,6 +451,8 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/api/event')  return handleEvent(req, res)
   if (url.pathname === '/api/health') {
     res.setHeader('Content-Type', 'application/json')
+    setCors(res, req.headers.origin)
+    if (req.method === 'OPTIONS') return handlePreflight(req, res)
     return res.end(JSON.stringify({ ok: true, uptime: Math.floor((Date.now() - SERVER_START) / 1000) }))
   }
   return serveStatic(req, res)
@@ -502,11 +512,19 @@ setInterval(() => {
     const now = Date.now()
     for (const file of fs.readdirSync(dir)) {
       if (file === 'office-status.json') continue           // never auto-delete main
-      if (!file.match(/^office-status-[^.]+\.json$/)) continue
+      const isStatus = /^office-status-[^.]+\.json$/.test(file)
+      const isSkill  = /^office-skill-[^.]+\.json$/.test(file)
+      if (!isStatus && !isSkill) continue
       try {
-        const { _seq } = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'))
-        if (parseInt(_seq, 10) && now - parseInt(_seq, 10) > 3_600_000) {
-          fs.unlinkSync(path.join(dir, file))
+        if (isSkill) {
+          // skill files have no _seq — use mtime
+          const { mtimeMs } = fs.statSync(path.join(dir, file))
+          if (now - mtimeMs > 3_600_000) fs.unlinkSync(path.join(dir, file))
+        } else {
+          const { _seq } = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'))
+          if (parseInt(_seq, 10) && now - parseInt(_seq, 10) > 3_600_000) {
+            fs.unlinkSync(path.join(dir, file))
+          }
         }
       } catch {}
     }

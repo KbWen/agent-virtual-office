@@ -68,7 +68,10 @@ Options:
 --port=PORT    Port number (default: 5174)
 --lang=LANG    Language: en, zh-TW (default: auto-detect)
 --no-open      Don't open browser automatically
+--no-host      Restrict to localhost only (dev server binds all interfaces by default)
 ```
+
+> **Note:** The dev server (`npx agent-virtual-office`) exposes to LAN by default and has no authentication. Use `--no-host` to restrict to localhost, or use `serve` mode with an `OFFICE_API_TOKEN` for a secured deployment.
 
 ### Option 2: Clone & dev
 
@@ -127,7 +130,7 @@ docker compose up -d
 
 Then open `http://localhost:5174`.
 
-The compose file mounts `~/.claude` read-only into the container so it can read hook-written status files (`office-status-*.json`). Pass an optional `OFFICE_API_TOKEN` to gate POST/event requests:
+The compose file mounts `~/.claude` read-write into the container so the server can both read hook-written status files and accept POST writes. Pass an optional `OFFICE_API_TOKEN` to gate POST/event requests:
 
 ```bash
 OFFICE_API_TOKEN=secret docker compose up -d

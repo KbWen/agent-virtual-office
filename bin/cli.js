@@ -184,13 +184,18 @@ if (command === 'serve') {
     process.exit(1)
   })
   child.on('close', (code) => process.exit(code || 0))
-  process.on('SIGINT', () => { try { child.kill() } catch {} ; process.exit(0) })
-  if (process.platform === 'win32') {
-    process.on('SIGTERM', () => {
+  // Forward signals to the child process; child.on('close') handles the actual exit.
+  // Hard-exit after 12s in case server.mjs's 10s drain timer never fires.
+  function forwardSignal(sig) {
+    if (process.platform === 'win32') {
       try { execSync(`taskkill /T /F /PID ${child.pid}`, { stdio: 'ignore' }) } catch {}
-      process.exit(0)
-    })
+    } else {
+      try { child.kill(sig) } catch {}
+    }
+    setTimeout(() => process.exit(1), 12000).unref()
   }
+  process.on('SIGINT',  () => forwardSignal('SIGINT'))
+  process.on('SIGTERM', () => forwardSignal('SIGTERM'))
   // Don't fall through to dev server
   return
 }

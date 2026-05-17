@@ -51,12 +51,29 @@ function getSessionSlug() {
   // would otherwise write to the same file and overwrite each other).
   const cwdHash = require('crypto').createHash('md5').update(process.cwd()).digest('hex').slice(0, 4)
   try {
-    const branch = require('child_process')
-      .execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
-      .trim()
-    if (branch && branch !== 'HEAD') {
-      const slug = branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) || 'default'
-      return `${slug}-${cwdHash}`
+    // Read .git/HEAD directly — avoids spawning a git process on every hook invocation
+    // (git rev-parse adds ~10-30ms latency per Claude Code tool call).
+    const gitEntry = path.join(process.cwd(), '.git')
+    let headContent = null
+    if (fs.existsSync(gitEntry)) {
+      const stat = fs.statSync(gitEntry)
+      if (stat.isFile()) {
+        // Worktree: .git is a file "gitdir: <path>"
+        const ref = fs.readFileSync(gitEntry, 'utf-8').trim()
+        const m = ref.match(/^gitdir:\s*(.+)$/)
+        if (m) headContent = fs.readFileSync(path.resolve(process.cwd(), m[1], 'HEAD'), 'utf-8').trim()
+      } else {
+        headContent = fs.readFileSync(path.join(gitEntry, 'HEAD'), 'utf-8').trim()
+      }
+    }
+    if (headContent) {
+      const branch = headContent.startsWith('ref: refs/heads/')
+        ? headContent.slice('ref: refs/heads/'.length)
+        : null  // detached HEAD — fall through to CWD slug
+      if (branch) {
+        const slug = branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) || 'default'
+        return `${slug}-${cwdHash}`
+      }
     }
   } catch {}
   const cwdSlug = path.basename(process.cwd())
@@ -379,6 +396,12 @@ function processEvent(event) {
       break
     }
     case 'PostToolUse': {
+      // If Stop already fired this turn, skip — straggler PostToolUse must not
+      // overwrite the authoritative idle state written by Stop.
+      try {
+        const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+        if (cur._stopped) return
+      } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       const skillCtx = readSkillContext(agentId)
       role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
@@ -411,7 +434,8 @@ function processEvent(event) {
       break
     }
     case 'Stop': {
-      // Claude's turn is over — mark all current agents as done
+      // Claude's turn is over — mark all current agents as done.
+      // _stopped: true prevents straggler PostToolUse events from overwriting this idle state.
       try {
         const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
         const doneAgents = (data.agents || []).map(a => ({
@@ -421,6 +445,7 @@ function processEvent(event) {
         }))
         const output = {
           _seq: String(Date.now()),
+          _stopped: true,
           _cwd: process.cwd(),
           type: 'office-status',
           agents: doneAgents,
@@ -451,6 +476,7 @@ function processEvent(event) {
           source: 'claude-cli',
           _cwd: process.cwd(),
           _seq: String(Date.now()),
+          _stopped: true,
         }
         const dir = path.dirname(STATUS_FILE)
         try {
