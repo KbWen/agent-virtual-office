@@ -579,11 +579,14 @@ export function startStatusIntegration(store) {
 
   if (sseCleanup && !polling.active) {
     polling.active = true
-    // Heartbeat-only failure probe: report failures so "SSE frozen + server down" drives
-    // health offline, but suppress success probes so healthy 304s don't cancel accumulated
-    // SSE errors — without this gate the two channels fight over consecutiveFailures and
-    // the indicator flaps between degraded/online on every SSE-error/304 pair.
-    const heartbeatProbe = result => { if (!result.ok && !result.skipped) handleProbe(result) }
+    // Heartbeat failure probe: only treat genuine reachability failures as health-down.
+    // parseError (malformed 200) and non-404 HTTP errors (500/401) mean the server answered —
+    // they are proof of life and must not drive integrationHealth offline. networkError and
+    // 404 are the only cases where the endpoint is truly unreachable.
+    const heartbeatProbe = result => {
+      if (result.skipped) return
+      if (result.networkError || result.status === 404) handleProbe(result)
+    }
     polling.cleanup = startFilePolling(handleIncoming, 10_000, heartbeatProbe)
   } else {
     startFastPolling()

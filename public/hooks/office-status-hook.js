@@ -666,6 +666,21 @@ function processEvent(event) {
   try {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     for (let i = 0; i < writeAttempts && !writeOk; i++) {
+      // Re-check _stopped before each retry (not the first attempt — that's already covered
+      // by the re-check guard above). If Stop fired during the first attempt's contention,
+      // a successful second write would clobber Stop's idle state with stale working data.
+      if (i > 0 && hookEvent !== 'UserPromptSubmit') {
+        try {
+          const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+          const sAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
+          if (latest._stopped && Number.isFinite(sAt) && Date.now() - sAt < 30_000) {
+            try { fs.unlinkSync(tmp) } catch {}
+            return
+          }
+        } catch (err) {
+          if (err.code === 'EBUSY' || err.code === 'EPERM') { try { fs.unlinkSync(tmp) } catch {}; return }
+        }
+      }
       try { fs.writeFileSync(tmp, json); fs.renameSync(tmp, STATUS_FILE); writeOk = true } catch {}
       if (!writeOk) { try { fs.writeFileSync(STATUS_FILE, json); writeOk = true } catch {} }
     }
