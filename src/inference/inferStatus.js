@@ -221,11 +221,13 @@ function startFilePolling(callback, baseIntervalMs = 1000, onProbe = null) {
       const result = await pollFileStatusOnce(fetch, pollingState, (m) => { if (!stopped) callback(m) })
       if (onProbe && result) onProbe(result)
       // Adaptive interval: double after 5 consecutive idle polls, reset on activity.
-      // Idle = unchanged (304/dup), active = delivered a new message.
+      // Idle = unchanged (304/dup/parse-error), active = delivered a new message.
+      // parseError counts as idle so a server persistently returning malformed JSON
+      // doesn't get hammered at 1s rate indefinitely.
       if (result?.delivered) {
         pollingState.idlePolls = 0
         currentIntervalMs = baseIntervalMs
-      } else if (result?.unchanged || result?.duplicate || result?.empty) {
+      } else if (result?.unchanged || result?.duplicate || result?.empty || result?.parseError) {
         pollingState.idlePolls = (pollingState.idlePolls || 0) + 1
         if (pollingState.idlePolls >= 5) {
           currentIntervalMs = Math.min(currentIntervalMs * 2, 8000)
