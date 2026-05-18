@@ -444,7 +444,7 @@ const MIME = {
 }
 
 function serveStatic(req, res) {
-  if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; return res.end() }
+  if (req.method !== 'GET' && req.method !== 'HEAD') { res.setHeader('Allow', 'GET, HEAD'); res.statusCode = 405; return res.end() }
   const urlPath = new URL(req.url, 'http://x').pathname
   // Reject NUL bytes which can cause filesystem misbehavior on some platforms.
   if (urlPath.includes('\0')) { res.statusCode = 400; return res.end('Bad Request') }
@@ -497,8 +497,9 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x')
   if (url.pathname === '/api/status') return handleStatus(req, res)
   if (url.pathname === '/api/status/stream') {
+    setCors(res, req.headers.origin, 'GET, OPTIONS')
+    if (req.method === 'OPTIONS') return handlePreflight(req, res)
     if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); res.statusCode = 405; return res.end() }
-    setCors(res, req.headers.origin)
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')
     res.setHeader('X-Accel-Buffering', 'no')
@@ -521,7 +522,7 @@ const server = http.createServer((req, res) => {
     res.setHeader('Cache-Control', 'no-store')
     setCors(res, req.headers.origin, 'GET, OPTIONS')
     if (req.method === 'OPTIONS') return handlePreflight(req, res)
-    if (req.method !== 'GET' && req.method !== 'HEAD') { res.setHeader('Allow', 'GET, OPTIONS'); res.statusCode = 405; return res.end() }
+    if (req.method !== 'GET' && req.method !== 'HEAD') { res.setHeader('Allow', 'GET, HEAD, OPTIONS'); res.statusCode = 405; return res.end() }
     const stats = getSessionStats(path.dirname(STATUS_PATH), process.cwd())
     return res.end(JSON.stringify({ ok: true, uptime: Math.floor(process.uptime()), ...stats }))
   }
@@ -683,3 +684,9 @@ function gracefulShutdown(signal) {
 
 process.on('SIGINT',  () => gracefulShutdown('SIGINT'))
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+// Sync last-resort cleanup for Windows where SIGTERM doesn't fire
+// (PM2, taskkill, nssm kill the process without emitting SIGTERM).
+process.on('exit', () => {
+  try { _watcherHandle?.close() } catch {}
+  try { if (_watchDebounce) clearTimeout(_watchDebounce) } catch {}
+})

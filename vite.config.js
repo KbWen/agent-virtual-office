@@ -257,12 +257,19 @@ function officeStatusPlugin() {
       // Clients receive an immediate snapshot then pushed updates on every hook write
       // or API POST — no polling needed when connected.
       server.middlewares.use('/api/status/stream', (req, res) => {
-        if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); res.statusCode = 405; res.end(); return }
         const allowedSse = getAllowedOriginHeader(req.headers.origin, apiConfig)
         if (allowedSse) res.setHeader('Access-Control-Allow-Origin', allowedSse)
         res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
         res.setHeader('Access-Control-Allow-Headers', 'X-Office-Token, Authorization')
         res.setHeader('Vary', 'Origin')
+        if (req.method === 'OPTIONS') {
+          if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
+            res.statusCode = 403; res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })); return
+          }
+          res.setHeader('Access-Control-Max-Age', '600')
+          res.statusCode = 204; res.end(); return
+        }
+        if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); res.statusCode = 405; res.end(); return }
         res.setHeader('Content-Type', 'text/event-stream')
         res.setHeader('Cache-Control', 'no-cache')
         res.setHeader('X-Accel-Buffering', 'no')  // disable Nginx response buffering
@@ -551,7 +558,7 @@ function officeStatusPlugin() {
           res.statusCode = 204; res.end(); return
         }
         if (req.method !== 'GET' && req.method !== 'HEAD') {
-          res.setHeader('Allow', 'GET, OPTIONS')
+          res.setHeader('Allow', 'GET, HEAD, OPTIONS')
           res.statusCode = 405; res.end(JSON.stringify({ error: 'Method not allowed' })); return
         }
         const stats = getSessionStats(path.dirname(statusPath), process.cwd())

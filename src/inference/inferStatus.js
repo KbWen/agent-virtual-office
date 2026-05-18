@@ -418,11 +418,13 @@ const DEBOUNCE_MS = 150  // keep low — tool calls are 1-2s apart, debounce mus
 export function startStatusIntegration(store) {
   // Reset mood state in case of HMR or React Strict Mode double-invoke
   resetMood()
+  let torn = false  // set on cleanup; guards late callbacks after teardown
   let debounceTimer = null
   let stalenessTimer = null
   let pendingMsg = null
 
   function applyMessage(msg) {
+    if (torn) return
     const s = store.getState()
 
     // Set mood override BEFORE feeding events so pushEventBatch's updateStoreMood sees it
@@ -460,7 +462,7 @@ export function startStatusIntegration(store) {
   }
 
   function handleIncoming(msg) {
-    if (!msg) return
+    if (torn || !msg) return
     pendingMsg = msg
     if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(() => {
@@ -551,6 +553,7 @@ export function startStatusIntegration(store) {
   ]
 
   return () => {
+    torn = true
     cleanups.forEach(fn => fn())
     if (debounceTimer) clearTimeout(debounceTimer)
     if (stalenessTimer) clearTimeout(stalenessTimer)
