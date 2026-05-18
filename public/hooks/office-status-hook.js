@@ -470,6 +470,18 @@ function processEvent(event) {
       break
     }
     case 'SubagentStop': {
+      // Guard against stale SubagentStop stragglers (same _stopped check as PreToolUse).
+      // clearSkillContext runs on the suppressed path too — turn is already over so the
+      // context file is safe to remove regardless. The key fix is that the status write
+      // (which would erase done-agents from Stop) must not happen on the suppressed path.
+      try {
+        const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+        const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
+        if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) {
+          if (agentId) clearSkillContext(agentId)
+          return
+        }
+      } catch {}
       role = skillToRoleExtended(agentType)
       task = agentType
       status = 'done'
@@ -592,13 +604,13 @@ function processEvent(event) {
 
   // Re-check _stopped: if Stop ran DURING our processing window (after the entry guard passed),
   // abort rather than overwriting the idle state with stale working/done data.
-  // UserPromptSubmit is exempt: it is the event that legitimately clears _stopped, and
-  // suppressing it would prevent the office from showing the PM re-entering planning on
-  // rapid back-to-back prompts (very common in normal usage).
-  // SubagentStart is also exempt: a subagent launch arriving within 30s of Stop represents
-  // *new* work starting (the user's new turn triggered it). Blocking it drops the subagent
-  // entirely — no skill context saved, wrong character animates, workflow never set.
-  if (hookEvent !== 'UserPromptSubmit' && hookEvent !== 'SubagentStart') {
+  // UserPromptSubmit is the ONLY exempt event: it is the event that legitimately clears
+  // _stopped, and suppressing it would prevent the office from showing the PM re-entering
+  // planning on rapid back-to-back prompts.
+  // SubagentStart is NOT exempt: if _stopped is still true when SubagentStart fires, UPS
+  // has not yet run for the new turn, meaning this SubagentStart is a straggler from the
+  // old turn. Once UPS clears _stopped, any SubagentStart for the new turn passes normally.
+  if (hookEvent !== 'UserPromptSubmit') {
     try {
       const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
       const stoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
@@ -648,7 +660,7 @@ function processEvent(event) {
       try { fs.writeFileSync(tmp, json); fs.renameSync(tmp, STATUS_FILE); writeOk = true } catch {}
       if (!writeOk) { try { fs.writeFileSync(STATUS_FILE, json); writeOk = true } catch {} }
     }
-    try { if (!writeOk) fs.unlinkSync(tmp) } catch {}
+    try { fs.unlinkSync(tmp) } catch {}  // clean up tmp; ENOENT (already renamed) is swallowed
   } catch {}
 }
 

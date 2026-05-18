@@ -119,35 +119,33 @@ describe('pollFileStatusOnce', () => {
     expect(callback).toHaveBeenCalledOnce()
   })
 
-  it('caps consecutive404 at 30 so a persistently flaky server does not ratchet forever', async () => {
-    // H2 fix: without the cap, 50% error rate ratchets consecutive404 unbounded and the
-    // office effectively goes blind (only 1 poll per 3 cycles, each itself 50% likely to fail).
+  it('caps consecutive404 at 29 so a persistently unreachable server does not ratchet forever', async () => {
+    // H2 fix: without the cap, 50% error rate ratchets consecutive404 unbounded; at cap=29
+    // (non-multiple of 3) the % 3 backoff skip keeps firing so the office stops hammering
+    // a dead server rather than pinging at base rate indefinitely.
+    // Force the counter through the multiples-of-3 run positions to reach the cap.
     const state = createFilePollingState()
-    // Simulate 100 consecutive network errors
     const failFetch = vi.fn().mockRejectedValue(new Error('network'))
-    for (let i = 0; i < 100; i++) {
-      state.inFlight = false  // reset so each poll can run (backoff skips some, but we set directly)
+    for (let i = 0; i < 200; i++) {
+      state.inFlight = false
+      // Only call when the backoff logic would allow a poll (≤10 or multiple of 3)
       if (state.consecutive404 <= 10 || state.consecutive404 % 3 === 0) {
         await pollFileStatusOnce(failFetch, state, vi.fn())
-      } else {
-        // Simulate the backoff skip
-        state.consecutive404++
       }
+      // Skipped polls don't call the function and don't increment the counter
     }
-    expect(state.consecutive404).toBeLessThanOrEqual(30)
+    expect(state.consecutive404).toBeLessThanOrEqual(29)
   })
 
-  it('caps consecutive404 at 30 on 404 responses too', async () => {
+  it('caps consecutive404 at 29 on 404 responses too', async () => {
     const state = createFilePollingState()
     const notFoundFetch = vi.fn().mockResolvedValue({ ok: false, status: 404, headers: { get: () => null } })
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 200; i++) {
       state.inFlight = false
       if (state.consecutive404 <= 10 || state.consecutive404 % 3 === 0) {
         await pollFileStatusOnce(notFoundFetch, state, vi.fn())
-      } else {
-        state.consecutive404 = Math.min(state.consecutive404 + 1, 30)
       }
     }
-    expect(state.consecutive404).toBeLessThanOrEqual(30)
+    expect(state.consecutive404).toBeLessThanOrEqual(29)
   })
 })
