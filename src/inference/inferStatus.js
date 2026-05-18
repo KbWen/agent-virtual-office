@@ -509,7 +509,19 @@ export function startStatusIntegration(store) {
     // because lastAppliedSeq hasn't been updated until applyMessage actually runs.
     const isNumericSeq = s => s && /^\d+$/.test(s)
     if (isNumericSeq(msg._seq)) {
-      if (isNumericSeq(lastAppliedSeq) && Number(msg._seq) < Number(lastAppliedSeq)) return
+      // Clock-skew tolerance: if the incoming seq is more than 5 minutes behind the
+      // high-water mark, treat it as a clock reset (NTP large correction, manual change,
+      // or a new hook process group) and accept the message rather than freezing updates
+      // indefinitely. Small backward steps (NTP ±seconds) are still dropped — correct.
+      const SKEW_TOLERANCE_MS = 300_000
+      if (isNumericSeq(lastAppliedSeq)) {
+        const gap = Number(lastAppliedSeq) - Number(msg._seq)
+        if (gap > SKEW_TOLERANCE_MS) {
+          lastAppliedSeq = null  // reset high-water mark; accept this message as a fresh start
+        } else if (gap > 0) {
+          return  // genuine stale drop within tolerance window
+        }
+      }
       if (pendingMsg && isNumericSeq(pendingMsg._seq) && Number(msg._seq) < Number(pendingMsg._seq)) return
     }
     pendingMsg = msg

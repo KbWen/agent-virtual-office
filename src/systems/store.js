@@ -382,9 +382,11 @@ export const useOfficeStore = create((set) => ({
           task: u.task,
           label: u.label,
           hint: u.hint || null,
-          // working/blocked: 30s expiry (hook re-sends on each tool call to keep alive)
+          // working/blocked: 5 min expiry — long-running tool calls (build, test suite, npm install)
+          // can take >30s with no hook event between PreToolUse and PostToolUse; a shorter
+          // expiry caused the workflow banner to flicker off mid-run and then self-heal.
           // done: 10s expiry (brief celebration then back to idle)
-          expiresAt: u.status === 'done' ? now + 10000 : now + 30000,
+          expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
         }
         // Immediately set behavior + expression to match work status
         const behaviorMap = {

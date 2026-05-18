@@ -515,6 +515,10 @@ function processEvent(event) {
           agents: doneAgents,
           activeCount: 0,
           workflow: data.workflow || null,
+          // Preserve R45/R46 identity fields so a SubagentStop arriving after Stop still
+          // uses the precise _workflowAgentId match rather than falling back to type-string.
+          _workflowAgentId: typeof data._workflowAgentId === 'string' ? data._workflowAgentId : null,
+          _workflowPromptId: typeof data._workflowPromptId === 'string' ? data._workflowPromptId : null,
           source: 'claude-cli',
           _promptId: data._promptId || null,
           _preToolPromptId: data._preToolPromptId || null,
@@ -596,7 +600,10 @@ function processEvent(event) {
   // returned early without clearing workflow) AND no UserPromptSubmit ran to reset it.
   // _workflowPromptId records the _promptId that was current when the workflow was set.
   // If it differs from the current _promptId, the workflow belongs to a dead turn.
-  const workflowTurnMismatch = !!(
+  // SubagentStart is excluded: it sets workflowOverride and must always install its own
+  // workflow even if the existing one is stale — the mismatch clear and the new-workflow
+  // set cannot both happen atomically in the current ternary structure.
+  const workflowTurnMismatch = hookEvent !== 'SubagentStart' && !!(
     existingWorkflowAgentId && existingWorkflowPromptId && existingPromptId &&
     existingWorkflowPromptId !== existingPromptId
   )
