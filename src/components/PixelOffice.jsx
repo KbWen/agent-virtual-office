@@ -708,14 +708,28 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     }
   }, [isPanel])
 
+  // rAF-coalesce the resize handler. ResizeObserver and the window 'resize' backup
+  // can both fire for a single drag-resize frame — each invocation reads clientWidth/
+  // clientHeight (a forced layout flush) and runs the ratio math. Collapsing bursts to
+  // one call per frame dedupes that double-work; the pending handle is cancelled on
+  // cleanup so a queued frame can't fire updatePanelViewBox against an unmounted panel.
   useEffect(() => {
     if (!isPanel || !containerRef.current) return
+    let rafId = null
+    const schedule = () => {
+      if (rafId != null) return
+      rafId = requestAnimationFrame(() => { rafId = null; updatePanelViewBox() })
+    }
     updatePanelViewBox()
-    const ro = new ResizeObserver(updatePanelViewBox)
+    const ro = new ResizeObserver(schedule)
     ro.observe(containerRef.current)
     // Backup: window resize for iframe/webview embedding
-    window.addEventListener('resize', updatePanelViewBox)
-    return () => { ro.disconnect(); window.removeEventListener('resize', updatePanelViewBox) }
+    window.addEventListener('resize', schedule)
+    return () => {
+      if (rafId != null) cancelAnimationFrame(rafId)
+      ro.disconnect()
+      window.removeEventListener('resize', schedule)
+    }
   }, [isPanel, updatePanelViewBox])
 
   const viewBox = isPanel ? panelViewBox : '0 0 800 560'
