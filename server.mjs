@@ -307,17 +307,23 @@ function handleStatus(req, res) {
     })
     req.on('end', () => {
       if (aborted) return
+      let normalized
       try {
-        const normalized = normalizePost(JSON.parse(body))
+        normalized = normalizePost(JSON.parse(body))
         // _cwd omitted intentionally: POST-pushed status is not project-scoped;
         // scanSessions always includes the bare office-status.json regardless of CWD.
         if (!atomicWrite(STATUS_PATH, JSON.stringify(normalized, null, 2))) {
           res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
         }
+      } catch { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' })); return }
+      // Write succeeded — respond before the best-effort SSE broadcast. A scanAndMerge or
+      // broadcastSSE failure must not misreport a valid, persisted update as a 400 (which
+      // would make clients retry and double-post).
+      res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
+      try {
         const ssePayload = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
         if (ssePayload) broadcastSSE(ssePayload)
-        res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
-      } catch { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' })) }
+      } catch {}
     })
     return
   }
@@ -400,13 +406,14 @@ function handleEvent(req, res) {
   })
   req.on('end', () => {
     if (aborted) return
+    let eventName = ''
+    let agents
     try {
       const parsed = JSON.parse(body)
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         res.statusCode = 400; return res.end(JSON.stringify({ ok: false, error: 'Invalid payload' }))
       }
-      const eventName = typeof parsed.event === 'string' ? parsed.event : ''
-      let agents
+      eventName = typeof parsed.event === 'string' ? parsed.event : ''
       if (eventName === 'custom' && parsed.role && parsed.status) {
         if (!VALID_ROLES.includes(parsed.role) || !VALID_STATUSES.includes(parsed.status)) {
           res.statusCode = 400; return res.end(JSON.stringify({ ok: false, error: 'Invalid role or status' }))
@@ -427,10 +434,14 @@ function handleEvent(req, res) {
       if (!atomicWrite(STATUS_PATH, JSON.stringify(output, null, 2))) {
         res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
       }
+    } catch { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' })); return }
+    // Write succeeded — respond before the best-effort SSE broadcast so a scanAndMerge or
+    // broadcastSSE failure cannot misreport a persisted event as a 400.
+    res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
+    try {
       const ssePayload = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
       if (ssePayload) broadcastSSE(ssePayload)
-      res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
-    } catch { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' })) }
+    } catch {}
   })
 }
 

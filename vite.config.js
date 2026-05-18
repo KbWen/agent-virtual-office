@@ -226,9 +226,10 @@ function officeStatusPlugin() {
           })
           req.on('end', () => {
             if (aborted) return
+            let normalized
             try {
               const parsed = JSON.parse(body)
-              const normalized = normalizePost(parsed)
+              normalized = normalizePost(parsed)
               normalized._cwd = process.cwd()
               const dir = path.dirname(statusPath)
               if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
@@ -236,14 +237,20 @@ function officeStatusPlugin() {
                 res.statusCode = 500
                 return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
               }
-              // Push to any connected SSE clients immediately (no need to wait for poll)
-              const sseData = scanAndMerge(path.dirname(statusPath), process.cwd())
-              if (sseData) broadcastSSE(sseData)
-              res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
             } catch {
               res.statusCode = 400
               res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }))
+              return
             }
+            // Write succeeded — respond 200 BEFORE the SSE broadcast. The broadcast is a
+            // best-effort side-effect (push to already-connected clients); if scanAndMerge
+            // or broadcastSSE throws, the client must NOT be told its valid, persisted
+            // update was rejected. Misreporting a 400 here would make clients retry/double-post.
+            res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
+            try {
+              const sseData = scanAndMerge(path.dirname(statusPath), process.cwd())
+              if (sseData) broadcastSSE(sseData)
+            } catch {}
           })
           return
         }
@@ -504,14 +511,15 @@ function officeStatusPlugin() {
         })
         req.on('end', () => {
           if (aborted) return
+          let eventName = ''
+          let agents
           try {
             const parsed = JSON.parse(body)
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
               res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid payload' })); return
             }
-            const eventName = typeof parsed.event === 'string' ? parsed.event : ''
+            eventName = typeof parsed.event === 'string' ? parsed.event : ''
 
-            let agents
             if (eventName === 'custom' && parsed.role && parsed.status) {
               if (!VALID_ROLES.includes(parsed.role) || !VALID_STATUSES.includes(parsed.status)) {
                 res.statusCode = 400
@@ -546,13 +554,18 @@ function officeStatusPlugin() {
               res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
               return
             }
-            const sseData = scanAndMerge(path.dirname(statusPath), process.cwd())
-            if (sseData) broadcastSSE(sseData)
-            res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
           } catch {
             res.statusCode = 400
             res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }))
+            return
           }
+          // Write succeeded — respond before the best-effort SSE broadcast so a
+          // scanAndMerge/broadcastSSE failure cannot misreport a persisted event as a 400.
+          res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
+          try {
+            const sseData = scanAndMerge(path.dirname(statusPath), process.cwd())
+            if (sseData) broadcastSSE(sseData)
+          } catch {}
         })
       })
 

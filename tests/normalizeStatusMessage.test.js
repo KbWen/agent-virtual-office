@@ -42,6 +42,20 @@ describe('normalizeStatusMessage', () => {
       })
     })
 
+    it('R67: preserves _hint:no-hooks so applyMessage can keep the setup prompt visible', () => {
+      // scanAndMerge tags an all-file-watcher merge with _hint:'no-hooks'. The envelope
+      // validator must pass _hint through untouched — applyMessage reads it to decide
+      // skipHintDismiss, the authoritative "hooks not installed" signal.
+      const msg = {
+        type: 'office-status',
+        _seq: '1000',
+        source: 'multi-session',
+        _hint: 'no-hooks',
+        agents: [{ role: 'dev', status: 'working' }],
+      }
+      expect(normalizeStatusMessage(msg)._hint).toBe('no-hooks')
+    })
+
     it('M-1: strips agents with invalid role or status (untrusted in-browser channel)', () => {
       const msg = {
         type: 'office-status',

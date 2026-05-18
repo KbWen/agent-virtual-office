@@ -537,11 +537,19 @@ export function startStatusIntegration(store) {
     // Route agents
     const updates = routeExternalAgents(msg.agents || [])
 
+    // "Hooks not installed" signal — keep the setup prompt visible.
+    // _hint:'no-hooks' is authoritative: scanAndMerge sets it precisely when EVERY
+    // contributing session is file-watcher, surviving the multi-session merge that
+    // rewrites source to 'multi-session' (a plain source==='file-watcher' check would
+    // miss that case and wrongly dismiss the prompt). The source check still covers
+    // file-watcher messages that never pass through scanAndMerge (e.g. direct postMessage).
+    const skipHintDismiss = msg._hint === 'no-hooks' || msg.source === 'file-watcher'
+
     if (updates.length > 0) {
       s.applyExternalStatus(updates, {
         source: msg.source || 'external',
         seq: msg._seq || null,
-        skipHintDismiss: msg.source === 'file-watcher',
+        skipHintDismiss,
       })
       s.setStatusSource('external')
       s.setIntegrationSource?.(msg.source || 'external')
@@ -552,7 +560,7 @@ export function startStatusIntegration(store) {
       const ids = distributeFallbackCount(msg.activeCount)
       s.applyExternalStatus(
         ids.map(id => ({ agentId: id, status: 'working', task: null, label: null })),
-        { skipHintDismiss: msg.source === 'file-watcher' }
+        { skipHintDismiss }
       )
       s.setStatusSource('fallback')
       s.setIntegrationSource?.(msg.source || 'fallback')

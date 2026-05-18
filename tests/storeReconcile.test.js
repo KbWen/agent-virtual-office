@@ -165,6 +165,59 @@ describe('applyExternalStatus — overflow position assignment (R66)', () => {
   })
 })
 
+describe('applyExternalStatus — setup-prompt dismissal contract (R67)', () => {
+  beforeEach(() => {
+    resetStore()
+    useOfficeStore.setState({ hasEverReceivedStatus: false })
+  })
+
+  it('sets hasEverReceivedStatus when a real status arrives (skipHintDismiss falsy)', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'dev', status: 'working', task: null, label: null }],
+      { source: 'claude-cli' },
+    )
+    // A genuine hook status dismisses the "run setup" prompt.
+    expect(useOfficeStore.getState().hasEverReceivedStatus).toBe(true)
+  })
+
+  it('keeps hasEverReceivedStatus false when skipHintDismiss is set (hooks not installed)', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'dev', status: 'working', task: null, label: null }],
+      { source: 'file-watcher', skipHintDismiss: true },
+    )
+    // file-watcher activity must NOT dismiss the setup prompt — hooks still absent.
+    expect(useOfficeStore.getState().hasEverReceivedStatus).toBe(false)
+  })
+
+  it('keeps hasEverReceivedStatus false for a multi-session payload of only file-watcher data', () => {
+    // R67: scanAndMerge tags an all-file-watcher merge with _hint:'no-hooks' and rewrites
+    // source to 'multi-session'. applyMessage derives skipHintDismiss from _hint, so the
+    // store must honour skipHintDismiss even when source !== 'file-watcher'.
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'wt~dev', status: 'working', task: null, label: null, session: 'wt' }],
+      { source: 'multi-session', skipHintDismiss: true },
+    )
+    expect(useOfficeStore.getState().hasEverReceivedStatus).toBe(false)
+  })
+
+  it('does not re-clear hasEverReceivedStatus once a real status has dismissed it', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'dev', status: 'working', task: null, label: null }],
+      { source: 'claude-cli' },
+    )
+    // A later file-watcher tick must not resurrect the prompt.
+    applyExternalStatus(
+      [{ agentId: 'qa', status: 'working', task: null, label: null }],
+      { source: 'file-watcher', skipHintDismiss: true },
+    )
+    expect(useOfficeStore.getState().hasEverReceivedStatus).toBe(true)
+  })
+})
+
 describe('addHandoff — unique ids (R65)', () => {
   beforeEach(() => useOfficeStore.setState({ handoffs: [] }))
 
