@@ -314,7 +314,13 @@ function PixelSprite({ grid, flipX = false, scale = 1 }) {
 }
 
 // ─── Full Sprite with shadow ──────────────────────────────────────────
-function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing }) {
+// React.memo: AgentCharacter re-renders ~30fps while the character walks (setRenderPos
+// fires every other RAF frame). Of CharacterPixelSprite's five props only walkFrame
+// (250ms cadence) and isMoving change during a walk — charId/expression/facing are
+// stable. Memo elides the component invocation (and its baseRole string-split +
+// CHAR_STYLES lookup) on the ~28-of-30 frames per second where no prop changed; the
+// inner useMemos only guarded the sprite-grid generation, not the function body itself.
+const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing }) {
   // Strip session prefix for style lookup: "feat-x~dev" → use dev's style
   const baseRole = charId.includes('~') ? charId.split('~').pop() : charId
   const style = CHAR_STYLES[charId] || CHAR_STYLES[baseRole] || CHAR_STYLES.pm
@@ -343,7 +349,7 @@ function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing 
       <PixelSprite grid={grid} flipX={flipX} scale={1} />
     </g>
   )
-}
+})
 
 // ═══ BEHAVIOR INDICATOR ICONS ═══
 // Small pixel-art icons that appear next to the character based on current behavior
@@ -944,9 +950,14 @@ function AgentCharacter({ agent }) {
   const pos = renderPos || state.position || { x: 0, y: 0 }
   const session = state.session || null
 
-  // Name tag dimensions (lifted from render for clarity)
-  const tagW = estimateTextWidth(name) + 16
-  const tagHalfW = tagW / 2
+  // Name tag dimensions — memoized on `name`. estimateTextWidth runs a per-codepoint
+  // loop; AgentCharacter re-renders ~30fps while walking (setRenderPos) and `name`
+  // changes only on a locale switch, so without this memo the char-width loop ran on
+  // every walk frame for a result that is constant for the whole walk.
+  const { tagW, tagHalfW } = useMemo(() => {
+    const w = estimateTextWidth(name) + 16
+    return { tagW: w, tagHalfW: w / 2 }
+  }, [name])
   const tagFill = state.status !== 'idle' ? (STATUS_COLORS[state.status] || color) : color
   const statusIcon = state.status === 'working' ? '⚡' : state.status === 'blocked' ? '✕' : state.status === 'done' ? '✓' : null
   const glowColor = STATUS_COLORS[state.status]
