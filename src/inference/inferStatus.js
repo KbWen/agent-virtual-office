@@ -24,12 +24,17 @@ function phaseToStatus(phase) {
   return 'working'
 }
 
+// Stamp `source` + `_seq` defaults onto a message object. Both call sites
+// (normalizeStatusMessage's office-status and office-vibe branches) pass an
+// object they JUST allocated and exclusively own — the office-status branch
+// builds `validated` via a spread, the office-vibe branch passes an inline
+// literal. Re-spreading here (`{ ...raw, ... }`) allocated a SECOND full object
+// per incoming SSE/poll message on top of the one the caller already built.
+// Mutate the caller-owned object in place instead: same result, one allocation.
 function withStatusEnvelope(raw, fallbackSource = 'external') {
-  return {
-    ...raw,
-    source: raw.source || fallbackSource,
-    _seq: raw._seq || String(Date.now()),
-  }
+  if (raw.source == null) raw.source = fallbackSource
+  if (raw._seq == null) raw._seq = String(Date.now())
+  return raw
 }
 
 const CAP = 200  // max string length for untrusted fields from in-browser channels
