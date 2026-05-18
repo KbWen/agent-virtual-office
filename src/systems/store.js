@@ -257,12 +257,24 @@ export const useOfficeStore = create((set) => ({
 
   setAgentBehavior: (id, behavior, expression, bubble) =>
     set((s) => {
-      if (!s.agents[id]) return s
-      const prev = s.agents[id].behavior
+      const current = s.agents[id]
+      if (!current) return s
+      const prev = current.behavior
+      const nextBubble = bubble || null
+      const nextExpression = expression || current.expression
+      // Skip the write entirely when behavior + expression + bubble all match the
+      // current agent. officeLife's 14:00 drowsiness handler re-sets the SAME
+      // behavior (setAgentBehavior(id, s.agents[id].behavior, 'tired', null)) and
+      // its 30s revert re-sets behavior again — and the watchdog re-arms behaviors.
+      // Without this guard each such call spreads the agent and replaces s.agents,
+      // synchronously waking that agent's AgentCharacter subscription for no change.
+      if (prev === behavior && current.expression === nextExpression && current.bubble === nextBubble) {
+        return s
+      }
       // Status is driven only by external integration (hooks), not by organic behaviors
       const agents = {
         ...s.agents,
-        [id]: { ...s.agents[id], behavior, expression: expression || s.agents[id].expression, bubble: bubble || null },
+        [id]: { ...current, behavior, expression: nextExpression, bubble: nextBubble },
       }
       // Log notable behavior changes to activity feed
       if (behavior !== prev && LOGGABLE_BEHAVIORS.has(behavior)) {
@@ -319,9 +331,16 @@ export const useOfficeStore = create((set) => ({
 
   clearBubble: (id) =>
     set((s) => {
-      if (!s.agents[id]) return s
+      const current = s.agents[id]
+      if (!current) return s
+      // Skip when the bubble is already null. clearBubble is fired from many
+      // deferred timers (AgentCharacter's scheduleDeferred, officeLife event
+      // cleanup) that often run after the bubble has already been replaced or
+      // cleared — an unconditional spread would wake the agent's subscription
+      // and replace s.agents for a no-op.
+      if (current.bubble === null) return s
       return {
-        agents: { ...s.agents, [id]: { ...s.agents[id], bubble: null } },
+        agents: { ...s.agents, [id]: { ...current, bubble: null } },
       }
     }),
 
@@ -403,7 +422,12 @@ export const useOfficeStore = create((set) => ({
     const entry = mkActivity({ type: 'event', agentId: null, message: event.id || event.name || 'event' })
     return { activeEvent: event, activityLog: [entry, ...s.activityLog].slice(0, 50) }
   }),
-  clearActiveEvent: () => set({ activeEvent: null }),
+  // Guard against a no-op clear — clearActiveEvent is called on every officeLife
+  // teardown/HMR (releaseAllGroupEvents) and after every event-cleanup timer, often
+  // when activeEvent is already null. An unconditional set() still synchronously
+  // wakes every activeEvent subscriber (PixelOffice, ControlPanel, ActivityFeed,
+  // WhiteboardAnimation). Skip the write when the state would not change.
+  clearActiveEvent: () => set((s) => (s.activeEvent === null ? {} : { activeEvent: null })),
   togglePause: () => set((s) => {
     const next = !s.isPaused
     try { if (typeof window !== 'undefined') localStorage.setItem('office-paused', String(next)) } catch {}
@@ -741,9 +765,23 @@ export const useOfficeStore = create((set) => ({
   mood: 'normal',  // normal | rushing | frustrated | stuck | smooth | intense | idle (transient, not persisted)
   setMood: (mood) => set({ mood }),
 
-  setStatusSource: (source) => set({ statusSource: source }),
-  setIntegrationSource: (source) => set({ integrationSource: source || null }),
-  setActiveWorkflow: (name) => set({ activeWorkflow: name }),
+  // Same-value guards on the integration-channel setters. setActiveWorkflow is
+  // still called standalone from applyMessage's workflow-only branch (a workflow-
+  // only hash); a repeated identical workflow string would otherwise wake every
+  // activeWorkflow subscriber (PixelOffice banner, AgentInspector) for no change.
+  // setStatusSource/setIntegrationSource are folded into applyExternalStatus for
+  // the hot SSE/poll path but remain exported for direct callers — guard them too.
+  setStatusSource: (source) => set((s) => (s.statusSource === source ? {} : { statusSource: source })),
+  setIntegrationSource: (source) =>
+    set((s) => {
+      const next = source || null
+      return s.integrationSource === next ? {} : { integrationSource: next }
+    }),
+  setActiveWorkflow: (name) =>
+    set((s) => {
+      const next = name ?? null
+      return s.activeWorkflow === next ? {} : { activeWorkflow: next }
+    }),
   markIntegrationProbe: ({ ok }) =>
     set((s) => {
       const h = s.integrationHealth
