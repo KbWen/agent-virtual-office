@@ -709,7 +709,6 @@ function AgentCharacter({ agent }) {
       if (pending) {
         pendingBehaviorRef.current = null
         store.setAgentBehavior(id, pending.behaviorId, pending.expression, pending.bubble)
-        if (pending.effect === 'coffee') store.incrementDeskItem(id, 'coffee')
         // Clear bubble after a while
         if (pending.bubble) {
           setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(pending.duration * 0.5, 4000))
@@ -803,7 +802,6 @@ function AgentCharacter({ agent }) {
         pendingBehaviorRef.current = null
         // Desk behavior or already at location — apply immediately
         store.setAgentBehavior(id, next.behaviorId, next.expression, next.bubble)
-        if (next.effect === 'coffee') store.incrementDeskItem(id, 'coffee')
         // Clear bubble after a while
         if (next.bubble) {
           setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(next.duration * 0.5, 4000))
@@ -836,7 +834,10 @@ function AgentCharacter({ agent }) {
   // Watch for group event movement targets
   const lastGroupTargetRef = useRef(null)
   useEffect(() => {
-    if (!agentState?.groupTarget || !visualPosRef.current) return
+    // When a group event clears (groupTarget → null), reset the dedup ref so the NEXT
+    // group event always re-evaluates — even if it happens to assign the same coords.
+    if (!agentState?.groupTarget) { lastGroupTargetRef.current = null; return }
+    if (!visualPosRef.current) return
     const gt = agentState.groupTarget
     // Only trigger if target actually changed
     const last = lastGroupTargetRef.current

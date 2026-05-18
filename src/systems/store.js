@@ -301,28 +301,6 @@ export const useOfficeStore = create((set) => ({
       }
     }),
 
-  incrementDeskItem: (id, item) =>
-    set((s) => {
-      const now = Date.now()
-      const dailyDoneLedger = ensureCurrentDailyDoneLedger(s.dailyDoneLedger, now)
-      const dayChanged = s.dailyDoneLedger.dayKey !== dailyDoneLedger.dayKey
-      // Mirror the day-reset logic from applyExternalStatus so organic behaviors
-      // (coffee, sticky notes) reset on midnight just as external-status writes do.
-      let agents = s.agents
-      if (dayChanged) {
-        agents = Object.fromEntries(
-          Object.entries(s.agents).map(([k, a]) =>
-            [k, a ? { ...a, deskItemCount: { coffee: 0, sticky: 0, books: 0 } } : a]
-          )
-        )
-      }
-      const agent = agents[id]
-      if (!agent) return dayChanged ? { agents, dailyDoneLedger } : s
-      const count = { ...agent.deskItemCount }
-      count[item] = (count[item] || 0) + 1
-      return { agents: { ...agents, [id]: { ...agent, deskItemCount: count } }, dailyDoneLedger }
-    }),
-
   updateTime: () => {
     const now = new Date()
     set({ hour: now.getHours(), minute: now.getMinutes() })

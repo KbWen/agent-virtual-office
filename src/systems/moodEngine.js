@@ -12,7 +12,7 @@
  */
 
 import { useOfficeStore } from './store.js'
-import { VALID_MOODS } from './constants.js'
+import { VALID_MOODS, MAX_MOOD_DURATION } from './constants.js'
 
 const MAX_EVENTS = 20
 const IDLE_TIMEOUT = 180000     // 3 minutes of silence → idle
@@ -136,7 +136,16 @@ export function pushEventBatch(eventList) {
 export function setMoodOverride(mood, durationMs = 60000) {
   if (!VALID_MOODS.includes(mood)) return
   if (overrideTimer) clearTimeout(overrideTimer)
-  const clampedMs = Math.max(durationMs, 1000)
+  // Clamp BOTH bounds here — this is the single chokepoint for every override caller.
+  // The file/API path is pre-clamped by normalizePost, but in-browser channels
+  // (postMessage, BroadcastChannel, window.__office_status__) reach setMoodOverride
+  // via inferStatus without an upper-bound clamp; without this an untrusted message
+  // could pin a mood ~31000 years into the future.
+  const raw = Number(durationMs)
+  const clampedMs = Math.min(
+    Math.max(Number.isFinite(raw) ? raw : 60000, 1000),
+    MAX_MOOD_DURATION
+  )
   overrideMood = mood
   overrideExpiry = Date.now() + clampedMs
   updateStoreMood()

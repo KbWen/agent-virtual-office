@@ -1,10 +1,21 @@
 import eventsData from '../config/officeEvents.json'
 import { WAYPOINTS, MEETING_CHAIRS, HOME_POSITIONS } from './movementSystem.js'
-import { eventBubble, eventName as getEventName } from '../i18n'
+import { eventBubble } from '../i18n'
 import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL } from './constants.js'
 
 let dailyTimer = null
 let rareTimer = null
+let timeInterval = null
+let timeEventInterval = null
+// Module-level cancellation flag so a double-init can fully cancel the PRIOR instance.
+// startOfficeLife's closures all read activeCancelled by reference, so reassigning it
+// here both starts a fresh flag and lets the double-init guard flip the old one true.
+let activeCancelled = null
+// Cancellation flags for in-flight interactive events (coffee machine, whiteboard,
+// deploy button). Tracked so teardown cancels their deferred callbacks too — otherwise
+// a click followed by unmount/HMR leaves multi-stage setTimeout callbacks firing
+// against a stale store.
+const interactiveCancellers = new Set()
 
 function randomInterval(range) {
   return range[0] + Math.random() * (range[1] - range[0])
@@ -438,24 +449,41 @@ export function triggerInteractiveEvent(store, eventId) {
 
   const participants = pickParticipants(event, state.agents, state.externalStatus)
   const cancelled = { value: false }
+  // Register so startOfficeLife teardown can cancel this event's deferred callbacks.
+  interactiveCancellers.add(cancelled)
 
   state.setActiveEvent(event)
   executeEvent(store, event, participants, cancelled)
+
+  // Deregister once the event's lifetime (plus a margin past the longest deferred
+  // handler step) has elapsed — keeps the Set from growing unbounded.
+  setTimeout(() => interactiveCancellers.delete(cancelled), event.duration + 15000)
 
   return true
 }
 
 export function startOfficeLife(store) {
-  // Guard against double-init (React StrictMode)
-  if (dailyTimer || rareTimer) {
+  // Guard against double-init (React StrictMode, HMR, missed cleanup).
+  // Fully tear down ANY prior instance — including its timeInterval/timeEventInterval
+  // and its cancellation flag. Previously only dailyTimer/rareTimer were module-level,
+  // so a re-init without cleanup leaked the two setInterval loops and left the prior
+  // instance's stale event callbacks firing (its `cancelled` flag never flipped).
+  if (dailyTimer || rareTimer || timeInterval || timeEventInterval) {
+    if (activeCancelled) activeCancelled.value = true
     clearTimeout(dailyTimer)
     clearTimeout(rareTimer)
-    dailyTimer = null
-    rareTimer = null
+    clearInterval(timeInterval)
+    clearInterval(timeEventInterval)
+    dailyTimer = rareTimer = timeInterval = timeEventInterval = null
+    // Cancel any in-flight interactive events from the prior instance.
+    for (const c of interactiveCancellers) c.value = true
+    interactiveCancellers.clear()
   }
 
-  // Shared cancellation flag — prevents stale event callbacks from firing after stop()
+  // Shared cancellation flag — prevents stale event callbacks from firing after stop().
+  // Tracked at module level so the next startOfficeLife() can cancel this instance.
   const cancelled = { value: false }
+  activeCancelled = cancelled
 
   const scheduleDaily = () => {
     dailyTimer = setTimeout(() => {
@@ -493,14 +521,14 @@ export function startOfficeLife(store) {
   scheduleRare()
 
   // Update time every minute
-  const timeInterval = setInterval(() => {
+  timeInterval = setInterval(() => {
     store.getState().updateTime()
   }, TIME_CHECK_INTERVAL)
 
   // ─── Time-linked events ──────────────────────────────────────────────
   // Check every minute for time-specific behaviors
   let lastTriggeredHour = -1
-  const timeEventInterval = setInterval(() => {
+  timeEventInterval = setInterval(() => {
     if (cancelled.value) return
     const state = store.getState()
     if (state.isPaused || state.activeEvent) return
@@ -577,5 +605,13 @@ export function startOfficeLife(store) {
     clearTimeout(rareTimer)
     clearInterval(timeInterval)
     clearInterval(timeEventInterval)
+    dailyTimer = rareTimer = timeInterval = timeEventInterval = null
+    // Cancel any in-flight interactive events so their deferred callbacks don't
+    // fire against a torn-down store.
+    for (const c of interactiveCancellers) c.value = true
+    interactiveCancellers.clear()
+    // Only release the module-level flag if it still points at THIS instance —
+    // a newer startOfficeLife() may have already replaced it.
+    if (activeCancelled === cancelled) activeCancelled = null
   }
 }

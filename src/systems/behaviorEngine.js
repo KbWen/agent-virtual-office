@@ -26,7 +26,7 @@ const behaviors = {
     { id: 'meeting', expr: 'normal', msgs: 'thinking', duration: [25000, 50000] },
   ],
   daily: [
-    { id: 'drink-coffee', expr: 'happy', msgs: 'coffee', duration: [12000, 25000], effect: 'coffee' },
+    { id: 'drink-coffee', expr: 'happy', msgs: 'coffee', duration: [12000, 25000] },
     { id: 'drink-water', expr: 'normal', msgs: null, duration: [10000, 20000] },
     { id: 'stretch', expr: 'happy', msgs: 'stretch', duration: [8000, 15000] },
     { id: 'look-window', expr: 'normal', msgs: null, duration: [15000, 28000] },
@@ -163,7 +163,6 @@ export function getNextBehavior(agentId, status = 'idle', hour = new Date().getH
     bubble: message,
     duration,
     category,
-    effect: behavior.effect || null,
   }
 }
 

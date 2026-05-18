@@ -1,0 +1,8 @@
+
+  Agent Virtual Office (production build)
+  Local:   http://127.0.0.1:5177
+  Panel:   http://127.0.0.1:5177?mode=panel
+  API:     http://127.0.0.1:5177/api/status
+
+  Use Ctrl+C to stop.
+  

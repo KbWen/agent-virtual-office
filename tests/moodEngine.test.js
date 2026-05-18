@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { MAX_MOOD_DURATION } from '../src/systems/constants.js'
 
 // Mock zustand store before importing moodEngine
 vi.mock('../src/systems/store', () => {
@@ -151,6 +152,27 @@ describe('moodEngine', () => {
       setMoodOverride('rushing', 1000)
       expect(getMood()).toBe('rushing')
       vi.advanceTimersByTime(1001)
+      pushEventBatch([])
+      expect(getMood()).not.toBe('rushing')
+    })
+
+    it('caps duration at MAX_MOOD_DURATION — untrusted channels cannot pin mood forever', () => {
+      // postMessage / BroadcastChannel / window.__office_status__ reach setMoodOverride
+      // without an upper-bound clamp; the override must still expire within MAX_MOOD_DURATION.
+      setMoodOverride('rushing', 999_999_999_999)
+      expect(getMood()).toBe('rushing')
+      // Just past the cap → override has expired.
+      vi.advanceTimersByTime(MAX_MOOD_DURATION + 100)
+      pushEventBatch([])
+      expect(getMood()).not.toBe('rushing')
+    })
+
+    it('does not pin mood for a non-finite duration', () => {
+      // NaN/Infinity from a malformed message must fall back to a sane finite duration,
+      // not poison overrideExpiry (NaN comparisons would never expire).
+      setMoodOverride('rushing', NaN)
+      expect(getMood()).toBe('rushing')
+      vi.advanceTimersByTime(MAX_MOOD_DURATION + 100)
       pushEventBatch([])
       expect(getMood()).not.toBe('rushing')
     })
