@@ -16,8 +16,14 @@ export default function AgentInspector() {
   const selectedAgent = useOfficeStore((s) => s.selectedAgent)
   const agent = useOfficeStore((s) => s.selectedAgent ? s.agents[s.selectedAgent] : null)
   const ext = useOfficeStore((s) => s.selectedAgent ? s.externalStatus[s.selectedAgent] : null)
-  const activityLog = useOfficeStore((s) => s.activityLog)
-  const dailyDoneLedger = useOfficeStore((s) => s.dailyDoneLedger)
+  // Gate the high-churn subscriptions on selectedAgent. activityLog is reassigned on every
+  // behavior/status/event change (many times per minute) and dailyDoneLedger on every
+  // applyExternalStatus call. When no agent is inspected the panel renders null — yet a raw
+  // `s.activityLog` / `s.dailyDoneLedger` subscription still re-rendered it on each mutation
+  // for nothing. Returning a stable `null` while closed makes those mutations Object.is-equal,
+  // so the inspector only re-renders for log/ledger changes while it is actually open.
+  const activityLog = useOfficeStore((s) => s.selectedAgent ? s.activityLog : null)
+  const dailyDoneLedger = useOfficeStore((s) => s.selectedAgent ? s.dailyDoneLedger : null)
   const mood = useOfficeStore((s) => s.mood)
   const activeWorkflow = useOfficeStore((s) => s.activeWorkflow)
   const clearSelectedAgent = useOfficeStore((s) => s.clearSelectedAgent)
