@@ -320,10 +320,14 @@ function handleStatus(req, res) {
       // broadcastSSE failure must not misreport a valid, persisted update as a 400 (which
       // would make clients retry and double-post).
       res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
-      try {
-        const ssePayload = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
-        if (ssePayload) broadcastSSE(ssePayload)
-      } catch {}
+      // Skip the broadcast scan entirely when no SSE clients are connected —
+      // scanAndMerge re-reads and re-parses every status file in ~/.claude/.
+      if (sseClients.size > 0) {
+        try {
+          const ssePayload = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
+          if (ssePayload) broadcastSSE(ssePayload)
+        } catch {}
+      }
     })
     return
   }
@@ -438,10 +442,13 @@ function handleEvent(req, res) {
     // Write succeeded — respond before the best-effort SSE broadcast so a scanAndMerge or
     // broadcastSSE failure cannot misreport a persisted event as a 400.
     res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
-    try {
-      const ssePayload = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
-      if (ssePayload) broadcastSSE(ssePayload)
-    } catch {}
+    // Skip the broadcast scan when no SSE clients are connected (see /api/status POST).
+    if (sseClients.size > 0) {
+      try {
+        const ssePayload = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
+        if (ssePayload) broadcastSSE(ssePayload)
+      } catch {}
+    }
   })
 }
 

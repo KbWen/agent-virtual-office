@@ -247,10 +247,15 @@ function officeStatusPlugin() {
             // or broadcastSSE throws, the client must NOT be told its valid, persisted
             // update was rejected. Misreporting a 400 here would make clients retry/double-post.
             res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
-            try {
-              const sseData = scanAndMerge(path.dirname(statusPath), process.cwd())
-              if (sseData) broadcastSSE(sseData)
-            } catch {}
+            // Skip the broadcast scan entirely when no SSE clients are connected —
+            // scanAndMerge re-reads and re-parses every status file in ~/.claude/.
+            // Running it for a broadcast that has no recipients is pure waste.
+            if (sseClients.size > 0) {
+              try {
+                const sseData = scanAndMerge(path.dirname(statusPath), process.cwd())
+                if (sseData) broadcastSSE(sseData)
+              } catch {}
+            }
           })
           return
         }
@@ -562,10 +567,13 @@ function officeStatusPlugin() {
           // Write succeeded — respond before the best-effort SSE broadcast so a
           // scanAndMerge/broadcastSSE failure cannot misreport a persisted event as a 400.
           res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
-          try {
-            const sseData = scanAndMerge(path.dirname(statusPath), process.cwd())
-            if (sseData) broadcastSSE(sseData)
-          } catch {}
+          // Skip the broadcast scan when no SSE clients are connected (see POST handler).
+          if (sseClients.size > 0) {
+            try {
+              const sseData = scanAndMerge(path.dirname(statusPath), process.cwd())
+              if (sseData) broadcastSSE(sseData)
+            } catch {}
+          }
         })
       })
 
