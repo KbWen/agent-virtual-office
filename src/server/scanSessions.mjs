@@ -86,9 +86,11 @@ export function scanAndMerge(dir, projectRoot) {
 
   // Dedup: bare office-status.json is a hook duplicate when its _seq is within 2s
   // of any slugged session. Use file name as key (not slug) so branch="main" is safe.
+  // Only apply timing dedup when the bare file was written by the hook (source='claude-cli');
+  // POST/API writes are independent sessions and must not be dropped by timing proximity.
   if (sessions.length > 1) {
     const bareIdx = sessions.findIndex(s => s.file === 'office-status.json')
-    if (bareIdx !== -1) {
+    if (bareIdx !== -1 && sessions[bareIdx].data.source === 'claude-cli') {
       const bareSeq = parseInt(sessions[bareIdx].data._seq, 10) || 0
       const bareWorkflow = sessions[bareIdx].data.workflow
       const isDup = sessions.some((s, i) =>

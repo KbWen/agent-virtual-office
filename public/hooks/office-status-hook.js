@@ -395,15 +395,19 @@ function processEvent(event) {
   let role, task, status, label, hint = null
   let clearWorkflow = false
   let workflowOverride = null  // only SubagentStart sets this; PreToolUse/PostToolUse must not clobber workflow
+  let capturedPromptId = null  // PreToolUse captures current _promptId for straggler detection
+  let newPromptId = null       // UserPromptSubmit sets a fresh _promptId each turn
 
   switch (hookEvent) {
     case 'UserPromptSubmit': {
       // New user message — PM enters planning mode.
-      // Also clears _stopped so subsequent PreToolUse/PostToolUse proceed normally.
+      // Writes a fresh _promptId so PostToolUse straggler detection (re-check below) can
+      // distinguish old-turn stragglers from legitimate new-turn tool calls.
       role = 'pm'
       task = 'thinking'
       status = 'working'
       clearWorkflow = true  // reset subagent workflow on each new turn
+      newPromptId = nextSeq()  // unique turn token; advances when user submits a new prompt
       label = pick(LANG === 'en'
         ? ['🤔 Thinking...', '📊 Got it, planning', '💡 Good question...', '🧠 Analyzing']
         : ['🤔 想一下...', '📊 收到，規劃中', '💡 好問題...', '🧠 分析中'])
@@ -415,10 +419,13 @@ function processEvent(event) {
       // _stoppedAt is a dedicated timestamp written by Stop; fall back to _seq for
       // files written before this field was added. Future _seq (monotonic counter
       // overshoot) cannot wedge the guard because we use _stoppedAt preferentially.
+      // Also capture _promptId at entry — PreToolUse writes it as _preToolPromptId so
+      // a later PostToolUse straggler can detect if UserPromptSubmit fired between them.
       try {
         const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
         const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
         if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
+        capturedPromptId = cur._promptId || null
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       // If inside a subagent with skill context, prefer the skill's role
@@ -497,6 +504,8 @@ function processEvent(event) {
           activeCount: 0,
           workflow: data.workflow || null,
           source: 'claude-cli',
+          _promptId: data._promptId || null,
+          _preToolPromptId: data._preToolPromptId || null,
         }
         const dir = path.dirname(STATUS_FILE)
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
@@ -547,6 +556,8 @@ function processEvent(event) {
   // Read existing status to merge (keep other agents' states + workflow)
   let existing = []
   let existingWorkflow = null
+  let existingPromptId = null
+  let existingPreToolPromptId = null
   try {
     const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
     existing = Array.isArray(data.agents)
@@ -561,6 +572,8 @@ function processEvent(event) {
           }))
       : []
     existingWorkflow = typeof data.workflow === 'string' ? data.workflow.slice(0, 200) : null
+    existingPromptId = data._promptId || null
+    existingPreToolPromptId = data._preToolPromptId || null
   } catch {}
 
   // Replace agent with same role, or add new
@@ -587,6 +600,12 @@ function processEvent(event) {
       const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
       const stoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
       if (latest._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
+      // PostToolUse straggler detection: PreToolUse captures _promptId as _preToolPromptId.
+      // If UserPromptSubmit advanced _promptId after our PreToolUse, _promptId !== _preToolPromptId
+      // → new turn started in our window → abort so we don't clobber the fresh PM state.
+      if (hookEvent === 'PostToolUse'
+          && latest._promptId && latest._preToolPromptId
+          && latest._promptId !== latest._preToolPromptId) return
     } catch (err) {
       // Only abort on rename-contention codes (EBUSY/EPERM = Stop's atomic rename in flight).
       // ENOENT = first-ever write; EACCES/EMFILE/other = persistent FS error — proceed
@@ -603,6 +622,13 @@ function processEvent(event) {
     activeCount,
     workflow: clearWorkflow ? null : (workflowOverride ? workflowOverride.slice(0, 200) : existingWorkflow),
     source: 'claude-cli',
+    // Turn-boundary fields for straggler detection:
+    // _promptId advances on each UserPromptSubmit; _preToolPromptId is set by PreToolUse
+    // to the _promptId at entry so PostToolUse can detect if a new turn started.
+    _promptId: newPromptId || existingPromptId,
+    _preToolPromptId: hookEvent === 'PreToolUse'
+      ? (capturedPromptId !== null ? capturedPromptId : existingPromptId)
+      : existingPreToolPromptId,
   }
 
   // Write with retry (Windows file locking can cause EBUSY on rename)

@@ -102,10 +102,10 @@ describe('dedup', () => {
   beforeEach(() => { dir = tmpDir() })
   afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
 
-  it('removes bare office-status.json when _seq is within 2s of a slugged session', () => {
+  it('removes bare office-status.json when _seq is within 2s of a slugged session (hook source)', () => {
     const baseSeq = Date.now()
     writeSession(dir, 'office-status.json', {
-      type: 'office-status', _seq: String(baseSeq),
+      type: 'office-status', _seq: String(baseSeq), source: 'claude-cli',
       agents: [{ role: 'dev', status: 'working', task: null, label: null }],
     })
     writeSession(dir, 'office-status-feat-x.json', {
@@ -116,6 +116,22 @@ describe('dedup', () => {
     // After dedup, only the slugged session remains → single-session path
     expect(result).not.toBeNull()
     expect(result.source).not.toBe('multi-session')
+  })
+
+  it('keeps bare file when source is not claude-cli (POST/API write — not a hook duplicate)', () => {
+    const baseSeq = Date.now()
+    writeSession(dir, 'office-status.json', {
+      type: 'office-status', _seq: String(baseSeq), source: 'api',
+      agents: [{ role: 'pm', status: 'working', task: null, label: null }],
+    })
+    writeSession(dir, 'office-status-feat-x.json', {
+      type: 'office-status', _seq: String(baseSeq + 100), _cwd: dir,
+      agents: [{ role: 'dev', status: 'working', task: null, label: null }],
+    })
+    const result = scanAndMerge(dir, dir)
+    // API-sourced bare file is not a hook duplicate — both sessions kept
+    expect(result.source).toBe('multi-session')
+    expect(result.sessionCount).toBe(2)
   })
 
   it('keeps bare file when _seq differs by more than 2s', () => {
@@ -343,11 +359,11 @@ describe('dedup: hasUniqueWorkflow carve-out', () => {
     expect(result.sessionCount).toBe(2)
   })
 
-  it('removes bare file when its workflow matches a slugged session (within 2s)', () => {
+  it('removes bare file when its workflow matches a slugged session (within 2s, hook source)', () => {
     const baseSeq = Date.now()
     const sharedWorkflow = 'shared-workflow'
     writeSession(dir, 'office-status.json', {
-      type: 'office-status', _seq: String(baseSeq), workflow: sharedWorkflow,
+      type: 'office-status', _seq: String(baseSeq), workflow: sharedWorkflow, source: 'claude-cli',
       agents: [{ role: 'pm', status: 'working', task: null, label: null }],
     })
     writeSession(dir, 'office-status-feat.json', {

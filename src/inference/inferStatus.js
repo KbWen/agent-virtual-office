@@ -178,7 +178,9 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
 
     state.lastSeq = data._seq || null
     const msg = normalizeStatusMessage(data)
-    if (msg) callback(msg)
+    // Invoke callback OUTSIDE the main catch so store/rendering exceptions don't
+    // masquerade as network failures and trip the consecutive404 backoff counter.
+    if (msg) { try { callback(msg) } catch {} }
     return { ok: true, delivered: Boolean(msg) }
   } catch {
     state.consecutive404++
@@ -259,6 +261,10 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
 
   function connect() {
     if (stopped) return
+    // Reset wire-dedup on every new connection so the reconnect snapshot is always delivered.
+    // Without this, a state that round-trips (working→done→working same labels) during an
+    // outage would produce byte-identical wire bytes and be silently dropped.
+    lastSseData = null
     es = new EventSource('/api/status/stream')
 
     es.addEventListener('open', () => {
