@@ -676,6 +676,13 @@ function processEvent(event) {
       if (hookEvent === 'PostToolUse'
           && latest._promptId && latest._preToolPromptId
           && latest._promptId !== latest._preToolPromptId) return
+      // Fresh-install guard: if both tokens are synthesized (__t: prefix) AND the session
+      // is stopped, no UPS has ever run — there is no legitimate new turn, so any PostToolUse
+      // arriving after the 30s window is unconditionally a straggler. The normal mismatch
+      // gate above is structurally inert when tokens are equal (no UPS advanced _promptId).
+      if (hookEvent === 'PostToolUse' && latest._stopped
+          && typeof latest._promptId === 'string' && latest._promptId.startsWith('__t:')
+          && typeof latest._preToolPromptId === 'string' && latest._preToolPromptId.startsWith('__t:')) return
     } catch (err) {
       // Only abort on rename-contention codes (EBUSY/EPERM = Stop's atomic rename in flight).
       // ENOENT = first-ever write; EACCES/EMFILE/other = persistent FS error — proceed

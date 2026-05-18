@@ -242,6 +242,20 @@ describe('multi-session merge', () => {
     expect(result.mood).toBeUndefined()
   })
 
+  it('M6: finished session (all done) mood must not inject over an active session with no mood', () => {
+    // alpha: all agents done, has mood — must NOT contribute mood to merged output
+    // beta: one working agent, no mood
+    const base = Date.now()
+    writeSlugged('alpha', base + 1000, [{ role: 'dev', status: 'done', task: null, label: null }], { mood: 'frustrated', moodDuration: 20000 })
+    writeSlugged('beta', base + 100, [{ role: 'qa', status: 'working', task: null, label: null }])
+    const result = scanAndMerge(dir, dir)
+    // beta's agent is active → alpha's done-only session must not leak its mood
+    expect(result.mood).toBeUndefined()
+    // beta's agent is still present
+    expect(result.agents.some(a => a.session === 'beta')).toBe(true)
+    expect(result.agents.some(a => a.session === 'alpha')).toBe(false)
+  })
+
   // Agent priority and role tiebreaker (multi-session path only — single session returns all agents)
   it('picks most urgent (blocked > working) agent per session', () => {
     const base = Date.now()

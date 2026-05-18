@@ -192,7 +192,10 @@ export function getSessionStats(dir, projectRoot) {
       if (!seq || now - seq > STALE_MS || seq > now + FUTURE_MS) continue
       if (parsed.source === 'file-watcher') {
         fileWatcherPresent = true
-      } else if (parsed._cwd && pathsEqual(path.resolve(parsed._cwd), path.resolve(projectRoot))) {
+      } else if (
+        (parsed._cwd && pathsEqual(path.resolve(parsed._cwd), path.resolve(projectRoot))) ||
+        (!parsed._cwd && file === 'office-status.json' && parsed.source !== 'file-watcher')
+      ) {
         hookSessionCount++
       }
     } catch {}
