@@ -21,6 +21,28 @@ function randomInterval(range) {
   return range[0] + Math.random() * (range[1] - range[0])
 }
 
+// Release EVERY agent currently locked in a group event back to organic scheduling.
+// Group-event cleanup normally happens in executeEvent's per-event setTimeout, but that
+// timer early-returns when `cancelled` is flipped (teardown / HMR / StrictMode remount /
+// double-init). The store's `inGroupEvent` flag is NOT persisted and NOT reset by the
+// module-level zustand store across an HMR boundary, so a cancelled event leaves its
+// participants stuck `inGroupEvent: true` forever: doSchedule skips them and the watchdog
+// explicitly ignores in-group agents — the agent freezes permanently. Teardown MUST
+// release them directly rather than trusting a cancelled cleanup timer.
+function releaseAllGroupEvents(store) {
+  try {
+    const s = store.getState()
+    if (!s || !s.agents) return
+    for (const id of Object.keys(s.agents)) {
+      if (s.agents[id]?.inGroupEvent) {
+        s.clearAgentGroupEvent(id)
+        s.clearBubble(id)
+      }
+    }
+    s.clearActiveEvent()
+  } catch { /* store may be torn down — best effort */ }
+}
+
 function jitter(pos, amount = 20) {
   return {
     x: pos.x + (Math.random() - 0.5) * amount,
@@ -478,6 +500,10 @@ export function startOfficeLife(store) {
     // Cancel any in-flight interactive events from the prior instance.
     for (const c of interactiveCancellers) c.value = true
     interactiveCancellers.clear()
+    // Cancelling the prior instance flips its `cancelled` flag, which makes every
+    // pending executeEvent cleanup early-return WITHOUT releasing its participants.
+    // Release them here so no agent is stranded `inGroupEvent: true` (frozen forever).
+    releaseAllGroupEvents(store)
   }
 
   // Shared cancellation flag — prevents stale event callbacks from firing after stop().
@@ -610,6 +636,11 @@ export function startOfficeLife(store) {
     // fire against a torn-down store.
     for (const c of interactiveCancellers) c.value = true
     interactiveCancellers.clear()
+    // Flipping `cancelled` makes every pending executeEvent cleanup early-return
+    // without releasing its participants. Release them directly so an unmount mid-event
+    // never strands an agent `inGroupEvent: true` (doSchedule + watchdog both skip
+    // in-group agents — the agent would freeze permanently).
+    releaseAllGroupEvents(store)
     // Only release the module-level flag if it still points at THIS instance —
     // a newer startOfficeLife() may have already replaced it.
     if (activeCancelled === cancelled) activeCancelled = null

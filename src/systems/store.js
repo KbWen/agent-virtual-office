@@ -209,7 +209,6 @@ const initAgents = (mode) => {
       expression: saved?.expression || 'normal',
       bubble: null,
       status: 'idle',  // always start idle — external hooks drive status
-      weightOverride: null,
       deskItemCount: saved?.deskItemCount || { coffee: 0, sticky: 0, books: 0 },
       position: saved?.position || { ...home },
       targetPosition: saved?.position || { ...home },

@@ -3,28 +3,45 @@ import { startOfficeLife, triggerInteractiveEvent } from '../src/systems/officeL
 import { TIME_CHECK_INTERVAL } from '../src/systems/constants.js'
 
 // Minimal fake store — officeLife only calls getState() and the actions it returns.
+// The agents map is mutated in place so group-event state changes are observable
+// (mirrors how the real zustand store survives across an officeLife teardown/re-init).
 function makeFakeStore() {
   let updateTimeCalls = 0
   const state = {
     isPaused: false,
     activeEvent: null,
     agents: {
-      dev: { id: 'dev', inGroupEvent: false, behavior: 'typing', expression: 'normal', position: { x: 100, y: 100 } },
-      qa: { id: 'qa', inGroupEvent: false, behavior: 'typing', expression: 'normal', position: { x: 200, y: 200 } },
+      dev: { id: 'dev', inGroupEvent: false, groupTarget: null, behavior: 'typing', expression: 'normal', bubble: null, position: { x: 100, y: 100 } },
+      qa: { id: 'qa', inGroupEvent: false, groupTarget: null, behavior: 'typing', expression: 'normal', bubble: null, position: { x: 200, y: 200 } },
     },
     externalStatus: {},
     hour: 9,
   }
   const api = {
-    ...state,
+    get agents() { return state.agents },
+    get isPaused() { return state.isPaused },
+    get activeEvent() { return state.activeEvent },
+    get externalStatus() { return state.externalStatus },
+    get hour() { return state.hour },
     updateTime: () => { updateTimeCalls++ },
-    setActiveEvent: () => {},
-    clearActiveEvent: () => {},
+    setActiveEvent: (e) => { state.activeEvent = e },
+    clearActiveEvent: () => { state.activeEvent = null },
     setAgentBehavior: () => {},
-    setAgentGroupEvent: () => {},
-    setMultipleAgentGroupEvents: () => {},
-    clearAgentGroupEvent: () => {},
-    clearBubble: () => {},
+    setAgentGroupEvent: (id, { behavior, expression, bubble, groupTarget } = {}) => {
+      if (!state.agents[id]) return
+      state.agents[id] = { ...state.agents[id], behavior, expression, bubble: bubble || null, inGroupEvent: true, groupTarget: groupTarget || null }
+    },
+    setMultipleAgentGroupEvents: (updates) => {
+      for (const u of updates) api.setAgentGroupEvent(u.id, u)
+    },
+    clearAgentGroupEvent: (id) => {
+      if (!state.agents[id]) return
+      state.agents[id] = { ...state.agents[id], inGroupEvent: false, groupTarget: null }
+    },
+    clearBubble: (id) => {
+      if (!state.agents[id]) return
+      state.agents[id] = { ...state.agents[id], bubble: null }
+    },
   }
   return {
     getState: () => api,
@@ -92,5 +109,40 @@ describe('officeLife — lifecycle teardown', () => {
     // Advance past every deferred step — none should run against the torn-down store.
     vi.advanceTimersByTime(20000)
     expect(setBehaviorSpy).not.toHaveBeenCalled()
+  })
+
+  it('teardown mid-event releases participants — no agent stranded inGroupEvent: true', () => {
+    const store = makeFakeStore()
+    const cleanup = startOfficeLife(store)
+
+    // Start a group event that locks dev + qa into inGroupEvent: true.
+    expect(triggerInteractiveEvent(store, 'review-debate')).toBe(true)
+    expect(store.getState().agents.dev.inGroupEvent).toBe(true)
+    expect(store.getState().agents.qa.inGroupEvent).toBe(true)
+
+    // Tear down BEFORE the executeEvent cleanup timer (event.duration = 18000ms) fires.
+    cleanup()
+
+    // The cancelled cleanup timer early-returns and never releases the agents — teardown
+    // itself must release them, otherwise doSchedule + watchdog both skip them forever.
+    expect(store.getState().agents.dev.inGroupEvent).toBe(false)
+    expect(store.getState().agents.qa.inGroupEvent).toBe(false)
+    expect(store.getState().activeEvent).toBe(null)
+  })
+
+  it('double-init mid-event releases the prior instance participants', () => {
+    const store = makeFakeStore()
+    startOfficeLife(store) // intentionally NOT cleaned up — simulates HMR / missed cleanup
+
+    expect(triggerInteractiveEvent(store, 'review-debate')).toBe(true)
+    expect(store.getState().agents.dev.inGroupEvent).toBe(true)
+
+    // Re-init without cleanup: the double-init guard must release the prior instance's
+    // stranded group-event participants, not just cancel its timers.
+    const cleanupB = startOfficeLife(store)
+    expect(store.getState().agents.dev.inGroupEvent).toBe(false)
+    expect(store.getState().agents.qa.inGroupEvent).toBe(false)
+
+    cleanupB()
   })
 })

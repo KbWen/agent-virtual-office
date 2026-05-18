@@ -82,24 +82,28 @@
     {
       "id": "dog-visit",
       "name": "有人帶狗",
+      "participants": "all",
       "duration": 20000,
       "description": "小狗在辦公室跑來跑去"
     },
     {
       "id": "ac-broken",
       "name": "空調壞了",
+      "participants": "all",
       "duration": 15000,
       "description": "所有人搧風動作，冒汗滴"
     },
     {
       "id": "boss-visit",
       "name": "老闆巡視",
+      "participants": "all",
       "duration": 10000,
       "description": "所有人回座位坐好假裝忙"
     },
     {
       "id": "group-stretch",
       "name": "集體伸懶腰",
+      "participants": "all",
       "duration": 8000,
       "description": "所有人同時伸懶腰"
     }
