@@ -302,4 +302,47 @@ describe('normalizeStatusMessage', () => {
       expect(result.workflow.length).toBe(200)
     })
   })
+
+  describe('R79: office-vibe agent (role) sanitization', () => {
+    // The office-status branch runs every agent through sanitizeAgent → sanitizeRoleId,
+    // which caps a composite slug at SLUG_CAP (64). The office-vibe branch previously
+    // passed raw.agent straight through — a crafted office-vibe { agent: '<8KB>~dev' }
+    // (reachable from postMessage / ?command= URL) injected an unbounded composite id
+    // into the store as a dynamic agent (React key, persisted dailyDoneLedger key).
+    it('caps the slug of an oversized composite agent id from office-vibe', () => {
+      const hugeSlug = 'a'.repeat(8000)
+      const result = normalizeStatusMessage({ type: 'office-vibe', agent: `${hugeSlug}~dev` })
+      expect(result.agents).toHaveLength(1)
+      // slug capped to 64 + '~' + 'dev' (3) = 68 — same bound as the office-status path.
+      expect(result.agents[0].role.length).toBe(68)
+      expect(result.agents[0].role.endsWith('~dev')).toBe(true)
+    })
+
+    it('passes a valid bare role through unchanged', () => {
+      const result = normalizeStatusMessage({ type: 'office-vibe', agent: 'qa' })
+      expect(result.agents[0].role).toBe('qa')
+    })
+
+    it('preserves a valid composite agent id', () => {
+      const result = normalizeStatusMessage({ type: 'office-vibe', agent: 'feat-x~dev' })
+      expect(result.agents[0].role).toBe('feat-x~dev')
+    })
+
+    it('rejects an invalid bare role and falls through to command routing', () => {
+      // 'hacker' is not a VALID_ROLE → sanitizeRoleId returns null → role falls back to
+      // routeTaskToAgent('/implement') = 'dev'. An invalid explicit agent must not reach
+      // the store verbatim; the command-based fallback is the correct downgrade.
+      const result = normalizeStatusMessage({
+        type: 'office-vibe', agent: 'hacker', command: '/implement',
+      })
+      expect(result.agents[0].role).toBe('dev')
+    })
+
+    it('rejects a composite whose base segment is not a valid role', () => {
+      // 'feat-x~hacker' has an invalid base → null → no command given → role is null,
+      // which routeExternalAgents then resolves via its own fallback order.
+      const result = normalizeStatusMessage({ type: 'office-vibe', agent: 'feat-x~hacker' })
+      expect(result.agents[0].role).toBeNull()
+    })
+  })
 })

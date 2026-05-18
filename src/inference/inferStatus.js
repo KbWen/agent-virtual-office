@@ -94,10 +94,16 @@ export function normalizeStatusMessage(raw) {
   // (postMessage, ?command= URL param) and must not bypass the CAP that the
   // office-status branch enforces via sanitizeAgent/capStr.
   if (raw.type === 'office-vibe') {
+    // Sanitize raw.agent through the SAME sanitizeRoleId the office-status branch uses.
+    // Without this, a crafted office-vibe { agent: '<8KB>~dev' } passes a bare slug~role
+    // composite straight into the store as an unbounded dynamic agent id (used as a React
+    // key, persisted in dailyDoneLedger). sanitizeRoleId caps the slug at SLUG_CAP and
+    // rejects invalid bare roles (which then correctly fall through to command routing).
+    const sanitizedRole = sanitizeRoleId(raw.agent)
     return withStatusEnvelope({
       type: 'office-status',
       agents: [{
-        role: raw.agent || routeTaskToAgent(raw.command) || null,
+        role: sanitizedRole || routeTaskToAgent(raw.command) || null,
         task: capStr(raw.command),
         status: phaseToStatus(raw.phase),
         label: null,
