@@ -577,6 +577,7 @@ function processEvent(event) {
   let existingPromptId = null
   let existingPreToolPromptId = null
   let existingStopped = false
+  let existingStoppedAt = null
   try {
     const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
     existing = Array.isArray(data.agents)
@@ -596,6 +597,7 @@ function processEvent(event) {
     existingPromptId = data._promptId || null
     existingPreToolPromptId = data._preToolPromptId || null
     existingStopped = Boolean(data._stopped)
+    existingStoppedAt = typeof data._stoppedAt === 'number' ? data._stoppedAt : null
   } catch {}
 
   // Detect stale workflow from a previous turn. Two conditions that independently indicate
@@ -641,6 +643,11 @@ function processEvent(event) {
       const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
       const stoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
       if (latest._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
+      // SubagentStart with _stopped is unconditionally a straggler — no time limit.
+      // A legitimate new-turn SubagentStart is always preceded by a UPS that clears _stopped.
+      // Without this, a straggler SubagentStart arriving >30s after Stop reinstalls a phantom
+      // workflow banner AND drops _stopped, re-enabling further straggler PostToolUse events.
+      if (latest._stopped && hookEvent === 'SubagentStart') return
       // PostToolUse straggler detection: PreToolUse captures _promptId as _preToolPromptId.
       // If UserPromptSubmit advanced _promptId after our PreToolUse, _promptId !== _preToolPromptId
       // → new turn started in our window → abort so we don't clobber the fresh PM state.
@@ -691,6 +698,14 @@ function processEvent(event) {
     _workflowAgentId: outWorkflowAgentId,
     _workflowPromptId: outWorkflowPromptId,
     source: 'claude-cli',
+    // Carry _stopped/_stoppedAt forward when they are set: a non-UPS event has no
+    // authority to clear Stop's idle signal. Without this, a PostToolUse that wins a
+    // last-writer-wins race with Stop erases _stopped=true, re-opening the straggler
+    // window for subsequent events. UserPromptSubmit is the only event that legitimately
+    // clears _stopped — it does so by omitting these keys from its own output.
+    ...(existingStopped && hookEvent !== 'UserPromptSubmit'
+      ? { _stopped: true, _stoppedAt: existingStoppedAt ?? undefined }
+      : {}),
     // Turn-boundary fields for straggler detection:
     // _promptId advances on each UserPromptSubmit; _preToolPromptId is set by PreToolUse
     // to the _promptId at entry so PostToolUse can detect if a new turn started.
