@@ -303,13 +303,24 @@ export const useOfficeStore = create((set) => ({
 
   incrementDeskItem: (id, item) =>
     set((s) => {
-      const agent = s.agents[id]
-      if (!agent) return s
+      const now = Date.now()
+      const dailyDoneLedger = ensureCurrentDailyDoneLedger(s.dailyDoneLedger, now)
+      const dayChanged = s.dailyDoneLedger.dayKey !== dailyDoneLedger.dayKey
+      // Mirror the day-reset logic from applyExternalStatus so organic behaviors
+      // (coffee, sticky notes) reset on midnight just as external-status writes do.
+      let agents = s.agents
+      if (dayChanged) {
+        agents = Object.fromEntries(
+          Object.entries(s.agents).map(([k, a]) =>
+            [k, a ? { ...a, deskItemCount: { coffee: 0, sticky: 0, books: 0 } } : a]
+          )
+        )
+      }
+      const agent = agents[id]
+      if (!agent) return dayChanged ? { agents, dailyDoneLedger } : s
       const count = { ...agent.deskItemCount }
-      // Cap at 20 — well above the level-3 visual threshold (6) but prevents unbounded
-      // growth across the 4h persistence window when only organic behaviors run.
-      count[item] = Math.min((count[item] || 0) + 1, 20)
-      return { agents: { ...s.agents, [id]: { ...agent, deskItemCount: count } } }
+      count[item] = (count[item] || 0) + 1
+      return { agents: { ...agents, [id]: { ...agent, deskItemCount: count } }, dailyDoneLedger }
     }),
 
   updateTime: () => {
