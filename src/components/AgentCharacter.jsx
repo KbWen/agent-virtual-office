@@ -860,7 +860,9 @@ function AgentCharacter({ agent }) {
     const delay = 500 + Math.random() * 3000
     timerRef.current = setTimeout(doSchedule, delay)
 
-    // Watchdog: if no behavior change in 45s, force restart the chain
+    // Watchdog: if no behavior change for WATCHDOG_TIMEOUT, force restart the chain.
+    // The timeout must stay above the longest legitimate behavior duration so a slow
+    // (not dead) behavior is never truncated — see constants.js for the budget.
     const lastBehaviorRef = { behavior: null, since: Date.now() }
     const watchdog = setInterval(() => {
       const agent = useOfficeStore.getState().agents[id]

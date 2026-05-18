@@ -45,7 +45,13 @@ function fromTemplate(key, ctx) {
   if (!Array.isArray(pool) || pool.length === 0) return null
   const template = pick(pool)
   if (!template) return null
-  return ctx ? template.replace(/\{ctx\}/g, ctx) : template.replace(/\s*\{ctx\}\s*/g, '')
+  // Use a function replacer (not a string) so `$`-sequences in ctx — which can be
+  // a real filename or task string like `$&`, `$1`, `` $` `` — are inserted
+  // literally rather than interpreted as String.prototype.replace substitution
+  // patterns. A string replacement of "$&" would re-inject the matched "{ctx}".
+  return ctx
+    ? template.replace(/\{ctx\}/g, () => ctx)
+    : template.replace(/\s*\{ctx\}\s*/g, '')
 }
 
 /**
