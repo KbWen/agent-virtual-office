@@ -19,6 +19,7 @@ function resetStore() {
     statusSource: 'organic',
     activeWorkflow: null,
     activityLog: [],
+    selectedAgent: null,
     dailyDoneLedger: { dayKey: 'reset', counts: {}, seenEventKeys: [] },
   })
 }
@@ -282,6 +283,123 @@ describe('clearExternalStatus — behavior/group-event reset contract (R68)', ()
     // qa is mid group event — must keep its animation.
     expect(qa.behavior).toBe('meeting')
     expect(qa.bubble).toBe('Standup')
+  })
+})
+
+describe('updateTime — daily-done ledger rollover (R71)', () => {
+  beforeEach(resetStore)
+
+  it('rolls the ledger over and resets desk items when the local day changes', () => {
+    // Seed a ledger whose dayKey is NOT today — simulates state surviving past midnight.
+    useOfficeStore.setState({
+      dailyDoneLedger: { dayKey: '1999-01-01', counts: { dev: 7, qa: 3 }, seenEventKeys: ['x'] },
+      agents: {
+        ...useOfficeStore.getState().agents,
+        dev: { ...useOfficeStore.getState().agents.dev, deskItemCount: { coffee: 5, sticky: 2, books: 1 } },
+      },
+    })
+
+    // updateTime runs every minute via officeLife's timeInterval — the rollover must be
+    // traffic-independent (not gated on an applyExternalStatus call).
+    useOfficeStore.getState().updateTime()
+
+    const s = useOfficeStore.getState()
+    expect(s.dailyDoneLedger.dayKey).not.toBe('1999-01-01')  // rolled to today
+    expect(s.dailyDoneLedger.counts).toEqual({})              // stale counts cleared
+    expect(s.dailyDoneLedger.seenEventKeys).toEqual([])
+    expect(s.agents.dev.deskItemCount).toEqual({ coffee: 0, sticky: 0, books: 0 })
+  })
+
+  it('leaves the ledger untouched when the day has not changed', () => {
+    const todayLedger = useOfficeStore.getState().dailyDoneLedger
+    // resetStore seeds dayKey:'reset' — replace with a genuine current-day ledger first.
+    useOfficeStore.getState().updateTime()
+    const afterFirst = useOfficeStore.getState().dailyDoneLedger
+    useOfficeStore.setState({
+      dailyDoneLedger: { ...afterFirst, counts: { dev: 4 } },
+    })
+    // A second same-day updateTime must NOT wipe the in-day counts.
+    useOfficeStore.getState().updateTime()
+    expect(useOfficeStore.getState().dailyDoneLedger.counts).toEqual({ dev: 4 })
+    void todayLedger
+  })
+})
+
+describe('selectedAgent — eviction when a selected dynamic agent disappears (R71)', () => {
+  beforeEach(resetStore)
+
+  it('clears selectedAgent when a multi-session reconcile removes the selected dynamic agent', () => {
+    const { applyExternalStatus, setSelectedAgent } = useOfficeStore.getState()
+    applyExternalStatus(
+      [
+        { agentId: 'feat-a~dev', status: 'working', task: null, label: null, session: 'feat-a' },
+        { agentId: 'feat-b~dev', status: 'working', task: null, label: null, session: 'feat-b' },
+      ],
+      { source: 'multi-session' },
+    )
+    setSelectedAgent('feat-b~dev')
+    expect(useOfficeStore.getState().selectedAgent).toBe('feat-b~dev')
+
+    // feat-b's session ends — reconciliation deletes the dynamic agent.
+    applyExternalStatus(
+      [{ agentId: 'feat-a~dev', status: 'working', task: null, label: null, session: 'feat-a' }],
+      { source: 'multi-session' },
+    )
+    // The dangling selection must be dropped, not left pointing at a gone id.
+    expect(useOfficeStore.getState().selectedAgent).toBeNull()
+  })
+
+  it('keeps selectedAgent when the selected agent is NOT the one evicted', () => {
+    const { applyExternalStatus, setSelectedAgent } = useOfficeStore.getState()
+    applyExternalStatus(
+      [
+        { agentId: 'feat-a~dev', status: 'working', task: null, label: null, session: 'feat-a' },
+        { agentId: 'feat-b~dev', status: 'working', task: null, label: null, session: 'feat-b' },
+      ],
+      { source: 'multi-session' },
+    )
+    setSelectedAgent('feat-a~dev')
+    applyExternalStatus(
+      [{ agentId: 'feat-a~dev', status: 'working', task: null, label: null, session: 'feat-a' }],
+      { source: 'multi-session' },
+    )
+    expect(useOfficeStore.getState().selectedAgent).toBe('feat-a~dev')
+  })
+
+  it('clears selectedAgent when clearExternalStatus(id) deletes the selected dynamic agent', () => {
+    const { applyExternalStatus, clearExternalStatus, setSelectedAgent } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'wt~qa', status: 'working', task: null, label: null, session: 'wt' }],
+      { source: 'multi-session' },
+    )
+    setSelectedAgent('wt~qa')
+    clearExternalStatus('wt~qa')  // dynamic agent expiry
+    expect(useOfficeStore.getState().agents['wt~qa']).toBeUndefined()
+    expect(useOfficeStore.getState().selectedAgent).toBeNull()
+  })
+
+  it('clears selectedAgent on a clear-all sweep that removes the selected dynamic agent', () => {
+    const { applyExternalStatus, clearExternalStatus, setSelectedAgent } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'wt~ops', status: 'working', task: null, label: null, session: 'wt' }],
+      { source: 'multi-session' },
+    )
+    setSelectedAgent('wt~ops')
+    clearExternalStatus()  // staleness sweep, clear-all
+    expect(useOfficeStore.getState().selectedAgent).toBeNull()
+  })
+
+  it('does NOT clear selectedAgent when a selected STATIC agent has its external status cleared', () => {
+    const { applyExternalStatus, clearExternalStatus, setSelectedAgent } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'dev', status: 'working', task: null, label: null }],
+      { source: 'claude-cli' },
+    )
+    setSelectedAgent('dev')
+    clearExternalStatus('dev')  // static agent goes idle, NOT deleted
+    // The static agent still exists — the inspector selection must survive.
+    expect(useOfficeStore.getState().agents.dev).toBeTruthy()
+    expect(useOfficeStore.getState().selectedAgent).toBe('dev')
   })
 })
 

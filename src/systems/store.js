@@ -324,8 +324,24 @@ export const useOfficeStore = create((set) => ({
     }),
 
   updateTime: () => {
-    const now = new Date()
-    set({ hour: now.getHours(), minute: now.getMinutes() })
+    set((s) => {
+      const now = new Date()
+      const next = { hour: now.getHours(), minute: now.getMinutes() }
+      // Roll the daily-done ledger over at the local midnight boundary. Without this,
+      // the ledger is only rolled inside applyExternalStatus — so if no external status
+      // arrives after midnight, PixelOffice's Sprint Kanban (totalDoneToday) and the
+      // inspector's "done today" keep summing YESTERDAY's counts until the next hook
+      // event. updateTime runs every minute, making the rollover traffic-independent.
+      const rolled = ensureCurrentDailyDoneLedger(s.dailyDoneLedger, now.getTime())
+      if (rolled.dayKey !== s.dailyDoneLedger?.dayKey) {
+        const agents = {}
+        for (const [id, a] of Object.entries(s.agents)) {
+          agents[id] = a ? { ...a, deskItemCount: { coffee: 0, sticky: 0, books: 0 } } : a
+        }
+        return { ...next, dailyDoneLedger: rolled, agents }
+      }
+      return next
+    })
   },
 
   setActiveEvent: (event) => set((s) => {
@@ -498,6 +514,7 @@ export const useOfficeStore = create((set) => ({
       // any dynamic (session-carrying) agent that this payload no longer includes.
       // Scoped to source==='multi-session' only: single-session and external channels
       // legitimately deliver one agent at a time and must NOT evict the others.
+      let evictedSelected = false
       if (meta.source === 'multi-session') {
         const present = new Set(updates.map(u => u.agentId))
         for (const id of Object.keys(agents)) {
@@ -510,13 +527,22 @@ export const useOfficeStore = create((set) => ({
           if (a && a.session && !present.has(id)) {
             delete agents[id]
             delete ext[id]
+            // If the inspector had this now-deleted dynamic agent selected, the id would
+            // dangle forever: AgentInspector renders nothing (its `agent` lookup is null)
+            // but selectedAgent stays set, so a future click on the SAME id toggles the
+            // panel off instead of open. Drop the selection when its target is evicted.
+            if (s.selectedAgent === id) evictedSelected = true
           }
         }
       }
       const log = activities.length > 0
         ? [...activities, ...s.activityLog].slice(0, 50)
         : s.activityLog
-      return { externalStatus: ext, agents, activityLog: log, dailyDoneLedger, hasEverReceivedStatus: meta.skipHintDismiss ? s.hasEverReceivedStatus : true }
+      return {
+        externalStatus: ext, agents, activityLog: log, dailyDoneLedger,
+        hasEverReceivedStatus: meta.skipHintDismiss ? s.hasEverReceivedStatus : true,
+        ...(evictedSelected ? { selectedAgent: null } : {}),
+      }
     }),
 
   clearExternalStatus: (agentId) =>
@@ -533,29 +559,47 @@ export const useOfficeStore = create((set) => ({
         if (a.inGroupEvent) return { ...a, status: 'idle' }
         return { ...a, status: 'idle', behavior: 'idle', expression: 'normal', bubble: null }
       }
+      // Drop a dangling inspector selection when its target dynamic agent is deleted —
+      // a deleted id left in selectedAgent makes a future same-id click toggle the
+      // panel off instead of open (see applyExternalStatus reconciliation for the
+      // matching guard).
       if (agentId) {
         const ext = { ...s.externalStatus }
         delete ext[agentId]
         const agents = { ...s.agents }
+        let evictedSelected = false
         if (agents[agentId]) {
           // Dynamic session agents disappear when they expire; base agents go idle
-          if (agents[agentId].session) delete agents[agentId]
-          else agents[agentId] = resetStaticAgent(agents[agentId])
+          if (agents[agentId].session) {
+            delete agents[agentId]
+            if (s.selectedAgent === agentId) evictedSelected = true
+          } else {
+            agents[agentId] = resetStaticAgent(agents[agentId])
+          }
         }
+        const selectionPatch = evictedSelected ? { selectedAgent: null } : {}
         if (Object.keys(ext).length === 0) {
-          return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null }
+          return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null, ...selectionPatch }
         }
-        return { externalStatus: ext, agents }
+        return { externalStatus: ext, agents, ...selectionPatch }
       }
       // Clear all
       const agents = { ...s.agents }
+      let evictedSelected = false
       for (const id of Object.keys(s.externalStatus)) {
         if (agents[id]) {
-          if (agents[id].session) delete agents[id]
-          else agents[id] = resetStaticAgent(agents[id])
+          if (agents[id].session) {
+            delete agents[id]
+            if (s.selectedAgent === id) evictedSelected = true
+          } else {
+            agents[id] = resetStaticAgent(agents[id])
+          }
         }
       }
-      return { externalStatus: {}, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null }
+      return {
+        externalStatus: {}, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null,
+        ...(evictedSelected ? { selectedAgent: null } : {}),
+      }
     }),
 
   // ─── Mood system ───
@@ -611,13 +655,23 @@ setNameResolver((charId) => _customProfiles[charId]?.name || null)
 
 // ─── Auto-persist on state changes (throttled) ───
 let _persistTimer = null
-useOfficeStore.subscribe(() => {
+const _unsubscribePersist = useOfficeStore.subscribe(() => {
   if (_persistTimer) return
   _persistTimer = setTimeout(() => {
     _persistTimer = null
     savePersistedState(useOfficeStore.getState())
   }, 2000)
 })
+
+// HMR: drop the pending persist timer AND the subscription on hot-replacement so an
+// orphaned timer doesn't fire against a stale closure and a duplicate subscription
+// doesn't accumulate (each HMR cycle would otherwise add another live subscriber).
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    if (_persistTimer) { clearTimeout(_persistTimer); _persistTimer = null }
+    _unsubscribePersist()
+  })
+}
 
 // ─── Cross-tab pause sync ───
 if (typeof window !== 'undefined') {
