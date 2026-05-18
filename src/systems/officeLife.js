@@ -533,7 +533,16 @@ export function startOfficeLife(store) {
   const cancelled = { value: false }
   activeCancelled = cancelled
 
+  // Guard the setTimeout creation itself on `cancelled`. The reschedule call sits at the
+  // BOTTOM of each callback (after the event work), so teardown can run between a
+  // callback's top-of-body `cancelled` check and its reschedule — clearTimeout(dailyTimer)
+  // then clears the OLD (already-fired) handle while the still-running callback proceeds
+  // to setTimeout a NEW timer that teardown's clearTimeout never saw. That orphan would
+  // fire 1-3 min later (harmless — its own cancelled check stops it — but it is a leaked
+  // handle and reassigns the module-level dailyTimer). Checking `cancelled` here makes a
+  // post-teardown reschedule a no-op, so no orphan timer is ever created.
   const scheduleDaily = () => {
+    if (cancelled.value) return
     dailyTimer = setTimeout(() => {
       if (cancelled.value) return
       const state = store.getState()
@@ -550,6 +559,7 @@ export function startOfficeLife(store) {
   }
 
   const scheduleRare = () => {
+    if (cancelled.value) return
     rareTimer = setTimeout(() => {
       if (cancelled.value) return
       const state = store.getState()

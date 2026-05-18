@@ -380,13 +380,19 @@ export const useOfficeStore = create((set) => ({
       // arrives after midnight, PixelOffice's Sprint Kanban (totalDoneToday) and the
       // inspector's "done today" keep summing YESTERDAY's counts until the next hook
       // event. updateTime runs every minute, making the rollover traffic-independent.
-      const rolled = ensureCurrentDailyDoneLedger(s.dailyDoneLedger, now.getTime())
-      if (rolled.dayKey !== s.dailyDoneLedger?.dayKey) {
+      //
+      // Detect the rollover by comparing the day KEY directly. ensureCurrentDailyDoneLedger
+      // unconditionally allocates a fresh ledger object (it spreads counts + seenEventKeys),
+      // so the old `rolled.dayKey !== s.dailyDoneLedger.dayKey` test built and then DISCARDED
+      // a full ledger clone every single minute just to read one string off it. getLocalDayKey
+      // is a pure string compute — the clone is now built only on the actual day boundary.
+      const todayKey = getLocalDayKey(now.getTime())
+      if (todayKey !== s.dailyDoneLedger?.dayKey) {
         const agents = {}
         for (const [id, a] of Object.entries(s.agents)) {
           agents[id] = a ? { ...a, deskItemCount: { coffee: 0, sticky: 0, books: 0 } } : a
         }
-        return { ...next, dailyDoneLedger: rolled, agents }
+        return { ...next, dailyDoneLedger: createDailyDoneLedger(now.getTime()), agents }
       }
       return next
     })
