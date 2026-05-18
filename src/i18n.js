@@ -91,7 +91,7 @@ export function charName(charId) {
     if (custom) return custom
   }
   // Strip session prefix: "feat-x~dev" → look up "dev", return "開發者"
-  const baseRole = charId.includes('~') ? charId.split('~')[1] : charId
+  const baseRole = charId.includes('~') ? charId.split('~').pop() : charId
   return t(`characters.${baseRole}.name`, baseRole)
 }
 

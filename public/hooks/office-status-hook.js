@@ -426,6 +426,10 @@ function processEvent(event) {
         const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
         if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
         capturedPromptId = cur._promptId || null
+        // If no _promptId exists yet (fresh install — first-ever Stop left a file without
+        // one), synthesize a turn token so the PostToolUse straggler gate is functional.
+        // UPS will write a real UUID; the mismatch becomes detectable on the first turn.
+        if (capturedPromptId === null) capturedPromptId = `__t:${nextSeq()}`
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       // If inside a subagent with skill context, prefer the skill's role
@@ -514,7 +518,9 @@ function processEvent(event) {
           type: 'office-status',
           agents: doneAgents,
           activeCount: 0,
-          workflow: data.workflow || null,
+          // Clear workflow if a subagent set it (_workflowAgentId present) — the session
+          // is ending so the subagent's workflow should not persist past Stop.
+          workflow: data._workflowAgentId ? null : (data.workflow || null),
           // Preserve R45/R46 identity fields so a SubagentStop arriving after Stop still
           // uses the precise _workflowAgentId match rather than falling back to type-string.
           _workflowAgentId: typeof data._workflowAgentId === 'string' ? data._workflowAgentId : null,
@@ -613,7 +619,11 @@ function processEvent(event) {
   const workflowTurnMismatch = hookEvent !== 'SubagentStart' && !!(
     (existingWorkflowAgentId && existingWorkflowPromptId && existingPromptId &&
      existingWorkflowPromptId !== existingPromptId) ||
-    (existingWorkflowAgentId && existingStopped)
+    // Dropped-UPS case: workflow belongs to a completed turn. Gate on 30s window so a
+    // stale _stopped from a prior session (>30s old) doesn't wipe the new session's
+    // workflow on PreToolUse events that arrive before the new SubagentStart.
+    (existingWorkflowAgentId && existingStopped &&
+     (existingStoppedAt == null || Date.now() - existingStoppedAt < 30_000))
   )
 
   // Replace agent with same role, or add new

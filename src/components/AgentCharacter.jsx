@@ -316,7 +316,7 @@ function PixelSprite({ grid, flipX = false, scale = 1 }) {
 // ─── Full Sprite with shadow ──────────────────────────────────────────
 function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing }) {
   // Strip session prefix for style lookup: "feat-x~dev" → use dev's style
-  const baseRole = charId.includes('~') ? charId.split('~')[1] : charId
+  const baseRole = charId.includes('~') ? charId.split('~').pop() : charId
   const style = CHAR_STYLES[charId] || CHAR_STYLES[baseRole] || CHAR_STYLES.pm
   const gender = style.gender || 'male'
 

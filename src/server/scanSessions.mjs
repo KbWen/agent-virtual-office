@@ -129,14 +129,13 @@ export function scanAndMerge(dir, projectRoot) {
         allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
       }
     }
-    // C2: _seq is a sorted join of all child _seq values — any child change moves it.
-    // (max-child strategy silently dropped updates from non-max sessions.)
-    const joinedSeq = sessions
-      .map(({ data }) => data._seq || '0')
-      .sort()
-      .join(':')
+    // C2: _seq is the max child _seq so the client's lastAppliedSeq stale-drop guard
+    // stays armed during multi-session. A session exit can transiently lower _seq, but
+    // the remaining session's next write advances it again within seconds. Colon-joined
+    // strings fail the /^\d+$/ guard in inferStatus.js and silently disarm it entirely.
+    const maxSeq = String(Math.max(...sessions.map(({ data }) => parseInt(data._seq, 10) || 0)))
     merged = {
-      _seq: joinedSeq,
+      _seq: maxSeq,
       type: 'office-status',
       agents: allAgents,
       activeCount: allAgents.filter(a => a.status === 'working' || a.status === 'blocked').length,

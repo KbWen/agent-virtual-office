@@ -360,7 +360,7 @@ export const useOfficeStore = create((set) => ({
         const previousStatus = ext[u.agentId]?.status || agents[u.agentId]?.status || 'idle'
         if (!agents[u.agentId]) {
           // Dynamic worktree agent — clone base role's visual style, place in overflow spot
-          const baseRole = u.agentId.includes('~') ? u.agentId.split('~')[1] : u.agentId
+          const baseRole = u.agentId.includes('~') ? u.agentId.split('~').pop() : u.agentId
           const baseAgent = s.agents[baseRole] || s.agents['dev']
           if (!baseAgent) continue
           const overflowIdx = Object.values(agents).filter(a => a.session).length
@@ -428,7 +428,7 @@ export const useOfficeStore = create((set) => ({
               qa: 'sticky', ops: 'coffee', res: 'books',
               gate: 'sticky', designer: 'sticky',
             }
-            const baseRole = u.agentId.includes('~') ? u.agentId.split('~')[1] : u.agentId
+            const baseRole = u.agentId.includes('~') ? u.agentId.split('~').pop() : u.agentId
             const growthItem = roleItems[baseRole] || 'coffee'
             const agent = agents[u.agentId]
             if (agent) {

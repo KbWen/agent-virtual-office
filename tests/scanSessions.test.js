@@ -184,29 +184,29 @@ describe('multi-session merge', () => {
     expect(sessions.indexOf('aaa')).toBeLessThan(sessions.indexOf('zzz'))
   })
 
-  // C2: joined _seq
-  it('C2: _seq changes when a non-max child session updates', () => {
+  // C2: numeric max _seq
+  it('C2: _seq changes when a session update advances the max', () => {
     const base = Date.now()
     writeSlugged('alpha', base + 1000, [{ role: 'dev', status: 'working', task: null, label: null }])
     writeSlugged('beta', base + 2000, [{ role: 'qa', status: 'working', task: null, label: null }])
     const r1 = scanAndMerge(dir, dir)
-    const seq1 = r1._seq
+    const seq1 = r1._seq  // = base+2000
 
-    // Update alpha (the non-max session) by bumping its _seq
-    writeSlugged('alpha', base + 1500, [{ role: 'dev', status: 'blocked', task: 'stuck', label: null }])
+    // Update alpha above beta's seq so the max advances
+    writeSlugged('alpha', base + 2500, [{ role: 'dev', status: 'blocked', task: 'stuck', label: null }])
     const r2 = scanAndMerge(dir, dir)
     expect(r2._seq).not.toBe(seq1)
   })
 
-  it('C2: _seq is a colon-joined string of sorted child _seqs', () => {
+  it('C2: _seq is the numeric max of child _seqs (passes lastAppliedSeq guard)', () => {
     const seqA = Date.now()
     const seqB = seqA + 1000
     writeSlugged('alpha', seqA, [{ role: 'dev', status: 'working', task: null, label: null }])
     writeSlugged('beta', seqB, [{ role: 'qa', status: 'working', task: null, label: null }])
     const result = scanAndMerge(dir, dir)
-    const parts = result._seq.split(':').sort()
-    expect(parts).toContain(String(seqA))
-    expect(parts).toContain(String(seqB))
+    // _seq must be numeric so inferStatus.js lastAppliedSeq guard stays armed
+    expect(result._seq).toBe(String(seqB))
+    expect(/^\d+$/.test(result._seq)).toBe(true)
   })
 
   // M3: both functions use same 5-min future tolerance
