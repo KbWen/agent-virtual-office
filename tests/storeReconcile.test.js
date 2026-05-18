@@ -92,6 +92,35 @@ describe('applyExternalStatus — multi-session ghost reconciliation (R63)', () 
     expect(s.agents['dev']).toBeTruthy()
     expect(s.agents['feat-x~qa']).toBeTruthy()
   })
+
+  it('evicts ALL dynamic agents on an empty multi-session payload (all sessions finished)', () => {
+    // Contract relied on by inferStatus.applyMessage's empty-multi-session branch:
+    // when every worktree session's agents are all 'done', scanAndMerge produces a
+    // merged payload with agents:[]. applyExternalStatus([], {source:'multi-session'})
+    // must still reconcile — evicting every phantom 'slug~role' worker — rather than
+    // leaving them lingering with stale 'working' status until their 5-min expiry.
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [
+        { agentId: 'feat-a~dev', status: 'working', task: null, label: null, session: 'feat-a' },
+        { agentId: 'feat-b~qa', status: 'working', task: null, label: null, session: 'feat-b' },
+      ],
+      { source: 'multi-session' },
+    )
+    let s = useOfficeStore.getState()
+    expect(s.agents['feat-a~dev']).toBeTruthy()
+    expect(s.agents['feat-b~qa']).toBeTruthy()
+
+    // Empty payload — both sessions done. ALL dynamic agents must be reconciled away.
+    applyExternalStatus([], { source: 'multi-session' })
+    s = useOfficeStore.getState()
+    expect(s.agents['feat-a~dev']).toBeUndefined()
+    expect(s.agents['feat-b~qa']).toBeUndefined()
+    expect(s.externalStatus['feat-a~dev']).toBeUndefined()
+    expect(s.externalStatus['feat-b~qa']).toBeUndefined()
+    // Static roster agents are untouched.
+    expect(s.agents['dev']).toBeTruthy()
+  })
 })
 
 describe('applyExternalStatus — overflow position assignment (R66)', () => {

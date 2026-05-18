@@ -117,6 +117,52 @@ describe('moodEngine', () => {
       // 3 events < RUSHING_THRESHOLD(5); 3 distinct working roles within INTENSE_WINDOW(30s) → intense
       expect(getMood()).toBe('intense')
     })
+
+    it('R76 Fix C: composite multi-session ids of the SAME base role do NOT trip intense', () => {
+      // Three worktrees all running a 'dev' agent feed composite 'slug~dev' ids.
+      // Before Fix C these counted as 3 distinct roles and falsely produced 'intense'.
+      // After normalization (base segment after last '~') they collapse to one role.
+      pushEventBatch([
+        { role: 'feat-x~dev', status: 'working', task: 'Edit', hint: null },
+        { role: 'hotfix~dev', status: 'working', task: 'Bash', hint: null },
+        { role: 'main~dev', status: 'working', task: 'Read', hint: null },
+      ])
+      expect(getMood()).toBe('normal')   // one base role → not intense
+    })
+
+    it('R76 Fix C: composite ids of 3 DISTINCT base roles still trip intense', () => {
+      // The heuristic must remain consistent between single- and multi-session sources:
+      // three genuinely different roles — even when carried as composites — are intense.
+      pushEventBatch([
+        { role: 'feat-x~dev', status: 'working', task: 'Edit', hint: null },
+        { role: 'feat-x~qa', status: 'working', task: 'Bash', hint: null },
+        { role: 'feat-x~ops', status: 'working', task: 'Read', hint: null },
+      ])
+      expect(getMood()).toBe('intense')
+    })
+
+    it('R76 Fix C: a slug containing "~" still resolves to the correct base role', () => {
+      // scanAndMerge splits on the last separator; the mood engine must match — three
+      // nested-slug composites of the same base role must NOT count as distinct.
+      pushEventBatch([
+        { role: 'a~b~dev', status: 'working', task: 'Edit', hint: null },
+        { role: 'c~d~dev', status: 'working', task: 'Bash', hint: null },
+        { role: 'e~f~dev', status: 'working', task: 'Read', hint: null },
+      ])
+      expect(getMood()).toBe('normal')
+    })
+
+    it('R76 Fix C: a bare role and a composite of the SAME base count once', () => {
+      // Mixed single-session ('dev') + multi-session ('slug~dev') feed — both normalize
+      // to 'dev'. With only one other distinct role this stays below the intense threshold.
+      pushEventBatch([
+        { role: 'dev', status: 'working', task: 'Edit', hint: null },
+        { role: 'feat-x~dev', status: 'working', task: 'Bash', hint: null },
+        { role: 'qa', status: 'working', task: 'Read', hint: null },
+      ])
+      // distinct base roles = {dev, qa} = 2 < INTENSE_ROLES(3) → normal
+      expect(getMood()).toBe('normal')
+    })
   })
 
   describe('idle detection', () => {

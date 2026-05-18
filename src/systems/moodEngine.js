@@ -76,11 +76,22 @@ function computeMood() {
     if (tail.every(e => e.status === 'done')) return 'smooth'
   }
 
-  // 5. Intense: 3+ distinct roles working in last 30 seconds
+  // 5. Intense: 3+ distinct roles working in last 30 seconds.
+  // Normalize composite multi-session ids ('slug~role') to their base role segment
+  // (the part after the LAST '~') before counting. Without this, three worktrees all
+  // running a 'dev' agent register as three distinct roles ('feat-x~dev', 'hotfix~dev',
+  // 'main~dev') and falsely trip 'intense'. The slug itself may contain '~', so split
+  // on the last separator only — consistent with sanitizeRoleId in inferStatus.js and
+  // the baseRole derivation in store.js / behaviorEngine.js.
   const activeRoles = new Set()
   for (const e of events) {
     if (now - e.timestamp < INTENSE_WINDOW && e.status !== 'done' && e.status !== 'idle') {
-      activeRoles.add(e.role)
+      const role = e.role
+      if (typeof role === 'string' && role.includes('~')) {
+        activeRoles.add(role.slice(role.lastIndexOf('~') + 1))
+      } else {
+        activeRoles.add(role)
+      }
     }
   }
   if (activeRoles.size >= INTENSE_ROLES) return 'intense'

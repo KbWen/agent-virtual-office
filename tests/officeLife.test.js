@@ -257,10 +257,18 @@ describe('officeLife — hour-14 drowsiness respects group events (R72)', () => 
     vi.useFakeTimers()
     // Monday so no Friday group-meeting fires alongside the hour-14 branch.
     vi.setSystemTime(new Date('2026-01-05T13:59:30'))
+    // Pin Math.random so the random daily/rare event schedulers in startOfficeLife
+    // arm their timers at the FAR end of their ranges (DAILY 180000ms, RARE 600000ms) —
+    // far beyond these tests' ~90s advance window. Without this, a daily event could
+    // fire mid-test, pick 'dev' as a participant, and clobber the group-event state the
+    // test asserts on (stochastic — fails only when the random interval lands in-window).
+    // These tests exercise the hour-14 drowsiness branch ONLY; random events are noise.
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999)
   })
   afterEach(() => {
     vi.runOnlyPendingTimers()
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('does NOT overwrite an agent that is locked in a group event', () => {

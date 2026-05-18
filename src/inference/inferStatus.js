@@ -109,6 +109,42 @@ export function normalizeStatusMessage(raw) {
   return null
 }
 
+// ─── applyMessage decision helpers (pure — extracted for direct testing) ──
+// These encode the routing/skip decisions made inside startStatusIntegration's
+// applyMessage/handleIncoming. They are pure (no DOM, no store) so they can be
+// unit-tested without an EventSource/window mocking harness.
+
+// Only hook-origin sources share a clock (both produced by Date.now() on the same
+// machine). External sources (postMessage, BroadcastChannel, window global, hash/
+// title) have independent clocks and must not poison the stale-drop high-water mark.
+const HOOK_ORIGIN = new Set(['claude-cli', 'codex-cli', 'multi-session', 'file-watcher'])
+
+export function isHookOrigin(source) {
+  return HOOK_ORIGIN.has(source)
+}
+
+/**
+ * "Hooks not installed" signal — when true, applyExternalStatus must NOT dismiss the
+ * setup prompt (hasEverReceivedStatus stays false).
+ *
+ * _hint:'no-hooks' is authoritative: scanAndMerge sets it precisely when EVERY
+ * contributing session is file-watcher, surviving the multi-session merge that
+ * rewrites source to 'multi-session' (a plain source==='file-watcher' check would
+ * miss that case). The source check still covers file-watcher messages that never
+ * pass through scanAndMerge (e.g. direct postMessage).
+ */
+export function shouldSkipHintDismiss(msg) {
+  if (!msg || typeof msg !== 'object') return false
+  return msg._hint === 'no-hooks' || msg.source === 'file-watcher'
+}
+
+// A numeric _seq is a same-machine monotonic clock value. Colon-joined or otherwise
+// non-numeric seqs (external channels, hash-bridge) must fail this guard so they are
+// never compared against hook-origin seqs for stale-drop.
+export function isNumericSeq(seq) {
+  return typeof seq === 'string' && /^\d+$/.test(seq)
+}
+
 // ─── URL params (one-time on load) ─────────────────────────────────────
 
 export function inferFromParams() {
@@ -515,12 +551,6 @@ export function startStatusIntegration(store) {
   let pendingMsg = null
   let lastAppliedSeq = null  // cross-channel stale-drop: tracks highest numeric _seq applied
 
-  // Only hook-origin sources share a clock (both produced by Date.now() on the same machine).
-  // External sources (postMessage, BroadcastChannel, window global, hash/title) have independent
-  // clocks and must not poison lastAppliedSeq or be compared against it for stale-drop.
-  const HOOK_ORIGIN = new Set(['claude-cli', 'codex-cli', 'multi-session', 'file-watcher'])
-  const isHookOrigin = s => HOOK_ORIGIN.has(s)
-
   function applyMessage(msg) {
     if (torn) return
     // Only track numeric _seq from hook-origin sources as the high-water mark.
@@ -537,13 +567,8 @@ export function startStatusIntegration(store) {
     // Route agents
     const updates = routeExternalAgents(msg.agents || [])
 
-    // "Hooks not installed" signal — keep the setup prompt visible.
-    // _hint:'no-hooks' is authoritative: scanAndMerge sets it precisely when EVERY
-    // contributing session is file-watcher, surviving the multi-session merge that
-    // rewrites source to 'multi-session' (a plain source==='file-watcher' check would
-    // miss that case and wrongly dismiss the prompt). The source check still covers
-    // file-watcher messages that never pass through scanAndMerge (e.g. direct postMessage).
-    const skipHintDismiss = msg._hint === 'no-hooks' || msg.source === 'file-watcher'
+    // "Hooks not installed" signal — keep the setup prompt visible (see shouldSkipHintDismiss).
+    const skipHintDismiss = shouldSkipHintDismiss(msg)
 
     if (updates.length > 0) {
       s.applyExternalStatus(updates, {
@@ -568,6 +593,20 @@ export function startStatusIntegration(store) {
       // workers — without this the mood engine never sees those events and mood stays
       // permanently 'idle' even while the office shows 8 busy characters.
       pushEventBatch(fallbackUpdates.map(u => ({ role: u.agentId, status: u.status, task: null, hint: null })))
+    } else if (msg.source === 'multi-session') {
+      // Empty multi-session payload — every worktree session's agents are all 'done'
+      // (or idle), so scanAndMerge's merge produced zero working/blocked representatives.
+      // applyExternalStatus's reconciliation block (gated on source==='multi-session')
+      // must still run: it evicts the dynamic 'slug~role' agents spawned by prior ticks.
+      // Without this call, those phantom workers linger with their stale 'working' status
+      // and 5-min expiresAt — the office shows finished worktree sessions as still busy.
+      // updates is empty → `present` is empty → ALL session-carrying agents are evicted,
+      // which is correct: an all-done multi-session payload means none are active.
+      s.applyExternalStatus([], {
+        source: 'multi-session',
+        seq: msg._seq || null,
+        skipHintDismiss,
+      })
     }
 
     if ('workflow' in msg) s.setActiveWorkflow(msg.workflow ?? null)
@@ -585,7 +624,6 @@ export function startStatusIntegration(store) {
     // Stale-drop only applies to hook-origin messages — they share the same clock.
     // External channels (postMessage, BroadcastChannel, window global, hash/title) have
     // independent clocks and must not be stale-dropped against or used to stale-drop hooks.
-    const isNumericSeq = s => s && /^\d+$/.test(s)
     const hookOriginMsg = isHookOrigin(msg.source)
     if (isNumericSeq(msg._seq) && hookOriginMsg) {
       // Clock-skew tolerance: if the incoming seq is more than 5 minutes behind the
