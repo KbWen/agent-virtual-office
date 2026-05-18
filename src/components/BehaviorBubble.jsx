@@ -35,7 +35,9 @@ export default function BehaviorBubble({ x, y, message }) {
   }
   const boxW = Math.max(Math.ceil(estWidth) + 18, 48)
   const boxH = 26
-  const bx = Math.max(10, Math.min(x - boxW / 2, 790 - boxW))
+  // bx is always centered on x — bubble renders in character-local coordinates
+  // (old Math.max/min clamp assumed absolute SVG coords, broke text alignment)
+  const bx = x - boxW / 2
   const by = y - boxH - 8
 
   return (
