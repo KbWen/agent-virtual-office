@@ -87,10 +87,10 @@ describe('single session pass-through', () => {
     writeSession(dir, 'office-status.json', {
       type: 'office-status', _seq: freshSeq(), _cwd: dir,
       agents: [{ role: 'dev', status: 'working', task: null, label: null }],
-      mood: 'energized', moodDuration: 30000,
+      mood: 'smooth', moodDuration: 30000,
     })
     const result = scanAndMerge(dir, dir)
-    expect(result.mood).toBe('energized')
+    expect(result.mood).toBe('smooth')
     expect(result.moodDuration).toBe(30000)
   })
 })
@@ -164,8 +164,8 @@ describe('multi-session merge', () => {
     const result = scanAndMerge(dir, dir)
     expect(result.source).toBe('multi-session')
     // aaa comes before zzz in sorted order
-    const roles = result.agents.map(a => a.session)
-    expect(roles.indexOf('aaa')).toBeLessThan(roles.indexOf('zzz'))
+    const sessions = result.agents.map(a => a.session)
+    expect(sessions.indexOf('aaa')).toBeLessThan(sessions.indexOf('zzz'))
   })
 
   // C2: joined _seq
@@ -211,10 +211,10 @@ describe('multi-session merge', () => {
   it('M6: carries forward mood from the most-recent session that has one', () => {
     const base = Date.now()
     writeSlugged('alpha', base + 100, [{ role: 'dev', status: 'working', task: null, label: null }], { mood: 'frustrated', moodDuration: 20000 })
-    writeSlugged('beta', base + 200, [{ role: 'qa', status: 'working', task: null, label: null }], { mood: 'energized', moodDuration: 30000 })
+    writeSlugged('beta', base + 200, [{ role: 'qa', status: 'working', task: null, label: null }], { mood: 'smooth', moodDuration: 30000 })
     const result = scanAndMerge(dir, dir)
     // beta has higher _seq → its mood wins
-    expect(result.mood).toBe('energized')
+    expect(result.mood).toBe('smooth')
     expect(result.moodDuration).toBe(30000)
   })
 
@@ -308,5 +308,100 @@ describe('getSessionStats', () => {
     })
     const stats = getSessionStats(dir, dir)
     expect(stats.hookSessionCount).toBe(0)
+  })
+
+  it('returns zeros when dir exists but is not readable (ENOTDIR guard)', () => {
+    // Write a *file* at the path so readdirSync would throw ENOTDIR
+    const filePath = path.join(dir, 'not-a-dir')
+    fs.writeFileSync(filePath, 'data')
+    const stats = getSessionStats(filePath, dir)
+    expect(stats.hookSessionCount).toBe(0)
+    expect(stats.fileWatcherPresent).toBe(false)
+  })
+})
+
+// ─── dedup: hasUniqueWorkflow carve-out ───────────────────────────────────────
+
+describe('dedup: hasUniqueWorkflow carve-out', () => {
+  let dir
+  beforeEach(() => { dir = tmpDir() })
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+
+  it('keeps bare file when it has a workflow no slugged session shares (even within 2s)', () => {
+    const baseSeq = Date.now()
+    writeSession(dir, 'office-status.json', {
+      type: 'office-status', _seq: String(baseSeq), workflow: 'unique-workflow',
+      agents: [{ role: 'pm', status: 'working', task: null, label: null }],
+    })
+    writeSession(dir, 'office-status-feat.json', {
+      type: 'office-status', _seq: String(baseSeq + 500), _cwd: dir, workflow: 'other-workflow',
+      agents: [{ role: 'dev', status: 'working', task: null, label: null }],
+    })
+    const result = scanAndMerge(dir, dir)
+    // Both sessions kept — bare file has unique workflow
+    expect(result.source).toBe('multi-session')
+    expect(result.sessionCount).toBe(2)
+  })
+
+  it('removes bare file when its workflow matches a slugged session (within 2s)', () => {
+    const baseSeq = Date.now()
+    const sharedWorkflow = 'shared-workflow'
+    writeSession(dir, 'office-status.json', {
+      type: 'office-status', _seq: String(baseSeq), workflow: sharedWorkflow,
+      agents: [{ role: 'pm', status: 'working', task: null, label: null }],
+    })
+    writeSession(dir, 'office-status-feat.json', {
+      type: 'office-status', _seq: String(baseSeq + 500), _cwd: dir, workflow: sharedWorkflow,
+      agents: [{ role: 'dev', status: 'working', task: null, label: null }],
+    })
+    const result = scanAndMerge(dir, dir)
+    // Bare file deduped — same workflow
+    expect(result.source).not.toBe('multi-session')
+  })
+})
+
+// ─── file-watcher strict exclusion + _hint:no-hooks ──────────────────────────
+
+describe('file-watcher strict exclusion and _hint:no-hooks', () => {
+  let dir
+  beforeEach(() => { dir = tmpDir() })
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+
+  it('excludes file-watcher session from strict pass when a hook session exists', () => {
+    writeSession(dir, 'office-status.json', {
+      type: 'office-status', _seq: freshSeq(), source: 'file-watcher',
+      agents: [{ role: 'dev', status: 'working', task: null, label: null }],
+    })
+    writeSession(dir, 'office-status-feat.json', {
+      type: 'office-status', _seq: freshSeq(), _cwd: dir, source: 'hook',
+      agents: [{ role: 'qa', status: 'working', task: null, label: null }],
+    })
+    const result = scanAndMerge(dir, dir)
+    // Hook session passes strict; file-watcher excluded from strict
+    expect(result).not.toBeNull()
+    expect(result._hint).toBeUndefined()
+    // Only the hook session should have been included
+    expect(result.source).not.toBe('multi-session')
+  })
+
+  it('sets _hint:no-hooks when only file-watcher sessions are available (fallback)', () => {
+    writeSession(dir, 'office-status.json', {
+      type: 'office-status', _seq: freshSeq(), source: 'file-watcher',
+      agents: [{ role: 'dev', status: 'working', task: null, label: null }],
+    })
+    // projectRoot is something OTHER than dir so CWD match fails → strict pass empty → fallback
+    const result = scanAndMerge(dir, '/nonexistent-project-root')
+    expect(result).not.toBeNull()
+    expect(result._hint).toBe('no-hooks')
+  })
+
+  it('skips malformed JSON files gracefully', () => {
+    fs.writeFileSync(path.join(dir, 'office-status-bad.json'), '{ bad json }')
+    writeSession(dir, 'office-status-good.json', {
+      type: 'office-status', _seq: freshSeq(), _cwd: dir,
+      agents: [{ role: 'dev', status: 'working', task: null, label: null }],
+    })
+    // Bad file skipped, good one processed
+    expect(scanAndMerge(dir, dir)).not.toBeNull()
   })
 })

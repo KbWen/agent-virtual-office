@@ -44,7 +44,9 @@ export function scanAndMerge(dir, projectRoot) {
 
   function scanDir(strict) {
     if (!fs.existsSync(dir)) return
-    for (const file of fs.readdirSync(dir)) {
+    let files
+    try { files = fs.readdirSync(dir) } catch { return }  // dir is a file or permission denied
+    for (const file of files) {
       if (!STATUS_FILE_RE.test(file)) continue
       try {
         const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
@@ -163,7 +165,9 @@ export function getSessionStats(dir, projectRoot) {
   const now = Date.now()
   let hookSessionCount = 0
   let fileWatcherPresent = false
-  for (const file of fs.readdirSync(dir)) {
+  let files
+  try { files = fs.readdirSync(dir) } catch { return { hookSessionCount: 0, fileWatcherPresent: false } }
+  for (const file of files) {
     if (!STATUS_FILE_RE.test(file)) continue
     try {
       const raw = fs.readFileSync(path.join(dir, file), 'utf-8')

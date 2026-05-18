@@ -245,16 +245,31 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
   let reconnectDelay = 2000
   let stopped = false
   let consecutiveErrors = 0
+  let connectionOpenedAt = 0
+  let lastSseSeq = null
   const MAX_CONSECUTIVE_ERRORS = 5
+  // Minimum connection lifetime before a successful event resets the error streak.
+  // Without this, a server that accepts → sends initial snapshot → crashes resets
+  // consecutiveErrors every time, defeating backoff and never calling onGiveUp.
+  const MIN_STABLE_MS = 10_000
 
   function connect() {
     if (stopped) return
+    connectionOpenedAt = Date.now()
     es = new EventSource('/api/status/stream')
     es.addEventListener('status', (e) => {
-      consecutiveErrors = 0  // successful event resets the error streak
-      reconnectDelay = 2000
+      // Only reset error streak if the connection has been alive long enough
+      // to prove it's stable (not just the always-sent initial snapshot).
+      if (Date.now() - connectionOpenedAt > MIN_STABLE_MS) {
+        consecutiveErrors = 0
+        reconnectDelay = 2000
+      }
       try {
         const data = JSON.parse(e.data)
+        // Dedup: server fires broadcastSSE on both POST and file-watcher;
+        // the same merged payload can arrive twice with the same _seq.
+        if (data._seq && data._seq === lastSseSeq) return
+        lastSseSeq = data._seq || null
         const msg = normalizeStatusMessage(data)
         if (msg) callback(msg)
         if (onProbe) onProbe({ ok: true, delivered: Boolean(msg) })
@@ -418,7 +433,10 @@ export function startStatusIntegration(store) {
       pushEventBatch(updates.map(u => ({ role: u.agentId, status: u.status, task: u.task, hint: u.hint || null })))
     } else if (msg.activeCount > 0) {
       const ids = distributeFallbackCount(msg.activeCount)
-      s.applyExternalStatus(ids.map(id => ({ agentId: id, status: 'working', task: null, label: null })))
+      s.applyExternalStatus(
+        ids.map(id => ({ agentId: id, status: 'working', task: null, label: null })),
+        { skipHintDismiss: msg.source === 'file-watcher' }
+      )
       s.setStatusSource('fallback')
       s.setIntegrationSource?.(msg.source || 'fallback')
     }

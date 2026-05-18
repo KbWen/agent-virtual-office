@@ -394,6 +394,7 @@ function processEvent(event) {
 
   let role, task, status, label, hint = null
   let clearWorkflow = false
+  let workflowOverride = null  // only SubagentStart sets this; PreToolUse/PostToolUse must not clobber workflow
 
   switch (hookEvent) {
     case 'UserPromptSubmit': {
@@ -456,6 +457,7 @@ function processEvent(event) {
       task = agentType
       status = 'working'
       label = skillLabel(agentType, false)
+      workflowOverride = agentType  // set workflow to the subagent type on start
       // Persist skill context so tool calls within this subagent stay on the right role
       if (agentId) saveSkillContext(agentId, role, agentType)
       break
@@ -581,7 +583,7 @@ function processEvent(event) {
     type: 'office-status',
     agents: newAgents,
     activeCount,
-    workflow: clearWorkflow ? null : ((agentType && agentType.slice(0, 200)) || existingWorkflow),
+    workflow: clearWorkflow ? null : (workflowOverride ? workflowOverride.slice(0, 200) : existingWorkflow),
     source: 'claude-cli',
   }
 

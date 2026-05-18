@@ -298,11 +298,12 @@ function handleStatus(req, res) {
     if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
     if (!checkRateLimit(req)) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
     req.setEncoding('utf-8')
-    let body = '', aborted = false
+    let body = '', aborted = false, receivedBytes = 0
     req.on('data', chunk => {
       if (aborted) return
+      receivedBytes += Buffer.byteLength(chunk, 'utf8')
+      if (receivedBytes > 16384) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Body too large' })); req.resume(); return }
       body += chunk
-      if (Buffer.byteLength(body, 'utf8') > 16384) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Body too large' })); req.resume() }
     })
     req.on('end', () => {
       if (aborted) return
@@ -337,11 +338,12 @@ function handleLang(req, res) {
   if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
   if (!checkRateLimit(req)) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
   req.setEncoding('utf-8')
-  let body = '', aborted = false
+  let body = '', aborted = false, receivedBytes = 0
   req.on('data', chunk => {
     if (aborted) return
+    receivedBytes += Buffer.byteLength(chunk, 'utf8')
+    if (receivedBytes > 16) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Body too large' })); req.resume(); return }
     body += chunk
-    if (Buffer.byteLength(body, 'utf8') > 16) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Body too large' })); req.resume() }
   })
   req.on('end', () => {
     if (aborted) return
@@ -382,22 +384,26 @@ function handleEvent(req, res) {
   res.setHeader('Cache-Control', 'no-store')
   setCors(res, req.headers.origin, 'POST, OPTIONS')
   if (req.method === 'OPTIONS') return handlePreflight(req, res)
-  if (req.method !== 'POST') { res.statusCode = 405; return res.end(JSON.stringify({ error: 'Method not allowed' })) }
+  if (req.method !== 'POST') { res.setHeader('Allow', 'POST, OPTIONS'); res.statusCode = 405; return res.end(JSON.stringify({ error: 'Method not allowed' })) }
   const reqOriginE = req.headers.origin
   if (reqOriginE && !isAllowedOrigin(reqOriginE)) { res.statusCode = 403; return res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })) }
   if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
   if (!checkRateLimit(req)) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
   req.setEncoding('utf-8')
-  let body = '', aborted = false
+  let body = '', aborted = false, receivedBytes = 0
   req.on('data', chunk => {
     if (aborted) return
+    receivedBytes += Buffer.byteLength(chunk, 'utf8')
+    if (receivedBytes > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.resume(); return }
     body += chunk
-    if (Buffer.byteLength(body, 'utf8') > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.resume() }
   })
   req.on('end', () => {
     if (aborted) return
     try {
       const parsed = JSON.parse(body)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        res.statusCode = 400; return res.end(JSON.stringify({ ok: false, error: 'Invalid payload' }))
+      }
       const eventName = typeof parsed.event === 'string' ? parsed.event : ''
       let agents
       if (eventName === 'custom' && parsed.role && parsed.status) {
@@ -512,11 +518,11 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/api/health') {
     res.setHeader('Content-Type', 'application/json')
     res.setHeader('Cache-Control', 'no-store')
-    setCors(res, req.headers.origin)
+    setCors(res, req.headers.origin, 'GET, OPTIONS')
     if (req.method === 'OPTIONS') return handlePreflight(req, res)
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; return res.end() }
     const stats = getSessionStats(path.dirname(STATUS_PATH), process.cwd())
-    return res.end(JSON.stringify({ ok: true, uptime: Math.floor((Date.now() - SERVER_START) / 1000), ...stats }))
+    return res.end(JSON.stringify({ ok: true, uptime: Math.floor(process.uptime()), ...stats }))
   }
   return serveStatic(req, res)
 })

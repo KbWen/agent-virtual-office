@@ -210,18 +210,19 @@ function officeStatusPlugin() {
             return
           }
           req.setEncoding('utf-8')
-          let body = ''
-          let aborted = false
+          let body = '', aborted = false, receivedBytes = 0
           const MAX_BODY = 16 * 1024
           req.on('data', chunk => {
             if (aborted) return
-            body += chunk
-            if (Buffer.byteLength(body, 'utf8') > MAX_BODY) {
+            receivedBytes += Buffer.byteLength(chunk, 'utf8')
+            if (receivedBytes > MAX_BODY) {
               aborted = true
               res.statusCode = 413
               res.end(JSON.stringify({ ok: false, error: 'Body too large' }))
               req.resume()
+              return
             }
+            body += chunk
           })
           req.on('end', () => {
             if (aborted) return
@@ -368,19 +369,19 @@ function officeStatusPlugin() {
             return
           }
           req.setEncoding('utf-8')
-          let body = ''
+          let body = '', langAborted = false, langReceivedBytes = 0
           const MAX_LANG_BODY = 16  // lang codes are tiny
-          let langAborted = false
           req.on('data', chunk => {
             if (langAborted) return
-            body += chunk
-            if (Buffer.byteLength(body, 'utf8') > MAX_LANG_BODY) {
+            langReceivedBytes += Buffer.byteLength(chunk, 'utf8')
+            if (langReceivedBytes > MAX_LANG_BODY) {
               langAborted = true
               res.statusCode = 413
               res.end(JSON.stringify({ ok: false, error: 'Body too large' }))
               req.resume()
               return
             }
+            body += chunk
           })
           req.on('end', () => {
             if (langAborted) return
@@ -470,17 +471,20 @@ function officeStatusPlugin() {
         }
 
         req.setEncoding('utf-8')
-        let body = ''
-        let aborted = false
+        let body = '', aborted = false, receivedBytes = 0
         req.on('data', chunk => {
           if (aborted) return
+          receivedBytes += Buffer.byteLength(chunk, 'utf8')
+          if (receivedBytes > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.resume(); return }
           body += chunk
-          if (Buffer.byteLength(body, 'utf8') > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.resume() }
         })
         req.on('end', () => {
           if (aborted) return
           try {
             const parsed = JSON.parse(body)
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+              res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid payload' })); return
+            }
             const eventName = typeof parsed.event === 'string' ? parsed.event : ''
 
             let agents
@@ -547,7 +551,7 @@ function officeStatusPlugin() {
           res.statusCode = 405; res.end(JSON.stringify({ error: 'Method not allowed' })); return
         }
         const stats = getSessionStats(path.dirname(statusPath), process.cwd())
-        res.end(JSON.stringify({ ok: true, uptime: process.uptime(), ...stats }))
+        res.end(JSON.stringify({ ok: true, uptime: Math.floor(process.uptime()), ...stats }))
       })
 
       // Sweep rate-limiter map so it doesn't grow unbounded under IP rotation.
