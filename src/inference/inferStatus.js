@@ -558,12 +558,16 @@ export function startStatusIntegration(store) {
       pushEventBatch(updates.map(u => ({ role: u.agentId, status: u.status, task: u.task, hint: u.hint || null })))
     } else if (msg.activeCount > 0) {
       const ids = distributeFallbackCount(msg.activeCount)
-      s.applyExternalStatus(
-        ids.map(id => ({ agentId: id, status: 'working', task: null, label: null })),
-        { skipHintDismiss }
-      )
+      const fallbackUpdates = ids.map(id => ({ agentId: id, status: 'working', task: null, label: null }))
+      s.applyExternalStatus(fallbackUpdates, { skipHintDismiss })
       s.setStatusSource('fallback')
       s.setIntegrationSource?.(msg.source || 'fallback')
+
+      // Feed mood engine for the count-only path too. A count-only message (e.g. a
+      // '#count=8' hash, with no role keys) produces zero routed agents but N active
+      // workers — without this the mood engine never sees those events and mood stays
+      // permanently 'idle' even while the office shows 8 busy characters.
+      pushEventBatch(fallbackUpdates.map(u => ({ role: u.agentId, status: u.status, task: null, hint: null })))
     }
 
     if ('workflow' in msg) s.setActiveWorkflow(msg.workflow ?? null)
@@ -654,11 +658,12 @@ export function startStatusIntegration(store) {
         }
       }
     }
-    // If all external entries cleared, revert to organic
-    if (Object.keys(store.getState().externalStatus).length === 0 && store.getState().statusSource !== 'organic') {
-      store.getState().setStatusSource('organic')
-      store.getState().setActiveWorkflow(null)
-    }
+    // Reverting to 'organic' is owned by clearExternalStatus: its single-id branch
+    // already sets statusSource:'organic' + activeWorkflow:null + integrationSource:null
+    // once it removes the LAST external entry. Re-doing it here would be redundant
+    // (the work is done) and incomplete (it never clears integrationSource), leaving
+    // an inconsistent state where statusSource flips back but the stale source label
+    // lingers. Let clearExternalStatus be the sole owner of the organic transition.
   }, 5000)
 
   // Apply initial state from URL params
