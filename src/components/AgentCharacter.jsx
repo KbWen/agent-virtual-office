@@ -704,14 +704,20 @@ function AgentCharacter({ agent }) {
     } else {
       movingRef.current = false
       setIsWalking(false)
-      // Apply deferred behavior now that character has arrived at destination
+      // Apply deferred behavior now that character has arrived at destination.
       const pending = pendingBehaviorRef.current
       if (pending) {
         pendingBehaviorRef.current = null
-        store.setAgentBehavior(id, pending.behaviorId, pending.expression, pending.bubble)
-        // Clear bubble after a while
-        if (pending.bubble) {
-          setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(pending.duration * 0.5, 4000))
+        // If a group event took over while this character was walking (the groupTarget
+        // effect redirects the in-flight walk), the deferred behavior is stale — applying
+        // it would overwrite the group event's behavior/bubble with whatever doSchedule
+        // had queued. officeLife owns behavior during group events; drop the pending one.
+        if (!store.agents[id]?.inGroupEvent) {
+          store.setAgentBehavior(id, pending.behaviorId, pending.expression, pending.bubble)
+          // Clear bubble after a while
+          if (pending.bubble) {
+            setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(pending.duration * 0.5, 4000))
+          }
         }
       }
     }

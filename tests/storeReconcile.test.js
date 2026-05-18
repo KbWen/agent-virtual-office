@@ -88,3 +88,30 @@ describe('applyExternalStatus — multi-session ghost reconciliation (R63)', () 
     expect(s.agents['feat-x~qa']).toBeTruthy()
   })
 })
+
+describe('addHandoff — unique ids (R65)', () => {
+  beforeEach(() => useOfficeStore.setState({ handoffs: [] }))
+
+  it('assigns a unique id to every handoff even when added in the same millisecond', () => {
+    const { addHandoff } = useOfficeStore.getState()
+    // Date.now() returns the same value for back-to-back synchronous calls — the
+    // monotonic counter must still produce distinct ids.
+    addHandoff('dev', 'qa')
+    addHandoff('pm', 'arch')
+    addHandoff('ops', 'res')
+    const ids = useOfficeStore.getState().handoffs.map(h => h.id)
+    expect(new Set(ids).size).toBe(3)  // all distinct — no React key collision
+  })
+
+  it('removeHandoff deletes ONLY the targeted handoff, not same-tick siblings', () => {
+    const { addHandoff, removeHandoff } = useOfficeStore.getState()
+    addHandoff('dev', 'qa')
+    addHandoff('pm', 'arch')
+    const [first, second] = useOfficeStore.getState().handoffs
+    // Completing one animation must not collaterally kill the other.
+    removeHandoff(first.id)
+    const remaining = useOfficeStore.getState().handoffs
+    expect(remaining).toHaveLength(1)
+    expect(remaining[0].id).toBe(second.id)
+  })
+})

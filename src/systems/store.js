@@ -179,6 +179,13 @@ function mkActivity(entry) {
   return { id: ++_activityId, timestamp: Date.now(), ...entry }
 }
 
+// Monotonic id for handoff animations. MUST NOT be Date.now(): two handoffs added
+// in the same millisecond (multiple agents picking 'pass-document' on the same tick,
+// or an event handler firing pass-document for several participants) would share an
+// id — colliding the React key in <FlyingDocuments> and causing removeHandoff() to
+// delete BOTH animations when one completes.
+let _handoffId = 0
+
 // Behaviors worth logging to the activity feed (skip mundane ones like idle)
 const LOGGABLE_BEHAVIORS = new Set([
   'typing', 'reading-screen', 'writing-notes', 'whiteboard', 'research',
@@ -536,7 +543,7 @@ export const useOfficeStore = create((set) => ({
   handoffs: [],
   addHandoff: (from, to) =>
     set((s) => {
-      const next = [...s.handoffs, { id: Date.now(), from, to, startTime: Date.now() }]
+      const next = [...s.handoffs, { id: ++_handoffId, from, to, startTime: Date.now() }]
       return { handoffs: next.length > 20 ? next.slice(-20) : next }
     }),
   removeHandoff: (id) =>
