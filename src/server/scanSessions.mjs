@@ -30,6 +30,56 @@ function pathsEqual(a, b) {
   return isWin ? a.toLowerCase() === b.toLowerCase() : a === b
 }
 
+// ─── mtime-based parse cache ──────────────────────────────────────────────
+// scanAndMerge runs on every GET /api/status poll, every SSE connect, and every
+// file-watcher debounce. It used to readFileSync + JSON.parse EVERY status file on
+// EVERY call. In the typical case — one active worktree — a single edit changes one
+// file, yet all the others were re-read and re-parsed for nothing.
+//
+// Root-cause fix: cache parsed payloads keyed on (mtimeMs, size). A statSync is far
+// cheaper than readFileSync+JSON.parse (no buffer allocation, no UTF-8 decode, no JSON
+// parse). When a file's stat signature is unchanged since the last scan, reuse the
+// cached parsed object — turning per-call work from O(all sessions) into O(changed
+// sessions). Atomic rename writes always bump mtime; size is a second discriminator so
+// a same-coarse-tick rewrite of different length is still detected.
+const _parseCache = new Map()  // fullPath -> { mtimeMs, size, parsed }
+const PARSE_CACHE_MAX = 256
+
+/**
+ * Read + parse a status file with an mtime/size cache. Returns the parsed object,
+ * or null when the file cannot be stat'd / read / parsed (caller skips it — same as
+ * the previous inline try/catch `continue`). The returned object is the SHARED cached
+ * instance — callers MUST treat it as read-only (scanAndMerge already only spreads /
+ * reads fields, never mutates a session's `data`).
+ */
+function readSessionFileCached(fullPath) {
+  let st
+  try {
+    st = fs.statSync(fullPath)
+  } catch {
+    return null  // file vanished between readdir and stat
+  }
+  const cached = _parseCache.get(fullPath)
+  if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size) {
+    return cached.parsed
+  }
+  let parsed
+  try {
+    parsed = JSON.parse(fs.readFileSync(fullPath, 'utf-8'))
+  } catch {
+    // Drop any stale cache entry for this path; a malformed file is re-read next call
+    // (malformed files are the rare exception, not the hot path — not worth caching).
+    _parseCache.delete(fullPath)
+    return null
+  }
+  // Bounded prune: worktree count is realistically small (<30); 256 is generous head-
+  // room. When exceeded, clear the whole cache — a cold rebuild costs one normal scan
+  // and keeps the map from growing unbounded as transient worktree slugs come and go.
+  if (_parseCache.size >= PARSE_CACHE_MAX) _parseCache.clear()
+  _parseCache.set(fullPath, { mtimeMs: st.mtimeMs, size: st.size, parsed })
+  return parsed
+}
+
 /**
  * Scan, dedup, and merge all active session files.
  *
@@ -55,8 +105,8 @@ export function scanAndMerge(dir, projectRoot) {
     for (const file of files) {
       if (!STATUS_FILE_RE.test(file)) continue
       try {
-        const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
-        const parsed = JSON.parse(raw)
+        const parsed = readSessionFileCached(path.join(dir, file))
+        if (!parsed) continue  // unreadable / unparsable — skip (cache miss returns null)
         const seq = parseInt(parsed._seq, 10)
         // Skip stale or implausibly far future (e.g. NTP jump)
         if (!seq || now - seq > STALE_MS || seq > now + FUTURE_MS) continue
@@ -201,8 +251,8 @@ export function getSessionStats(dir, projectRoot) {
   for (const file of files) {
     if (!STATUS_FILE_RE.test(file)) continue
     try {
-      const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
-      const parsed = JSON.parse(raw)
+      const parsed = readSessionFileCached(path.join(dir, file))
+      if (!parsed) continue  // shared mtime/size cache — skip unreadable files
       const seq = parseInt(parsed._seq, 10)
       if (!seq || now - seq > STALE_MS || seq > now + FUTURE_MS) continue
       if (parsed.source === 'file-watcher') {
