@@ -77,7 +77,12 @@ export function normalizeStatusMessage(raw) {
     const agents = Array.isArray(raw.agents)
       ? raw.agents.map(sanitizeAgent).filter(Boolean)
       : []
-    const activeCount = agents.filter(a => a.status === 'working' || a.status === 'blocked').length
+    // Count active agents with a plain loop — `.filter(...).length` allocates a
+    // throwaway intermediate array on every SSE message just to read its length.
+    let activeCount = 0
+    for (const a of agents) {
+      if (a.status === 'working' || a.status === 'blocked') activeCount++
+    }
     const validated = {
       ...raw,
       agents,
