@@ -713,18 +713,24 @@ function AgentCharacter({ agent }) {
   // Handle arriving at a waypoint
   const onWaypointReached = useCallback(() => {
     const store = useOfficeStore.getState()
-    store.setAgentArrived(id)
 
     if (pathRef.current.length > 0) {
       const next = pathRef.current.shift()
       // Continue to next waypoint
       targetPosRef.current = { ...next }
+      // Merge "arrived at this waypoint" + "retarget to next" into one store write.
+      // The old code did setAgentArrived() then setAgentTarget() — two set() calls,
+      // two subscriber wake-ups per intermediate waypoint. advanceAgentWaypoint snaps
+      // position onto the reached target and sets the next leg in a single set().
       if (visualPosRef.current) {
         const facing = calcFacing(visualPosRef.current.x, visualPosRef.current.y, next.x, next.y)
-        store.setAgentTarget(id, next, facing)
+        store.advanceAgentWaypoint(id, next, facing)
+      } else {
+        store.advanceAgentWaypoint(id, next)
       }
       startRaf()
     } else {
+      store.setAgentArrived(id)
       movingRef.current = false
       setIsWalking(false)
       // Apply deferred behavior now that character has arrived at destination.

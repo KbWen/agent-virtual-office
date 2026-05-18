@@ -603,23 +603,36 @@ export function startStatusIntegration(store) {
     // "Hooks not installed" signal — keep the setup prompt visible (see shouldSkipHintDismiss).
     const skipHintDismiss = shouldSkipHintDismiss(msg)
 
+    // The integration-channel fields (statusSource, integrationSource, activeWorkflow)
+    // are passed through applyExternalStatus's meta so the whole update lands in ONE
+    // store set() instead of four. `hasWorkflow` is a separate flag because `workflow`
+    // can legitimately be null — `'workflow' in msg` is the presence test, distinct
+    // from a workflow value of null.
+    const hasWorkflow = 'workflow' in msg
+
     if (updates.length > 0) {
       s.applyExternalStatus(updates, {
         source: msg.source || 'external',
         seq: msg._seq || null,
         skipHintDismiss,
+        statusSource: 'external',
+        integrationSource: msg.source || 'external',
+        hasWorkflow,
+        workflow: msg.workflow ?? null,
       })
-      s.setStatusSource('external')
-      s.setIntegrationSource?.(msg.source || 'external')
 
       // Feed mood engine — batch to recompute mood once instead of once per agent
       pushEventBatch(updates.map(u => ({ role: u.agentId, status: u.status, task: u.task, hint: u.hint || null })))
     } else if (msg.activeCount > 0) {
       const ids = distributeFallbackCount(msg.activeCount)
       const fallbackUpdates = ids.map(id => ({ agentId: id, status: 'working', task: null, label: null }))
-      s.applyExternalStatus(fallbackUpdates, { skipHintDismiss })
-      s.setStatusSource('fallback')
-      s.setIntegrationSource?.(msg.source || 'fallback')
+      s.applyExternalStatus(fallbackUpdates, {
+        skipHintDismiss,
+        statusSource: 'fallback',
+        integrationSource: msg.source || 'fallback',
+        hasWorkflow,
+        workflow: msg.workflow ?? null,
+      })
 
       // Feed mood engine for the count-only path too. A count-only message (e.g. a
       // '#count=8' hash, with no role keys) produces zero routed agents but N active
@@ -635,24 +648,28 @@ export function startStatusIntegration(store) {
       // and 5-min expiresAt — the office shows finished worktree sessions as still busy.
       // updates is empty → `present` is empty → ALL session-carrying agents are evicted,
       // which is correct: an all-done multi-session payload means none are active.
+      // If the eviction leaves zero external agents, transition statusSource back to
+      // 'organic' immediately. Otherwise the store keeps statusSource:'external' (a green
+      // "live" dot) over an empty office for up to STALENESS_TIMEOUT (2 min) until the
+      // staleness timer fires clearExternalStatus. clearExternalStatus only flips to
+      // 'organic' when it itself empties externalStatus — here applyExternalStatus does the
+      // emptying. `clearSourceIfEmpty` makes applyExternalStatus decide this INSIDE its own
+      // reducer (it knows the post-eviction externalStatus), so the source/workflow reset
+      // lands in the SAME set() — no second store write, no extra subscriber wake-up.
       s.applyExternalStatus([], {
         source: 'multi-session',
         seq: msg._seq || null,
         skipHintDismiss,
+        clearSourceIfEmpty: true,
+        hasWorkflow,
+        workflow: msg.workflow ?? null,
       })
-      // If that eviction left zero external agents, transition statusSource back to
-      // 'organic' immediately. Otherwise the store keeps statusSource:'external' (a green
-      // "live" dot) over an empty office for up to STALENESS_TIMEOUT (2 min) until the
-      // staleness timer fires clearExternalStatus. clearExternalStatus only flips to
-      // 'organic' when it itself empties externalStatus — here applyExternalStatus did the
-      // emptying, so nothing flips the source without this explicit check.
-      if (Object.keys(store.getState().externalStatus).length === 0) {
-        s.setStatusSource('organic')
-        s.setIntegrationSource?.(null)
-      }
+    } else if (hasWorkflow) {
+      // No agent updates and no fallback count, but the message still carries a
+      // workflow field (e.g. a workflow-only hash). Apply it as a standalone single
+      // set() — the prior code reached this via the trailing setActiveWorkflow call.
+      s.setActiveWorkflow(msg.workflow ?? null)
     }
-
-    if ('workflow' in msg) s.setActiveWorkflow(msg.workflow ?? null)
 
     resetStalenessTimer()
   }

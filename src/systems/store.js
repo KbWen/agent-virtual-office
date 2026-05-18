@@ -347,6 +347,30 @@ export const useOfficeStore = create((set) => ({
       }
     }),
 
+  // Snap the agent onto its current target AND set the next waypoint target in ONE set().
+  // A multi-waypoint path fires onWaypointReached on every intermediate point, which used
+  // to call setAgentArrived + setAgentTarget back-to-back — two store writes, two full
+  // subscriber wake-ups per waypoint. They are a single logical "advance to next leg"
+  // transition, so merge them: snap position to the just-reached target, then immediately
+  // retarget. One set() spreads the agent once instead of twice.
+  advanceAgentWaypoint: (id, nextTarget, facing) =>
+    set((s) => {
+      const agent = s.agents[id]
+      if (!agent) return s
+      return {
+        agents: {
+          ...s.agents,
+          [id]: {
+            ...agent,
+            position: { ...agent.targetPosition },
+            targetPosition: nextTarget,
+            isMoving: true,
+            facing: facing || agent.facing,
+          },
+        },
+      }
+    }),
+
   updateTime: () => {
     set((s) => {
       const now = new Date()
@@ -578,10 +602,38 @@ export const useOfficeStore = create((set) => ({
       const log = activities.length > 0
         ? [...activities, ...s.activityLog].slice(0, 50)
         : s.activityLog
+      // Coalesce the integration-channel field writes into THIS single set().
+      // applyMessage previously called applyExternalStatus + setStatusSource +
+      // setIntegrationSource + setActiveWorkflow as four separate store writes,
+      // each waking every subscriber (zustand fires listeners synchronously per
+      // set(), independent of React 18 batching). They always change together for
+      // one incoming message, so fold them in here — one set(), one wake-up.
+      // Each is applied only when meta carries it AND the value actually differs,
+      // so an unchanged field is omitted (no spurious invalidation).
+      const integrationPatch = {}
+      // clearSourceIfEmpty (multi-session empty payload): when this eviction leaves
+      // zero external agents, the integration channel went silent — revert to 'organic'
+      // here rather than in a follow-up store write. Takes precedence over meta.statusSource.
+      const revertToOrganic = meta.clearSourceIfEmpty && Object.keys(ext).length === 0
+      if (revertToOrganic) {
+        if (s.statusSource !== 'organic') integrationPatch.statusSource = 'organic'
+        if (s.integrationSource !== null) integrationPatch.integrationSource = null
+      } else {
+        if (meta.statusSource !== undefined && meta.statusSource !== s.statusSource) {
+          integrationPatch.statusSource = meta.statusSource
+        }
+        if (meta.integrationSource !== undefined && (meta.integrationSource || null) !== s.integrationSource) {
+          integrationPatch.integrationSource = meta.integrationSource || null
+        }
+      }
+      if (meta.hasWorkflow && (meta.workflow ?? null) !== s.activeWorkflow) {
+        integrationPatch.activeWorkflow = meta.workflow ?? null
+      }
       return {
         externalStatus: ext, agents, activityLog: log, dailyDoneLedger,
         hasEverReceivedStatus: meta.skipHintDismiss ? s.hasEverReceivedStatus : true,
         ...(evictedSelected ? { selectedAgent: null } : {}),
+        ...integrationPatch,
       }
     }),
 
