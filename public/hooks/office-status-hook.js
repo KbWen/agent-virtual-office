@@ -595,7 +595,10 @@ function processEvent(event) {
   // UserPromptSubmit is exempt: it is the event that legitimately clears _stopped, and
   // suppressing it would prevent the office from showing the PM re-entering planning on
   // rapid back-to-back prompts (very common in normal usage).
-  if (hookEvent !== 'UserPromptSubmit') {
+  // SubagentStart is also exempt: a subagent launch arriving within 30s of Stop represents
+  // *new* work starting (the user's new turn triggered it). Blocking it drops the subagent
+  // entirely — no skill context saved, wrong character animates, workflow never set.
+  if (hookEvent !== 'UserPromptSubmit' && hookEvent !== 'SubagentStart') {
     try {
       const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
       const stoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
@@ -631,19 +634,22 @@ function processEvent(event) {
       : existingPreToolPromptId,
   }
 
-  // Write with retry (Windows file locking can cause EBUSY on rename)
+  // Write with retry (Windows file locking can cause EBUSY on rename).
+  // UserPromptSubmit retries harder (3 attempts) because it advances _promptId for
+  // straggler detection — a dropped UPS write silently disables that guard for the turn.
   const dir = path.dirname(STATUS_FILE)
   const json = JSON.stringify(output, null, 2)
   const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+  const writeAttempts = hookEvent === 'UserPromptSubmit' ? 3 : 1
+  let writeOk = false
   try {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(tmp, json)
-    fs.renameSync(tmp, STATUS_FILE)
-  } catch {
-    // Rename failed (EBUSY / file locked) — write directly as fallback
-    try { fs.writeFileSync(STATUS_FILE, json) } catch {}
-    try { fs.unlinkSync(tmp) } catch {}
-  }
+    for (let i = 0; i < writeAttempts && !writeOk; i++) {
+      try { fs.writeFileSync(tmp, json); fs.renameSync(tmp, STATUS_FILE); writeOk = true } catch {}
+      if (!writeOk) { try { fs.writeFileSync(STATUS_FILE, json); writeOk = true } catch {} }
+    }
+    try { if (!writeOk) fs.unlinkSync(tmp) } catch {}
+  } catch {}
 }
 
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)

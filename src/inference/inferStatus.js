@@ -152,7 +152,7 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
     if (resp.status === 304) { state.consecutive404 = 0; return { ok: true, unchanged: true } }
     if (!resp.ok) {
       if (resp.status === 404) {
-        state.consecutive404++
+        state.consecutive404 = Math.min(state.consecutive404 + 1, 30)
       } else {
         // Non-404 errors (401, 500, etc.) — don't back off, just skip this cycle
         state.consecutive404 = 0
@@ -187,7 +187,7 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
     if (msg) { try { callback(msg) } catch {} }
     return { ok: true, delivered: Boolean(msg) }
   } catch {
-    state.consecutive404++
+    state.consecutive404 = Math.min(state.consecutive404 + 1, 30)
     return { ok: false, networkError: true }
   } finally {
     state.inFlight = false
@@ -230,7 +230,7 @@ function startFilePolling(callback, baseIntervalMs = 1000, onProbe = null) {
       } else if (result?.unchanged || result?.duplicate || result?.empty || result?.parseError) {
         pollingState.idlePolls = (pollingState.idlePolls || 0) + 1
         if (pollingState.idlePolls >= 5) {
-          currentIntervalMs = Math.min(currentIntervalMs * 2, 8000)
+          currentIntervalMs = Math.min(currentIntervalMs * 2, Math.max(8000, baseIntervalMs))
         }
       }
       schedulePoll()
@@ -545,7 +545,10 @@ export function startStatusIntegration(store) {
   }
 
   const sseCleanup = startSSEListening(handleIncoming, handleProbe, () => {
-    // SSE permanently failed — stop the slow heartbeat poller and restart at fast rate
+    // SSE permanently failed — stop the slow heartbeat poller and restart at fast rate.
+    // Guard against teardown races: if the component is already unmounted (torn=true),
+    // a concurrent SSE giveup must not spawn a new poller that leaks outside cleanup.
+    if (torn) return
     if (polling.cleanup) { polling.cleanup(); polling.active = false }
     startFastPolling()
   })
