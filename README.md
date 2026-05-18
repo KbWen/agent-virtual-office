@@ -195,6 +195,34 @@ curl -X POST http://localhost:5174/api/event \
 
 Named events use predefined agents — `role` and `status` are only needed for `custom` events (validated, invalid values return HTTP 400).
 
+#### GitHub Actions example
+
+Add a step to any workflow to light up the office on CI events:
+
+```yaml
+# .github/workflows/deploy.yml
+- name: Notify office — deploy started
+  run: |
+    curl -s -X POST ${{ vars.OFFICE_URL }}/api/event \
+      -H "Content-Type: application/json" \
+      -H "X-Office-Token: ${{ secrets.OFFICE_API_TOKEN }}" \
+      -d '{"event":"deploy-start"}'
+
+- name: Deploy
+  run: npm run deploy
+
+- name: Notify office — deploy result
+  if: always()
+  run: |
+    EVENT=$([[ "${{ job.status }}" == "success" ]] && echo "deploy-success" || echo "deploy-failed")
+    curl -s -X POST ${{ vars.OFFICE_URL }}/api/event \
+      -H "Content-Type: application/json" \
+      -H "X-Office-Token: ${{ secrets.OFFICE_API_TOKEN }}" \
+      -d "{\"event\":\"$EVENT\"}"
+```
+
+Set `OFFICE_URL` (e.g. `http://office.internal:5174`) as a repository variable and `OFFICE_API_TOKEN` as a secret. For self-hosted runners on the same LAN the server is reachable without any extra tunneling.
+
 ### Claude Code Hook Install
 
 The recommended way is the one-click setup command:

@@ -133,6 +133,7 @@ export function createFilePollingState() {
     lastSeq: null,
     consecutive404: 0,
     inFlight: false,
+    idlePolls: 0,      // consecutive polls with no new data (drives adaptive interval)
   }
 }
 
@@ -183,7 +184,7 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
   }
 }
 
-function startFilePolling(callback, intervalMs = 1000, onProbe = null) {
+function startFilePolling(callback, baseIntervalMs = 1000, onProbe = null) {
   // Skip file polling when /api/status can't work:
   // - file:// protocol (no server)
   // - HTTPS page can't fetch HTTP localhost (mixed content)
@@ -200,14 +201,89 @@ function startFilePolling(callback, intervalMs = 1000, onProbe = null) {
   }
 
   const pollingState = createFilePollingState()
-  const timer = setInterval(() => {
-    void pollFileStatusOnce(fetch, pollingState, callback).then((result) => {
+  let currentIntervalMs = baseIntervalMs
+  let timer = null
+  let stopped = false
+
+  function schedulePoll() {
+    if (stopped) return
+    timer = setTimeout(async () => {
+      const result = await pollFileStatusOnce(fetch, pollingState, callback)
       if (onProbe && result) onProbe(result)
+      // Adaptive interval: double after 5 consecutive idle polls, reset on activity.
+      // Idle = unchanged (304/dup), active = delivered a new message.
+      if (result?.delivered) {
+        pollingState.idlePolls = 0
+        currentIntervalMs = baseIntervalMs
+      } else if (result?.unchanged || result?.duplicate || result?.empty) {
+        pollingState.idlePolls = (pollingState.idlePolls || 0) + 1
+        if (pollingState.idlePolls >= 5) {
+          currentIntervalMs = Math.min(currentIntervalMs * 2, 8000)
+        }
+      }
+      schedulePoll()
+    }, currentIntervalMs)
+  }
+
+  schedulePoll()
+  return () => { stopped = true; clearTimeout(timer) }
+}
+
+// SSE listener for /api/status/stream — receives push updates instead of polling.
+// Falls back to HTTP polling if EventSource is unavailable or the endpoint errors.
+// onGiveUp is called with no arguments when the SSE connection permanently fails
+// (5 consecutive errors with no successful event), so the caller can restore fast polling.
+function startSSEListening(callback, onProbe = null, onGiveUp = null) {
+  if (typeof EventSource === 'undefined') return null
+  if (typeof window !== 'undefined') {
+    const proto = window.location.protocol
+    if (proto === 'file:' || (proto === 'https:' && window.location.hostname !== 'localhost')) return null
+  }
+
+  let es = null
+  let reconnectTimer = null
+  let reconnectDelay = 2000
+  let stopped = false
+  let consecutiveErrors = 0
+  const MAX_CONSECUTIVE_ERRORS = 5
+
+  function connect() {
+    if (stopped) return
+    es = new EventSource('/api/status/stream')
+    es.addEventListener('status', (e) => {
+      consecutiveErrors = 0  // successful event resets the error streak
+      reconnectDelay = 2000
+      try {
+        const data = JSON.parse(e.data)
+        const msg = normalizeStatusMessage(data)
+        if (msg) callback(msg)
+        if (onProbe) onProbe({ ok: true, delivered: Boolean(msg) })
+      } catch {}
     })
-    // Back off if server seems down (skip polls but don't kill the interval)
-    // Polling resumes automatically when server comes back (consecutive404 resets on success)
-  }, intervalMs)
-  return () => clearInterval(timer)
+    es.onerror = () => {
+      es.close()
+      es = null
+      if (stopped) return
+      consecutiveErrors++
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        // Endpoint is permanently unavailable — stop reconnecting and signal caller
+        stopped = true
+        if (onGiveUp) onGiveUp()
+        return
+      }
+      // Exponential backoff: 2s → 4s → 8s → 16s → cap at 30s
+      reconnectTimer = setTimeout(connect, reconnectDelay)
+      reconnectDelay = Math.min(reconnectDelay * 2, 30_000)
+    }
+  }
+
+  connect()
+
+  return () => {
+    stopped = true
+    clearTimeout(reconnectTimer)
+    if (es) { es.close(); es = null }
+  }
 }
 
 // ─── URL hash monitoring (passive, no platform cooperation needed) ──────
@@ -404,14 +480,40 @@ export function startStatusIntegration(store) {
   const initial = inferFromParams()
   if (initial) applyMessage(initial)
 
+  // Try SSE first; fall back to 1s polling if SSE isn't available.
+  // When SSE is active, reduce HTTP polling to a 10s heartbeat (catches missed pushes).
+  // If SSE permanently gives up (5 consecutive errors), restart file polling at the fast rate.
+  let filePollingCleanup = null
+  let filePollingActive = false
+
+  function startFastPolling() {
+    if (filePollingActive) return
+    filePollingActive = true
+    filePollingCleanup = startFilePolling(handleIncoming, STATUS_POLL_INTERVAL, handleProbe)
+  }
+
+  const sseCleanup = startSSEListening(handleIncoming, handleProbe, () => {
+    // SSE permanently failed — stop the slow heartbeat poller and restart at fast rate
+    if (filePollingCleanup) { filePollingCleanup(); filePollingActive = false }
+    startFastPolling()
+  })
+
+  if (sseCleanup) {
+    filePollingActive = true
+    filePollingCleanup = startFilePolling(handleIncoming, 10_000, handleProbe)
+  } else {
+    startFastPolling()
+  }
+
   // Start all listeners (active + passive channels)
   const cleanups = [
-    listenForStatusUpdates(handleIncoming),   // postMessage (artifact/embedded)
-    listenBroadcastChannel(handleIncoming),   // cross-tab (CLI opens browser)
-    startPolling(handleIncoming),             // window global (CLI injection)
-    startFilePolling(handleIncoming, STATUS_POLL_INTERVAL, handleProbe), // /api/status (CLI hook → file → vite)
-    listenHashChanges(handleIncoming),        // URL hash (passive, any platform)
-    listenTitleChanges(handleIncoming),       // title monitoring (heuristic)
+    listenForStatusUpdates(handleIncoming),           // postMessage (artifact/embedded)
+    listenBroadcastChannel(handleIncoming),           // cross-tab (CLI opens browser)
+    startPolling(handleIncoming),                     // window global (CLI injection)
+    listenHashChanges(handleIncoming),                // URL hash (passive, any platform)
+    listenTitleChanges(handleIncoming),               // title monitoring (heuristic)
+    () => { if (filePollingCleanup) filePollingCleanup() }, // /api/status fallback
+    ...(sseCleanup ? [sseCleanup] : []),              // SSE push channel
   ]
 
   return () => {

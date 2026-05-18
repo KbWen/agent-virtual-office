@@ -19,10 +19,12 @@ import os from 'node:os'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
+import { scanAndMerge, getSessionStats } from './src/server/scanSessions.mjs'
 
 // ─── Inline validation (mirrors src/utils/normalizePost.js + src/systems/constants.js) ─
-// Kept inline so server.mjs has zero dependencies on src/ at runtime.
+// Kept inline so server.mjs has zero dependencies on src/ at runtime for normalizePost.
 // Parity is verified by tests/normalizePost.server.test.js — update BOTH when changing.
+// Note: session scan/merge logic is in src/server/scanSessions.mjs (shared with vite.config.js).
 const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
 const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
 const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
@@ -162,6 +164,24 @@ function nextSeq() {
 const isWin = process.platform === 'win32'
 function pathsEqual(a, b) { return isWin ? a.toLowerCase() === b.toLowerCase() : a === b }
 
+// ─── SSE clients ──────────────────────────────────────────────────────────────
+const sseClients = new Set()
+
+function broadcastSSE(merged) {
+  if (sseClients.size === 0) return
+  const payload = `event: status\ndata: ${JSON.stringify(merged)}\n\n`
+  for (const client of [...sseClients]) {
+    try { client.write(payload) } catch { sseClients.delete(client) }
+  }
+}
+
+setInterval(() => {
+  if (sseClients.size === 0) return
+  for (const client of [...sseClients]) {
+    try { client.write(':heartbeat\n\n') } catch { sseClients.delete(client) }
+  }
+}, 30_000)
+
 // ─── CORS + auth ─────────────────────────────────────────────────────────────
 const LOOPBACK_RE = /^https?:\/\/(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?$/i
 
@@ -262,66 +282,8 @@ function handleStatus(req, res) {
   if (req.method === 'GET') {
     try {
       const clientEtag = req.headers['if-none-match']
-      const dir = path.dirname(STATUS_PATH)
-      const now = Date.now()
-      const sessions = []
-
-      function scanSessions(strict) {
-        if (!fs.existsSync(dir)) return
-        for (const file of fs.readdirSync(dir)) {
-          if (!file.match(/^office-status(-[^.]+)?\.json$/)) continue
-          try {
-            const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
-            const parsed = JSON.parse(raw)
-            const seq = parseInt(parsed._seq, 10)
-            if (!seq || now - seq > 300000 || seq > now + 60000) continue
-            if (strict) {
-              if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), path.resolve(process.cwd()))) continue
-              if (!parsed._cwd && file !== 'office-status.json') continue
-            }
-            if (parsed.source === 'file-watcher') continue
-            const slug = file === 'office-status.json' ? 'main'
-              : file.replace(/^office-status-/, '').replace(/\.json$/, '')
-            sessions.push({ slug, data: parsed })
-          } catch {}
-        }
-      }
-
-      scanSessions(true)
-      if (sessions.length === 0) scanSessions(false)
-      if (sessions.length === 0) return res.end('null')
-
-      // Dedup bare main if it's a hook duplicate
-      if (sessions.length > 1) {
-        const mainIdx = sessions.findIndex(s => s.slug === 'main')
-        if (mainIdx !== -1) {
-          const mainSeq = parseInt(sessions[mainIdx].data._seq, 10) || 0
-          const mainWorkflow = sessions[mainIdx].data.workflow
-          const isDup = sessions.some((s, i) => i !== mainIdx && Math.abs((parseInt(s.data._seq, 10) || 0) - mainSeq) < 2000)
-          const hasUniqueWorkflow = mainWorkflow && !sessions.some((s, i) => i !== mainIdx && s.data.workflow === mainWorkflow)
-          if (isDup && !hasUniqueWorkflow) sessions.splice(mainIdx, 1)
-        }
-      }
-
-      let merged
-      if (sessions.length === 1) {
-        merged = { ...sessions[0].data }
-        delete merged._cwd
-      } else {
-        const PRI = { blocked: 0, working: 1, done: 2, idle: 3 }
-        const allAgents = []
-        let workflow = null
-        for (const { slug, data } of sessions) {
-          if (!workflow && data.workflow) workflow = data.workflow
-          const pick = (data.agents || [])
-            .filter(a => a.status === 'working' || a.status === 'blocked')
-            .sort((a, b) => (PRI[a.status] ?? 9) - (PRI[b.status] ?? 9))[0]
-          if (pick) allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
-        }
-        const mergedSeq = sessions.reduce((max, { data }) => { const s = parseInt(data._seq, 10); return Number.isFinite(s) && s > max ? s : max }, 0)
-        merged = { _seq: String(mergedSeq || Date.now()), type: 'office-status', agents: allAgents, activeCount: allAgents.filter(a => a.status === 'working' || a.status === 'blocked').length, workflow, source: 'multi-session', sessionCount: sessions.length }
-      }
-
+      const merged = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
+      if (!merged) return res.end('null')
       const data = JSON.stringify(merged)
       const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
       if (clientEtag === etag) { res.statusCode = 304; return res.end() }
@@ -351,6 +313,8 @@ function handleStatus(req, res) {
         if (!atomicWrite(STATUS_PATH, JSON.stringify(normalized, null, 2))) {
           res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
         }
+        const ssePayload = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
+        if (ssePayload) broadcastSSE(ssePayload)
         res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
       } catch { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' })) }
     })
@@ -456,6 +420,8 @@ function handleEvent(req, res) {
       if (!atomicWrite(STATUS_PATH, JSON.stringify(output, null, 2))) {
         res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
       }
+      const ssePayload = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
+      if (ssePayload) broadcastSSE(ssePayload)
       res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
     } catch { res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' })) }
   })
@@ -521,6 +487,24 @@ const server = http.createServer((req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff')
   const url = new URL(req.url, 'http://x')
   if (url.pathname === '/api/status') return handleStatus(req, res)
+  if (url.pathname === '/api/status/stream') {
+    if (req.method !== 'GET') { res.statusCode = 405; return res.end() }
+    setCors(res, req.headers.origin)
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('X-Accel-Buffering', 'no')
+    res.flushHeaders?.()
+    sseClients.add(res)
+    req.on('close', () => sseClients.delete(res))
+    req.on('error', () => sseClients.delete(res))
+    res.on('error', () => sseClients.delete(res))
+    const snapshot = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
+    if (snapshot) {
+      try { res.write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`) }
+      catch { sseClients.delete(res) }
+    }
+    return
+  }
   if (url.pathname === '/api/lang')   return handleLang(req, res)
   if (url.pathname === '/api/event')  return handleEvent(req, res)
   if (url.pathname === '/api/health') {
@@ -529,7 +513,8 @@ const server = http.createServer((req, res) => {
     setCors(res, req.headers.origin)
     if (req.method === 'OPTIONS') return handlePreflight(req, res)
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; return res.end() }
-    return res.end(JSON.stringify({ ok: true, uptime: Math.floor((Date.now() - SERVER_START) / 1000) }))
+    const stats = getSessionStats(path.dirname(STATUS_PATH), process.cwd())
+    return res.end(JSON.stringify({ ok: true, uptime: Math.floor((Date.now() - SERVER_START) / 1000), ...stats }))
   }
   return serveStatic(req, res)
 })
@@ -584,6 +569,26 @@ server.on('error', (err) => {
   else console.error('\n  Server error:', err.message, '\n')
   process.exit(1)
 })
+
+// Watch ~/.claude/ for hook-written status file changes and broadcast via SSE.
+// Hooks write directly to disk (not through POST), so fs.watch is the only way
+// to push those updates to connected SSE clients without polling.
+{
+  const watchDir = path.dirname(STATUS_PATH)
+  let debounceTimer = null
+  try {
+    if (!fs.existsSync(watchDir)) fs.mkdirSync(watchDir, { recursive: true })
+    fs.watch(watchDir, { persistent: false }, (event, filename) => {
+      if (!filename || !filename.match(/^office-status(-[^.]+)?\.json$/)) return
+      if (sseClients.size === 0) return
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        const merged = scanAndMerge(watchDir, process.cwd())
+        if (merged) broadcastSSE(merged)
+      }, 80)  // debounce: atomic rename fires two events on some platforms
+    })
+  } catch {}
+}
 
 // ─── Stale session cleanup (runs every 10 min, not in the GET hot path) ──────
 setInterval(() => {

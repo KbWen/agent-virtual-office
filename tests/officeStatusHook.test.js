@@ -262,8 +262,38 @@ describe('extractContext (hook)', () => {
   })
 })
 
-// Import skill context helpers for testing
-const { skillContextPath, saveSkillContext, readSkillContext, clearSkillContext } = await import('../public/hooks/office-status-hook.js')
+// Import skill context helpers and sanitizeId for testing
+const { skillContextPath, saveSkillContext, readSkillContext, clearSkillContext, sanitizeId } = await import('../public/hooks/office-status-hook.js')
+
+describe('sanitizeId (path-traversal safety)', () => {
+  it('allows safe alphanumeric IDs unchanged', () => {
+    expect(sanitizeId('agent-review-001')).toBe('agent-review-001')
+    expect(sanitizeId('agent_plan_2')).toBe('agent_plan_2')
+  })
+
+  it('replaces path traversal sequences with underscores', () => {
+    const safe = sanitizeId('../../../etc/passwd')
+    // Must not contain slashes or dots — path cannot escape ~/.claude/
+    expect(safe).not.toMatch(/[./\\]/)
+    // Each non-alphanumeric char becomes '_': '../../../' = 9 chars → 9 underscores
+    expect(safe).toBe('_________etc_passwd')
+  })
+
+  it('truncates to 64 characters', () => {
+    const long = 'a'.repeat(100)
+    expect(sanitizeId(long).length).toBe(64)
+  })
+
+  it('returns "unknown" for non-string input', () => {
+    expect(sanitizeId(null)).toBe('unknown')
+    expect(sanitizeId(undefined)).toBe('unknown')
+    expect(sanitizeId(42)).toBe('unknown')
+  })
+
+  it('returns "unknown" for empty string (nothing left after sanitization)', () => {
+    expect(sanitizeId('')).toBe('unknown')
+  })
+})
 
 describe('skill context', () => {
   it('saves and reads skill context by agent_id', () => {

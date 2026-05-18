@@ -410,12 +410,14 @@ function processEvent(event) {
     }
     case 'PreToolUse': {
       // Suppress if Stop fired and no new UserPromptSubmit has fired yet.
-      // Use a 30s window (not a strict boolean) so a failed write can't permanently
-      // wedge the guard — it self-heals once 30s have elapsed since _seq was written.
+      // Use a 30s window so a failed write can't permanently wedge the guard.
+      // _stoppedAt is a dedicated timestamp written by Stop; fall back to _seq for
+      // files written before this field was added. Future _seq (monotonic counter
+      // overshoot) cannot wedge the guard because we use _stoppedAt preferentially.
       try {
         const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-        const seq = parseInt(cur._seq, 10)
-        if (cur._stopped && !Number.isNaN(seq) && Date.now() - seq < 30_000) return
+        const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
+        if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       // If inside a subagent with skill context, prefer the skill's role
@@ -429,11 +431,11 @@ function processEvent(event) {
     }
     case 'PostToolUse': {
       // Suppress straggler PostToolUse events that arrive after Stop.
-      // Use a 30s window (not a strict boolean) — same rationale as PreToolUse.
+      // Same _stoppedAt guard as PreToolUse — see comment above.
       try {
         const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-        const seq = parseInt(cur._seq, 10)
-        if (cur._stopped && !Number.isNaN(seq) && Date.now() - seq < 30_000) return
+        const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
+        if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       const skillCtx = readSkillContext(agentId)
@@ -486,6 +488,7 @@ function processEvent(event) {
         const output = {
           _seq: nextSeq(),
           _stopped: true,
+          _stoppedAt: Date.now(),
           _cwd: process.cwd(),
           type: 'office-status',
           agents: doneAgents,
@@ -517,6 +520,7 @@ function processEvent(event) {
           _cwd: process.cwd(),
           _seq: nextSeq(),
           _stopped: true,
+          _stoppedAt: Date.now(),
         }
         const dir = path.dirname(STATUS_FILE)
         try {
@@ -599,6 +603,6 @@ function processEvent(event) {
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)
 if (typeof module !== 'undefined') {
   module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
-    shortFile, shortCommand, extractContext,
+    shortFile, shortCommand, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext }
 }
