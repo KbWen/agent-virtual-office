@@ -85,20 +85,25 @@ describe('pollFileStatusOnce', () => {
     expect(callback).not.toHaveBeenCalled()
   })
 
-  it('resets backoff after a 304 Not Modified response', async () => {
+  it('resets backoff and skipTick after a 304 Not Modified response', async () => {
+    // skipTick drives the 1-in-3 recovery cadence; set it to 2 so the next call (→3) runs
     const state = createFilePollingState()
-    state.consecutive404 = 12  // in backoff, but 12 % 3 === 0 so this poll runs
+    state.consecutive404 = 12
+    state.skipTick = 2
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 304, headers: { get: () => null } })
     const callback = vi.fn()
 
     const result = await pollFileStatusOnce(fetchImpl, state, callback)
 
     expect(result).toMatchObject({ ok: true, unchanged: true })
-    expect(state.consecutive404).toBe(0)  // server is alive — clear backoff
+    expect(state.consecutive404).toBe(0)   // server is alive — clear backoff
+    expect(state.skipTick).toBe(0)         // also reset so next outage starts fresh
     expect(callback).not.toHaveBeenCalled()
   })
 
   it('resets backoff after a successful fetch', async () => {
+    // At consecutive404=11, skipTick advances each call; every 3rd tick allows a real poll.
+    // Tick 1 (skipTick→1): skip. Tick 2 (skipTick→2): skip. Tick 3 (skipTick→3, 3%3=0): runs.
     const state = createFilePollingState()
     state.consecutive404 = 11
     const callback = vi.fn()
@@ -108,31 +113,31 @@ describe('pollFileStatusOnce', () => {
       jsonData: { type: 'office-status', _seq: 'fresh', agents: [{ role: 'qa', status: 'done' }] },
     }))
 
-    await pollFileStatusOnce(skippedFetch, state, callback)
+    // First two calls skipped (skipTick 1, 2 — both non-multiples of 3)
+    state.inFlight = false
+    await pollFileStatusOnce(skippedFetch, state, callback)  // skipTick → 1
+    state.inFlight = false
+    await pollFileStatusOnce(skippedFetch, state, callback)  // skipTick → 2
     expect(skippedFetch).not.toHaveBeenCalled()
 
-    state.consecutive404 = 12
+    // Third call: skipTick reaches 3 (3 % 3 === 0) → poll runs
+    state.inFlight = false
     await pollFileStatusOnce(successFetch, state, callback)
 
     expect(successFetch).toHaveBeenCalledOnce()
     expect(state.consecutive404).toBe(0)
+    expect(state.skipTick).toBe(0)
     expect(callback).toHaveBeenCalledOnce()
   })
 
   it('caps consecutive404 at 30 so a persistently unreachable server does not ratchet forever', async () => {
-    // H2 fix: cap=30 is a multiple of 3 so the % 3 backoff skip still fires at the ceiling
-    // (30 % 3 === 0 → poll runs), allowing the office to retry a recovered server every
-    // 3rd cycle indefinitely. A non-multiple cap (e.g. 29) would black-hole polling permanently.
-    // Force the counter through the multiples-of-3 run positions to reach the cap.
+    // skipTick drives cadence; every 3rd call is a real poll attempt even in backoff.
+    // The counter grows to the cap via those recovery-attempt polls that also fail.
     const state = createFilePollingState()
     const failFetch = vi.fn().mockRejectedValue(new Error('network'))
     for (let i = 0; i < 200; i++) {
       state.inFlight = false
-      // Only call when the backoff logic would allow a poll (≤10 or multiple of 3)
-      if (state.consecutive404 <= 10 || state.consecutive404 % 3 === 0) {
-        await pollFileStatusOnce(failFetch, state, vi.fn())
-      }
-      // Skipped polls don't call the function and don't increment the counter
+      await pollFileStatusOnce(failFetch, state, vi.fn())
     }
     expect(state.consecutive404).toBeLessThanOrEqual(30)
   })
@@ -142,9 +147,7 @@ describe('pollFileStatusOnce', () => {
     const notFoundFetch = vi.fn().mockResolvedValue({ ok: false, status: 404, headers: { get: () => null } })
     for (let i = 0; i < 200; i++) {
       state.inFlight = false
-      if (state.consecutive404 <= 10 || state.consecutive404 % 3 === 0) {
-        await pollFileStatusOnce(notFoundFetch, state, vi.fn())
-      }
+      await pollFileStatusOnce(notFoundFetch, state, vi.fn())
     }
     expect(state.consecutive404).toBeLessThanOrEqual(30)
   })

@@ -132,6 +132,7 @@ export function createFilePollingState() {
     lastEtag: null,
     lastSeq: null,
     consecutive404: 0,
+    skipTick: 0,       // separate tick counter for backoff cadence (not consecutive404)
     inFlight: false,
     idlePolls: 0,      // consecutive polls with no new data (drives adaptive interval)
   }
@@ -139,9 +140,14 @@ export function createFilePollingState() {
 
 export async function pollFileStatusOnce(fetchImpl, state, callback) {
   if (state.inFlight) return { ok: true, skipped: true, reason: 'in-flight' }
-  // Back off when server is unreachable (skip every other poll after 10 failures)
-  if (state.consecutive404 > 10 && state.consecutive404 % 3 !== 0) {
-    return { ok: false, skipped: true, reason: 'backoff' }
+  // Back off when server is unreachable: skip 2 of every 3 ticks after 10 consecutive failures.
+  // Uses a separate skipTick counter (incremented on every call including skips) so the
+  // recovery poll fires unconditionally every 3rd tick regardless of consecutive404 value.
+  // If consecutive404 drove the modulo instead, it would freeze at 11 (11%3=2, never advances)
+  // and recovery polls would never run.
+  if (state.consecutive404 > 10) {
+    state.skipTick = (state.skipTick || 0) + 1
+    if (state.skipTick % 3 !== 0) return { ok: false, skipped: true, reason: 'backoff' }
   }
 
   state.inFlight = true
@@ -149,18 +155,18 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
     const headers = {}
     if (state.lastEtag) headers['If-None-Match'] = state.lastEtag
     const resp = await fetchImpl('/api/status', { headers })
-    if (resp.status === 304) { state.consecutive404 = 0; return { ok: true, unchanged: true } }
+    if (resp.status === 304) { state.consecutive404 = 0; state.skipTick = 0; return { ok: true, unchanged: true } }
     if (!resp.ok) {
       if (resp.status === 404) {
         state.consecutive404 = Math.min(state.consecutive404 + 1, 30)
       } else {
         // Non-404 errors (401, 500, etc.) — don't back off, just skip this cycle
-        state.consecutive404 = 0
+        state.consecutive404 = 0; state.skipTick = 0
       }
       return { ok: false, status: resp.status }
     }
 
-    state.consecutive404 = 0
+    state.consecutive404 = 0; state.skipTick = 0
     const prevEtag = state.lastEtag
     state.lastEtag = resp.headers.get('ETag')
 
@@ -474,7 +480,7 @@ export function startStatusIntegration(store) {
       s.setIntegrationSource?.(msg.source || 'fallback')
     }
 
-    if (msg.workflow) s.setActiveWorkflow(msg.workflow)
+    if ('workflow' in msg) s.setActiveWorkflow(msg.workflow)
 
     resetStalenessTimer()
   }

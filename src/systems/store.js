@@ -479,13 +479,18 @@ export const useOfficeStore = create((set) => ({
   setActiveWorkflow: (name) => set({ activeWorkflow: name }),
   markIntegrationProbe: ({ ok }) =>
     set((s) => {
+      const h = s.integrationHealth
+      const failures = ok ? 0 : h.consecutiveFailures + 1
+      const nextState = ok ? 'online' : (failures >= 3 ? 'offline' : 'degraded')
+      // Skip update when nothing material changed — avoids re-rendering ControlPanel on
+      // every SSE event (which calls onProbe on each delivered status message).
+      if (nextState === h.state && failures === h.consecutiveFailures) return {}
       const now = Date.now()
-      const failures = ok ? 0 : s.integrationHealth.consecutiveFailures + 1
       return {
         integrationHealth: {
-          state: ok ? 'online' : (failures >= 3 ? 'offline' : 'degraded'),
-          lastSuccessAt: ok ? now : s.integrationHealth.lastSuccessAt,
-          lastErrorAt: ok ? s.integrationHealth.lastErrorAt : now,
+          state: nextState,
+          lastSuccessAt: ok ? now : h.lastSuccessAt,
+          lastErrorAt: ok ? h.lastErrorAt : now,
           consecutiveFailures: failures,
         },
       }
