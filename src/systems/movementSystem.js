@@ -343,7 +343,7 @@ export function needsLocationChange(behaviorId) {
 }
 
 // ─── Anti-overlap system ──────────────────────────────────────────────
-import { MIN_AGENT_DIST, OBSTACLE_PUSH_PX, CORRIDOR_JITTER, DOOR_JITTER } from './constants'
+import { MIN_AGENT_DIST, OBSTACLE_PUSH_PX, CORRIDOR_JITTER, DOOR_JITTER } from './constants.js'
 
 // Get all other agents' current and target positions
 function getOccupiedPositions(agentId, allAgents) {

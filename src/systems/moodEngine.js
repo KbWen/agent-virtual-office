@@ -11,8 +11,8 @@
  * Moods: normal | rushing | frustrated | stuck | smooth | intense | idle
  */
 
-import { useOfficeStore } from './store'
-import { VALID_MOODS } from './constants'
+import { useOfficeStore } from './store.js'
+import { VALID_MOODS } from './constants.js'
 
 const MAX_EVENTS = 20
 const IDLE_TIMEOUT = 180000     // 3 minutes of silence → idle

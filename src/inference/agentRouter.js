@@ -12,7 +12,7 @@ const ROLE_KEYWORDS = {
   qa:       [/test/i, /review/i, /\blint\b/i, /check/i, /verify/i, /validate/i, /quality/i, /bug/i, /assert/i, /coverage/i],
   ops:      [/deploy/i, /ship/i, /release/i, /\bci\b/i, /\bcd\b/i, /infra/i, /monitor/i, /handoff/i, /docker/i, /publish/i],
   res:      [/research/i, /search/i, /explore/i, /learn/i, /analyze/i, /investigate/i, /\bread\b/i, /study/i, /survey/i],
-  gate:     [/gate/i, /guard/i, /security/i, /\bauth\w*/i, /permission/i, /approve/i, /compliance/i, /audit/i, /policy/i],
+  gate:     [/gate/i, /guard/i, /security/i, /\bauth(?:entication?|enticat\w*|oriz\w*|[nz])?\b/i, /permission/i, /approve/i, /compliance/i, /audit/i, /policy/i],
   designer: [/\bdesign\b/i, /\bui\b/i, /\bux\b/i, /style/i, /\bcss\b/i, /layout/i, /visual/i, /brand/i, /icon/i, /figma/i, /sketch/i, /color/i, /font/i, /spacing/i, /typography/i],
 }
 

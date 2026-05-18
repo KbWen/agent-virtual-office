@@ -62,17 +62,31 @@ describe('routeTaskToAgent', () => {
     expect(routeTaskToAgent('grant permission and approve access')).toBe('gate')  // permission+approve=2
   })
 
+  it('matches gate for auth as a word or word-prefix (auth, authn, authz, authentication, authorization)', () => {
+    expect(routeTaskToAgent('auth token required for the endpoint')).toBe('gate')
+    expect(routeTaskToAgent('authn configuration for SSO')).toBe('gate')
+    expect(routeTaskToAgent('authz policy enforcement')).toBe('gate')
+    expect(routeTaskToAgent('authentication required for the endpoint')).toBe('gate')
+    expect(routeTaskToAgent('authorize the new role')).toBe('gate')
+    expect(routeTaskToAgent('authorization flow')).toBe('gate')
+  })
+
+  it('does not match gate for "auth" embedded inside unrelated words', () => {
+    // \bauth regex requires a word boundary before "auth" AND excludes author/authority
+    expect(routeTaskToAgent('write the author biography')).not.toBe('gate')       // author → not gate
+    expect(routeTaskToAgent('oauth setup for provider')).not.toBe('gate')         // oauth has no \b before auth
+  })
+
   it('matches designer keywords', () => {
     expect(routeTaskToAgent('design the onboarding UI')).toBe('designer')
     expect(routeTaskToAgent('update CSS styles for dark mode')).toBe('designer')
     expect(routeTaskToAgent('review the typography and spacing')).toBe('designer')
   })
 
-  it('returns highest-scoring role for multi-keyword tasks', () => {
-    // "implement" (dev) + "test" (qa) — dev wins only if it scores higher
-    // both score 1, so whichever comes first in iteration wins; just assert it returns something
-    const result = routeTaskToAgent('implement and test the feature')
-    expect(result).not.toBeNull()
+  it('breaks multi-keyword ties by FALLBACK_ORDER priority', () => {
+    // "implement" → dev (score 1), "test" → qa (score 1) — FALLBACK_ORDER puts dev before qa
+    // strict-greater tie-break keeps the first → dev
+    expect(routeTaskToAgent('implement and test the feature')).toBe('dev')
   })
 
   it('returns null for unrecognized task with no matches', () => {

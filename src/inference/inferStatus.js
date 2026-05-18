@@ -11,9 +11,9 @@
  * Legacy:   { type: 'office-vibe', agent, command, phase } (auto-converted)
  */
 
-import { routeExternalAgents, distributeFallbackCount, routeTaskToAgent } from './agentRouter'
-import { pushEventBatch, setMoodOverride, resetMood } from '../systems/moodEngine'
-import { VALID_ROLES, VALID_STATUSES, STATUS_POLL_INTERVAL } from '../systems/constants'
+import { routeExternalAgents, distributeFallbackCount, routeTaskToAgent } from './agentRouter.js'
+import { pushEventBatch, setMoodOverride, resetMood } from '../systems/moodEngine.js'
+import { VALID_ROLES, VALID_STATUSES, STATUS_POLL_INTERVAL } from '../systems/constants.js'
 
 // ─── Message normalization ─────────────────────────────────────────────
 

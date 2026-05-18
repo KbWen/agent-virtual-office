@@ -67,6 +67,11 @@ describe('normalizePost', () => {
   })
 
   describe('full format (type: office-status)', () => {
+    it('full-format agent shape is exactly {role,status,task,label,hint}', () => {
+      const result = normalizePost({ type: 'office-status', agents: [{ role: 'dev', status: 'working' }] })
+      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: null, label: null, hint: null })
+    })
+
     it('passes through valid agents', () => {
       const body = {
         type: 'office-status',

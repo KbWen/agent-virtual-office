@@ -129,6 +129,9 @@ const CASES = [
   { dev: true, qa: 'working' },
   // duplicate roles in full format — first occurrence wins (N3)
   { type: 'office-status', agents: [{ role: 'dev', status: 'working' }, { role: 'dev', status: 'done' }] },
+  // orphan moodDuration must be nulled when mood is invalid
+  { dev: 'working', mood: 'hacked', moodDuration: 5000 },
+  { type: 'office-status', agents: [], mood: '<bad>', moodDuration: 30000 },
 ]
 
 describe('normalizePost server/canonical parity', () => {

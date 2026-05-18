@@ -31,6 +31,7 @@ describe('moodEngine', () => {
   afterEach(() => {
     // Drain pending timers so they don't bleed into the next test's fake-timer queue.
     vi.runOnlyPendingTimers()
+    resetMood()              // clear module state before real-timers restore
     vi.useRealTimers()
   })
 
@@ -75,9 +76,11 @@ describe('moodEngine', () => {
 
   describe('frustrated detection', () => {
     it('detects frustrated when last 3 events are blocked', () => {
-      pushEventBatch([{ role: 'dev', status: 'blocked', task: 'Edit', hint: 'error' }])
-      pushEventBatch([{ role: 'dev', status: 'blocked', task: 'Bash', hint: 'error' }])
-      pushEventBatch([{ role: 'dev', status: 'blocked', task: 'Read', hint: 'error' }])
+      pushEventBatch([
+        { role: 'dev', status: 'blocked', task: 'Edit', hint: 'error' },
+        { role: 'dev', status: 'blocked', task: 'Bash', hint: 'error' },
+        { role: 'dev', status: 'blocked', task: 'Read', hint: 'error' },
+      ])
       expect(getMood()).toBe('frustrated')
     })
   })

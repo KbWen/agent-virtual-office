@@ -60,15 +60,17 @@ function safeEqual(a, b) {
 }
 
 // Atomic write: temp file + rename to prevent partial-read corruption.
-function atomicWrite(filePath, data) {
+function atomicWrite(filePath, content) {
   const tmp = filePath + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
   try {
-    fs.writeFileSync(tmp, data)
+    fs.writeFileSync(tmp, content)
     fs.renameSync(tmp, filePath)
     return true
   } catch {
+    let ok = false
+    try { fs.writeFileSync(filePath, content); ok = true } catch {}
     try { fs.unlinkSync(tmp) } catch {}
-    try { fs.writeFileSync(filePath, data); return true } catch { return false }
+    return ok
   }
 }
 
@@ -103,11 +105,12 @@ export function getAllowedOriginHeader(origin, config = getOfficeApiConfig()) {
 
 export function isAuthorizedOfficeRequest(req, config = getOfficeApiConfig()) {
   if (!config.token) return true
-  const header = req.headers['x-office-token']
-  const auth = req.headers.authorization
-  if (safeEqual(header, config.token)) return true
-  if (typeof auth === 'string' && safeEqual(auth, `Bearer ${config.token}`)) return true
-  return false
+  const h = req.headers['x-office-token']
+  const a = req.headers.authorization
+  // Evaluate both before OR-ing — avoids timing oracle from short-circuit evaluation.
+  const m1 = typeof h === 'string' && safeEqual(h, config.token)
+  const m2 = typeof a === 'string' && safeEqual(a, `Bearer ${config.token}`)
+  return m1 || m2
 }
 
 function officeStatusPlugin() {
@@ -157,6 +160,7 @@ function officeStatusPlugin() {
             res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
             return
           }
+          res.setHeader('Access-Control-Max-Age', '600')
           res.statusCode = 204
           res.end()
           return
@@ -250,11 +254,8 @@ function officeStatusPlugin() {
               // Priority: blocked > working (shows the most urgent state per session)
               const STATUS_PRIORITY = { blocked: 0, working: 1, done: 2, idle: 3 }
               const allAgents = []
-              let latestSeq = 0
               let workflow = null
               for (const { slug, data } of sessions) {
-                const seq = parseInt(data._seq, 10) || 0
-                if (seq > latestSeq) latestSeq = seq
                 if (!workflow && data.workflow) workflow = data.workflow
                 // Pick the single most active agent from this session
                 const active = (data.agents || [])
@@ -264,10 +265,10 @@ function officeStatusPlugin() {
                 if (pick) allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
               }
               merged = {
-                _seq: String(latestSeq || Date.now()),
+                _seq: nextSeq(),
                 type: 'office-status',
                 agents: allAgents,
-                activeCount: allAgents.filter(a => a.status !== 'done').length,
+                activeCount: allAgents.filter(a => a.status === 'working' || a.status === 'blocked').length,
                 workflow,
                 source: 'multi-session',
                 sessionCount: sessions.length,
@@ -363,19 +364,20 @@ function officeStatusPlugin() {
 
       server.middlewares.use('/api/lang', (req, res) => {
         res.setHeader('Content-Type', 'application/json')
-        res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('Cache-Control', 'no-store')
         res.setHeader('X-Content-Type-Options', 'nosniff')
         res.setHeader('Vary', 'Origin')
         const allowedOriginL = getAllowedOriginHeader(req.headers.origin, apiConfig)
         if (allowedOriginL) res.setHeader('Access-Control-Allow-Origin', allowedOriginL)
         res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Office-Token, Authorization')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match, X-Office-Token, Authorization')
         if (req.method === 'OPTIONS') {
           if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
             res.statusCode = 403
             res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
             return
           }
+          res.setHeader('Access-Control-Max-Age', '600')
           res.statusCode = 204
           res.end()
           return
@@ -439,7 +441,7 @@ function officeStatusPlugin() {
           return
         }
         res.statusCode = 405
-        res.end()
+        res.end(JSON.stringify({ error: 'Method not allowed' }))
       })
 
       // ─── /api/event — one-shot CI/CD webhook ────────────────────────────
@@ -457,11 +459,12 @@ function officeStatusPlugin() {
 
       server.middlewares.use('/api/event', (req, res) => {
         res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Cache-Control', 'no-store')
         res.setHeader('X-Content-Type-Options', 'nosniff')
         const allowedOrigin = getAllowedOriginHeader(req.headers.origin, apiConfig)
         if (allowedOrigin) res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
         res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Office-Token, Authorization')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match, X-Office-Token, Authorization')
         res.setHeader('Vary', 'Origin')
 
         if (req.method === 'OPTIONS') {
@@ -470,6 +473,7 @@ function officeStatusPlugin() {
             res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
             return
           }
+          res.setHeader('Access-Control-Max-Age', '600')
           res.statusCode = 204
           res.end()
           return
@@ -534,7 +538,7 @@ function officeStatusPlugin() {
               _cwd: process.cwd(),
               type: 'office-status',
               agents,
-              activeCount: agents.filter(a => a.status !== 'done').length,
+              activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
               workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : eventName,
               source: 'webhook',
             }
@@ -552,6 +556,39 @@ function officeStatusPlugin() {
           }
         })
       })
+
+      server.middlewares.use('/api/health', (req, res) => {
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Cache-Control', 'no-store')
+        res.setHeader('X-Content-Type-Options', 'nosniff')
+        const allowedH = getAllowedOriginHeader(req.headers.origin, apiConfig)
+        if (allowedH) res.setHeader('Access-Control-Allow-Origin', allowedH)
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        res.setHeader('Vary', 'Origin')
+        if (req.method === 'OPTIONS') {
+          if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
+            res.statusCode = 403; res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })); return
+          }
+          res.setHeader('Access-Control-Max-Age', '600')
+          res.statusCode = 204; res.end(); return
+        }
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          res.statusCode = 405; res.end(JSON.stringify({ error: 'Method not allowed' })); return
+        }
+        res.end(JSON.stringify({ ok: true }))
+      })
+
+      // Sweep rate-limiter map so it doesn't grow unbounded under IP rotation.
+      const rlSweep = setInterval(() => {
+        const cutoff = Date.now() - RATE_WINDOW
+        for (const [ip, ts] of postCounts) {
+          const fresh = ts.filter(t => t >= cutoff)
+          if (fresh.length === 0) postCounts.delete(ip)
+          else postCounts.set(ip, fresh)
+        }
+      }, 600_000)
+      if (rlSweep.unref) rlSweep.unref()
+      server.httpServer?.once('close', () => clearInterval(rlSweep))
     }
   }
 }

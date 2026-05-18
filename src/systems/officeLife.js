@@ -1,7 +1,7 @@
 import eventsData from '../config/officeEvents.json'
-import { WAYPOINTS, MEETING_CHAIRS, HOME_POSITIONS } from './movementSystem'
+import { WAYPOINTS, MEETING_CHAIRS, HOME_POSITIONS } from './movementSystem.js'
 import { eventBubble, eventName as getEventName } from '../i18n'
-import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL } from './constants'
+import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL } from './constants.js'
 
 let dailyTimer = null
 let rareTimer = null

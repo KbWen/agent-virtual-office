@@ -1,10 +1,10 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
-import { HOME_POSITIONS, OVERFLOW_POSITIONS } from './movementSystem'
+import { HOME_POSITIONS, OVERFLOW_POSITIONS } from './movementSystem.js'
 import { randomBubble, setNameResolver, behaviorLabel } from '../i18n'
 import { generateContextBubble } from './contextBubble'
 import { detectProjectMode } from './platformDetect'
-import { STATUS_COLORS } from './constants'
+import { STATUS_COLORS } from './constants.js'
 
 export { STATUS_COLORS }
 

@@ -310,10 +310,8 @@ function handleStatus(req, res) {
       } else {
         const PRI = { blocked: 0, working: 1, done: 2, idle: 3 }
         const allAgents = []
-        let latestSeq = 0, workflow = null
+        let workflow = null
         for (const { slug, data } of sessions) {
-          const seq = parseInt(data._seq, 10) || 0
-          if (seq > latestSeq) latestSeq = seq
           if (!workflow && data.workflow) workflow = data.workflow
           const pick = (data.agents || [])
             .filter(a => a.status === 'working' || a.status === 'blocked')
@@ -594,7 +592,11 @@ setInterval(() => {
 
     // Sweep rate-limiter map while we're here (avoids unbounded growth under IP rotation).
     const cutoff = now - RATE_WINDOW
-    for (const [k, v] of postCounts) if (v.start < cutoff) postCounts.delete(k)
+    for (const [k, v] of postCounts) {
+      const fresh = Array.isArray(v) ? v.filter(t => t >= cutoff) : []
+      if (fresh.length === 0) postCounts.delete(k)
+      else postCounts.set(k, fresh)
+    }
 
     for (const file of fs.readdirSync(dir)) {
       if (file === 'office-status.json') continue           // never auto-delete main
