@@ -1,12 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createFilePollingState, pollFileStatusOnce } from '../src/inference/inferStatus.js'
 
-function makeResponse({ ok = true, status = 200, etag = null, jsonData = null }) {
+function makeResponse({ ok = true, status = 200, etag = null, jsonData = null, rawBody = null }) {
+  const body = rawBody ?? (jsonData !== null ? JSON.stringify(jsonData) : 'null')
   return {
     ok,
     status,
     headers: { get: () => etag },
-    json: vi.fn().mockResolvedValue(jsonData),
+    text: vi.fn().mockResolvedValue(body),
   }
 }
 
@@ -23,25 +24,39 @@ describe('pollFileStatusOnce', () => {
     expect(callback).not.toHaveBeenCalled()
   })
 
-  it('skips duplicate _seq payloads on ETag-less servers so external status is not re-applied', async () => {
-    // ETag-less server: _seq dedup is the only guard against re-delivery
+  it('skips duplicate body payloads on ETag-less servers so unchanged content is not re-applied', async () => {
+    // ETag-less server: raw body dedup is the guard against re-delivery (mirrors SSE wire-byte dedup)
+    const body = JSON.stringify({ type: 'office-status', _seq: '1000', agents: [{ role: 'dev', status: 'working' }] })
     const state = createFilePollingState()
     const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(makeResponse({
-        etag: null,
-        jsonData: { type: 'office-status', _seq: 'same', agents: [{ role: 'dev', status: 'working' }] },
-      }))
-      .mockResolvedValueOnce(makeResponse({
-        etag: null,
-        jsonData: { type: 'office-status', _seq: 'same', agents: [{ role: 'dev', status: 'working' }] },
-      }))
+      .mockResolvedValueOnce(makeResponse({ etag: null, rawBody: body }))
+      .mockResolvedValueOnce(makeResponse({ etag: null, rawBody: body }))
     const callback = vi.fn()
 
     await pollFileStatusOnce(fetchImpl, state, callback)
     await pollFileStatusOnce(fetchImpl, state, callback)
 
     expect(callback).toHaveBeenCalledTimes(1)
-    expect(state.lastSeq).toBe('same')
+    expect(state.lastSeq).toBe('1000')
+    expect(state.lastBody).toBe(body)
+  })
+
+  it('delivers when body changes with same _seq and no ETag (MEDIUM-2: same-ms hook writes)', async () => {
+    // Two hook processes write in the same millisecond → identical _seq but different agents.
+    // ETag is stripped by proxy. Body-based dedup must detect the difference and deliver both.
+    const seq = String(Date.now())
+    const bodyA = JSON.stringify({ type: 'office-status', _seq: seq, agents: [{ role: 'dev', status: 'working', label: 'A' }] })
+    const bodyB = JSON.stringify({ type: 'office-status', _seq: seq, agents: [{ role: 'qa', status: 'blocked', label: 'B' }] })
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(makeResponse({ etag: null, rawBody: bodyA }))
+      .mockResolvedValueOnce(makeResponse({ etag: null, rawBody: bodyB }))
+    const callback = vi.fn()
+
+    await pollFileStatusOnce(fetchImpl, state, callback)
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(callback).toHaveBeenCalledTimes(2)
   })
 
   it('delivers when ETag changes even if _seq is unchanged (same-ms hook writes)', async () => {
@@ -73,7 +88,7 @@ describe('pollFileStatusOnce', () => {
     const badJsonFetch = vi.fn().mockResolvedValueOnce({
       ok: true, status: 200,
       headers: { get: () => 'new-etag' },
-      json: vi.fn().mockRejectedValue(new SyntaxError('bad json')),
+      text: vi.fn().mockResolvedValue('{bad json}'),  // valid text() but invalid JSON → parse throws
     })
     const callback = vi.fn()
 

@@ -131,6 +131,7 @@ export function createFilePollingState() {
   return {
     lastEtag: null,
     lastSeq: null,
+    lastBody: null,    // raw JSON text — dedup fallback when ETag is absent (mirrors SSE wire-byte dedup)
     consecutive404: 0,
     skipTick: 0,       // separate tick counter for backoff cadence (not consecutive404)
     inFlight: false,
@@ -170,9 +171,10 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
     const prevEtag = state.lastEtag
     state.lastEtag = resp.headers.get('ETag')
 
-    let data
+    let rawBody, data
     try {
-      data = await resp.json()
+      rawBody = await resp.text()
+      data = JSON.parse(rawBody)
     } catch {
       // Restore the previous ETag so a *changed* body (e.g. recovered valid JSON)
       // is re-fetched on the next poll. An unchanged malformed body harmlessly yields
@@ -181,11 +183,12 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
       return { ok: false, parseError: true }
     }
     if (!data) return { ok: true, empty: true }
-    // Skip _seq dedup when ETag proves the body changed (200 + new ETag is authoritative).
-    // Only fall back to _seq dedup for ETag-less servers where 200 can repeat unchanged content.
+    // Dedup: prefer ETag (server-authoritative), then raw body text (mirrors SSE wire-byte
+    // dedup — guards against same-ms _seq collision when ETag is intermittently absent).
     const etagChanged = state.lastEtag && state.lastEtag !== prevEtag
-    if (!etagChanged && data._seq && data._seq === state.lastSeq) return { ok: true, duplicate: true }
+    if (!etagChanged && rawBody === state.lastBody) return { ok: true, duplicate: true }
 
+    state.lastBody = rawBody
     state.lastSeq = data._seq || null
     const msg = normalizeStatusMessage(data)
     // Invoke callback OUTSIDE the main catch so store/rendering exceptions don't
