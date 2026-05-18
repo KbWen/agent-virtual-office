@@ -579,11 +579,15 @@ function processEvent(event) {
 
   // Re-check _stopped: if Stop ran DURING our processing window (after the entry guard passed),
   // abort rather than overwriting the idle state with stale working/done data.
+  // Fail-closed: ENOENT means first-ever write (safe to proceed); any other error (EBUSY,
+  // EPERM) means Stop's atomic rename is in flight — abort to avoid clobbering idle state.
   try {
     const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
     const stoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
     if (latest._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
-  } catch {}
+  } catch (err) {
+    if (err.code !== 'ENOENT') return  // EBUSY/EPERM = Stop is writing, abort
+  }
 
   const output = {
     _seq: nextSeq(),
