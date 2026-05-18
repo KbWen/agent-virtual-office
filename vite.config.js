@@ -248,6 +248,7 @@ function officeStatusPlugin() {
           return
         }
 
+        res.setHeader('Allow', 'GET, POST, OPTIONS')
         res.statusCode = 405
         res.end(JSON.stringify({ error: 'Method not allowed' }))
       })
@@ -256,9 +257,10 @@ function officeStatusPlugin() {
       // Clients receive an immediate snapshot then pushed updates on every hook write
       // or API POST — no polling needed when connected.
       server.middlewares.use('/api/status/stream', (req, res) => {
-        if (req.method !== 'GET') { res.statusCode = 405; res.end(); return }
+        if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); res.statusCode = 405; res.end(); return }
         const allowedSse = getAllowedOriginHeader(req.headers.origin, apiConfig)
         if (allowedSse) res.setHeader('Access-Control-Allow-Origin', allowedSse)
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
         res.setHeader('Access-Control-Allow-Headers', 'X-Office-Token, Authorization')
         res.setHeader('Vary', 'Origin')
         res.setHeader('Content-Type', 'text/event-stream')
@@ -549,6 +551,7 @@ function officeStatusPlugin() {
           res.statusCode = 204; res.end(); return
         }
         if (req.method !== 'GET' && req.method !== 'HEAD') {
+          res.setHeader('Allow', 'GET, OPTIONS')
           res.statusCode = 405; res.end(JSON.stringify({ error: 'Method not allowed' })); return
         }
         const stats = getSessionStats(path.dirname(statusPath), process.cwd())
@@ -605,22 +608,24 @@ function fileWatcherFallbackPlugin() {
     if (last && now - last.time < DEBOUNCE_MS) return
 
     // Don't write when hooks are actively running. Hooks write to office-status-<slug>.json,
-    // not this bare file, so checking the bare file for 'claude-cli' only catches curl/API
-    // callers. The correct check is whether any recent slugged hook session exists.
-    // (scanAndMerge's strict-pass exclusion is the real dedup, but skipping writes
-    //  reduces filesystem noise and unnecessary SSE broadcasts.)
+    // not this bare file. scanAndMerge's strict-pass exclusion is the real dedup, but
+    // skipping writes reduces filesystem noise and unnecessary SSE broadcasts.
     try {
       const hookDir = path.dirname(statusPath)
-      for (const f of fs.readdirSync(hookDir)) {
+      const hookFiles = fs.readdirSync(hookDir)
+      for (const f of hookFiles) {
         if (!/^office-status-.+\.json$/.test(f)) continue
-        const d = JSON.parse(fs.readFileSync(path.join(hookDir, f), 'utf-8'))
-        if (d.source === 'claude-cli' && d._seq && now - parseInt(d._seq, 10) < 10_000) return
+        try {
+          const d = JSON.parse(fs.readFileSync(path.join(hookDir, f), 'utf-8'))
+          if (d.source === 'claude-cli' && d._seq && now - parseInt(d._seq, 10) < 10_000) return
+        } catch {}  // file may have been deleted/truncated between readdir and read
       }
     } catch {}
-    // Also skip if a POST/curl caller recently wrote to the bare file directly
+    // Also skip if a recent non-file-watcher write was made to the bare file (curl/API/webhook)
     try {
       const existing = JSON.parse(fs.readFileSync(statusPath, 'utf-8'))
-      if (existing.source === 'claude-cli' && existing._seq && now - parseInt(existing._seq, 10) < 10_000) return
+      if (existing.source && existing.source !== 'file-watcher' && existing._seq
+          && now - parseInt(existing._seq, 10) < 10_000) return
     } catch {}
 
     recentEdits.set(role, { file, time: now })

@@ -322,6 +322,7 @@ function handleStatus(req, res) {
     return
   }
 
+  res.setHeader('Allow', 'GET, POST, OPTIONS')
   res.statusCode = 405
   res.end(JSON.stringify({ error: 'Method not allowed' }))
 }
@@ -520,7 +521,7 @@ const server = http.createServer((req, res) => {
     res.setHeader('Cache-Control', 'no-store')
     setCors(res, req.headers.origin, 'GET, OPTIONS')
     if (req.method === 'OPTIONS') return handlePreflight(req, res)
-    if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; return res.end() }
+    if (req.method !== 'GET' && req.method !== 'HEAD') { res.setHeader('Allow', 'GET, OPTIONS'); res.statusCode = 405; return res.end() }
     const stats = getSessionStats(path.dirname(STATUS_PATH), process.cwd())
     return res.end(JSON.stringify({ ok: true, uptime: Math.floor(process.uptime()), ...stats }))
   }
