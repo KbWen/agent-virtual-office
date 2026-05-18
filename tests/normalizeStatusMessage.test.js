@@ -165,6 +165,30 @@ describe('normalizeStatusMessage', () => {
       expect(result.agents[0].role.length).toBe(68)
       expect(result.agents[0].session.length).toBe(64)
     })
+
+    it('R81: caps an oversized `source` from an untrusted office-status message', () => {
+      // `source` is spread uncapped from `raw` and reaches the store via
+      // setIntegrationSource + every isHookOrigin() comparison. An untrusted
+      // in-browser channel (postMessage/BroadcastChannel/window global) must not
+      // be able to inject an unbounded source string. Cap = 200, same as task/label.
+      const big = 's'.repeat(500)
+      const result = normalizeStatusMessage({
+        type: 'office-status',
+        agents: [{ role: 'dev', status: 'working' }],
+        source: big,
+      })
+      expect(result.source.length).toBe(200)
+    })
+
+    it('R81: falls back to the default source when `source` is absent', () => {
+      // Capping must not break the no-source case — withStatusEnvelope still
+      // supplies its fallbackSource ('external') when `source` is omitted.
+      const result = normalizeStatusMessage({
+        type: 'office-status',
+        agents: [{ role: 'dev', status: 'working' }],
+      })
+      expect(result.source).toBe('external')
+    })
   })
 
   describe('legacy office-vibe conversion', () => {
@@ -223,6 +247,24 @@ describe('normalizeStatusMessage', () => {
       expect(result.source).toBe('gemini')
       expect(result.workflow).toBe('Sprint 1')
       expect(result._seq).toEqual(expect.any(String))
+    })
+
+    it('R81: caps an oversized `source` from an untrusted office-vibe message', () => {
+      // office-vibe is reachable from postMessage and the ?source= URL param
+      // (inferFromParams). raw.source flows into withStatusEnvelope's fallbackSource
+      // arg uncapped otherwise — cap it at the same 200-char boundary.
+      const big = 's'.repeat(500)
+      const result = normalizeStatusMessage({
+        type: 'office-vibe',
+        command: 'npm test',
+        source: big,
+      })
+      expect(result.source.length).toBe(200)
+    })
+
+    it('R81: falls back to "legacy" source when office-vibe omits `source`', () => {
+      const result = normalizeStatusMessage({ type: 'office-vibe', command: 'npm test' })
+      expect(result.source).toBe('legacy')
     })
   })
 

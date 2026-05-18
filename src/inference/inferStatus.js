@@ -83,8 +83,17 @@ export function normalizeStatusMessage(raw) {
       agents,
       activeCount,
       workflow: capStr(raw.workflow),
+      // Cap `source` — it is spread uncapped from `raw` and untrusted in-browser
+      // channels (postMessage, BroadcastChannel, window.__office_status__) reach this
+      // branch directly. Without the cap a crafted office-status message injects an
+      // unbounded `source` string into the store (setIntegrationSource) and into every
+      // isHookOrigin() comparison. Mirrors the agent/task/workflow capping already done
+      // here and the slug capping R79 added for office-vibe. capStr falls back to null
+      // when `source` is absent so withStatusEnvelope still applies its fallbackSource.
+      source: capStr(raw.source) || undefined,
       mood: VALID_MOODS.includes(raw.mood) ? raw.mood : undefined,
     }
+    if (validated.source === undefined) delete validated.source
     if (validated.mood === undefined) delete validated.mood
     return withStatusEnvelope(validated)
   }
@@ -109,7 +118,10 @@ export function normalizeStatusMessage(raw) {
         label: null,
       }],
       workflow: capStr(raw.workflow),
-    }, raw.source || 'legacy')
+      // Cap the fallback source: office-vibe is reachable from untrusted channels
+      // (postMessage, ?source= URL param via inferFromParams) and raw.source flows
+      // straight into withStatusEnvelope's `source` field uncapped otherwise.
+    }, capStr(raw.source) || 'legacy')
   }
 
   return null
