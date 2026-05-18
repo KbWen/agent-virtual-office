@@ -315,6 +315,10 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
       es = null
       if (dead) { try { dead.close() } catch {} }
       if (stopped) return
+      // Report failure probe so integrationHealth transitions to degraded/offline.
+      // Without this, health stays frozen at 'online' during outages when SSE is active,
+      // because the success-only 'status' handler is the only path that called onProbe.
+      if (onProbe) onProbe({ ok: false })
       consecutiveErrors++
       if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
         // Endpoint is permanently unavailable — stop reconnecting and signal caller

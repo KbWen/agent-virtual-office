@@ -480,10 +480,11 @@ export const useOfficeStore = create((set) => ({
   markIntegrationProbe: ({ ok }) =>
     set((s) => {
       const h = s.integrationHealth
-      const failures = ok ? 0 : h.consecutiveFailures + 1
+      // Cap at 3 so once 'offline' is reached, further failures are no-ops (no re-render).
+      const failures = ok ? 0 : Math.min(h.consecutiveFailures + 1, 3)
       const nextState = ok ? 'online' : (failures >= 3 ? 'offline' : 'degraded')
       // Skip update when nothing material changed — avoids re-rendering ControlPanel on
-      // every SSE event (which calls onProbe on each delivered status message).
+      // every SSE event or every failed probe once the server is already offline.
       if (nextState === h.state && failures === h.consecutiveFailures) return {}
       const now = Date.now()
       return {
