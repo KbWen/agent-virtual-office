@@ -13,7 +13,10 @@ import {
 } from './TopDownFurniture'
 
 // ─── Sprint Kanban Board ─────────────────────────────────────────────────
-function SprintKanban({ x, y, doneCount = 0 }) {
+// React.memo: PixelOffice re-renders on every minute/hour tick and every
+// agentOrderSignature change. SprintKanban's props (x, y, doneCount) are
+// unchanged on a clock tick, so memo skips re-building its ~25 SVG elements.
+const SprintKanban = React.memo(function SprintKanban({ x, y, doneCount = 0 }) {
   const W = 78, H = 52
   const MAX_CELLS = 6  // 3 rows × 2 per row, leaves row 4 for overflow text
   const filled = Math.min(doneCount, MAX_CELLS)
@@ -55,7 +58,7 @@ function SprintKanban({ x, y, doneCount = 0 }) {
       )}
     </g>
   )
-}
+})
 
 // ─── Flying Document Animation ──────────────────────────────────────────
 function FlyingDocument({ fromPos, toPos, onComplete }) {
@@ -364,7 +367,12 @@ function growthLevel(count) {
 }
 
 // ─── Personalized desk with character-specific items ─────────────────────
-function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0, stickyCount = 0, booksCount = 0, onDeployClick }) {
+// React.memo: each PersonalDesk renders ~80 SVG elements. PixelOffice re-renders
+// on every minute/hour tick and every agentOrderSignature change (an agent
+// walking), none of which alter a desk's props. Without memo all 7 desks
+// re-execute on every such render. The ops desk's onDeployClick is stabilized
+// with useCallback in PixelOffice so its identity stays constant across renders.
+const PersonalDesk = React.memo(function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0, stickyCount = 0, booksCount = 0, onDeployClick }) {
   const W = 60, H = 38
   return (
     <g>
@@ -504,7 +512,7 @@ function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0, stickyCoun
       )}
     </g>
   )
-}
+})
 
 // ─── Night sky visible through windows ───────────────────────────────────────
 function NightSky({ hour }) {
@@ -664,6 +672,13 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     return { coffeeCountMap: coffee, stickyCountMap: sticky, booksCountMap: books }
   }, [deskItemCounts])
   const lightOverlay = getLightingOverlay(hour)
+
+  // Stable handler for the ops desk's deploy button — a fresh inline arrow on
+  // every render would defeat PersonalDesk's React.memo for the ops desk.
+  const handleDeployClick = useCallback(
+    () => triggerInteractiveEvent(useOfficeStore, 'deploy-success'),
+    []
+  )
 
   // Panel mode: auto-adapt viewBox to container shape
   const isPanel = mode === 'panel'
@@ -859,7 +874,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           coffeeCount={coffeeCountMap[d.id] || 0}
           stickyCount={stickyCountMap[d.id] || 0}
           booksCount={booksCountMap[d.id] || 0}
-          onDeployClick={d.id === 'ops' ? () => triggerInteractiveEvent(useOfficeStore, 'deploy-success') : undefined}
+          onDeployClick={d.id === 'ops' ? handleDeployClick : undefined}
         />
       ))}
 
