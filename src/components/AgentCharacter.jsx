@@ -591,6 +591,20 @@ function AgentCharacter({ agent }) {
   const movingStuckRef = useRef(0)
   const pendingBehaviorRef = useRef(null) // deferred behavior for location-based actions
   const [walkFrame, setWalkFrame] = useState(0)
+  // Tracks every fire-and-forget setTimeout (bubble clears, handoff steps) so the
+  // unmount cleanup can cancel them. Without this, a deferred clearBubble/handoff
+  // callback fires up to ~4s after the component unmounts and mutates the store
+  // against a torn-down character.
+  const deferredTimersRef = useRef(new Set())
+  const scheduleDeferred = useCallback((fn, ms) => {
+    const handle = setTimeout(() => {
+      deferredTimersRef.current.delete(handle)
+      if (isUnmountedRef.current) return
+      fn()
+    }, ms)
+    deferredTimersRef.current.add(handle)
+    return handle
+  }, [])
 
   // RAF-based smooth movement — only runs while walking
   const visualPosRef = useRef(null)
@@ -675,15 +689,20 @@ function AgentCharacter({ agent }) {
     rafRef.current = requestAnimationFrame(animate)
   }, [])
 
-  // Cleanup RAF on unmount
+  // Cleanup RAF + deferred timers on unmount
   useEffect(() => {
     isUnmountedRef.current = false
+    const deferred = deferredTimersRef.current
     return () => {
       isUnmountedRef.current = true
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null
       }
+      // Cancel any in-flight bubble-clear / handoff timers so they don't fire
+      // against a torn-down component after unmount.
+      for (const handle of deferred) clearTimeout(handle)
+      deferred.clear()
     }
   }, [])
 
@@ -716,12 +735,12 @@ function AgentCharacter({ agent }) {
           store.setAgentBehavior(id, pending.behaviorId, pending.expression, pending.bubble)
           // Clear bubble after a while
           if (pending.bubble) {
-            setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(pending.duration * 0.5, 4000))
+            scheduleDeferred(() => useOfficeStore.getState().clearBubble(id), Math.min(pending.duration * 0.5, 4000))
           }
         }
       }
     }
-  }, [id, startRaf])
+  }, [id, startRaf, scheduleDeferred])
 
   // Keep ref in sync
   onWaypointReachedRef.current = onWaypointReached
@@ -813,7 +832,7 @@ function AgentCharacter({ agent }) {
         store.setAgentBehavior(id, next.behaviorId, next.expression, next.bubble)
         // Clear bubble after a while
         if (next.bubble) {
-          setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(next.duration * 0.5, 4000))
+          scheduleDeferred(() => useOfficeStore.getState().clearBubble(id), Math.min(next.duration * 0.5, 4000))
         }
       }
 
@@ -823,11 +842,11 @@ function AgentCharacter({ agent }) {
         if (others.length > 0) {
           const targetId = others[Math.floor(Math.random() * others.length)]
           store.addHandoff(id, targetId)
-          setTimeout(() => {
+          scheduleDeferred(() => {
             const s = useOfficeStore.getState()
             if (!s.agents[targetId]?.inGroupEvent) {
               s.setAgentBehavior(targetId, 'reading-screen', 'normal', eventBubble('handoff-received'))
-              setTimeout(() => s.clearBubble(targetId), 3000)
+              scheduleDeferred(() => s.clearBubble(targetId), 3000)
             }
           }, 1500)
         }
@@ -838,7 +857,7 @@ function AgentCharacter({ agent }) {
 
     // ALWAYS schedule next — even if an error occurred above
     timerRef.current = setTimeout(doSchedule, nextDelay)
-  }, [id, startWalkTo])
+  }, [id, startWalkTo, scheduleDeferred])
 
   // Watch for group event movement targets
   const lastGroupTargetRef = useRef(null)

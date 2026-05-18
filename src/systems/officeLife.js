@@ -16,6 +16,11 @@ let activeCancelled = null
 // a click followed by unmount/HMR leaves multi-stage setTimeout callbacks firing
 // against a stale store.
 const interactiveCancellers = new Set()
+// Handles of the per-event deregistration timers (the setTimeout that removes a
+// canceller from interactiveCancellers once the event lifetime elapsed). Tracked so
+// teardown can clearTimeout them — otherwise each leaks as a pending handle until it
+// fires a now-useless Set.delete on an already-cleared Set.
+const interactiveDeregTimers = new Set()
 
 function randomInterval(range) {
   return range[0] + Math.random() * (range[1] - range[0])
@@ -478,8 +483,13 @@ export function triggerInteractiveEvent(store, eventId) {
   executeEvent(store, event, participants, cancelled)
 
   // Deregister once the event's lifetime (plus a margin past the longest deferred
-  // handler step) has elapsed — keeps the Set from growing unbounded.
-  setTimeout(() => interactiveCancellers.delete(cancelled), event.duration + 15000)
+  // handler step) has elapsed — keeps the Set from growing unbounded. The handle is
+  // tracked so startOfficeLife teardown can clear it instead of leaving it pending.
+  const deregTimer = setTimeout(() => {
+    interactiveCancellers.delete(cancelled)
+    interactiveDeregTimers.delete(deregTimer)
+  }, event.duration + 15000)
+  interactiveDeregTimers.add(deregTimer)
 
   return true
 }
@@ -500,6 +510,8 @@ export function startOfficeLife(store) {
     // Cancel any in-flight interactive events from the prior instance.
     for (const c of interactiveCancellers) c.value = true
     interactiveCancellers.clear()
+    for (const t of interactiveDeregTimers) clearTimeout(t)
+    interactiveDeregTimers.clear()
     // Cancelling the prior instance flips its `cancelled` flag, which makes every
     // pending executeEvent cleanup early-return WITHOUT releasing its participants.
     // Release them here so no agent is stranded `inGroupEvent: true` (frozen forever).
@@ -660,6 +672,8 @@ export function startOfficeLife(store) {
     // fire against a torn-down store.
     for (const c of interactiveCancellers) c.value = true
     interactiveCancellers.clear()
+    for (const t of interactiveDeregTimers) clearTimeout(t)
+    interactiveDeregTimers.clear()
     // Flipping `cancelled` makes every pending executeEvent cleanup early-return
     // without releasing its participants. Release them directly so an unmount mid-event
     // never strands an agent `inGroupEvent: true` (doSchedule + watchdog both skip
