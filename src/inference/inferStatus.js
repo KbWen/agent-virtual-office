@@ -13,7 +13,7 @@
 
 import { routeExternalAgents, distributeFallbackCount, routeTaskToAgent } from './agentRouter.js'
 import { pushEventBatch, setMoodOverride, resetMood } from '../systems/moodEngine.js'
-import { VALID_ROLES, VALID_STATUSES, STATUS_POLL_INTERVAL } from '../systems/constants.js'
+import { VALID_ROLES, VALID_STATUSES, VALID_MOODS, STATUS_POLL_INTERVAL } from '../systems/constants.js'
 
 // ─── Message normalization ─────────────────────────────────────────────
 
@@ -32,14 +32,39 @@ function withStatusEnvelope(raw, fallbackSource = 'external') {
   }
 }
 
+const CAP = 200  // max string length for untrusted fields from in-browser channels
+
+function capStr(v) { return typeof v === 'string' ? v.slice(0, CAP) : null }
+
+function sanitizeAgent(a) {
+  if (!a || typeof a !== 'object') return null
+  if (!VALID_ROLES.includes(a.role) || !VALID_STATUSES.includes(a.status)) return null
+  return { role: a.role, status: a.status, task: capStr(a.task), label: capStr(a.label), hint: capStr(a.hint) }
+}
+
 /**
  * Normalize any incoming message to the unified office-status format
  */
 export function normalizeStatusMessage(raw) {
   if (!raw || typeof raw !== 'object') return null
 
-  // New protocol
-  if (raw.type === 'office-status') return withStatusEnvelope(raw)
+  // New protocol — validate envelope so untrusted in-browser channels (postMessage,
+  // BroadcastChannel, window.__office_status__) cannot inject unbounded strings into the store.
+  if (raw.type === 'office-status') {
+    const agents = Array.isArray(raw.agents)
+      ? raw.agents.map(sanitizeAgent).filter(Boolean)
+      : []
+    const activeCount = agents.filter(a => a.status === 'working' || a.status === 'blocked').length
+    const validated = {
+      ...raw,
+      agents,
+      activeCount,
+      workflow: capStr(raw.workflow),
+      mood: VALID_MOODS.includes(raw.mood) ? raw.mood : undefined,
+    }
+    if (validated.mood === undefined) delete validated.mood
+    return withStatusEnvelope(validated)
+  }
 
   // Legacy office-vibe → convert (uses agentRouter for command→role mapping)
   if (raw.type === 'office-vibe') {
@@ -463,7 +488,7 @@ export function startStatusIntegration(store) {
   // Only hook-origin sources share a clock (both produced by Date.now() on the same machine).
   // External sources (postMessage, BroadcastChannel, window global, hash/title) have independent
   // clocks and must not poison lastAppliedSeq or be compared against it for stale-drop.
-  const HOOK_ORIGIN = new Set(['claude-cli', 'multi-session', 'file-watcher'])
+  const HOOK_ORIGIN = new Set(['claude-cli', 'codex-cli', 'multi-session', 'file-watcher'])
   const isHookOrigin = s => HOOK_ORIGIN.has(s)
 
   function applyMessage(msg) {

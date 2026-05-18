@@ -41,6 +41,60 @@ describe('normalizeStatusMessage', () => {
         source: 'codex-cli',
       })
     })
+
+    it('M-1: strips agents with invalid role or status (untrusted in-browser channel)', () => {
+      const msg = {
+        type: 'office-status',
+        agents: [
+          { role: 'hacker', status: 'working' },        // invalid role
+          { role: 'dev', status: 'pwned' },              // invalid status
+          { role: 'dev', status: 'working' },            // valid — kept
+        ],
+      }
+      const result = normalizeStatusMessage(msg)
+      expect(result.agents).toHaveLength(1)
+      expect(result.agents[0].role).toBe('dev')
+    })
+
+    it('M-1: caps oversized label/task/hint strings at 200 chars', () => {
+      const big = 'x'.repeat(500)
+      const msg = {
+        type: 'office-status',
+        agents: [{ role: 'dev', status: 'working', label: big, task: big, hint: big }],
+        workflow: big,
+      }
+      const result = normalizeStatusMessage(msg)
+      expect(result.agents[0].label.length).toBe(200)
+      expect(result.agents[0].task.length).toBe(200)
+      expect(result.agents[0].hint.length).toBe(200)
+      expect(result.workflow.length).toBe(200)
+    })
+
+    it('M-1: validates mood against VALID_MOODS and strips unknown values', () => {
+      const valid = normalizeStatusMessage({ type: 'office-status', agents: [], mood: 'rushing' })
+      expect(valid.mood).toBe('rushing')
+      const invalid = normalizeStatusMessage({ type: 'office-status', agents: [], mood: 'panicking' })
+      expect(invalid.mood).toBeUndefined()
+    })
+
+    it('M-1: activeCount counts only working+blocked agents (not idle)', () => {
+      const msg = {
+        type: 'office-status',
+        agents: [
+          { role: 'dev', status: 'working' },
+          { role: 'qa', status: 'idle' },
+          { role: 'ops', status: 'done' },
+        ],
+      }
+      const result = normalizeStatusMessage(msg)
+      expect(result.activeCount).toBe(1)
+    })
+
+    it('M-1: tolerates non-array agents without throwing', () => {
+      const msg = { type: 'office-status', agents: 'not-an-array' }
+      const result = normalizeStatusMessage(msg)
+      expect(result.agents).toEqual([])
+    })
   })
 
   describe('legacy office-vibe conversion', () => {

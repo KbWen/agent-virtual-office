@@ -6,6 +6,7 @@ const { execSync } = require('child_process')
 
 const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
 const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
+const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
 
 function getSessionSlug() {
   const cwdHash = require('crypto').createHash('md5').update(process.cwd()).digest('hex').slice(0, 4)
@@ -46,11 +47,9 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
     return {
       type: 'office-status',
       agents,
-      activeCount: typeof body.activeCount === 'number'
-        ? body.activeCount
-        : agents.filter((agent) => agent.status !== 'done').length,
+      activeCount: agents.filter((a) => a.status === 'working' || a.status === 'blocked').length,
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
-      mood: typeof body.mood === 'string' ? body.mood : null,
+      mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
       source: body.source || 'codex-cli',
       _seq: body._seq || String(now),
     }
@@ -73,7 +72,7 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
   return {
     type: 'office-status',
     agents,
-    activeCount: agents.filter((agent) => agent.status !== 'done').length,
+    activeCount: agents.filter((a) => a.status === 'working' || a.status === 'blocked').length,
     workflow: body.workflow || null,
     source: body.source || 'codex-cli',
     _seq: body._seq || String(now),
