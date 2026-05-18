@@ -214,6 +214,43 @@ describe('routeExternalAgents', () => {
     expect(result[0].agentId).not.toBe('__proto__')
     expect(['dev', 'qa', 'pm', 'ops', 'arch', 'res', 'designer', 'gate']).toContain(result[0].agentId)
   })
+
+  it('R62: tier 1 routes a multi-session composite role to its own composite id', () => {
+    // Before R62, FALLBACK_ORDER.includes('feat-x~dev') was false → the entry fell
+    // to tier 2 keyword routing and was collapsed onto a base character, destroying
+    // the per-worktree identity.
+    const result = routeExternalAgents([
+      { role: 'feat-x~dev', task: 'run the test suite', status: 'working', session: 'feat-x' },
+    ])
+    expect(result).toHaveLength(1)
+    expect(result[0].agentId).toBe('feat-x~dev')   // NOT keyword-routed to 'qa'
+    expect(result[0].session).toBe('feat-x')
+  })
+
+  it('R62: composite agents from different worktrees never collide', () => {
+    const result = routeExternalAgents([
+      { role: 'feat-a~dev', status: 'working', session: 'feat-a' },
+      { role: 'feat-b~dev', status: 'working', session: 'feat-b' },
+    ])
+    expect(result).toHaveLength(2)
+    expect(result.map(r => r.agentId)).toEqual(['feat-a~dev', 'feat-b~dev'])
+  })
+
+  it('R62: composite role with invalid base segment falls through to tier 3', () => {
+    const result = routeExternalAgents([{ role: 'feat-x~hacker', task: 'xyz', status: 'working' }])
+    expect(result[0].agentId).not.toBe('feat-x~hacker')
+    expect(['dev', 'qa', 'pm', 'ops', 'arch', 'res', 'designer', 'gate']).toContain(result[0].agentId)
+  })
+
+  it('R62: a composite and a bare role with the same base coexist as distinct agents', () => {
+    const result = routeExternalAgents([
+      { role: 'feat-x~dev', status: 'working', session: 'feat-x' },
+      { role: 'dev', status: 'blocked' },
+    ])
+    expect(result).toHaveLength(2)
+    expect(result[0].agentId).toBe('feat-x~dev')
+    expect(result[1].agentId).toBe('dev')
+  })
 })
 
 describe('distributeFallbackCount', () => {

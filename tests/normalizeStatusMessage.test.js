@@ -95,6 +95,62 @@ describe('normalizeStatusMessage', () => {
       const result = normalizeStatusMessage(msg)
       expect(result.agents).toEqual([])
     })
+
+    it('R62: preserves multi-session composite slug~role agents', () => {
+      // scanAndMerge emits agents with role 'slug~role' for multi-worktree views.
+      // Before R62, sanitizeAgent stripped these (VALID_ROLES.includes('feat-x~dev')
+      // is false) — multi-session mode rendered zero agents through the SSE/poll path.
+      const msg = {
+        type: 'office-status',
+        source: 'multi-session',
+        agents: [
+          { role: 'feat-x~dev', status: 'working', session: 'feat-x' },
+          { role: 'hotfix~qa', status: 'blocked', session: 'hotfix' },
+        ],
+      }
+      const result = normalizeStatusMessage(msg)
+      expect(result.agents).toHaveLength(2)
+      expect(result.agents[0].role).toBe('feat-x~dev')
+      expect(result.agents[0].session).toBe('feat-x')
+      expect(result.agents[1].role).toBe('hotfix~qa')
+    })
+
+    it('R62: preserves a slug that itself contains "~" (splits on last separator)', () => {
+      const msg = {
+        type: 'office-status',
+        agents: [{ role: 'feat~nested~dev', status: 'working', session: 'feat~nested' }],
+      }
+      const result = normalizeStatusMessage(msg)
+      expect(result.agents).toHaveLength(1)
+      expect(result.agents[0].role).toBe('feat~nested~dev')
+    })
+
+    it('R62: rejects composite role whose base segment is not a valid role', () => {
+      const msg = {
+        type: 'office-status',
+        agents: [
+          { role: 'feat-x~hacker', status: 'working' },   // invalid base
+          { role: '~dev', status: 'working' },             // empty slug
+          { role: 'feat-x~dev', status: 'working' },       // valid — kept
+        ],
+      }
+      const result = normalizeStatusMessage(msg)
+      expect(result.agents).toHaveLength(1)
+      expect(result.agents[0].role).toBe('feat-x~dev')
+    })
+
+    it('R62: caps an oversized session slug in a composite role', () => {
+      const hugeSlug = 'a'.repeat(500)
+      const msg = {
+        type: 'office-status',
+        agents: [{ role: `${hugeSlug}~dev`, status: 'working', session: hugeSlug }],
+      }
+      const result = normalizeStatusMessage(msg)
+      expect(result.agents).toHaveLength(1)
+      // slug (64) + '~' + 'dev' (3) = 68
+      expect(result.agents[0].role.length).toBe(68)
+      expect(result.agents[0].session.length).toBe(64)
+    })
   })
 
   describe('legacy office-vibe conversion', () => {
@@ -168,6 +224,39 @@ describe('normalizeStatusMessage', () => {
         agents: [{ role: 'dev', status: 'done' }],
       })
       expect(second?._seq).toBe(first?._seq)
+    })
+
+    it('R62: caps oversized task from the URL hash (bypasses sanitizeAgent path)', () => {
+      // buildHashStatusMessage feeds applyExternalStatus WITHOUT going through
+      // normalizeStatusMessage — its own output must enforce the 200-char cap.
+      const big = 'x'.repeat(500)
+      const result = buildHashStatusMessage(`#dev=${encodeURIComponent(big)}`)
+      expect(result.agents).toHaveLength(1)
+      expect(result.agents[0].task.length).toBe(200)
+    })
+
+    it('R62: caps oversized workflow from the URL hash', () => {
+      const big = 'w'.repeat(500)
+      const result = buildHashStatusMessage(`#workflow=${encodeURIComponent(big)}`)
+      expect(result.workflow.length).toBe(200)
+    })
+
+    it('R62: parses count with explicit radix 10 (no octal/hex surprises)', () => {
+      expect(buildHashStatusMessage('#count=08').activeCount).toBe(8)
+    })
+  })
+
+  describe('R62: office-vibe length capping', () => {
+    it('caps an oversized command (task) from office-vibe', () => {
+      const big = 'c'.repeat(500)
+      const result = normalizeStatusMessage({ type: 'office-vibe', command: big })
+      expect(result.agents[0].task.length).toBe(200)
+    })
+
+    it('caps an oversized workflow from office-vibe', () => {
+      const big = 'w'.repeat(500)
+      const result = normalizeStatusMessage({ type: 'office-vibe', workflow: big })
+      expect(result.workflow.length).toBe(200)
     })
   })
 })

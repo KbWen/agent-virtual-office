@@ -33,13 +33,36 @@ function withStatusEnvelope(raw, fallbackSource = 'external') {
 }
 
 const CAP = 200  // max string length for untrusted fields from in-browser channels
+const SLUG_CAP = 64  // max length for a session slug prefix in a composite role id
 
 function capStr(v) { return typeof v === 'string' ? v.slice(0, CAP) : null }
 
+// A role id is either a bare VALID_ROLE ('dev') or a multi-session composite
+// 'slug~role' produced by scanAndMerge (e.g. 'feat-x~dev'). The base role — the
+// segment after the LAST '~' — must be a VALID_ROLE. The slug may itself contain
+// '~', so split on the last separator only. Returns the canonicalized role id
+// (slug capped) or null when the base role is invalid.
+function sanitizeRoleId(role) {
+  if (typeof role !== 'string' || role.length === 0) return null
+  const sep = role.lastIndexOf('~')
+  if (sep === -1) {
+    return VALID_ROLES.includes(role) ? role : null
+  }
+  const slug = role.slice(0, sep)
+  const base = role.slice(sep + 1)
+  if (!slug || !VALID_ROLES.includes(base)) return null
+  return `${slug.slice(0, SLUG_CAP)}~${base}`
+}
+
 function sanitizeAgent(a) {
   if (!a || typeof a !== 'object') return null
-  if (!VALID_ROLES.includes(a.role) || !VALID_STATUSES.includes(a.status)) return null
-  return { role: a.role, status: a.status, task: capStr(a.task), label: capStr(a.label), hint: capStr(a.hint) }
+  const role = sanitizeRoleId(a.role)
+  if (!role || !VALID_STATUSES.includes(a.status)) return null
+  // Preserve session — multi-session merged agents carry their worktree slug here
+  // and applyExternalStatus / routeExternalAgents both depend on it. Cap it: the
+  // slug originates from a filename and is not fully trusted.
+  const session = typeof a.session === 'string' ? a.session.slice(0, SLUG_CAP) : null
+  return { role, status: a.status, task: capStr(a.task), label: capStr(a.label), hint: capStr(a.hint), session }
 }
 
 /**
@@ -66,17 +89,20 @@ export function normalizeStatusMessage(raw) {
     return withStatusEnvelope(validated)
   }
 
-  // Legacy office-vibe → convert (uses agentRouter for command→role mapping)
+  // Legacy office-vibe → convert (uses agentRouter for command→role mapping).
+  // Cap task/workflow here too — office-vibe is reachable from untrusted channels
+  // (postMessage, ?command= URL param) and must not bypass the CAP that the
+  // office-status branch enforces via sanitizeAgent/capStr.
   if (raw.type === 'office-vibe') {
     return withStatusEnvelope({
       type: 'office-status',
       agents: [{
         role: raw.agent || routeTaskToAgent(raw.command) || null,
-        task: raw.command || null,
+        task: capStr(raw.command),
         status: phaseToStatus(raw.phase),
         label: null,
       }],
-      workflow: raw.workflow || null,
+      workflow: capStr(raw.workflow),
     }, raw.source || 'legacy')
   }
 
@@ -389,7 +415,11 @@ export function buildHashStatusMessage(hash) {
     const isStatus = VALID_STATUSES.includes(val)
     agents.push({
       role,
-      task: isStatus ? null : val,
+      // Cap task — the URL hash is fully attacker-controllable and this payload
+      // is delivered to applyExternalStatus WITHOUT passing through the
+      // sanitizeAgent/capStr path that office-status messages get. Without this
+      // cap a crafted #dev=<1MB> hash injects an unbounded string into the store.
+      task: isStatus ? null : capStr(val),
       status: isStatus ? val : 'working',
       label: null,
     })
@@ -400,9 +430,9 @@ export function buildHashStatusMessage(hash) {
   return {
     type: 'office-status',
     agents,
-    activeCount: parseInt(params.get('count')) || 0,
-    workflow: params.get('workflow') || null,
-    source: params.get('source') || 'hash-bridge',
+    activeCount: parseInt(params.get('count'), 10) || 0,
+    workflow: capStr(params.get('workflow')),
+    source: capStr(params.get('source')) || 'hash-bridge',
     _seq: `hash:${rawHash}`,
   }
 }

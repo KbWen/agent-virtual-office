@@ -19,6 +19,18 @@ const ROLE_KEYWORDS = {
 // Stable fallback order for activeCount distribution
 const FALLBACK_ORDER = ['dev', 'qa', 'pm', 'ops', 'arch', 'res', 'designer', 'gate']
 
+// A role id is "explicit" if it is a bare VALID_ROLE or a multi-session composite
+// 'slug~role' whose base (segment after the last '~') is a VALID_ROLE. Composite
+// ids are produced by scanAndMerge for multi-worktree sessions and MUST be routed
+// to their own dynamic character — not keyword-rerouted to a base role, which
+// would collapse every worktree's agent onto a single shared character.
+function isExplicitRoleId(role) {
+  if (typeof role !== 'string' || role.length === 0) return false
+  const sep = role.lastIndexOf('~')
+  if (sep === -1) return FALLBACK_ORDER.includes(role)
+  return sep > 0 && FALLBACK_ORDER.includes(role.slice(sep + 1))
+}
+
 // Legacy command→agent mapping (from old inferStatus.js)
 const COMMAND_TO_AGENT = {
   '/bootstrap': 'pm', '/plan': 'pm', '/spec': 'pm', '/spec-intake': 'pm',
@@ -79,7 +91,8 @@ export function routeExternalAgents(agents) {
   for (const entry of agents) {
     if (!entry || typeof entry !== 'object') continue
     let agentId = null
-    const hasExplicitRole = !!(entry.role && FALLBACK_ORDER.includes(entry.role))
+    // Recognize both bare ('dev') and composite ('feat-x~dev') role ids.
+    const hasExplicitRole = isExplicitRoleId(entry.role)
 
     // Tier 1: explicit role
     if (hasExplicitRole && !assigned.has(entry.role)) {
