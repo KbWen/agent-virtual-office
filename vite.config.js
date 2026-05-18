@@ -257,6 +257,7 @@ function officeStatusPlugin() {
       // Clients receive an immediate snapshot then pushed updates on every hook write
       // or API POST — no polling needed when connected.
       server.middlewares.use('/api/status/stream', (req, res) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff')
         const allowedSse = getAllowedOriginHeader(req.headers.origin, apiConfig)
         if (allowedSse) res.setHeader('Access-Control-Allow-Origin', allowedSse)
         res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -264,6 +265,7 @@ function officeStatusPlugin() {
         res.setHeader('Vary', 'Origin')
         if (req.method === 'OPTIONS') {
           if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
+            res.setHeader('Content-Type', 'application/json')
             res.statusCode = 403; res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })); return
           }
           res.setHeader('Access-Control-Max-Age', '600')

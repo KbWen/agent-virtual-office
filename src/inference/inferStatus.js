@@ -532,7 +532,7 @@ export function startStatusIntegration(store) {
     startFastPolling()
   })
 
-  if (sseCleanup) {
+  if (sseCleanup && !polling.active) {
     polling.active = true
     // null onProbe: when SSE is active it already feeds handleProbe; the 10s
     // heartbeat poller is just a catch-all for missed pushes, not a health signal.

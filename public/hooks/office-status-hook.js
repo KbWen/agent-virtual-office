@@ -577,6 +577,14 @@ function processEvent(event) {
 
   const activeCount = newAgents.filter(a => a.status === 'working' || a.status === 'blocked').length
 
+  // Re-check _stopped: if Stop ran DURING our processing window (after the entry guard passed),
+  // abort rather than overwriting the idle state with stale working/done data.
+  try {
+    const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+    const stoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
+    if (latest._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
+  } catch {}
+
   const output = {
     _seq: nextSeq(),
     _cwd: process.cwd(),
