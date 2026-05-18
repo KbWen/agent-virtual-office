@@ -16,8 +16,13 @@ const ROLE_KEYWORDS = {
   designer: [/\bdesign\b/i, /\bui\b/i, /\bux\b/i, /style/i, /\bcss\b/i, /layout/i, /visual/i, /brand/i, /icon/i, /figma/i, /sketch/i, /color/i, /font/i, /spacing/i, /typography/i],
 }
 
-// Stable fallback order for activeCount distribution
+// Stable fallback order for activeCount distribution. The ARRAY's job is ordered
+// iteration (tier-3 `.find`, routeTaskToAgent's priority loop, distributeFallbackCount's
+// slice). Membership tests belong on a Set: isExplicitRoleId runs once per routed agent
+// on the SSE/poll hot path, and an O(roles) Array.includes is the wrong primitive for an
+// "is this a known role" check — FALLBACK_ROLE_SET makes it O(1).
 const FALLBACK_ORDER = ['dev', 'qa', 'pm', 'ops', 'arch', 'res', 'designer', 'gate']
+const FALLBACK_ROLE_SET = new Set(FALLBACK_ORDER)
 
 // A role id is "explicit" if it is a bare VALID_ROLE or a multi-session composite
 // 'slug~role' whose base (segment after the last '~') is a VALID_ROLE. Composite
@@ -27,8 +32,8 @@ const FALLBACK_ORDER = ['dev', 'qa', 'pm', 'ops', 'arch', 'res', 'designer', 'ga
 function isExplicitRoleId(role) {
   if (typeof role !== 'string' || role.length === 0) return false
   const sep = role.lastIndexOf('~')
-  if (sep === -1) return FALLBACK_ORDER.includes(role)
-  return sep > 0 && FALLBACK_ORDER.includes(role.slice(sep + 1))
+  if (sep === -1) return FALLBACK_ROLE_SET.has(role)
+  return sep > 0 && FALLBACK_ROLE_SET.has(role.slice(sep + 1))
 }
 
 // Legacy command→agent mapping (from old inferStatus.js)
