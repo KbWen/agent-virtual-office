@@ -1,8 +1,16 @@
 import React from 'react'
 
+// All furniture below is wrapped in React.memo. PixelOffice re-renders on every minute/
+// hour clock tick, every activeEvent/activeWorkflow change, and every agentOrderSignature
+// change (an agent stepping). The furniture's props are static literals (or, for
+// WallWindow/DeskLamp, the slow-changing `hour`), so on the overwhelming majority of those
+// re-renders no furniture prop changes — memo skips re-executing each component and
+// re-reconciling its SVG subtree. Clock is intentionally NOT memoized: its `minute` prop
+// changes on every tick, so memo could never hit.
+
 // ─── Desk (top-down view) ────────────────────────────────────────────────
 // facing: 'down' (default, monitor at top) or 'up' (monitor at bottom, for paired desks)
-export function Desk({ x, y, color = '#B8864E', hasMonitor = true, coffeeCount = 0, facing = 'down' }) {
+export const Desk = React.memo(function Desk({ x, y, color = '#B8864E', hasMonitor = true, coffeeCount = 0, facing = 'down' }) {
   const W = 52, H = 34
   const up = facing === 'up'
   return (
@@ -45,11 +53,11 @@ export function Desk({ x, y, color = '#B8864E', hasMonitor = true, coffeeCount =
       {coffeeCount >= 3 && <CoffeeCup x={x + 21} y={y} steaming={false} />}
     </g>
   )
-}
+})
 
 // ─── Desk Cluster (two facing desks) ─────────────────────────────────────
 // topAgent faces down, bottomAgent faces up — they sit across from each other
-export function DeskCluster({ x, topY, bottomY, topCoffee = 0, bottomCoffee = 0, label }) {
+export const DeskCluster = React.memo(function DeskCluster({ x, topY, bottomY, topCoffee = 0, bottomCoffee = 0, label }) {
   return (
     <g>
       {/* Cluster label */}
@@ -62,10 +70,10 @@ export function DeskCluster({ x, topY, bottomY, topCoffee = 0, bottomCoffee = 0,
       <Desk x={x} y={bottomY} facing="up" coffeeCount={bottomCoffee} />
     </g>
   )
-}
+})
 
 // ─── Coffee Cup ──────────────────────────────────────────────────────────
-export function CoffeeCup({ x, y, steaming = true }) {
+export const CoffeeCup = React.memo(function CoffeeCup({ x, y, steaming = true }) {
   return (
     <g>
       <rect x={x} y={y} width={6} height={7} rx={1} fill="#F5E6D3" stroke="#D4C4B0" strokeWidth="0.5" />
@@ -83,10 +91,10 @@ export function CoffeeCup({ x, y, steaming = true }) {
       )}
     </g>
   )
-}
+})
 
 // ─── Bookshelf ───────────────────────────────────────────────────────────
-export function Bookshelf({ x, y, width = 70, rows = 2 }) {
+export const Bookshelf = React.memo(function Bookshelf({ x, y, width = 70, rows = 2 }) {
   const BOOK_COLORS = ['#E24B4A', '#378ADD', '#1D9E75', '#BA7517', '#7F77DD', '#D85A30', '#5DCAA5', '#FF9E9E', '#FFE066']
   const H = rows * 17
   return (
@@ -115,10 +123,10 @@ export function Bookshelf({ x, y, width = 70, rows = 2 }) {
       })}
     </g>
   )
-}
+})
 
 // ─── Plant ───────────────────────────────────────────────────────────────
-export function Plant({ x, y }) {
+export const Plant = React.memo(function Plant({ x, y }) {
   return (
     <g>
       <rect x={x - 5} y={y} width={10} height={9} rx={2} fill="#C4724B" />
@@ -129,10 +137,10 @@ export function Plant({ x, y }) {
       <ellipse cx={x - 2} cy={y - 12} rx={2.5} ry={3.5} fill="#66BB6A" />
     </g>
   )
-}
+})
 
 // ─── Couch ───────────────────────────────────────────────────────────────
-export function Couch({ x, y, width = 80, color = '#7B8FA1' }) {
+export const Couch = React.memo(function Couch({ x, y, width = 80, color = '#7B8FA1' }) {
   return (
     <g>
       <rect x={x} y={y} width={width} height={34} rx={5} fill={color} />
@@ -143,10 +151,10 @@ export function Couch({ x, y, width = 80, color = '#7B8FA1' }) {
       <rect x={x + width - 10} y={y + 9} width={10} height={25} rx={3} fill="#6B7F91" />
     </g>
   )
-}
+})
 
 // ─── Round Coffee Table ───────────────────────────────────────────────────
-export function RoundTable({ x, y, r = 22 }) {
+export const RoundTable = React.memo(function RoundTable({ x, y, r = 22 }) {
   return (
     <g>
       <circle cx={x} cy={y} r={r} fill="#C8965E" stroke="#A07040" strokeWidth="1.5" />
@@ -154,10 +162,10 @@ export function RoundTable({ x, y, r = 22 }) {
       <ellipse cx={x} cy={y} rx={r - 8} ry={r - 10} fill="none" stroke="#B07840" strokeWidth="0.5" opacity="0.4" />
     </g>
   )
-}
+})
 
 // ─── Meeting Table ────────────────────────────────────────────────────────
-export function MeetingTable({ x, y, w = 90, h = 50 }) {
+export const MeetingTable = React.memo(function MeetingTable({ x, y, w = 90, h = 50 }) {
   return (
     <g>
       <rect x={x - w / 2} y={y - h / 2} width={w} height={h} rx={8} fill="#C8965E" stroke="#A07040" strokeWidth="1.5" />
@@ -176,10 +184,10 @@ export function MeetingTable({ x, y, w = 90, h = 50 }) {
       )}
     </g>
   )
-}
+})
 
 // ─── Coffee / Vending Machine ─────────────────────────────────────────────
-export function CoffeeMachine({ x, y }) {
+export const CoffeeMachine = React.memo(function CoffeeMachine({ x, y }) {
   return (
     <g>
       <rect x={x} y={y} width={18} height={26} rx={2} fill="#444" />
@@ -192,10 +200,10 @@ export function CoffeeMachine({ x, y }) {
       <rect x={x + 2} y={y + 23} width={14} height={3} rx={1} fill="#888" />
     </g>
   )
-}
+})
 
 // ─── Water Cooler ─────────────────────────────────────────────────────────
-export function WaterCooler({ x, y }) {
+export const WaterCooler = React.memo(function WaterCooler({ x, y }) {
   return (
     <g>
       <rect x={x - 5} y={y + 6} width={10} height={14} rx={2} fill="#ccc" />
@@ -205,10 +213,10 @@ export function WaterCooler({ x, y }) {
       <circle cx={x + 2} cy={y + 14} r={1.5} fill="#378ADD" opacity="0.7" />
     </g>
   )
-}
+})
 
 // ─── Gate / Security Booth ────────────────────────────────────────────────
-export function GateBooth({ x, y }) {
+export const GateBooth = React.memo(function GateBooth({ x, y }) {
   return (
     <g>
       <rect x={x - 16} y={y - 10} width={32} height={22} rx={3} fill="#888" stroke="#666" strokeWidth="1" />
@@ -219,10 +227,10 @@ export function GateBooth({ x, y }) {
       <text x={x} y={y - 11} textAnchor="middle" fontSize="4.5" fill="white" fontFamily="monospace" fontWeight="bold">GATE</text>
     </g>
   )
-}
+})
 
 // ─── Wall Window ─────────────────────────────────────────────────────────
-export function WallWindow({ x, y, w = 42, h = 26, hour = 12 }) {
+export const WallWindow = React.memo(function WallWindow({ x, y, w = 42, h = 26, hour = 12 }) {
   const isNight = hour >= 19 || hour < 6
   const sky = hour >= 20 ? '#0a0a2a' : hour >= 19 ? '#0f1535' : hour >= 17 ? '#FF8844' : hour >= 7 ? '#87CEEB' : '#0a0a2a'
   return (
@@ -262,10 +270,10 @@ export function WallWindow({ x, y, w = 42, h = 26, hour = 12 }) {
       )}
     </g>
   )
-}
+})
 
 // ─── Desk Lamp (visible at night) ────────────────────────────────────────
-export function DeskLamp({ x, y, on = true }) {
+export const DeskLamp = React.memo(function DeskLamp({ x, y, on = true }) {
   if (!on) return null
   return (
     <g>
@@ -285,10 +293,10 @@ export function DeskLamp({ x, y, on = true }) {
       </circle>
     </g>
   )
-}
+})
 
 // ─── Whiteboard ───────────────────────────────────────────────────────────
-export function Whiteboard({ x, y, w = 65, h = 42 }) {
+export const Whiteboard = React.memo(function Whiteboard({ x, y, w = 65, h = 42 }) {
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} rx={2} fill="#F8F8F0" stroke="#BBB" strokeWidth="1.5" />
@@ -302,10 +310,10 @@ export function Whiteboard({ x, y, w = 65, h = 42 }) {
       <rect x={x} y={y + h} width={w} height={4} rx={0.5} fill="#CCC" />
     </g>
   )
-}
+})
 
 // ─── Server Rack ──────────────────────────────────────────────────────────
-export function ServerRack({ x, y }) {
+export const ServerRack = React.memo(function ServerRack({ x, y }) {
   return (
     <g>
       <rect x={x} y={y} width={24} height={42} rx={2} fill="#2a2a2a" stroke="#222" strokeWidth="1" />
@@ -319,9 +327,10 @@ export function ServerRack({ x, y }) {
       ))}
     </g>
   )
-}
+})
 
 // ─── Clock ────────────────────────────────────────────────────────────────
+// NOT memoized: `minute` changes on every clock tick, so a memo could never hit.
 export function Clock({ x, y, r = 14, hour = 12, minute = 0 }) {
   const hr = ((hour % 12) + minute / 60) / 12 * Math.PI * 2
   const mn = minute / 60 * Math.PI * 2
@@ -350,7 +359,7 @@ export function Clock({ x, y, r = 14, hour = 12, minute = 0 }) {
 }
 
 // ─── Printer ──────────────────────────────────────────────────────────────
-export function Printer({ x, y }) {
+export const Printer = React.memo(function Printer({ x, y }) {
   return (
     <g>
       <rect x={x} y={y} width={20} height={14} rx={2} fill="#DDD" stroke="#BBB" strokeWidth="0.8" />
@@ -359,10 +368,10 @@ export function Printer({ x, y }) {
       <rect x={x + 2} y={y + 5} width={16} height={2} rx={0.5} fill="#AAA" opacity="0.5" />
     </g>
   )
-}
+})
 
 // ─── Rug / Carpet ─────────────────────────────────────────────────────────
-export function Rug({ x, y, w, h, color = '#8B6578' }) {
+export const Rug = React.memo(function Rug({ x, y, w, h, color = '#8B6578' }) {
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} rx={4} fill={color} opacity="0.35" />
@@ -376,4 +385,4 @@ export function Rug({ x, y, w, h, color = '#8B6578' }) {
       ))}
     </g>
   )
-}
+})

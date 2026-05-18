@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react'
 
-export default function BehaviorBubble({ x, y, message }) {
+function BehaviorBubble({ x, y, message }) {
   const [visible, setVisible] = useState(false)
   const [currentMsg, setCurrentMsg] = useState(message)
   const fadeTimerRef = useRef(null)
@@ -80,6 +80,14 @@ export default function BehaviorBubble({ x, y, message }) {
     </g>
   )
 }
+
+// React.memo: AgentCharacter (the parent) re-renders ~30fps while the character walks
+// because its renderPos state updates every other RAF frame. BehaviorBubble's props are
+// x=0 / y=-68 (constant literals) and message (changes a few times per minute), so on a
+// walk-tick re-render none of its props change — memo skips the whole render + the JSX
+// reconciliation of its ~5 SVG elements. The inner useMemo only guards the layout math;
+// React.memo additionally elides the component invocation itself.
+export default React.memo(BehaviorBubble)
 
 // Pure layout derivation — extracted so the memo body stays small and the regex /
 // char-width work is unambiguously a function of the message string alone.

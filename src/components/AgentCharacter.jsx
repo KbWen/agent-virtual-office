@@ -347,7 +347,11 @@ function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing 
 
 // ═══ BEHAVIOR INDICATOR ICONS ═══
 // Small pixel-art icons that appear next to the character based on current behavior
-function BehaviorIndicator({ behavior }) {
+// React.memo: AgentCharacter re-renders on every useLocale / reducedMotion / agentState
+// change. BehaviorIndicator's only prop is `behavior` (a stable string) — memo prevents a
+// parent-triggered re-render when the behavior is unchanged. Its own 600ms `frame` interval
+// still drives the icon animation independently.
+const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
   const [frame, setFrame] = useState(0)
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
 
@@ -564,7 +568,7 @@ function BehaviorIndicator({ behavior }) {
     default:
       return null
   }
-}
+})
 
 // ─── Unicode-aware text width for monospace SVG ──────────────────────
 // CJK chars ~10 units, ASCII ~7 units at fontSize 12 monospace

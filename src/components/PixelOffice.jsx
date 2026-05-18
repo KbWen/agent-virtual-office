@@ -515,7 +515,11 @@ const PersonalDesk = React.memo(function PersonalDesk({ x, y, label, color, vari
 })
 
 // ─── Night sky visible through windows ───────────────────────────────────────
-function NightSky({ hour }) {
+// React.memo: PixelOffice re-renders every minute (the `minute` clock tick). NightSky's
+// only prop is `hour` — its ~20-element SVG tree changes solely when `hour` crosses the
+// 6/19 day-night boundary. Memo skips the rebuild on the 59 of 60 minute-ticks per hour
+// where `hour` is unchanged.
+const NightSky = React.memo(function NightSky({ hour }) {
   if (hour >= 6 && hour < 19) return null
 
   return (
@@ -575,7 +579,7 @@ function NightSky({ hour }) {
       </g>
     </g>
   )
-}
+})
 
 // Static desk positions matching WAYPOINTS — defined outside component to avoid re-creation
 const DESK_DATA = [
