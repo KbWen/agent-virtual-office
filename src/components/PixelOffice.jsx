@@ -669,12 +669,16 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     return cleanup
   }, [])
 
-  // Memoize agent list — only re-sort when IDs change (not on every property update)
+  // Memoize agent list — re-sort only when the order signature changes (an agent's
+  // id set or rounded-y changes), NOT on every property update. `agentOrderSignature`
+  // is derived from Object.keys(s.agents), so the agent id set it represents is exactly
+  // Object.keys(getState().agents) — sort those values directly. The previous code
+  // round-tripped each signature entry through `.split('|', 1)[0]` to recover the id it
+  // had just joined in; that split allocated a throwaway array per agent every time the
+  // signature changed. `agentOrderSignature` stays in the dep array (it is the precise
+  // change trigger); the body just no longer parses it.
   const agentList = useMemo(
-    () => {
-      const agents = useOfficeStore.getState().agents
-      return sortByY(agentOrderSignature.map((entry) => entry.split('|', 1)[0]).map(id => agents[id]).filter(Boolean))
-    },
+    () => sortByY(Object.values(useOfficeStore.getState().agents)),
     [agentOrderSignature]
   )
   // Single memo derives all three id→count maps from the flat selector array.
