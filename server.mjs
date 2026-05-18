@@ -650,6 +650,11 @@ function gracefulShutdown(signal) {
   clearTimeout(_watchDebounce)
   if (_watcherHandle) { try { _watcherHandle.close() } catch {} }
 
+  // B7a: end all open SSE streams so server.close() doesn't wait for them
+  // (SSE responses are never-ending — without this, close() hangs until the 10s hard-exit)
+  for (const c of [...sseClients]) { try { c.end() } catch {} }
+  sseClients.clear()
+
   server.close((err) => {
     if (err) { console.error('  Server close error:', err.message); process.exit(1) }
     console.log('  All connections drained. Exiting cleanly.')
