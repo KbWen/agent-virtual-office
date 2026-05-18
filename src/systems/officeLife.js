@@ -22,6 +22,17 @@ const interactiveCancellers = new Set()
 // fires a now-useless Set.delete on an already-cleared Set.
 const interactiveDeregTimers = new Set()
 
+// id → event lookup, built once at module load. triggerInteractiveEvent previously
+// rebuilt `[...daily, ...rare]` and ran an O(catalog) .find() on every user click of
+// the coffee machine / whiteboard / deploy button. The catalog is static, so resolve
+// it to an O(1) map once instead of allocating + scanning per click.
+const EVENT_BY_ID = (() => {
+  const map = {}
+  for (const e of eventsData.daily || []) map[e.id] = e
+  for (const e of eventsData.rare || []) map[e.id] = e
+  return map
+})()
+
 function randomInterval(range) {
   return range[0] + Math.random() * (range[1] - range[0])
 }
@@ -470,8 +481,7 @@ export function triggerInteractiveEvent(store, eventId) {
   const state = store.getState()
   if (state.isPaused || state.activeEvent) return false
 
-  const allEvents = [...(eventsData.daily || []), ...(eventsData.rare || [])]
-  const event = allEvents.find(e => e.id === eventId)
+  const event = EVENT_BY_ID[eventId]
   if (!event) return false
 
   const participants = pickParticipants(event, state.agents, state.externalStatus)
@@ -641,7 +651,7 @@ export function startOfficeLife(store) {
 
     // 10:00 or 15:00 — Auto tea break
     if (hour === 10 || hour === 15) {
-      const teaEvent = eventsData.daily.find(e => e.id === 'tea-break')
+      const teaEvent = EVENT_BY_ID['tea-break']
       if (teaEvent) {
         const participants = pickParticipants(teaEvent, state.agents, state.externalStatus)
         store.getState().setActiveEvent(teaEvent)
@@ -652,7 +662,7 @@ export function startOfficeLife(store) {
     // Friday 15:00+ — Social boost (handled via behavior weights already, but trigger a group-meeting)
     const day = new Date().getDay()
     if (day === 5 && hour === 15) {
-      const meetEvent = eventsData.daily.find(e => e.id === 'group-meeting')
+      const meetEvent = EVENT_BY_ID['group-meeting']
       if (meetEvent) {
         const participants = pickParticipants(meetEvent, state.agents, state.externalStatus)
         store.getState().setActiveEvent(meetEvent)

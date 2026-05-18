@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
-import { HOME_POSITIONS, OVERFLOW_POSITIONS } from './movementSystem.js'
+import { HOME_POSITIONS, OVERFLOW_POSITIONS, OVERFLOW_SLOT_BY_XY } from './movementSystem.js'
 import { randomBubble, setNameResolver, behaviorLabel } from '../i18n'
 import { generateContextBubble } from './contextBubble'
 import { detectProjectMode } from './platformDetect'
@@ -413,8 +413,10 @@ export const useOfficeStore = create((set) => ({
         if (staticRosterIds.has(id)) continue
         dynamicAgentCount++
         const a = agents[id]
-        const slot = OVERFLOW_POSITIONS.findIndex(p => p.x === a.position?.x && p.y === a.position?.y)
-        if (slot !== -1) occupiedSlots.add(slot)
+        // O(1) slot resolution via the prebuilt "x,y"→index map (was an O(slots)
+        // findIndex scan per dynamic agent).
+        const slot = OVERFLOW_SLOT_BY_XY.get(`${a.position?.x},${a.position?.y}`)
+        if (slot !== undefined) occupiedSlots.add(slot)
       }
 
       for (const u of updates) {

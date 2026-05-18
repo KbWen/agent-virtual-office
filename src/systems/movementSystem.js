@@ -148,6 +148,15 @@ export const OVERFLOW_POSITIONS = [
   { x: 300, y: 50 },
 ]
 
+// "x,y" → slot index, built once. applyExternalStatus's overflow bookkeeping needs to
+// know which slot an existing dynamic agent occupies; a per-agent OVERFLOW_POSITIONS
+// .findIndex() is an O(slots) scan, so resolve it to an O(1) lookup instead.
+export const OVERFLOW_SLOT_BY_XY = (() => {
+  const map = new Map()
+  OVERFLOW_POSITIONS.forEach((p, i) => map.set(`${p.x},${p.y}`, i))
+  return map
+})()
+
 // Home = chair position (behind desk, y+24), NOT desk center
 export const HOME_POSITIONS = {
   pm:   { x: 140, y: 264 },
