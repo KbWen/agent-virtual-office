@@ -29,7 +29,7 @@ const os = require('os')
 function parseArgs(argv) {
   const args = { port: 5174, watch: process.cwd(), source: 'generic' }
   for (let i = 2; i < argv.length; i++) {
-    if (argv[i] === '--port' && argv[i + 1]) { args.port = parseInt(argv[i + 1], 10); i++ }
+    if (argv[i] === '--port' && argv[i + 1]) { args.port = /^\d+$/.test(argv[i + 1]) ? parseInt(argv[i + 1], 10) : NaN; i++ }
     else if (argv[i] === '--watch' && argv[i + 1]) { args.watch = path.resolve(argv[i + 1]); i++ }
     else if (argv[i] === '--source' && argv[i + 1]) { args.source = argv[i + 1]; i++ }
   }
@@ -76,7 +76,7 @@ const IDLE_LABEL = '☕ 等指令中'
 // ─── POST to /api/status ──────────────────────────────────────────────────────
 
 function postStatus(port, agents, source) {
-  const activeCount = agents.filter(a => a.status !== 'done' && a.status !== 'idle').length
+  const activeCount = agents.filter(a => a.status === 'working' || a.status === 'blocked').length
   const payload = JSON.stringify({
     _seq: String(Date.now()),
     type: 'office-status',
@@ -97,8 +97,10 @@ function postStatus(port, agents, source) {
   }
 
   const req = http.request(options, (res) => {
-    // Consume the response body so the socket closes cleanly
     res.resume()
+    if (res.statusCode === 401) {
+      console.warn('[bridge] 401 Unauthorized — server has OFFICE_API_TOKEN set. Bridge updates are silently dropped. Check token configuration.')
+    }
   })
 
   req.on('error', () => {

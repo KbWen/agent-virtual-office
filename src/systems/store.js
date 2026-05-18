@@ -306,7 +306,9 @@ export const useOfficeStore = create((set) => ({
       const agent = s.agents[id]
       if (!agent) return s
       const count = { ...agent.deskItemCount }
-      count[item] = (count[item] || 0) + 1
+      // Cap at 20 — well above the level-3 visual threshold (6) but prevents unbounded
+      // growth across the 4h persistence window when only organic behaviors run.
+      count[item] = Math.min((count[item] || 0) + 1, 20)
       return { agents: { ...s.agents, [id]: { ...agent, deskItemCount: count } } }
     }),
 
@@ -363,7 +365,10 @@ export const useOfficeStore = create((set) => ({
           const baseRole = u.agentId.includes('~') ? u.agentId.split('~').pop() : u.agentId
           const baseAgent = s.agents[baseRole] || s.agents['dev']
           if (!baseAgent) continue
-          const overflowIdx = Object.values(agents).filter(a => a.session).length
+          // Count all dynamic agents (not in the original roster) to get the next overflow slot.
+          // Using a.session would miss null-session agents from postMessage/hash callers,
+          // causing every null-session dynamic agent to stack at OVERFLOW_POSITIONS[0].
+          const overflowIdx = Object.values(agents).filter(a => !s.agents[a.id]).length
           const pos = { ...OVERFLOW_POSITIONS[overflowIdx % OVERFLOW_POSITIONS.length] }
           agents[u.agentId] = {
             ...baseAgent,
