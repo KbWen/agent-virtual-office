@@ -420,10 +420,12 @@ function listenTitleChanges(callback) {
 
     for (const { pattern, role, status } of TITLE_PATTERNS) {
       if (pattern.test(title)) {
-        callback({
+        const msg = normalizeStatusMessage({
           type: 'office-status',
           agents: [{ role: role || 'dev', task: title, status, label: null }],
+          source: 'title',
         })
+        if (msg) callback(msg)
         return
       }
     }
@@ -493,7 +495,7 @@ export function startStatusIntegration(store) {
       s.setIntegrationSource?.(msg.source || 'fallback')
     }
 
-    if ('workflow' in msg) s.setActiveWorkflow(msg.workflow)
+    if ('workflow' in msg) s.setActiveWorkflow(msg.workflow ?? null)
 
     resetStalenessTimer()
   }

@@ -569,6 +569,7 @@ function processEvent(event) {
   let existing = []
   let existingWorkflow = null
   let existingWorkflowAgentId = null
+  let existingWorkflowPromptId = null
   let existingPromptId = null
   let existingPreToolPromptId = null
   try {
@@ -586,9 +587,19 @@ function processEvent(event) {
       : []
     existingWorkflow = typeof data.workflow === 'string' ? data.workflow.slice(0, 200) : null
     existingWorkflowAgentId = typeof data._workflowAgentId === 'string' ? data._workflowAgentId : null
+    existingWorkflowPromptId = typeof data._workflowPromptId === 'string' ? data._workflowPromptId : null
     existingPromptId = data._promptId || null
     existingPreToolPromptId = data._preToolPromptId || null
   } catch {}
+
+  // Detect stale workflow from a previous turn: SubagentStop was suppressed (straggler guard
+  // returned early without clearing workflow) AND no UserPromptSubmit ran to reset it.
+  // _workflowPromptId records the _promptId that was current when the workflow was set.
+  // If it differs from the current _promptId, the workflow belongs to a dead turn.
+  const workflowTurnMismatch = !!(
+    existingWorkflowAgentId && existingWorkflowPromptId && existingPromptId &&
+    existingWorkflowPromptId !== existingPromptId
+  )
 
   // Replace agent with same role, or add new
   const newAgents = [
@@ -636,9 +647,23 @@ function processEvent(event) {
   // a straggler SubagentStop for a completed /review would clear the workflow of a new /review
   // that's currently running. Use _workflowAgentId (the agent_id that set the workflow) for
   // precise identity matching so same-type subagent overlap can't clobber each other.
-  const effectiveClearWorkflow = (hookEvent === 'SubagentStop' && clearWorkflow)
-    ? (existingWorkflowAgentId ? existingWorkflowAgentId === agentId : existingWorkflow === (agentType || '').slice(0, 200))
-    : clearWorkflow
+  const effectiveClearWorkflow = workflowTurnMismatch || (
+    (hookEvent === 'SubagentStop' && clearWorkflow)
+      ? (existingWorkflowAgentId ? existingWorkflowAgentId === agentId : existingWorkflow === (agentType || '').slice(0, 200))
+      : clearWorkflow
+  )
+
+  // Derive the workflow owner fields for the output.
+  // workflowOverride (SubagentStart) sets all three; effectiveClearWorkflow (UPS/SubagentStop/
+  // turn-mismatch) clears all three; otherwise preserve existing values unchanged.
+  const outWorkflow = effectiveClearWorkflow ? null
+    : (workflowOverride ? workflowOverride.slice(0, 200) : existingWorkflow)
+  const outWorkflowAgentId = effectiveClearWorkflow ? null
+    : (workflowOverride ? (agentId || existingWorkflowAgentId) : existingWorkflowAgentId)
+  // _workflowPromptId records the _promptId current when the workflow was set so future
+  // PreToolUse/PostToolUse can detect a stale workflow from a now-dead turn.
+  const outWorkflowPromptId = effectiveClearWorkflow ? null
+    : (workflowOverride ? existingPromptId : existingWorkflowPromptId)
 
   const output = {
     _seq: nextSeq(),
@@ -646,10 +671,9 @@ function processEvent(event) {
     type: 'office-status',
     agents: newAgents,
     activeCount,
-    workflow: effectiveClearWorkflow ? null : (workflowOverride ? workflowOverride.slice(0, 200) : existingWorkflow),
-    // Track which agent_id owns the current workflow so SubagentStop can precisely match.
-    _workflowAgentId: effectiveClearWorkflow ? null
-      : (workflowOverride ? (agentId || existingWorkflowAgentId) : existingWorkflowAgentId),
+    workflow: outWorkflow,
+    _workflowAgentId: outWorkflowAgentId,
+    _workflowPromptId: outWorkflowPromptId,
     source: 'claude-cli',
     // Turn-boundary fields for straggler detection:
     // _promptId advances on each UserPromptSubmit; _preToolPromptId is set by PreToolUse
