@@ -497,7 +497,7 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x')
   if (url.pathname === '/api/status') return handleStatus(req, res)
   if (url.pathname === '/api/status/stream') {
-    if (req.method !== 'GET') { res.statusCode = 405; return res.end() }
+    if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); res.statusCode = 405; return res.end() }
     setCors(res, req.headers.origin)
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')

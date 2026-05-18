@@ -617,7 +617,7 @@ function fileWatcherFallbackPlugin() {
         if (!/^office-status-.+\.json$/.test(f)) continue
         try {
           const d = JSON.parse(fs.readFileSync(path.join(hookDir, f), 'utf-8'))
-          if (d.source === 'claude-cli' && d._seq && now - parseInt(d._seq, 10) < 10_000) return
+          if (d.source !== 'file-watcher' && d._seq && now - parseInt(d._seq, 10) < 10_000) return
         } catch {}  // file may have been deleted/truncated between readdir and read
       }
     } catch {}

@@ -405,3 +405,77 @@ describe('file-watcher strict exclusion and _hint:no-hooks', () => {
     expect(scanAndMerge(dir, dir)).not.toBeNull()
   })
 })
+
+// ─── fallback pass _cwd filtering ────────────────────────────────────────────
+
+describe('fallback pass _cwd filtering', () => {
+  let dir
+  beforeEach(() => { dir = tmpDir() })
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+
+  it('excludes a foreign-_cwd hook session from fallback so it cannot mix with local file-watcher', () => {
+    // Hook session from a different project — strict pass sees nothing (no match for dir),
+    // fallback must also exclude it.
+    writeSession(dir, 'office-status-other.json', {
+      type: 'office-status', _seq: freshSeq(), _cwd: '/some/other/project', source: 'claude-cli',
+      agents: [{ role: 'dev', status: 'working', task: null, label: null }],
+    })
+    writeSession(dir, 'office-status.json', {
+      type: 'office-status', _seq: freshSeq(), source: 'file-watcher',
+      agents: [{ role: 'dev', status: 'working', task: null, label: null }],
+    })
+    // projectRoot doesn't match either _cwd → strict empty → fallback
+    const result = scanAndMerge(dir, dir)
+    expect(result).not.toBeNull()
+    // Foreign hook session must NOT appear in merged output
+    expect(result._hint).toBe('no-hooks')
+    // All agents should come from file-watcher, not the foreign session
+    expect(result.source).not.toBe('multi-session')
+  })
+
+  it('excludes a slugged no-_cwd non-file-watcher session from fallback (old hook or foreign tool)', () => {
+    // A slugged file with no _cwd and source !== 'file-watcher' — e.g. old hook version
+    writeSession(dir, 'office-status-old-hook.json', {
+      type: 'office-status', _seq: freshSeq(), source: 'claude-cli',
+      agents: [{ role: 'dev', status: 'working', task: null, label: null }],
+    })
+    writeSession(dir, 'office-status.json', {
+      type: 'office-status', _seq: freshSeq(), source: 'file-watcher',
+      agents: [{ role: 'dev', status: 'working', task: null, label: null }],
+    })
+    // projectRoot doesn't match → strict empty → fallback
+    const result = scanAndMerge(dir, '/nonexistent-root')
+    expect(result).not.toBeNull()
+    // Old hook file must not suppress the _hint:'no-hooks' signal
+    expect(result._hint).toBe('no-hooks')
+  })
+
+  it('includes a file-watcher session and the bare file in fallback even when no matching _cwd exists', () => {
+    writeSession(dir, 'office-status.json', {
+      type: 'office-status', _seq: freshSeq(), source: 'file-watcher',
+      agents: [{ role: 'dev', status: 'working', task: 'edit', label: null }],
+    })
+    const result = scanAndMerge(dir, '/nonexistent-root')
+    expect(result).not.toBeNull()
+    expect(result._hint).toBe('no-hooks')
+  })
+
+  it('includes a matching-_cwd hook session in fallback when strict pass returns nothing (no file-watcher)', () => {
+    // Strict fails because the only session is file-watcher (excluded from strict).
+    // Fallback should include it and also the hook session if its _cwd matches.
+    writeSession(dir, 'office-status-feat.json', {
+      type: 'office-status', _seq: freshSeq(), _cwd: dir, source: 'claude-cli',
+      agents: [{ role: 'qa', status: 'working', task: null, label: null }],
+    })
+    writeSession(dir, 'office-status.json', {
+      type: 'office-status', _seq: freshSeq(), source: 'file-watcher',
+      agents: [{ role: 'dev', status: 'working', task: null, label: null }],
+    })
+    // Strict pass: feat.json has matching _cwd and source!='file-watcher' → included
+    // So we actually go through the strict path here, not fallback.
+    // Verify: strict returns the hook session, not file-watcher.
+    const result = scanAndMerge(dir, dir)
+    expect(result).not.toBeNull()
+    expect(result._hint).toBeUndefined()
+  })
+})

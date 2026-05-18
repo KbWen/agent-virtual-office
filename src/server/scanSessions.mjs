@@ -61,11 +61,12 @@ export function scanAndMerge(dir, projectRoot) {
           // polluting multi-session views. Fallback pass includes it as last resort.
           if (parsed.source === 'file-watcher') continue
         } else {
-          // Fallback: include file-watcher and no-_cwd bare files, but still exclude
-          // sessions that explicitly belong to a different project (_cwd mismatch).
-          // Without this, a fresh hook session for another repo makes strict empty →
-          // fallback mixes foreign agents with local file-watcher data.
+          // Fallback: include file-watcher and the no-_cwd bare file, but exclude:
+          // 1. Sessions from a different project (explicit _cwd set but doesn't match)
+          // 2. Slugged files with no _cwd that strict mode excluded — they are from old
+          //    hook versions or foreign tools and would suppress _hint:'no-hooks'.
           if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), path.resolve(projectRoot))) continue
+          if (!parsed._cwd && file !== 'office-status.json' && parsed.source !== 'file-watcher') continue
         }
         const slug = file === 'office-status.json'
           ? 'main'
