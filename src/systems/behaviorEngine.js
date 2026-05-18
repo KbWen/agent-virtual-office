@@ -63,11 +63,19 @@ function weightedRandom(weights) {
   return entries[0][0]
 }
 
+// Fallback behavior entry — used when a category has zero behaviors valid for a
+// role. MUST share the exact shape of a `behaviors` pool entry ({ id, expr, msgs,
+// duration:[min,max] }). A mismatched shape (e.g. { behaviorId, duration:number })
+// would make getNextBehavior read behavior.id === undefined and feed a scalar to
+// randomDuration → NaN duration → doSchedule's setTimeout(_, NaN) fires immediately,
+// pinning the CPU in a tight re-schedule loop.
+const FALLBACK_BEHAVIOR = { id: 'typing', expr: 'focused', msgs: 'typing', duration: [18000, 45000] }
+
 function pickBehavior(agentId, category) {
   const baseRole = agentId.includes('~') ? agentId.split('~').pop() : agentId
   const pool = behaviors[category] || behaviors.work
   const valid = pool.filter((b) => !b.only || b.only.includes(baseRole))
-  if (valid.length === 0) return { behaviorId: 'typing', msgKey: null, duration: 8000 }
+  if (valid.length === 0) return FALLBACK_BEHAVIOR
   return valid[Math.floor(Math.random() * valid.length)]
 }
 
@@ -81,8 +89,15 @@ function pickMessage(msgKey) {
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
+// Resolve a duration range to a concrete ms value. Guards against a malformed
+// `duration` (non-array, or array with non-finite endpoints): a NaN duration would
+// flow into doSchedule's setTimeout(_, NaN) and re-fire on every tick — a CPU spin.
+const DEFAULT_DURATION = 8000
 function randomDuration(range) {
-  return range[0] + Math.random() * (range[1] - range[0])
+  if (!Array.isArray(range) || range.length < 2) return DEFAULT_DURATION
+  const [min, max] = range
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return DEFAULT_DURATION
+  return min + Math.random() * (max - min)
 }
 
 // Status-specific bubble chance and message pools

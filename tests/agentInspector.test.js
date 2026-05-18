@@ -201,6 +201,77 @@ describe('AgentInspector', () => {
     })
   })
 
+  it('grows deskItemCount on a fresh done event, keyed to the base role item', () => {
+    // Growth system: a deduplicated fresh done event accumulates one desk item.
+    // dev → 'coffee'. Reset the agent to a clean baseline first.
+    const base = useOfficeStore.getState().agents
+    useOfficeStore.setState({
+      agents: {
+        ...base,
+        dev: { ...base.dev, status: 'idle', inGroupEvent: false, deskItemCount: { coffee: 0, sticky: 0, books: 0 } },
+        arch: { ...base.arch, status: 'idle', inGroupEvent: false, deskItemCount: { coffee: 0, sticky: 0, books: 0 } },
+      },
+      externalStatus: {},
+      dailyDoneLedger: { dayKey: '2026-04-08', counts: {}, seenEventKeys: [] },
+    })
+    const now = new Date('2026-04-08T12:00:00+08:00').getTime()
+
+    useOfficeStore.getState().applyExternalStatus(
+      [{ agentId: 'dev', status: 'done', task: 'Edit', label: 'fix' }],
+      { source: 'claude-cli', seq: 'g1', now },
+    )
+    expect(useOfficeStore.getState().agents.dev.deskItemCount.coffee).toBe(1)
+
+    // arch → 'books'. A done for arch grows books, not coffee.
+    useOfficeStore.getState().applyExternalStatus(
+      [{ agentId: 'arch', status: 'done', task: 'Edit', label: 'design' }],
+      { source: 'claude-cli', seq: 'g2', now },
+    )
+    expect(useOfficeStore.getState().agents.arch.deskItemCount.books).toBe(1)
+    expect(useOfficeStore.getState().agents.arch.deskItemCount.coffee).toBe(0)
+  })
+
+  it('does NOT grow deskItemCount on a replayed (already-seen) done event', () => {
+    const base = useOfficeStore.getState().agents
+    useOfficeStore.setState({
+      agents: {
+        ...base,
+        dev: { ...base.dev, status: 'done', inGroupEvent: false, deskItemCount: { coffee: 5, sticky: 0, books: 0 } },
+      },
+      externalStatus: {
+        dev: { status: 'done', task: 'Edit', label: 'fix', expiresAt: Date.now() + 10_000 },
+      },
+      dailyDoneLedger: { dayKey: '2026-04-08', counts: { dev: 5 }, seenEventKeys: ['claude-cli:seen:dev'] },
+    })
+    const now = new Date('2026-04-08T12:00:00+08:00').getTime()
+
+    // Same eventKey as already-seen → shouldCount is false → no growth.
+    useOfficeStore.getState().applyExternalStatus(
+      [{ agentId: 'dev', status: 'done', task: 'Edit', label: 'fix' }],
+      { source: 'claude-cli', seq: 'seen', now },
+    )
+    expect(useOfficeStore.getState().agents.dev.deskItemCount.coffee).toBe(5)
+  })
+
+  it('grows deskItemCount for a dynamic worktree (composite) agent under its base role item', () => {
+    useOfficeStore.setState({
+      externalStatus: {},
+      dailyDoneLedger: { dayKey: '2026-04-08', counts: {}, seenEventKeys: [] },
+    })
+    const now = new Date('2026-04-08T12:00:00+08:00').getTime()
+
+    useOfficeStore.getState().applyExternalStatus(
+      [{ agentId: 'feat-x~dev', status: 'done', task: 'Edit', label: 'fix', session: 'feat-x' }],
+      { source: 'multi-session', seq: 'c1', now },
+    )
+    const dyn = useOfficeStore.getState().agents['feat-x~dev']
+    expect(dyn).toBeTruthy()
+    // baseRole 'dev' → 'coffee'.
+    expect(dyn.deskItemCount.coffee).toBe(1)
+    // Ledger counts are keyed by the FULL composite id (each worktree agent is distinct).
+    expect(useOfficeStore.getState().dailyDoneLedger.counts['feat-x~dev']).toBe(1)
+  })
+
   it('clears integration source metadata when the last external agent is removed', () => {
     useOfficeStore.setState({
       externalStatus: {

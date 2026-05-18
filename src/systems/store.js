@@ -419,6 +419,13 @@ export const useOfficeStore = create((set) => ({
             status: 'idle',
             bubble: null,
             inGroupEvent: false,
+            // Fresh, OWN deskItemCount — `...baseAgent` would otherwise (a) seed the
+            // dynamic agent with the base role's accumulated growth (e.g. inherit dev's
+            // 5 coffee cups at spawn) and (b) ALIAS the same object reference, so a
+            // pre-first-growth mutation of one would silently affect the other. Each
+            // worktree agent is a distinct worker and must start its desk empty.
+            deskItemCount: { coffee: 0, sticky: 0, books: 0 },
+            groupTarget: null,
           }
         }
         ext[u.agentId] = {

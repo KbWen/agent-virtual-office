@@ -779,7 +779,10 @@ function AgentCharacter({ agent }) {
       movingStuckRef.current = 0
 
       const next = getNextBehavior(id, agent.status || 'idle', new Date().getHours(), store.mood || 'normal')
-      nextDelay = next.duration
+      // Guard the re-schedule delay: a non-finite or non-positive duration would make
+      // setTimeout(doSchedule, nextDelay) fire on the next tick, spinning the behavior
+      // chain in a tight CPU loop. Fall back to the 8s default if the value is unusable.
+      nextDelay = (Number.isFinite(next.duration) && next.duration > 0) ? next.duration : 8000
 
       // Walk to behavior location
       const destination = getTargetForBehavior(id, next.behaviorId, store.agents)
