@@ -343,10 +343,11 @@ describe('dedup: hasUniqueWorkflow carve-out', () => {
   beforeEach(() => { dir = tmpDir() })
   afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
 
-  it('keeps bare file when it has a workflow no slugged session shares (even within 2s)', () => {
+  it('keeps bare file when it has a workflow no slugged session shares (even within 2s, hook source)', () => {
+    // Exercises hasUniqueWorkflow carve-out: isDup=true AND hasUniqueWorkflow=true → keep
     const baseSeq = Date.now()
     writeSession(dir, 'office-status.json', {
-      type: 'office-status', _seq: String(baseSeq), workflow: 'unique-workflow',
+      type: 'office-status', _seq: String(baseSeq), workflow: 'unique-workflow', source: 'claude-cli',
       agents: [{ role: 'pm', status: 'working', task: null, label: null }],
     })
     writeSession(dir, 'office-status-feat.json', {
@@ -354,7 +355,7 @@ describe('dedup: hasUniqueWorkflow carve-out', () => {
       agents: [{ role: 'dev', status: 'working', task: null, label: null }],
     })
     const result = scanAndMerge(dir, dir)
-    // Both sessions kept — bare file has unique workflow
+    // Both sessions kept — bare file has unique workflow (carve-out prevents dedup)
     expect(result.source).toBe('multi-session')
     expect(result.sessionCount).toBe(2)
   })
