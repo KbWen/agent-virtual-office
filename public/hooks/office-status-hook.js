@@ -568,6 +568,7 @@ function processEvent(event) {
   // Read existing status to merge (keep other agents' states + workflow)
   let existing = []
   let existingWorkflow = null
+  let existingWorkflowAgentId = null
   let existingPromptId = null
   let existingPreToolPromptId = null
   try {
@@ -584,6 +585,7 @@ function processEvent(event) {
           }))
       : []
     existingWorkflow = typeof data.workflow === 'string' ? data.workflow.slice(0, 200) : null
+    existingWorkflowAgentId = typeof data._workflowAgentId === 'string' ? data._workflowAgentId : null
     existingPromptId = data._promptId || null
     existingPreToolPromptId = data._preToolPromptId || null
   } catch {}
@@ -630,10 +632,12 @@ function processEvent(event) {
   }
 
   // SubagentStop straggler guard: only clear workflow if it still belongs to this subagent.
-  // A straggler SubagentStop arriving after a new turn's SubagentStart must not null out
-  // the new turn's workflow (set to a different agentType by the new SubagentStart).
+  // Type-string comparison (R39) can't distinguish same-type subagents running back-to-back:
+  // a straggler SubagentStop for a completed /review would clear the workflow of a new /review
+  // that's currently running. Use _workflowAgentId (the agent_id that set the workflow) for
+  // precise identity matching so same-type subagent overlap can't clobber each other.
   const effectiveClearWorkflow = (hookEvent === 'SubagentStop' && clearWorkflow)
-    ? existingWorkflow === (agentType || '').slice(0, 200)
+    ? (existingWorkflowAgentId ? existingWorkflowAgentId === agentId : existingWorkflow === (agentType || '').slice(0, 200))
     : clearWorkflow
 
   const output = {
@@ -643,6 +647,9 @@ function processEvent(event) {
     agents: newAgents,
     activeCount,
     workflow: effectiveClearWorkflow ? null : (workflowOverride ? workflowOverride.slice(0, 200) : existingWorkflow),
+    // Track which agent_id owns the current workflow so SubagentStop can precisely match.
+    _workflowAgentId: effectiveClearWorkflow ? null
+      : (workflowOverride ? (agentId || existingWorkflowAgentId) : existingWorkflowAgentId),
     source: 'claude-cli',
     // Turn-boundary fields for straggler detection:
     // _promptId advances on each UserPromptSubmit; _preToolPromptId is set by PreToolUse
@@ -674,6 +681,13 @@ function processEvent(event) {
           const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
           const sAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
           if (latest._stopped && Number.isFinite(sAt) && Date.now() - sAt < 30_000) {
+            try { fs.unlinkSync(tmp) } catch {}
+            return
+          }
+          // New turn started between our first write attempt and this retry — abort so we
+          // don't overwrite UPS's fresh PM-planning state with old-turn working data.
+          if (hookEvent === 'PreToolUse' && capturedPromptId && latest._promptId
+              && latest._promptId !== capturedPromptId) {
             try { fs.unlinkSync(tmp) } catch {}
             return
           }

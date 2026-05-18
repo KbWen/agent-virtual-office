@@ -500,11 +500,16 @@ export function startStatusIntegration(store) {
 
   function handleIncoming(msg) {
     if (torn || !msg) return
-    // Drop cross-channel stale deliveries: heartbeat poller can race SSE and deliver an
-    // older body (lower _seq timestamp) that would clobber newer state in the debounce slot.
-    if (msg._seq && lastAppliedSeq &&
-        /^\d+$/.test(msg._seq) && /^\d+$/.test(lastAppliedSeq) &&
-        Number(msg._seq) < Number(lastAppliedSeq)) return
+    // Drop cross-channel stale deliveries. Compare against both lastAppliedSeq (already
+    // committed to the store) AND pendingMsg._seq (queued but not yet applied). Without
+    // the pendingMsg check, a burst of 3 messages in the 150ms window lets a stale
+    // heartbeat body (lower seq) clobber a fresher SSE push already in the debounce slot,
+    // because lastAppliedSeq hasn't been updated until applyMessage actually runs.
+    const isNumericSeq = s => s && /^\d+$/.test(s)
+    if (isNumericSeq(msg._seq)) {
+      if (isNumericSeq(lastAppliedSeq) && Number(msg._seq) < Number(lastAppliedSeq)) return
+      if (pendingMsg && isNumericSeq(pendingMsg._seq) && Number(msg._seq) < Number(pendingMsg._seq)) return
+    }
     pendingMsg = msg
     if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(() => {
