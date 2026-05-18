@@ -362,6 +362,12 @@ export const useOfficeStore = create((set) => ({
       const now = meta.now || Date.now()
       const ext = { ...s.externalStatus }
       const agents = { ...s.agents }
+      // Authoritative static roster for the active mode — the SAME source initAgents
+      // uses to seed s.agents. This is the only stable way to tell a dynamic worktree
+      // agent apart from a static one: dynamic agents may carry session:null (postMessage/
+      // hash callers), so the `.session` field cannot be used as the discriminator, and
+      // s.agents itself is unreliable because it accumulates dynamic agents from prior calls.
+      const staticRosterIds = new Set((characters[s.mode] || characters.agentcortex).map(c => c.id))
       const activities = []
       const dailyDoneLedger = ensureCurrentDailyDoneLedger(s.dailyDoneLedger, now)
       const dayChanged = s.dailyDoneLedger.dayKey !== dailyDoneLedger.dayKey
@@ -377,11 +383,33 @@ export const useOfficeStore = create((set) => ({
           const baseRole = u.agentId.includes('~') ? u.agentId.split('~').pop() : u.agentId
           const baseAgent = s.agents[baseRole] || s.agents['dev']
           if (!baseAgent) continue
-          // Count all dynamic agents (not in the original roster) to get the next overflow slot.
-          // Using a.session would miss null-session agents from postMessage/hash callers,
-          // causing every null-session dynamic agent to stack at OVERFLOW_POSITIONS[0].
-          const overflowIdx = Object.values(agents).filter(a => !s.agents[a.id]).length
-          const pos = { ...OVERFLOW_POSITIONS[overflowIdx % OVERFLOW_POSITIONS.length] }
+          // Place the agent in the LOWEST overflow slot not already occupied by another
+          // dynamic agent. A naive "count of existing dynamic agents" only yields a free
+          // slot when slots fill contiguously from 0 — after a middle agent is reconciled
+          // away (multi-session session exit), the count no longer maps to an empty slot
+          // and the next agent collides with a survivor. Computing occupied slots from the
+          // accumulating `agents` copy makes a position collision structurally impossible
+          // regardless of create/remove order, and works whether prior dynamic agents were
+          // committed by this call or an earlier one. `staticRosterIds` (the authoritative
+          // mode roster) — not `s.agents` — is the dynamic/static discriminator, because
+          // null-session agents (postMessage/hash callers) have no `.session` field and
+          // s.agents accumulates dynamic agents from prior calls.
+          const occupiedSlots = new Set()
+          for (const id of Object.keys(agents)) {
+            if (staticRosterIds.has(id)) continue
+            const a = agents[id]
+            const slot = OVERFLOW_POSITIONS.findIndex(p => p.x === a.position?.x && p.y === a.position?.y)
+            if (slot !== -1) occupiedSlots.add(slot)
+          }
+          let overflowIdx = 0
+          while (overflowIdx < OVERFLOW_POSITIONS.length && occupiedSlots.has(overflowIdx)) overflowIdx++
+          // All slots full — wrap deterministically by dynamic-agent count so overflow
+          // beyond OVERFLOW_POSITIONS.length still spreads instead of pinning to slot 0.
+          if (overflowIdx >= OVERFLOW_POSITIONS.length) {
+            overflowIdx = Object.keys(agents).filter(id => !staticRosterIds.has(id)).length
+              % OVERFLOW_POSITIONS.length
+          }
+          const pos = { ...OVERFLOW_POSITIONS[overflowIdx] }
           agents[u.agentId] = {
             ...baseAgent,
             id: u.agentId,

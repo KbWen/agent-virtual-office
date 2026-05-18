@@ -89,6 +89,82 @@ describe('applyExternalStatus — multi-session ghost reconciliation (R63)', () 
   })
 })
 
+describe('applyExternalStatus — overflow position assignment (R66)', () => {
+  beforeEach(resetStore)
+
+  it('places dynamic agents created across SEPARATE calls in distinct overflow slots', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+
+    // Each call creates ONE null-session dynamic agent (the postMessage/hash path).
+    // The entry snapshot of call N already contains the agents committed by calls 1..N-1,
+    // so a count filtered against the snapshot would return 0 every time and stack them all.
+    applyExternalStatus(
+      [{ agentId: 'wt-a~dev', status: 'working', task: null, label: null }],
+      { source: 'external' },
+    )
+    applyExternalStatus(
+      [{ agentId: 'wt-b~dev', status: 'working', task: null, label: null }],
+      { source: 'external' },
+    )
+    applyExternalStatus(
+      [{ agentId: 'wt-c~dev', status: 'working', task: null, label: null }],
+      { source: 'external' },
+    )
+
+    const s = useOfficeStore.getState()
+    const positions = ['wt-a~dev', 'wt-b~dev', 'wt-c~dev'].map(id => {
+      const p = s.agents[id].position
+      return `${p.x},${p.y}`
+    })
+    // All three must land on distinct overflow coordinates — no stacking at slot 0.
+    expect(new Set(positions).size).toBe(3)
+  })
+
+  it('places dynamic agents created WITHIN a single call in distinct overflow slots', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [
+        { agentId: 'wt-x~dev', status: 'working', task: null, label: null, session: 'wt-x' },
+        { agentId: 'wt-y~dev', status: 'working', task: null, label: null, session: 'wt-y' },
+      ],
+      { source: 'multi-session' },
+    )
+    const s = useOfficeStore.getState()
+    const px = s.agents['wt-x~dev'].position
+    const py = s.agents['wt-y~dev'].position
+    expect(`${px.x},${px.y}`).not.toBe(`${py.x},${py.y}`)
+  })
+
+  it('reuses a freed overflow slot after a dynamic agent is reconciled away', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    // Two dynamic agents occupy slots 0 and 1.
+    applyExternalStatus(
+      [
+        { agentId: 'sess-1~dev', status: 'working', task: null, label: null, session: 'sess-1' },
+        { agentId: 'sess-2~dev', status: 'working', task: null, label: null, session: 'sess-2' },
+      ],
+      { source: 'multi-session' },
+    )
+    // sess-1 ends — reconciliation drops it, freeing slot 0.
+    applyExternalStatus(
+      [{ agentId: 'sess-2~dev', status: 'working', task: null, label: null, session: 'sess-2' }],
+      { source: 'multi-session' },
+    )
+    // A new dynamic agent arrives via a separate call. With one dynamic agent left,
+    // the count is 1 → it takes slot 1's coordinates, not an off-the-end index.
+    applyExternalStatus(
+      [{ agentId: 'sess-3~dev', status: 'working', task: null, label: null }],
+      { source: 'external' },
+    )
+    const s = useOfficeStore.getState()
+    expect(s.agents['sess-3~dev']).toBeTruthy()
+    // sess-2 and sess-3 are the only two dynamic agents — they must not collide.
+    const p2 = s.agents['sess-2~dev'].position
+    const p3 = s.agents['sess-3~dev'].position
+    expect(`${p2.x},${p2.y}`).not.toBe(`${p3.x},${p3.y}`)
+  })
+})
+
 describe('addHandoff — unique ids (R65)', () => {
   beforeEach(() => useOfficeStore.setState({ handoffs: [] }))
 
