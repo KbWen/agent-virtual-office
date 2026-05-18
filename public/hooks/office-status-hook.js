@@ -576,6 +576,7 @@ function processEvent(event) {
   let existingWorkflowPromptId = null
   let existingPromptId = null
   let existingPreToolPromptId = null
+  let existingStopped = false
   try {
     const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
     existing = Array.isArray(data.agents)
@@ -594,18 +595,23 @@ function processEvent(event) {
     existingWorkflowPromptId = typeof data._workflowPromptId === 'string' ? data._workflowPromptId : null
     existingPromptId = data._promptId || null
     existingPreToolPromptId = data._preToolPromptId || null
+    existingStopped = Boolean(data._stopped)
   } catch {}
 
-  // Detect stale workflow from a previous turn: SubagentStop was suppressed (straggler guard
-  // returned early without clearing workflow) AND no UserPromptSubmit ran to reset it.
-  // _workflowPromptId records the _promptId that was current when the workflow was set.
-  // If it differs from the current _promptId, the workflow belongs to a dead turn.
-  // SubagentStart is excluded: it sets workflowOverride and must always install its own
-  // workflow even if the existing one is stale — the mismatch clear and the new-workflow
-  // set cannot both happen atomically in the current ternary structure.
+  // Detect stale workflow from a previous turn. Two conditions that independently indicate
+  // the workflow no longer belongs to the current turn:
+  // 1. _workflowPromptId !== _promptId: the workflow was set in a different turn (the normal
+  //    mismatch case — SubagentStop suppressed + UPS ran and advanced _promptId).
+  // 2. existingStopped && existingWorkflowAgentId: the prior turn ended (_stopped=true is still
+  //    set) but UPS never successfully landed to advance _promptId. _workflowPromptId equals
+  //    _promptId (both stale) so the normal mismatch can't fire — but _stopped is unambiguous
+  //    evidence that the workflow belongs to a completed turn.
+  // SubagentStart is excluded from both: it sets workflowOverride and must always install
+  // its own workflow regardless of existing state.
   const workflowTurnMismatch = hookEvent !== 'SubagentStart' && !!(
-    existingWorkflowAgentId && existingWorkflowPromptId && existingPromptId &&
-    existingWorkflowPromptId !== existingPromptId
+    (existingWorkflowAgentId && existingWorkflowPromptId && existingPromptId &&
+     existingWorkflowPromptId !== existingPromptId) ||
+    (existingWorkflowAgentId && existingStopped)
   )
 
   // Replace agent with same role, or add new
@@ -665,8 +671,11 @@ function processEvent(event) {
   // turn-mismatch) clears all three; otherwise preserve existing values unchanged.
   const outWorkflow = effectiveClearWorkflow ? null
     : (workflowOverride ? workflowOverride.slice(0, 200) : existingWorkflow)
+  // Never inherit a prior agent's id when setting a new workflow: each SubagentStart owns
+  // its own workflow independently, so if agentId is absent fall back to null rather than
+  // the prior agent's id (which would make SubagentStop's identity check permanently fail).
   const outWorkflowAgentId = effectiveClearWorkflow ? null
-    : (workflowOverride ? (agentId || existingWorkflowAgentId) : existingWorkflowAgentId)
+    : (workflowOverride ? (agentId || null) : existingWorkflowAgentId)
   // _workflowPromptId records the _promptId current when the workflow was set so future
   // PreToolUse/PostToolUse can detect a stale workflow from a now-dead turn.
   const outWorkflowPromptId = effectiveClearWorkflow ? null
