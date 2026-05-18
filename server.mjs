@@ -175,12 +175,14 @@ function broadcastSSE(merged) {
   }
 }
 
-setInterval(() => {
+// M1: capture handle so gracefulShutdown can clear it; unref so it doesn't block exit alone
+const _sseHeartbeat = setInterval(() => {
   if (sseClients.size === 0) return
   for (const client of [...sseClients]) {
     try { client.write(':heartbeat\n\n') } catch { sseClients.delete(client) }
   }
 }, 30_000)
+_sseHeartbeat.unref()
 
 // ─── CORS + auth ─────────────────────────────────────────────────────────────
 const LOOPBACK_RE = /^https?:\/\/(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?$/i
@@ -230,25 +232,23 @@ function isAuthorized(req) {
 }
 
 // ─── Rate limiter (sliding window) ───────────────────────────────────────────
-// Note: keys on req.socket.remoteAddress. Behind a reverse proxy (Nginx/Caddy)
-// every request arrives from 127.0.0.1, so this becomes a global aggregate cap
-// (30 POST / 10s total) rather than a per-client limit. In that case Nginx's
-// limit_req (docs/deployment/nginx.conf) is the real per-client rate limiter.
-// This layer defends the loopback surface on non-proxied deployments.
-// Sliding window (per-IP timestamp array) eliminates the fixed-window 2× burst flaw.
+// Keyed on IP only (not per-endpoint) — shared 30 POST / 10s budget across all
+// write endpoints. Per-endpoint keying would allow 90 writes/10s (3 endpoints × 30).
+// Behind a reverse proxy all requests arrive from 127.0.0.1, making this a global
+// aggregate cap; Nginx's limit_req (docs/deployment/nginx.conf) is the real
+// per-client guard in that case. Sliding window eliminates fixed-window burst flaw.
 const postCounts = new Map()
 const RATE_WINDOW = 10000, RATE_LIMIT = 30
 
-function checkRateLimit(req, endpoint = '') {
+function checkRateLimit(req) {
   if (req.method !== 'POST') return true
   const ip = req.socket?.remoteAddress || 'unknown'
-  const key = endpoint ? `${ip}:${endpoint}` : ip
   const now = Date.now()
-  const ts = postCounts.get(key) || []
+  const ts = postCounts.get(ip) || []
   const fresh = ts.filter(t => now - t < RATE_WINDOW)
-  if (fresh.length >= RATE_LIMIT) { postCounts.set(key, fresh); return false }
+  if (fresh.length >= RATE_LIMIT) { postCounts.set(ip, fresh); return false }
   fresh.push(now)
-  postCounts.set(key, fresh)
+  postCounts.set(ip, fresh)
   return true
 }
 
@@ -296,7 +296,7 @@ function handleStatus(req, res) {
     const reqOrigin = req.headers.origin
     if (reqOrigin && !isAllowedOrigin(reqOrigin)) { res.statusCode = 403; return res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })) }
     if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
-    if (!checkRateLimit(req, 'status')) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
+    if (!checkRateLimit(req)) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
     req.setEncoding('utf-8')
     let body = '', aborted = false
     req.on('data', chunk => {
@@ -335,7 +335,7 @@ function handleLang(req, res) {
   const reqOriginL = req.headers.origin
   if (reqOriginL && !isAllowedOrigin(reqOriginL)) { res.statusCode = 403; return res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })) }
   if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
-  if (!checkRateLimit(req, 'lang')) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
+  if (!checkRateLimit(req)) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
   req.setEncoding('utf-8')
   let body = '', aborted = false
   req.on('data', chunk => {
@@ -359,8 +359,8 @@ function handleLang(req, res) {
 
 // ─── /api/event ───────────────────────────────────────────────────────────────
 const EVENT_TO_STATUS = {
-  'pr-merged':         [{ role: 'ops', status: 'done',    label: '🚀 PR merged!' }, { role: 'dev', status: 'done', label: '✅ 上了！' }],
-  'pr-opened':         [{ role: 'dev', status: 'working', label: '📋 PR 開好了' }],
+  'pr-merged':         [{ role: 'ops', status: 'done',    label: '🚀 PR merged!' }, { role: 'dev', status: 'done', label: '✅ Shipped!' }],
+  'pr-opened':         [{ role: 'dev', status: 'working', label: '📋 PR opened' }],
   'pr-reviewed':       [{ role: 'qa',  status: 'done',    label: '✅ PR reviewed' }],
   'test-passed':       [{ role: 'qa',  status: 'done',    label: '✅ Tests passed!' }],
   'test-failed':       [{ role: 'qa',  status: 'blocked', label: '❌ Tests failed' }],
@@ -386,7 +386,7 @@ function handleEvent(req, res) {
   const reqOriginE = req.headers.origin
   if (reqOriginE && !isAllowedOrigin(reqOriginE)) { res.statusCode = 403; return res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })) }
   if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
-  if (!checkRateLimit(req, 'event')) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
+  if (!checkRateLimit(req)) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
   req.setEncoding('utf-8')
   let body = '', aborted = false
   req.on('data', chunk => {
@@ -453,9 +453,11 @@ function serveStatic(req, res) {
     target = path.join(dist, 'index.html')
   }
 
-  // Resolve symlinks and re-check containment to block symlink traversal inside dist/
-  let realTarget = target
-  try { realTarget = fs.realpathSync(target) } catch { /* keep original path if realpathSync fails */ }
+  // Resolve symlinks and re-check containment to block symlink traversal inside dist/.
+  // On realpathSync failure (broken symlink, TOCTOU race) return 403 rather than
+  // continuing with the unresolved path which may bypass the containment check.
+  let realTarget
+  try { realTarget = fs.realpathSync(target) } catch { res.statusCode = 403; return res.end('Forbidden') }
   if (realTarget !== dist && !realTarget.startsWith(dist + path.sep)) { res.statusCode = 403; return res.end('Forbidden') }
 
   const ext = path.extname(target).toLowerCase()
@@ -573,16 +575,18 @@ server.on('error', (err) => {
 // Watch ~/.claude/ for hook-written status file changes and broadcast via SSE.
 // Hooks write directly to disk (not through POST), so fs.watch is the only way
 // to push those updates to connected SSE clients without polling.
+// M2: hoisted so gracefulShutdown can close the watcher and clear the debounce timer.
+let _watcherHandle = null
+let _watchDebounce = null
 {
   const watchDir = path.dirname(STATUS_PATH)
-  let debounceTimer = null
   try {
     if (!fs.existsSync(watchDir)) fs.mkdirSync(watchDir, { recursive: true })
-    fs.watch(watchDir, { persistent: false }, (event, filename) => {
+    _watcherHandle = fs.watch(watchDir, { persistent: false }, (event, filename) => {
       if (!filename || !filename.match(/^office-status(-[^.]+)?\.json$/)) return
       if (sseClients.size === 0) return
-      clearTimeout(debounceTimer)
-      debounceTimer = setTimeout(() => {
+      clearTimeout(_watchDebounce)
+      _watchDebounce = setTimeout(() => {
         const merged = scanAndMerge(watchDir, process.cwd())
         if (merged) broadcastSSE(merged)
       }, 80)  // debounce: atomic rename fires two events on some platforms
@@ -640,6 +644,11 @@ function gracefulShutdown(signal) {
   if (_shuttingDown) return
   _shuttingDown = true
   console.log(`\n  ${signal} received — draining in-flight requests...`)
+
+  // M1: stop SSE heartbeat; M2: stop file watcher and pending debounce
+  clearInterval(_sseHeartbeat)
+  clearTimeout(_watchDebounce)
+  if (_watcherHandle) { try { _watcherHandle.close() } catch {} }
 
   server.close((err) => {
     if (err) { console.error('  Server close error:', err.message); process.exit(1) }

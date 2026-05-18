@@ -46,7 +46,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
     const locales = availableLocales()
     const idx = locales.indexOf(lang)
     const next = locales[(idx + 1) % locales.length]
-    const labels = { en: 'EN', 'zh-TW': '中' }
+    const labels = { en: 'EN', 'zh-TW': 'ZH' }
     return labels[next] || next.toUpperCase()
   })()
 

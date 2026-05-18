@@ -20,8 +20,12 @@ export default function BehaviorBubble({ x, y, message }) {
 
   if (!currentMsg) return null
 
-  // Clean garbled characters (U+FFFD replacement char, orphaned surrogates)
-  const cleanMsg = currentMsg.replace(/[\uFFFD]/g, '').replace(/[\uD800-\uDFFF]/g, '')
+  // Clean garbled characters: U+FFFD and unpaired surrogates only.
+  // Full surrogate range strip destroyed non-BMP emoji (\uD83D\uDE80 etc.) \u2014 keep paired surrogates.
+  const cleanMsg = currentMsg
+    .replace(/\uFFFD/g, '')
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')   // lone high surrogate
+    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')  // lone low surrogate
 
   // Unicode-safe truncation using Array.from (handles surrogate pairs)
   const chars = Array.from(cleanMsg)

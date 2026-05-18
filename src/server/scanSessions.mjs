@@ -22,6 +22,10 @@ import path from 'node:path'
 const STATUS_FILE_RE = /^office-status(-[^.]+)?\.json$/
 const isWin = process.platform === 'win32'
 
+// Shared TTL constants — keep in sync between scanAndMerge and getSessionStats
+const STALE_MS = 300_000   // sessions older than 5 min are stale
+const FUTURE_MS = 300_000  // sessions more than 5 min in the future are implausible (NTP jump)
+
 function pathsEqual(a, b) {
   return isWin ? a.toLowerCase() === b.toLowerCase() : a === b
 }
@@ -46,8 +50,8 @@ export function scanAndMerge(dir, projectRoot) {
         const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
         const parsed = JSON.parse(raw)
         const seq = parseInt(parsed._seq, 10)
-        // Skip stale (>5 min old) or implausibly far future (>5 min ahead, e.g. NTP jump)
-        if (!seq || now - seq > 300_000 || seq > now + 300_000) continue
+        // Skip stale or implausibly far future (e.g. NTP jump)
+        if (!seq || now - seq > STALE_MS || seq > now + FUTURE_MS) continue
         if (strict) {
           if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), path.resolve(projectRoot))) continue
           if (!parsed._cwd && file !== 'office-status.json') continue
@@ -88,6 +92,10 @@ export function scanAndMerge(dir, projectRoot) {
 
   if (sessions.length === 0) return null
 
+  // C1: sort sessions deterministically before merging so JSON output is stable
+  // (fs.readdirSync order is platform-dependent — unstable order → different JSON hash → no 304)
+  sessions.sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0))
+
   let merged
   if (sessions.length === 1) {
     merged = { ...sessions[0].data }
@@ -98,26 +106,40 @@ export function scanAndMerge(dir, projectRoot) {
     let workflow = null
     for (const { slug, data } of sessions) {
       if (!workflow && data.workflow) workflow = data.workflow
-      // Pick the single most urgent agent from this session
+      // Pick the single most urgent agent from this session.
+      // Role is the tiebreaker so the sort is stable across calls (C1).
       const pick = (data.agents || [])
         .filter(a => a && typeof a === 'object' && (a.status === 'working' || a.status === 'blocked'))
-        .sort((a, b) => (PRI[a.status] ?? 9) - (PRI[b.status] ?? 9))[0]
+        .sort((a, b) => {
+          const pd = (PRI[a.status] ?? 9) - (PRI[b.status] ?? 9)
+          return pd !== 0 ? pd : (a.role < b.role ? -1 : a.role > b.role ? 1 : 0)
+        })[0]
       if (pick && typeof pick.role === 'string') {
         allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
       }
     }
-    const mergedSeq = sessions.reduce((max, { data }) => {
-      const s = parseInt(data._seq, 10)
-      return Number.isFinite(s) && s > max ? s : max
-    }, 0)
+    // C2: _seq is a sorted join of all child _seq values — any child change moves it.
+    // (max-child strategy silently dropped updates from non-max sessions.)
+    const joinedSeq = sessions
+      .map(({ data }) => data._seq || '0')
+      .sort()
+      .join(':')
     merged = {
-      _seq: String(mergedSeq || Date.now()),
+      _seq: joinedSeq,
       type: 'office-status',
       agents: allAgents,
       activeCount: allAgents.filter(a => a.status === 'working' || a.status === 'blocked').length,
       workflow,
       source: 'multi-session',
       sessionCount: sessions.length,
+    }
+    // M6: carry forward mood from the most-recent session that has one
+    const moodSession = [...sessions]
+      .sort((a, b) => (parseInt(b.data._seq, 10) || 0) - (parseInt(a.data._seq, 10) || 0))
+      .find(s => s.data.mood)
+    if (moodSession) {
+      merged.mood = moodSession.data.mood
+      if (moodSession.data.moodDuration != null) merged.moodDuration = moodSession.data.moodDuration
     }
   }
 
@@ -147,7 +169,7 @@ export function getSessionStats(dir, projectRoot) {
       const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
       const parsed = JSON.parse(raw)
       const seq = parseInt(parsed._seq, 10)
-      if (!seq || now - seq > 300_000 || seq > now + 60_000) continue
+      if (!seq || now - seq > STALE_MS || seq > now + FUTURE_MS) continue
       if (parsed.source === 'file-watcher') {
         fileWatcherPresent = true
       } else if (parsed._cwd && pathsEqual(path.resolve(parsed._cwd), path.resolve(projectRoot))) {

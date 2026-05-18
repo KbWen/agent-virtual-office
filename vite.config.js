@@ -134,16 +134,16 @@ function officeStatusPlugin() {
     }
   }
 
-  function checkRateLimit(req, endpoint = '') {
+  // M4: keyed on IP only — shared 30 POST/10s budget across all write endpoints
+  function checkRateLimit(req) {
     if (req.method !== 'POST') return true
     const ip = req.socket?.remoteAddress || 'unknown'
-    const key = endpoint ? `${ip}:${endpoint}` : ip
     const now = Date.now()
-    const ts = postCounts.get(key) || []
+    const ts = postCounts.get(ip) || []
     const fresh = ts.filter(t => now - t < RATE_WINDOW)
-    if (fresh.length >= RATE_LIMIT) { postCounts.set(key, fresh); return false }
+    if (fresh.length >= RATE_LIMIT) { postCounts.set(ip, fresh); return false }
     fresh.push(now)
-    postCounts.set(key, fresh)
+    postCounts.set(ip, fresh)
     return true
   }
 
@@ -204,7 +204,7 @@ function officeStatusPlugin() {
             res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
             return
           }
-          if (!checkRateLimit(req, 'status')) {
+          if (!checkRateLimit(req)) {
             res.statusCode = 429
             res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
             return
@@ -309,8 +309,8 @@ function officeStatusPlugin() {
 
       const EVENT_TO_STATUS = {
         'pr-merged':      [{ role: 'ops', status: 'done',    label: '🚀 PR merged!' },
-                           { role: 'dev', status: 'done',    label: '✅ 上了！' }],
-        'pr-opened':      [{ role: 'dev', status: 'working', label: '📋 PR 開好了' }],
+                           { role: 'dev', status: 'done',    label: '✅ Shipped!' }],
+        'pr-opened':      [{ role: 'dev', status: 'working', label: '📋 PR opened' }],
         'pr-reviewed':    [{ role: 'qa',  status: 'done',    label: '✅ PR reviewed' }],
         'test-passed':    [{ role: 'qa',  status: 'done',    label: '✅ Tests passed!' }],
         'test-failed':    [{ role: 'qa',  status: 'blocked', label: '❌ Tests failed' }],
@@ -362,7 +362,7 @@ function officeStatusPlugin() {
             res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
             return
           }
-          if (!checkRateLimit(req, 'lang')) {
+          if (!checkRateLimit(req)) {
             res.statusCode = 429
             res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
             return
@@ -463,7 +463,7 @@ function officeStatusPlugin() {
           res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
           return
         }
-        if (!checkRateLimit(req, 'event')) {
+        if (!checkRateLimit(req)) {
           res.statusCode = 429
           res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
           return

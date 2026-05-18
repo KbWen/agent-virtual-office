@@ -67,7 +67,7 @@ export function normalizePost(body) {
   }
   const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
   return {
-    _seq: String(Date.now()),
+    _seq: nextSeq(),
     type: 'office-status',
     agents,
     activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
