@@ -75,8 +75,12 @@ if (command === 'setup') {
     }
   }
 
-  // Write back atomically to prevent corruption on crash/disk-full
-  const settingsTmp = settingsPath + '.tmp.' + process.pid
+  // Write back atomically to prevent corruption on crash/disk-full.
+  // tmp name = pid + random suffix so two concurrent setup runs (or a leftover
+  // tmp from a prior crashed run) never collide on the same path — matches the
+  // atomicWrite convention in server.mjs / the hooks.
+  const settingsTmp = settingsPath + '.tmp.' + process.pid + '.' +
+    (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
   try {
     fs.writeFileSync(settingsTmp, JSON.stringify(settings, null, 2))
     fs.renameSync(settingsTmp, settingsPath)

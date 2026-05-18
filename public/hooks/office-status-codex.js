@@ -8,6 +8,24 @@ const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer'
 const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
 const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
 
+// Monotonic _seq: plain integer string, matches office-status-hook.js / server.mjs.
+// Two invocations in the same ms get distinct values, so scanSessions dedup/staleness
+// keying stays correct. Caller-supplied _seq is only honored when it is a plain
+// integer string — a stale or non-numeric _seq would otherwise make scanAndMerge
+// drop the session as stale or fail the /^\d+$/ guard in the client.
+let _seqLast = 0
+function nextSeq() {
+  const now = Date.now()
+  _seqLast = now > _seqLast ? now : _seqLast + 1
+  return String(_seqLast)
+}
+
+function coerceSeq(raw) {
+  if (typeof raw === 'string' && /^\d+$/.test(raw)) return raw
+  if (typeof raw === 'number' && Number.isInteger(raw) && raw >= 0) return String(raw)
+  return nextSeq()
+}
+
 function getSessionSlug() {
   const cwdHash = require('crypto').createHash('md5').update(process.cwd()).digest('hex').slice(0, 4)
   try {
@@ -38,6 +56,12 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
   if (!body || typeof body !== 'object') {
     throw new Error('Expected a JSON object payload')
   }
+  // Caller may supply _seq, but a stale/non-numeric value would break scanSessions
+  // staleness + the client's /^\d+$/ guard. coerceSeq accepts only plain-integer
+  // strings; anything else falls back to a fresh monotonic value.
+  // `now` is kept as a parameter for deterministic tests, but only via coerceSeq's
+  // nextSeq() fallback — a literal numeric `now` is no longer used as the seq.
+  void now
 
   if (body.type === 'office-status') {
     const agents = Array.isArray(body.agents)
@@ -51,7 +75,7 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
       source: body.source || 'codex-cli',
-      _seq: body._seq || String(now),
+      _seq: coerceSeq(body._seq),
     }
   }
 
@@ -75,7 +99,7 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
     activeCount: agents.filter((a) => a.status === 'working' || a.status === 'blocked').length,
     workflow: body.workflow || null,
     source: body.source || 'codex-cli',
-    _seq: body._seq || String(now),
+    _seq: coerceSeq(body._seq),
   }
 }
 
@@ -90,13 +114,19 @@ function writeCodexStatusFile(payload, cwd = process.cwd()) {
 
   const dir = path.dirname(statusFile)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmpFile = `${statusFile}.tmp.${process.pid}`
+  // tmp name = pid + random suffix: a bare pid collides when two codex hook
+  // invocations share a parent pid and run concurrently — one's writeFileSync
+  // would clobber the other mid-write and the shared-path unlinkSync would
+  // delete the sibling's tmp. Matches office-status-hook.js / vite.config.js.
+  const tmpFile = `${statusFile}.tmp.${process.pid}.` +
+    (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+  const json = JSON.stringify(output, null, 2)
   try {
-    fs.writeFileSync(tmpFile, JSON.stringify(output, null, 2))
+    fs.writeFileSync(tmpFile, json)
     fs.renameSync(tmpFile, statusFile)
   } catch {
-    try { fs.writeFileSync(statusFile, JSON.stringify(output, null, 2)) } catch {}
-    try { fs.unlinkSync(`${statusFile}.tmp.${process.pid}`) } catch {}
+    try { fs.writeFileSync(statusFile, json) } catch {}
+    try { fs.unlinkSync(tmpFile) } catch {}
   }
   return { statusFile, payload: output }
 }

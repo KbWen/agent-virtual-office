@@ -293,14 +293,26 @@ function officeStatusPlugin() {
       // Always register — chokidar watches non-existent dirs and picks them up when created
       if (!fs.existsSync(watchDir)) fs.mkdirSync(watchDir, { recursive: true })
       server.watcher.add(watchDir)
+      // Debounce: an atomic temp-file rename fires two watcher events on some
+      // platforms (one for the tmp unlink, one for the rename target). Without
+      // debouncing, a single hook write triggers two full scanAndMerge passes
+      // and two SSE broadcasts. Mirrors server.mjs's 80ms watcher debounce.
+      let watchDebounce = null
       const onWatchChange = (file) => {
-        if (path.basename(file).match(/^office-status(-[^.]+)?\.json$/)) {
+        if (!path.basename(file).match(/^office-status(-[^.]+)?\.json$/)) return
+        if (sseClients.size === 0) return
+        clearTimeout(watchDebounce)
+        watchDebounce = setTimeout(() => {
           const merged = scanAndMerge(path.dirname(statusPath), process.cwd())
           if (merged) broadcastSSE(merged)
-        }
+        }, 80)
+        if (watchDebounce.unref) watchDebounce.unref()
       }
       server.watcher.on('change', onWatchChange)
-      server.httpServer?.on('close', () => server.watcher.off('change', onWatchChange))
+      server.httpServer?.on('close', () => {
+        server.watcher.off('change', onWatchChange)
+        clearTimeout(watchDebounce)
+      })
 
       // Heartbeat: keep SSE connections alive through proxies and load balancers
       const sseHeartbeat = setInterval(() => {

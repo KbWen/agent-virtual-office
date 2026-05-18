@@ -6,6 +6,9 @@
  * When either copy changes, update BOTH and verify this suite still passes.
  */
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { normalizePost as canonical } from '../src/utils/normalizePost.js'
 
 // ── Inline copy from server.mjs ────────────────────────────────────────────
@@ -149,4 +152,45 @@ describe('normalizePost server/canonical parity', () => {
       expect(_b).toMatch(SEQ_RE)
     })
   }
+})
+
+// ── Source-drift guard ──────────────────────────────────────────────────────
+// The behavioral CASES above only exercise the embedded `serverNormalizePost`
+// copy — if server.mjs's REAL normalizePost drifts but this file's copy is not
+// updated, the behavioral tests silently keep passing against the stale copy.
+// This test reads server.mjs's actual source and asserts the function body is
+// byte-identical (whitespace-normalized) to the embedded copy, closing that gap.
+describe('normalizePost embedded copy matches server.mjs source', () => {
+  function extractFnBody(source, fnName) {
+    const startMarker = `function ${fnName}(`
+    const start = source.indexOf(startMarker)
+    if (start === -1) throw new Error(`${fnName} not found in source`)
+    // Walk braces from the first '{' after the signature to find the matching close.
+    let i = source.indexOf('{', start)
+    if (i === -1) throw new Error(`${fnName} body brace not found`)
+    let depth = 0
+    for (; i < source.length; i++) {
+      const ch = source[i]
+      if (ch === '{') depth++
+      else if (ch === '}') {
+        depth--
+        if (depth === 0) return source.slice(start, i + 1)
+      }
+    }
+    throw new Error(`${fnName} body not balanced`)
+  }
+  // Collapse all runs of whitespace so cosmetic indentation differences between
+  // the two files (test uses different indentation) don't cause false failures —
+  // only real logic differences are flagged.
+  const norm = (s) => s.replace(/\s+/g, ' ').trim()
+
+  it('serverNormalizePost is logically identical to server.mjs normalizePost', () => {
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    const serverSrc = readFileSync(path.join(here, '..', 'server.mjs'), 'utf-8')
+    const testSrc = readFileSync(fileURLToPath(import.meta.url), 'utf-8')
+    const real = extractFnBody(serverSrc, 'normalizePost')
+    const embedded = extractFnBody(testSrc, 'serverNormalizePost')
+    // Rename the embedded function so only the body (not the name) is compared.
+    expect(norm(embedded.replace('serverNormalizePost', 'normalizePost'))).toBe(norm(real))
+  })
 })
