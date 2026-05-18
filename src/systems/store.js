@@ -120,10 +120,19 @@ export function validatePersistedAgent(saved) {
   }
 }
 
-function validatePersistedDailyDoneLedger(saved) {
+export function validatePersistedDailyDoneLedger(saved, now = Date.now()) {
   if (!saved || typeof saved !== 'object') return null
   const dayKey = typeof saved.dayKey === 'string' ? saved.dayKey : null
   if (!dayKey) return null
+
+  // Reconcile the day AT VALIDATION TIME, not via a later tick. loadPersistedState's
+  // staleness window is 4 hours, so a ledger saved late yesterday is loaded early today
+  // with yesterday's dayKey. Returning it verbatim seeds the store with a stale-day
+  // ledger; until updateTime's next 60s rollover runs, PixelOffice's Sprint Kanban
+  // (totalDoneToday) and the inspector's "done today" display YESTERDAY's counts.
+  // If the persisted day is not today, the counts/event keys belong to a finished day —
+  // return a fresh empty ledger for today rather than carrying the stale tally.
+  if (dayKey !== getLocalDayKey(now)) return createDailyDoneLedger(now)
 
   const counts = {}
   for (const [agentId, value] of Object.entries(saved.counts || {})) {
