@@ -426,11 +426,12 @@ function processEvent(event) {
         const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
         if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
         capturedPromptId = cur._promptId || null
-        // If no _promptId exists yet (fresh install — first-ever Stop left a file without
-        // one), synthesize a turn token so the PostToolUse straggler gate is functional.
-        // UPS will write a real UUID; the mismatch becomes detectable on the first turn.
-        if (capturedPromptId === null) capturedPromptId = `__t:${nextSeq()}`
       } catch {}
+      // Synthesize OUTSIDE the try so ENOENT (file absent on fresh install — no prior Stop
+      // has run yet) does not kill the synthesis path. Without this, the catch swallows the
+      // missing-file exception AND capturedPromptId stays null, leaving the PostToolUse
+      // straggler gate structurally dead for the entire first turn.
+      if (capturedPromptId === null) capturedPromptId = `__t:${nextSeq()}`
       const fullPath = extractFilePath(tool, toolInput)
       // If inside a subagent with skill context, prefer the skill's role
       const skillCtx = readSkillContext(agentId)

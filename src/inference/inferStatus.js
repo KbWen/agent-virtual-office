@@ -526,9 +526,14 @@ export function startStatusIntegration(store) {
       if (isNumericSeq(lastAppliedSeq)) {
         const gap = Number(lastAppliedSeq) - Number(msg._seq)
         if (gap > SKEW_TOLERANCE_MS) {
-          // Reset is incomplete without also clearing pendingMsg: if pendingMsg holds a
-          // stale high-seq value, the first post-reset message would be dropped by the
-          // pendingMsg comparison below even though lastAppliedSeq was just nulled.
+          // Flush the queued pendingMsg before resetting: it was legitimately queued and
+          // may be newer than the skew-tripping message (e.g. hook A queued, straggler B
+          // trips the reset). Discarding A silently would be a lost update. Apply it now
+          // so the office reflects A's state, then accept B as the new pending.
+          if (pendingMsg && isHookOrigin(pendingMsg.source)) {
+            if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null }
+            applyMessage(pendingMsg)
+          }
           lastAppliedSeq = null
           pendingMsg = null
           if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null }

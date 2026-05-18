@@ -146,8 +146,13 @@ export function scanAndMerge(dir, projectRoot) {
       source: 'multi-session',
       sessionCount: sessions.length,
     }
-    // M6: carry forward mood from the most-recent session that has one
+    // M6: carry forward mood from the most-recent *active* session that has one.
+    // Restrict to sessions that contributed an active agent — same rationale as workflow:
+    // a finished session (all agents done) must not inject its mood over an unrelated active
+    // session whose own agents carry no mood of their own.
+    const activeSlugs = new Set(allAgents.map(a => a.session))
     const moodSession = [...sessions]
+      .filter(s => activeSlugs.has(s.slug))
       .sort((a, b) => (parseInt(b.data._seq, 10) || 0) - (parseInt(a.data._seq, 10) || 0))
       .find(s => s.data.mood)
     if (moodSession) {
