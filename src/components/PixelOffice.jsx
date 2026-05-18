@@ -113,10 +113,16 @@ function FlyingDocument({ fromPos, toPos, onComplete }) {
 
 function FlyingDocuments() {
   const handoffs = useOfficeStore((s) => s.handoffs)
-  const agents = useOfficeStore((s) => s.agents)
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
 
   if (reducedMotion) return null
+  // Read agent positions via getState() rather than subscribing to s.agents.
+  // A FlyingDocument animates a fixed arc between its from/to coords captured at
+  // mount — it never needs live position updates. Subscribing to s.agents made
+  // FlyingDocuments re-render on EVERY agent RAF position tick (~30fps per walking
+  // agent) even when handoffs was empty. Now it re-renders only when handoffs
+  // itself changes (a handful of times per minute).
+  const agents = useOfficeStore.getState().agents
   return handoffs.map((h) => {
     const fromAgent = agents[h.from]
     const toAgent = agents[h.to]

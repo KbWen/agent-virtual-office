@@ -358,8 +358,11 @@ import { MIN_AGENT_DIST, OBSTACLE_PUSH_PX, CORRIDOR_JITTER, DOOR_JITTER } from '
 function getOccupiedPositions(agentId, allAgents) {
   const positions = []
   if (!allAgents) return positions
-  for (const [id, agent] of Object.entries(allAgents)) {
+  // Iterate keys directly — Object.entries() allocates an array of [id,agent]
+  // pair arrays; only the value is needed and the id is read in place.
+  for (const id of Object.keys(allAgents)) {
     if (id === agentId) continue
+    const agent = allAgents[id]
     // Use target position if moving, else current position
     const pos = agent.targetPosition || agent.position
     if (pos) positions.push(pos)
