@@ -288,6 +288,9 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
         if (!stopped && es) {
           consecutiveErrors = 0
           reconnectDelay = 2000
+          // Emit success probe so integrationHealth transitions back to 'online'
+          // after a quiet reconnect (server alive but no tool calls firing events).
+          if (onProbe) onProbe({ ok: true })
         }
       }, MIN_STABLE_MS)
     })
@@ -450,9 +453,11 @@ export function startStatusIntegration(store) {
   let debounceTimer = null
   let stalenessTimer = null
   let pendingMsg = null
+  let lastAppliedSeq = null  // cross-channel stale-drop: tracks highest numeric _seq applied
 
   function applyMessage(msg) {
     if (torn) return
+    if (msg._seq) lastAppliedSeq = msg._seq
     const s = store.getState()
 
     // Set mood override BEFORE feeding events so pushEventBatch's updateStoreMood sees it
@@ -491,6 +496,11 @@ export function startStatusIntegration(store) {
 
   function handleIncoming(msg) {
     if (torn || !msg) return
+    // Drop cross-channel stale deliveries: heartbeat poller can race SSE and deliver an
+    // older body (lower _seq timestamp) that would clobber newer state in the debounce slot.
+    if (msg._seq && lastAppliedSeq &&
+        /^\d+$/.test(msg._seq) && /^\d+$/.test(lastAppliedSeq) &&
+        Number(msg._seq) < Number(lastAppliedSeq)) return
     pendingMsg = msg
     if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(() => {
@@ -565,9 +575,9 @@ export function startStatusIntegration(store) {
 
   if (sseCleanup && !polling.active) {
     polling.active = true
-    // null onProbe: when SSE is active it already feeds handleProbe; the 10s
-    // heartbeat poller is just a catch-all for missed pushes, not a health signal.
-    polling.cleanup = startFilePolling(handleIncoming, 10_000, null)
+    // Pass handleProbe so that if SSE freezes without firing onerror (stuck connection),
+    // the heartbeat poller still advances integrationHealth via its own 200/304 results.
+    polling.cleanup = startFilePolling(handleIncoming, 10_000, handleProbe)
   } else {
     startFastPolling()
   }
