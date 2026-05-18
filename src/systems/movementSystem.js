@@ -415,10 +415,22 @@ function jitter(pos, amount = 16) {
 }
 
 export function getTargetForBehavior(agentId, behaviorId, allAgents) {
-  const occupied = getOccupiedPositions(agentId, allAgents)
+  // Lazily resolve the occupied-positions list — getOccupiedPositions scans every
+  // agent and allocates an array. The MOST common case is a desk/work behavior
+  // (the `work` category carries 65% of the weight in behaviorEngine, and all of
+  // its behaviors map to HOME_POSITIONS via the `waypointKey === undefined`
+  // early-return below), which never reads `occupied`. Building it unconditionally
+  // meant an all-agents scan + array allocation per agent per behavior cycle that
+  // was discarded for the majority path. Compute it only when a branch needs it.
+  let _occupied = null
+  const occupiedPositions = () => {
+    if (_occupied === null) _occupied = getOccupiedPositions(agentId, allAgents)
+    return _occupied
+  }
 
   // Meeting: pick a random chair around the table
   if (behaviorId === 'meeting') {
+    const occupied = occupiedPositions()
     // Pick a chair that's not already occupied
     const shuffled = [...MEETING_CHAIRS].sort(() => Math.random() - 0.5)
     for (const chair of shuffled) {
@@ -441,7 +453,7 @@ export function getTargetForBehavior(agentId, behaviorId, allAgents) {
           x: targetPos.x + Math.cos(angle) * dist,
           y: targetPos.y + Math.sin(angle) * dist,
         })
-        return avoidOverlap(raw, occupied)
+        return avoidOverlap(raw, occupiedPositions())
       }
     }
   }
@@ -453,7 +465,7 @@ export function getTargetForBehavior(agentId, behaviorId, allAgents) {
   const base = WAYPOINTS[waypointKey] || HOME_POSITIONS[agentId]
   if (!base) return null
   const jittered = jitter(base, 24)
-  return avoidOverlap(jittered, occupied)
+  return avoidOverlap(jittered, occupiedPositions())
 }
 
 export function calcFacing(fromX, fromY, toX, toY) {
