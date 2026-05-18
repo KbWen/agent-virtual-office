@@ -86,19 +86,35 @@ function savePersistedState(state) {
 
 // ─── Validation for persisted data ───
 const VALID_FACINGS = new Set(['up', 'down', 'left', 'right'])
+const DESK_ITEM_KEYS = ['coffee', 'sticky', 'books']
 
 function isValidPosition(pos) {
   return pos && typeof pos.x === 'number' && typeof pos.y === 'number'
     && isFinite(pos.x) && isFinite(pos.y)
 }
 
-function validatePersistedAgent(saved) {
+// Deep-validate a persisted deskItemCount: localStorage is attacker/corruption-reachable,
+// and the value flows straight into the growth math (count[item] = (count[item]||0)+1).
+// A string value would string-concat ("lots"+1), a negative would underflow, and unknown
+// keys would persist forever. Rebuild a clean {coffee,sticky,books} object with only
+// finite non-negative integers, dropping any extra keys.
+function validateDeskItemCount(saved) {
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return undefined
+  const clean = {}
+  for (const key of DESK_ITEM_KEYS) {
+    const v = saved[key]
+    clean[key] = (typeof v === 'number' && Number.isFinite(v) && v >= 0) ? Math.floor(v) : 0
+  }
+  return clean
+}
+
+export function validatePersistedAgent(saved) {
   if (!saved) return null
   return {
     // status is NOT persisted — always starts as 'idle', driven by external hooks
     behavior: typeof saved.behavior === 'string' ? saved.behavior : undefined,
     expression: typeof saved.expression === 'string' ? saved.expression : undefined,
-    deskItemCount: saved.deskItemCount && typeof saved.deskItemCount === 'object' ? saved.deskItemCount : undefined,
+    deskItemCount: validateDeskItemCount(saved.deskItemCount),
     position: isValidPosition(saved.position) ? saved.position : undefined,
     facing: VALID_FACINGS.has(saved.facing) ? saved.facing : undefined,
   }
@@ -430,6 +446,29 @@ export const useOfficeStore = create((set) => ({
               count[growthItem] = (count[growthItem] || 0) + 1
               agents[u.agentId] = { ...agent, deskItemCount: count }
             }
+          }
+        }
+      }
+      // Multi-session reconciliation: scanAndMerge emits the COMPLETE set of active
+      // worktree agents on every tick. When a worktree session ends, its composite
+      // 'slug~role' agent simply stops appearing in the payload — nothing else signals
+      // its departure. Without reconciliation, that dynamic agent lingers as a phantom
+      // worker for up to its 5-min expiresAt window. So on a multi-session update, drop
+      // any dynamic (session-carrying) agent that this payload no longer includes.
+      // Scoped to source==='multi-session' only: single-session and external channels
+      // legitimately deliver one agent at a time and must NOT evict the others.
+      if (meta.source === 'multi-session') {
+        const present = new Set(updates.map(u => u.agentId))
+        for (const id of Object.keys(agents)) {
+          const a = agents[id]
+          // A dynamic agent is identified solely by a non-null `session` slug — only
+          // applyExternalStatus's dynamic-creation branch ever sets that field; static
+          // roster agents (initAgents) never have it. The agent may have been created in
+          // a PRIOR applyExternalStatus call (so it now lives in s.agents too) — that is
+          // exactly the case we must reconcile, so do not gate on s.agents membership.
+          if (a && a.session && !present.has(id)) {
+            delete agents[id]
+            delete ext[id]
           }
         }
       }
