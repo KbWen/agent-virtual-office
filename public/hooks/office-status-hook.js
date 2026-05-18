@@ -654,12 +654,14 @@ function processEvent(event) {
   }
 
   // Write with retry (Windows file locking can cause EBUSY on rename).
-  // UserPromptSubmit retries harder (3 attempts) because it advances _promptId for
-  // straggler detection — a dropped UPS write silently disables that guard for the turn.
+  // UserPromptSubmit AND PreToolUse retry harder (3 attempts): both write turn-boundary
+  // tokens (_promptId / _preToolPromptId) that the PostToolUse straggler gate depends on.
+  // A dropped PreToolUse write leaves _preToolPromptId stale, causing the next PostToolUse
+  // to see a false mismatch and abort as a straggler even though it belongs to this turn.
   const dir = path.dirname(STATUS_FILE)
   const json = JSON.stringify(output, null, 2)
   const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
-  const writeAttempts = hookEvent === 'UserPromptSubmit' ? 3 : 1
+  const writeAttempts = (hookEvent === 'UserPromptSubmit' || hookEvent === 'PreToolUse') ? 3 : 1
   let writeOk = false
   try {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })

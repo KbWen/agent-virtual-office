@@ -457,7 +457,11 @@ export function startStatusIntegration(store) {
 
   function applyMessage(msg) {
     if (torn) return
-    if (msg._seq) lastAppliedSeq = msg._seq
+    // Only track numeric _seq values as the high-water mark for cross-channel stale-drop.
+    // Colon-joined multi-session seqs ("ts1:ts2") and hash-bridge seqs ("hash:...") are
+    // not comparable, so updating lastAppliedSeq with them would permanently disarm the
+    // guard by making the /^\d+$/ test fail for all subsequent single-session deliveries.
+    if (msg._seq && /^\d+$/.test(String(msg._seq))) lastAppliedSeq = msg._seq
     const s = store.getState()
 
     // Set mood override BEFORE feeding events so pushEventBatch's updateStoreMood sees it
@@ -575,9 +579,12 @@ export function startStatusIntegration(store) {
 
   if (sseCleanup && !polling.active) {
     polling.active = true
-    // Pass handleProbe so that if SSE freezes without firing onerror (stuck connection),
-    // the heartbeat poller still advances integrationHealth via its own 200/304 results.
-    polling.cleanup = startFilePolling(handleIncoming, 10_000, handleProbe)
+    // Heartbeat-only failure probe: report failures so "SSE frozen + server down" drives
+    // health offline, but suppress success probes so healthy 304s don't cancel accumulated
+    // SSE errors — without this gate the two channels fight over consecutiveFailures and
+    // the indicator flaps between degraded/online on every SSE-error/304 pair.
+    const heartbeatProbe = result => { if (!result.ok && !result.skipped) handleProbe(result) }
+    polling.cleanup = startFilePolling(handleIncoming, 10_000, heartbeatProbe)
   } else {
     startFastPolling()
   }
