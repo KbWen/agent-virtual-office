@@ -627,7 +627,15 @@ function AgentCharacter({ agent }) {
   // Use refs for callbacks accessed inside RAF to avoid stale closures
   const onWaypointReachedRef = useRef(null)
 
-  // Initialize visual position from agent's home position
+  // Initialize visual position from agent's home position.
+  // Depend on agentState's PRESENCE (a boolean), not the agentState object itself.
+  // agentState is s.agents[id], whose identity changes on every mutation — behavior,
+  // bubble, and ~30×/sec position updates while walking. The old `[agentState]` dep
+  // therefore re-fired this effect on every walk frame, even though its body is a
+  // one-shot guarded by `!visualPosRef.current` and does nothing after the first run.
+  // The seed only needs to happen once, when the agent first appears (false→true),
+  // so a presence boolean is the precise dependency.
+  const agentPresent = !!agentState
   useEffect(() => {
     if (!agentState) return
     const home = agentState.position || { x: 300, y: 250 }
@@ -636,7 +644,8 @@ function AgentCharacter({ agent }) {
       targetPosRef.current = { ...home }
       setRenderPos({ ...home })
     }
-  }, [agentState])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentPresent])
 
   // Walk animation timer (leg alternation)
   useEffect(() => {
