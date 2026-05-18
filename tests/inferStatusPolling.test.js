@@ -65,6 +65,26 @@ describe('pollFileStatusOnce', () => {
     expect(callback).toHaveBeenCalledTimes(2)
   })
 
+  it('restores prevEtag on parse failure so recovered body is not 304-skipped', async () => {
+    // R34 fix: parseError must not keep the new ETag; if it did, a recovered server
+    // would return 304 (same-ETag) and the valid body would never be delivered.
+    const state = createFilePollingState()
+    state.lastEtag = 'prev-etag'
+    const badJsonFetch = vi.fn().mockResolvedValueOnce({
+      ok: true, status: 200,
+      headers: { get: () => 'new-etag' },
+      json: vi.fn().mockRejectedValue(new SyntaxError('bad json')),
+    })
+    const callback = vi.fn()
+
+    const result = await pollFileStatusOnce(badJsonFetch, state, callback)
+
+    expect(result).toMatchObject({ ok: false, parseError: true })
+    expect(state.lastEtag).toBe('prev-etag')   // restored — not 'new-etag'
+    expect(state.lastSeq).toBeNull()            // unchanged
+    expect(callback).not.toHaveBeenCalled()
+  })
+
   it('resets backoff after a 304 Not Modified response', async () => {
     const state = createFilePollingState()
     state.consecutive404 = 12  // in backoff, but 12 % 3 === 0 so this poll runs

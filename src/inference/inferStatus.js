@@ -168,8 +168,9 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
     try {
       data = await resp.json()
     } catch {
-      // Discard the stored ETag so the next poll re-fetches the full body rather
-      // than getting a 304 "unchanged" for a persistently malformed response.
+      // Restore the previous ETag so a *changed* body (e.g. recovered valid JSON)
+      // is re-fetched on the next poll. An unchanged malformed body harmlessly yields
+      // 304 — but if the server recovers, the hash differs and no 304 occurs.
       state.lastEtag = prevEtag
       return { ok: false, parseError: true }
     }
