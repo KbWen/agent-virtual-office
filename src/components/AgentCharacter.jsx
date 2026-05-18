@@ -955,6 +955,14 @@ function AgentCharacter({ agent }) {
     setSelectedAgent(id)
   }, [id, setSelectedAgent])
 
+  // Stable keyboard handler — the root <g> re-renders ~30fps while the character walks
+  // (setRenderPos). A fresh inline `onKeyDown={(e) => ...}` arrow allocated a new closure
+  // on every one of those frames; useCallback over the already-stable handleClick keeps
+  // one closure for the component's lifetime.
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(e) }
+  }, [handleClick])
+
   const state = agentState || {}
   const pos = renderPos || state.position || { x: 0, y: 0 }
   const session = state.session || null
@@ -975,7 +983,7 @@ function AgentCharacter({ agent }) {
     <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}
       style={{ cursor: 'pointer' }} onClick={handleClick}
       role="button" aria-label={name} tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(e) } }}>
+      onKeyDown={handleKeyDown}>
       {/* Working glow ring */}
       {state.status === 'working' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.5">
