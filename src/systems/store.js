@@ -432,8 +432,23 @@ export const useOfficeStore = create((set) => ({
       // s.agents itself is unreliable because it accumulates dynamic agents from prior calls.
       const staticRosterIds = new Set((characters[s.mode] || characters.agentcortex).map(c => c.id))
       const activities = []
-      const dailyDoneLedger = ensureCurrentDailyDoneLedger(s.dailyDoneLedger, now)
-      const dayChanged = s.dailyDoneLedger.dayKey !== dailyDoneLedger.dayKey
+      // Preserve the dailyDoneLedger object identity when this update neither rolls the
+      // day nor records a fresh 'done'. ensureCurrentDailyDoneLedger ALWAYS allocates a
+      // new object (it spreads counts/seenEventKeys), so the previous unconditional clone
+      // gave the store a brand-new `dailyDoneLedger` — and a brand-new `.counts` — on
+      // EVERY incoming SSE/poll message, even a pure 'working' tick that touches no
+      // counts. That re-fired PixelOffice's `s.dailyDoneLedger?.counts` selector and
+      // AgentInspector's `s.dailyDoneLedger` subscription for nothing. Clone-on-write:
+      // on a same-day update keep s.dailyDoneLedger by reference until a count is
+      // actually about to be incremented (the `if (shouldCount)` branch below clones it).
+      const rolledLedger = ensureCurrentDailyDoneLedger(s.dailyDoneLedger, now)
+      const dayChanged = s.dailyDoneLedger.dayKey !== rolledLedger.dayKey
+      // `dailyDoneLedger` starts as the rolled ledger (a new object) on a day change, or
+      // the existing reference on a same-day update. `ledgerMutated` tracks whether the
+      // final returned value differs from s.dailyDoneLedger so an unchanged ledger keeps
+      // its identity.
+      let dailyDoneLedger = dayChanged ? rolledLedger : s.dailyDoneLedger
+      let ledgerMutated = dayChanged
       if (dayChanged) {
         for (const id of Object.keys(agents)) {
           if (agents[id]) agents[id] = { ...agents[id], deskItemCount: { coffee: 0, sticky: 0, books: 0 } }
@@ -554,6 +569,18 @@ export const useOfficeStore = create((set) => ({
           const shouldCount = isFreshDoneTransition && isUnseenEvent
 
           if (shouldCount) {
+            // Clone-on-write: the FIRST counted 'done' in this update upgrades
+            // `dailyDoneLedger` from the shared s.dailyDoneLedger reference to a fresh
+            // object (with fresh `counts`) so the in-place increments below never mutate
+            // store state. Subsequent counted dones in the same update reuse the clone.
+            if (!ledgerMutated) {
+              dailyDoneLedger = {
+                dayKey: dailyDoneLedger.dayKey,
+                counts: { ...dailyDoneLedger.counts },
+                seenEventKeys: [...dailyDoneLedger.seenEventKeys],
+              }
+              ledgerMutated = true
+            }
             dailyDoneLedger.counts[u.agentId] = (dailyDoneLedger.counts[u.agentId] || 0) + 1
             if (eventKey) {
               dailyDoneLedger.seenEventKeys = [...dailyDoneLedger.seenEventKeys, eventKey].slice(-500)

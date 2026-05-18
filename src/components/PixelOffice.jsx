@@ -224,6 +224,20 @@ function getLightingOverlay(hour) {
   return { fill: '#050510', opacity: 0.45 }
 }
 
+// ─── Clock widget — isolates the per-minute subscription ──────────────────
+// PixelOffice's full SVG tree (~1000 elements) is reconciled on every store change
+// that hits one of its subscriptions. `minute` advances every 60s, `hour` only once
+// per hour — so 59 of every 60 PixelOffice re-renders per hour were driven SOLELY by
+// the minute hand. Isolating the `minute` (and `hour`) subscription into this tiny
+// wrapper means PixelOffice no longer subscribes to `minute` at all: the minute tick
+// now re-renders only this 1-element <Clock>, not the whole office. PixelOffice still
+// subscribes to `hour` independently (NightSky / lighting / WallWindow need it).
+function ClockWidget({ x, y, r }) {
+  const hour = useOfficeStore((s) => s.hour)
+  const minute = useOfficeStore((s) => s.minute)
+  return <Clock x={x} y={y} r={r} hour={hour} minute={minute} />
+}
+
 // ─── Boss character that walks through during boss-visit event ─────────
 function WalkingBoss() {
   const [pos, setPos] = React.useState({ x: 100, y: 150 })
@@ -638,7 +652,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     [dailyDoneCounts]
   )
   const hour = useOfficeStore((s) => s.hour)
-  const minute = useOfficeStore((s) => s.minute)
+  // `minute` is intentionally NOT subscribed here — ClockWidget owns that subscription
+  // so the per-minute tick re-renders only the clock, not PixelOffice's whole SVG tree.
   const activeEvent = useOfficeStore((s) => s.activeEvent)
   const activeWorkflow = useOfficeStore((s) => s.activeWorkflow)
   const hasEverReceivedStatus = useOfficeStore((s) => s.hasEverReceivedStatus)
@@ -797,8 +812,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <WallWindow x={240} y={141} w={36} h={18} hour={hour} />
       <WallWindow x={340} y={141} w={36} h={18} hour={hour} />
       <WallWindow x={440} y={141} w={36} h={18} hour={hour} />
-      {/* Clock mounted on north wall */}
-      <Clock x={540} y={150} r={10} hour={hour} minute={minute} />
+      {/* Clock mounted on north wall — own subscription so the minute tick doesn't
+          re-render the whole office */}
+      <ClockWidget x={540} y={150} r={10} />
 
       {/* ═══ DOOR OPENINGS (cut through thick walls) ═══ */}
       {/* Entrance → Main Office (north wall) */}
