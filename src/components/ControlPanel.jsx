@@ -1,11 +1,21 @@
 import React, { useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName } from '../i18n'
 
 const statusOptions = ['idle', 'working', 'blocked', 'done']
 
 export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
-  const agents = useOfficeStore((s) => s.agents)
+  // ControlPanel only needs id/color/behavior/status per agent — NOT position.
+  // Subscribing to the whole `agents` object re-rendered the panel on every RAF
+  // position tick (~30fps while any agent walks). useShallow over a projected
+  // {id,color,behavior,status} list makes the panel re-render only when one of
+  // those four display fields actually changes.
+  const agentList = useOfficeStore(useShallow((s) =>
+    Object.values(s.agents).map((a) => ({
+      id: a.id, color: a.color, behavior: a.behavior, status: a.status,
+    }))
+  ))
   const isPaused = useOfficeStore((s) => s.isPaused)
   const togglePause = useOfficeStore((s) => s.togglePause)
   const triggerWorkflow = useOfficeStore((s) => s.triggerWorkflow)
@@ -22,18 +32,18 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
     return !localStorage.getItem('office-onboarded')
   })
   const lang = useLocale()
-  const agentList = Object.values(agents)
   const isPanel = mode === 'panel'
 
   const setStatus = (id, status) => {
-    const agent = agents[id]
-    if (!agent) return
-    useOfficeStore.setState((s) => ({
-      agents: {
-        ...s.agents,
-        [id]: { ...s.agents[id], status },
-      },
-    }))
+    useOfficeStore.setState((s) => {
+      if (!s.agents[id]) return s
+      return {
+        agents: {
+          ...s.agents,
+          [id]: { ...s.agents[id], status },
+        },
+      }
+    })
   }
 
   const cycleLang = () => {

@@ -610,8 +610,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     for (const id of DESK_IDS) out.push(s.agents[id]?.deskItemCount?.books || 0)
     return out
   }))
-  const totalDoneToday = useOfficeStore((s) =>
-    Object.values(s.dailyDoneLedger?.counts || {}).reduce((sum, c) => sum + c, 0)
+  // Subscribe to the ledger reference (changes only on a done event or day rollover),
+  // then sum in a memo. The previous inline `Object.values().reduce()` selector re-ran
+  // the reduction on EVERY store mutation — every RAF position tick, every behavior
+  // change — even though the done-count only changes a few times per minute.
+  const dailyDoneCounts = useOfficeStore((s) => s.dailyDoneLedger?.counts)
+  const totalDoneToday = useMemo(
+    () => Object.values(dailyDoneCounts || {}).reduce((sum, c) => sum + c, 0),
+    [dailyDoneCounts]
   )
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
