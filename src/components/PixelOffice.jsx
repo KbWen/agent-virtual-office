@@ -598,10 +598,18 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   // Only re-render PixelOffice when agent IDs change, not on every property update.
   // AgentCharacter subscribes to its own agent state independently.
   const agentOrderSignature = useOfficeStore(useShallow((s) => getAgentOrderSignature(s.agents)))
-  // Targeted selector — only re-renders when coffee counts change, not on every agent tick
-  const coffeeCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.coffee || 0)))
-  const stickyCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.sticky || 0)))
-  const booksCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.books || 0)))
+  // Targeted selector — only re-renders when desk-item counts change, not on every
+  // agent tick. The three growth items (coffee/sticky/books) are read in ONE flat
+  // selector instead of three: a separate useShallow per item ran the selector and
+  // allocated a 7-element array three times per store setState. One selector → one
+  // allocation. Layout: [coffee×7, sticky×7, books×7].
+  const deskItemCounts = useOfficeStore(useShallow((s) => {
+    const out = []
+    for (const id of DESK_IDS) out.push(s.agents[id]?.deskItemCount?.coffee || 0)
+    for (const id of DESK_IDS) out.push(s.agents[id]?.deskItemCount?.sticky || 0)
+    for (const id of DESK_IDS) out.push(s.agents[id]?.deskItemCount?.books || 0)
+    return out
+  }))
   const totalDoneToday = useOfficeStore((s) =>
     Object.values(s.dailyDoneLedger?.counts || {}).reduce((sum, c) => sum + c, 0)
   )
@@ -630,18 +638,19 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     },
     [agentOrderSignature]
   )
-  const coffeeCountMap = useMemo(
-    () => Object.fromEntries(DESK_IDS.map((id, index) => [id, coffeeCounts[index] || 0])),
-    [coffeeCounts]
-  )
-  const stickyCountMap = useMemo(
-    () => Object.fromEntries(DESK_IDS.map((id, index) => [id, stickyCounts[index] || 0])),
-    [stickyCounts]
-  )
-  const booksCountMap = useMemo(
-    () => Object.fromEntries(DESK_IDS.map((id, index) => [id, booksCounts[index] || 0])),
-    [booksCounts]
-  )
+  // Single memo derives all three id→count maps from the flat selector array.
+  // The flat layout is [coffee×N, sticky×N, books×N] where N = DESK_IDS.length.
+  const { coffeeCountMap, stickyCountMap, booksCountMap } = useMemo(() => {
+    const n = DESK_IDS.length
+    const coffee = {}, sticky = {}, books = {}
+    for (let i = 0; i < n; i++) {
+      const id = DESK_IDS[i]
+      coffee[id] = deskItemCounts[i] || 0
+      sticky[id] = deskItemCounts[n + i] || 0
+      books[id] = deskItemCounts[2 * n + i] || 0
+    }
+    return { coffeeCountMap: coffee, stickyCountMap: sticky, booksCountMap: books }
+  }, [deskItemCounts])
   const lightOverlay = getLightingOverlay(hour)
 
   // Panel mode: auto-adapt viewBox to container shape

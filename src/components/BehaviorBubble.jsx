@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useMemo } from 'react'
 
 export default function BehaviorBubble({ x, y, message }) {
   const [visible, setVisible] = useState(false)
@@ -18,26 +18,19 @@ export default function BehaviorBubble({ x, y, message }) {
     return () => { if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current) }
   }, [message])
 
-  if (!currentMsg) return null
+  // Derive display text + box width ONCE per message. Without this memo the three
+  // surrogate-cleaning regexes, the Array.from split, and the per-char width loop
+  // re-ran on every render — and BehaviorBubble re-renders on every x/y change while
+  // its parent AgentCharacter walks (~30fps). The result depends only on currentMsg,
+  // which changes a few times per minute, so x/y movement must not retrigger it.
+  const derived = useMemo(() => {
+    if (!currentMsg) return null
+    return computeBubbleLayout(currentMsg)
+  }, [currentMsg])
 
-  // Clean garbled characters: U+FFFD and unpaired surrogates only.
-  // Full surrogate range strip destroyed non-BMP emoji (\uD83D\uDE80 etc.) \u2014 keep paired surrogates.
-  const cleanMsg = currentMsg
-    .replace(/\uFFFD/g, '')
-    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')   // lone high surrogate
-    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')  // lone low surrogate
+  if (!derived) return null
 
-  // Unicode-safe truncation using Array.from (handles surrogate pairs)
-  const chars = Array.from(cleanMsg)
-  const maxLen = 16
-  const displayMsg = chars.length > maxLen ? chars.slice(0, maxLen).join('') + '…' : cleanMsg
-
-  // Width: CJK chars (~11 units) vs ASCII (~6.5 units) at fontSize 11
-  let estWidth = 0
-  for (const ch of displayMsg) {
-    estWidth += ch.codePointAt(0) > 0x2E7F ? 11 : 6.5
-  }
-  const boxW = Math.max(Math.ceil(estWidth) + 18, 48)
+  const { displayMsg, boxW } = derived
   const boxH = 26
   // bx is always centered on x — bubble renders in character-local coordinates
   // (old Math.max/min clamp assumed absolute SVG coords, broke text alignment)
@@ -86,4 +79,27 @@ export default function BehaviorBubble({ x, y, message }) {
       </text>
     </g>
   )
+}
+
+// Pure layout derivation — extracted so the memo body stays small and the regex /
+// char-width work is unambiguously a function of the message string alone.
+function computeBubbleLayout(currentMsg) {
+  // Clean garbled characters: U+FFFD and unpaired surrogates only.
+  // Full surrogate range strip destroyed non-BMP emoji (\uD83D\uDE80 etc.) \u2014 keep paired surrogates.
+  const cleanMsg = currentMsg
+    .replace(/\uFFFD/g, '')
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')   // lone high surrogate
+    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')  // lone low surrogate
+
+  // Unicode-safe truncation using Array.from (handles surrogate pairs)
+  const chars = Array.from(cleanMsg)
+  const maxLen = 16
+  const displayMsg = chars.length > maxLen ? chars.slice(0, maxLen).join('') + '…' : cleanMsg
+
+  // Width: CJK chars (~11 units) vs ASCII (~6.5 units) at fontSize 11
+  let estWidth = 0
+  for (const ch of displayMsg) {
+    estWidth += ch.codePointAt(0) > 0x2E7F ? 11 : 6.5
+  }
+  return { displayMsg, boxW: Math.max(Math.ceil(estWidth) + 18, 48) }
 }

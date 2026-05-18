@@ -41,6 +41,12 @@ export function scanAndMerge(dir, projectRoot) {
   const now = Date.now()
   const sessions = []
   let fromFallback = false
+  // Resolve the project root ONCE — it is invariant across the whole scan. Previously
+  // path.resolve(projectRoot) was recomputed for every status file in both the strict
+  // and fallback passes; with N session files that is 2N redundant path resolutions
+  // per GET/SSE/watcher tick. The per-file _cwd still resolves inside the loop because
+  // it differs per file.
+  const resolvedRoot = path.resolve(projectRoot)
 
   function scanDir(strict) {
     if (!fs.existsSync(dir)) return
@@ -55,7 +61,7 @@ export function scanAndMerge(dir, projectRoot) {
         // Skip stale or implausibly far future (e.g. NTP jump)
         if (!seq || now - seq > STALE_MS || seq > now + FUTURE_MS) continue
         if (strict) {
-          if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), path.resolve(projectRoot))) continue
+          if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), resolvedRoot)) continue
           if (!parsed._cwd && file !== 'office-status.json') continue
           // File-watcher fires on every JS edit — exclude from strict to avoid
           // polluting multi-session views. Fallback pass includes it as last resort.
@@ -65,7 +71,7 @@ export function scanAndMerge(dir, projectRoot) {
           // 1. Sessions from a different project (explicit _cwd set but doesn't match)
           // 2. Slugged files with no _cwd that strict mode excluded — they are from old
           //    hook versions or foreign tools and would suppress _hint:'no-hooks'.
-          if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), path.resolve(projectRoot))) continue
+          if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), resolvedRoot)) continue
           if (!parsed._cwd && file !== 'office-status.json' && parsed.source !== 'file-watcher') continue
         }
         const slug = file === 'office-status.json'
@@ -183,6 +189,8 @@ export function getSessionStats(dir, projectRoot) {
   let fileWatcherPresent = false
   let files
   try { files = fs.readdirSync(dir) } catch { return { hookSessionCount: 0, fileWatcherPresent: false } }
+  // Resolve the project root once — invariant across the scan (see scanAndMerge).
+  const resolvedRoot = path.resolve(projectRoot)
   for (const file of files) {
     if (!STATUS_FILE_RE.test(file)) continue
     try {
@@ -193,7 +201,7 @@ export function getSessionStats(dir, projectRoot) {
       if (parsed.source === 'file-watcher') {
         fileWatcherPresent = true
       } else if (
-        (parsed._cwd && pathsEqual(path.resolve(parsed._cwd), path.resolve(projectRoot))) ||
+        (parsed._cwd && pathsEqual(path.resolve(parsed._cwd), resolvedRoot)) ||
         (!parsed._cwd && file === 'office-status.json' && parsed.source !== 'file-watcher')
       ) {
         hookSessionCount++

@@ -53,14 +53,18 @@ const behaviors = {
 }
 
 function weightedRandom(weights) {
-  const entries = Object.entries(weights)
-  const total = entries.reduce((s, [, w]) => s + w, 0)
+  // Iterate keys directly — Object.entries() would allocate an array of [key,value]
+  // pairs on every call (once per agent per behavior cycle). A single Object.keys
+  // pass is enough; total and selection both read weights[key] in place.
+  const keys = Object.keys(weights)
+  let total = 0
+  for (const key of keys) total += weights[key]
   let r = Math.random() * total
-  for (const [key, w] of entries) {
-    r -= w
+  for (const key of keys) {
+    r -= weights[key]
     if (r <= 0) return key
   }
-  return entries[0][0]
+  return keys[0]
 }
 
 // Fallback behavior entry — used when a category has zero behaviors valid for a
