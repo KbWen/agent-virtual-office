@@ -81,21 +81,24 @@ function getSessionSlug() {
       const refMatch = headContent.match(/^ref:\s+refs\/heads\/(.+)$/)
       const branch = refMatch ? refMatch[1] : null  // null = detached HEAD → fall through
       if (branch) {
-        const slug = branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) || 'default'
+        const slug = branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').slice(0, 28).replace(/^-+|-+$/g, '') || 'default'
         return `${slug}-${cwdHash}`
       }
     }
   } catch {}
-  const cwdSlug = path.basename(process.cwd())
+  const cwdSlug = (path.basename(process.cwd())
     .replace(/[^a-zA-Z0-9]/g, '-')
     .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 28) || 'default'
+    .slice(0, 28)
+    .replace(/^-+|-+$/g, '')) || 'default'
   return `${cwdSlug}-${cwdHash}`
 }
 
 const SESSION_SLUG = getSessionSlug()
 const STATUS_FILE = path.join(os.homedir(), '.claude', `office-status-${SESSION_SLUG}.json`)
+
+// ─── Shared role list — single source for Stop handler and merge logic ───
+const VALID_HOOK_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
 
 // ─── Role mapping ───
 
@@ -468,7 +471,6 @@ function processEvent(event) {
       // Claude's turn is over — mark all current agents as done.
       // _stopped: true prevents straggler PostToolUse events from overwriting this idle state.
       try {
-        const VALID_HOOK_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
         const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
         const doneAgents = (Array.isArray(data.agents) ? data.agents : [])
           .filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
@@ -537,14 +539,13 @@ function processEvent(event) {
   }
 
   // Read existing status to merge (keep other agents' states + workflow)
-  const VALID_MERGE_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
   let existing = []
   let existingWorkflow = null
   try {
     const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
     existing = Array.isArray(data.agents)
       ? data.agents
-          .filter(a => a && typeof a === 'object' && VALID_MERGE_ROLES.includes(a.role))
+          .filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
           .map(a => ({
             role: a.role,
             status: typeof a.status === 'string' ? a.status : 'working',
@@ -597,6 +598,7 @@ function processEvent(event) {
 
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)
 if (typeof module !== 'undefined') {
-  module.exports = { HOOK_VERSION, toolToRole, skillToRole, shortFile, shortCommand, extractContext,
+  module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
+    shortFile, shortCommand, extractContext,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext }
 }

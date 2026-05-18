@@ -321,6 +321,11 @@ export function startStatusIntegration(store) {
   function applyMessage(msg) {
     const s = store.getState()
 
+    // Set mood override BEFORE feeding events so pushEventBatch's updateStoreMood sees it
+    if (msg.mood) {
+      setMoodOverride(msg.mood, msg.moodDuration || 60000)
+    }
+
     // Route agents
     const updates = routeExternalAgents(msg.agents || [])
 
@@ -340,11 +345,6 @@ export function startStatusIntegration(store) {
       s.applyExternalStatus(ids.map(id => ({ agentId: id, status: 'working', task: null, label: null })))
       s.setStatusSource('fallback')
       s.setIntegrationSource?.(msg.source || 'fallback')
-    }
-
-    // Handle explicit mood override from API
-    if (msg.mood) {
-      setMoodOverride(msg.mood, msg.moodDuration || 60000)
     }
 
     if (msg.workflow) s.setActiveWorkflow(msg.workflow)

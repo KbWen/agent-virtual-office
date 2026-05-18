@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 // Import CommonJS hook helpers
-const { toolToRole, skillToRole, shortFile, shortCommand, extractContext } = await import('../public/hooks/office-status-hook.js')
+const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext } = await import('../public/hooks/office-status-hook.js')
 
 describe('toolToRole', () => {
   it('maps Edit/Write/NotebookEdit to dev', () => {
@@ -110,6 +110,58 @@ describe('skillToRole', () => {
   })
 })
 
+describe('fileToRole', () => {
+  it('maps test files to qa', () => {
+    expect(fileToRole('/project/src/App.test.js')).toBe('qa')
+    expect(fileToRole('/project/tests/store.spec.ts')).toBe('qa')
+    expect(fileToRole('/project/__tests__/util.test.jsx')).toBe('qa')
+  })
+
+  it('maps CI/CD files to ops', () => {
+    expect(fileToRole('/project/.github/workflows/ci.yml')).toBe('ops')
+    expect(fileToRole('/project/Dockerfile')).toBe('ops')
+    expect(fileToRole('/project/docker-compose.yml')).toBe('ops')
+    expect(fileToRole('/project/deploy.yaml')).toBe('ops')
+  })
+
+  it('maps docs to res', () => {
+    expect(fileToRole('/project/README.md')).toBe('res')
+    expect(fileToRole('/project/docs/guide.mdx')).toBe('res')
+    expect(fileToRole('/project/notes/todo.txt')).toBe('res')
+  })
+
+  it('maps ADR/architecture files to arch', () => {
+    expect(fileToRole('/project/adr/001-auth.md')).toBe('res') // .md beats /adr/
+    expect(fileToRole('/project/architecture/schema.puml')).toBe('arch')
+    expect(fileToRole('/project/src/design.drawio')).toBe('arch')
+  })
+
+  it('maps CSS/design files to designer', () => {
+    expect(fileToRole('/project/src/App.css')).toBe('designer')
+    expect(fileToRole('/project/styles/theme.scss')).toBe('designer')
+    expect(fileToRole('/project/assets/logo.svg')).toBe('designer')
+    expect(fileToRole('/project/design/mockup.figma')).toBe('designer')
+    expect(fileToRole('/project/public/icon.png')).toBe('designer')
+  })
+
+  it('returns null for plain source files (fall through)', () => {
+    expect(fileToRole('/project/src/App.jsx')).toBeNull()
+    expect(fileToRole('/project/src/store.js')).toBeNull()
+    expect(fileToRole('/project/src/utils/format.ts')).toBeNull()
+  })
+
+  it('returns null for null/undefined input', () => {
+    expect(fileToRole(null)).toBeNull()
+    expect(fileToRole(undefined)).toBeNull()
+    expect(fileToRole('')).toBeNull()
+  })
+
+  it('handles Windows-style backslash paths', () => {
+    expect(fileToRole('C:\\project\\tests\\App.test.js')).toBe('qa')
+    expect(fileToRole('C:\\project\\src\\styles\\main.css')).toBe('designer')
+  })
+})
+
 describe('shortFile', () => {
   it('extracts basename from full path', () => {
     expect(shortFile('/Users/x/project/src/App.jsx')).toBe('App.jsx')
@@ -191,7 +243,8 @@ describe('extractContext (hook)', () => {
 
   it('extracts task count from TodoWrite input', () => {
     const result = extractContext('TodoWrite', { todos: [{ content: 'a' }, { content: 'b' }] })
-    expect(result).toBe('2 tasks')
+    // Label is bilingual ('2 tasks' en, '2 個任務' zh-TW) depending on ~/.claude/office-lang
+    expect(result).toMatch(/^2 /)
   })
 
   it('returns null for TodoWrite with no todos', () => {
