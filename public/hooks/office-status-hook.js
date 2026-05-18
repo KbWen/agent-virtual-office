@@ -638,10 +638,21 @@ function processEvent(event) {
   // SubagentStart is NOT exempt: if _stopped is still true when SubagentStart fires, UPS
   // has not yet run for the new turn, meaning this SubagentStart is a straggler from the
   // old turn. Once UPS clears _stopped, any SubagentStart for the new turn passes normally.
+  // recheckStopped/recheckStoppedAt: sourced from the re-check guard's fresh file read,
+  // not the earlier merge read. The carry-through must use these values so a UPS that
+  // fires between the merge read and the re-check guard clears _stopped before it reaches
+  // the carry-through — using the stale merge-read value would re-assert _stopped:true
+  // after UPS already cleared it, freezing subsequent events for up to 30s.
+  let recheckStopped = existingStopped
+  let recheckStoppedAt = existingStoppedAt
+
   if (hookEvent !== 'UserPromptSubmit') {
     try {
       const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-      const stoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
+      // Update recheck fields from the freshest read (single consistent snapshot for guard + carry-through).
+      recheckStopped = Boolean(latest._stopped)
+      recheckStoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : null
+      const stoppedAt = recheckStoppedAt ?? parseInt(latest._seq, 10)
       if (latest._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
       // SubagentStart with _stopped is unconditionally a straggler — no time limit.
       // A legitimate new-turn SubagentStart is always preceded by a UPS that clears _stopped.
@@ -703,8 +714,12 @@ function processEvent(event) {
     // last-writer-wins race with Stop erases _stopped=true, re-opening the straggler
     // window for subsequent events. UserPromptSubmit is the only event that legitimately
     // clears _stopped — it does so by omitting these keys from its own output.
-    ...(existingStopped && hookEvent !== 'UserPromptSubmit'
-      ? { _stopped: true, _stoppedAt: existingStoppedAt ?? undefined }
+    // Use recheckStopped (from the re-check guard's fresh read) not existingStopped (stale
+    // merge read) so a UPS that fires between the two reads is reflected here. Fall back to
+    // Date.now() when _stoppedAt is absent: a missing timestamp causes _seq to be used as a
+    // proxy, and a newly-written _seq ≈ now restarts the 30s window on every write.
+    ...(recheckStopped && hookEvent !== 'UserPromptSubmit'
+      ? { _stopped: true, _stoppedAt: recheckStoppedAt ?? Date.now() }
       : {}),
     // Turn-boundary fields for straggler detection:
     // _promptId advances on each UserPromptSubmit; _preToolPromptId is set by PreToolUse
