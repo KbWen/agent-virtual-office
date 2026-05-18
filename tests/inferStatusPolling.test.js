@@ -119,10 +119,10 @@ describe('pollFileStatusOnce', () => {
     expect(callback).toHaveBeenCalledOnce()
   })
 
-  it('caps consecutive404 at 29 so a persistently unreachable server does not ratchet forever', async () => {
-    // H2 fix: without the cap, 50% error rate ratchets consecutive404 unbounded; at cap=29
-    // (non-multiple of 3) the % 3 backoff skip keeps firing so the office stops hammering
-    // a dead server rather than pinging at base rate indefinitely.
+  it('caps consecutive404 at 30 so a persistently unreachable server does not ratchet forever', async () => {
+    // H2 fix: cap=30 is a multiple of 3 so the % 3 backoff skip still fires at the ceiling
+    // (30 % 3 === 0 → poll runs), allowing the office to retry a recovered server every
+    // 3rd cycle indefinitely. A non-multiple cap (e.g. 29) would black-hole polling permanently.
     // Force the counter through the multiples-of-3 run positions to reach the cap.
     const state = createFilePollingState()
     const failFetch = vi.fn().mockRejectedValue(new Error('network'))
@@ -134,10 +134,10 @@ describe('pollFileStatusOnce', () => {
       }
       // Skipped polls don't call the function and don't increment the counter
     }
-    expect(state.consecutive404).toBeLessThanOrEqual(29)
+    expect(state.consecutive404).toBeLessThanOrEqual(30)
   })
 
-  it('caps consecutive404 at 29 on 404 responses too', async () => {
+  it('caps consecutive404 at 30 on 404 responses too', async () => {
     const state = createFilePollingState()
     const notFoundFetch = vi.fn().mockResolvedValue({ ok: false, status: 404, headers: { get: () => null } })
     for (let i = 0; i < 200; i++) {
@@ -146,6 +146,6 @@ describe('pollFileStatusOnce', () => {
         await pollFileStatusOnce(notFoundFetch, state, vi.fn())
       }
     }
-    expect(state.consecutive404).toBeLessThanOrEqual(29)
+    expect(state.consecutive404).toBeLessThanOrEqual(30)
   })
 })

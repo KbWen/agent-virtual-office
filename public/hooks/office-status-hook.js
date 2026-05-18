@@ -629,13 +629,20 @@ function processEvent(event) {
     }
   }
 
+  // SubagentStop straggler guard: only clear workflow if it still belongs to this subagent.
+  // A straggler SubagentStop arriving after a new turn's SubagentStart must not null out
+  // the new turn's workflow (set to a different agentType by the new SubagentStart).
+  const effectiveClearWorkflow = (hookEvent === 'SubagentStop' && clearWorkflow)
+    ? existingWorkflow === (agentType || '').slice(0, 200)
+    : clearWorkflow
+
   const output = {
     _seq: nextSeq(),
     _cwd: process.cwd(),
     type: 'office-status',
     agents: newAgents,
     activeCount,
-    workflow: clearWorkflow ? null : (workflowOverride ? workflowOverride.slice(0, 200) : existingWorkflow),
+    workflow: effectiveClearWorkflow ? null : (workflowOverride ? workflowOverride.slice(0, 200) : existingWorkflow),
     source: 'claude-cli',
     // Turn-boundary fields for straggler detection:
     // _promptId advances on each UserPromptSubmit; _preToolPromptId is set by PreToolUse

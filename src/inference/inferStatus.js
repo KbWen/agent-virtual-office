@@ -152,7 +152,7 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
     if (resp.status === 304) { state.consecutive404 = 0; return { ok: true, unchanged: true } }
     if (!resp.ok) {
       if (resp.status === 404) {
-        state.consecutive404 = Math.min(state.consecutive404 + 1, 29)
+        state.consecutive404 = Math.min(state.consecutive404 + 1, 30)
       } else {
         // Non-404 errors (401, 500, etc.) — don't back off, just skip this cycle
         state.consecutive404 = 0
@@ -187,7 +187,7 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
     if (msg) { try { callback(msg) } catch {} }
     return { ok: true, delivered: Boolean(msg) }
   } catch {
-    state.consecutive404 = Math.min(state.consecutive404 + 1, 29)
+    state.consecutive404 = Math.min(state.consecutive404 + 1, 30)
     return { ok: false, networkError: true }
   } finally {
     state.inFlight = false
