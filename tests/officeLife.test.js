@@ -26,7 +26,16 @@ function makeFakeStore() {
     updateTime: () => { updateTimeCalls++ },
     setActiveEvent: (e) => { state.activeEvent = e },
     clearActiveEvent: () => { state.activeEvent = null },
-    setAgentBehavior: () => {},
+    setAgentBehavior: (id, behavior, expression, bubble) => {
+      if (!state.agents[id]) return
+      // Mirror the real store: behavior/expression/bubble update, inGroupEvent untouched.
+      state.agents[id] = {
+        ...state.agents[id],
+        behavior,
+        expression: expression || state.agents[id].expression,
+        bubble: bubble || null,
+      }
+    },
     setAgentGroupEvent: (id, { behavior, expression, bubble, groupTarget } = {}) => {
       if (!state.agents[id]) return
       state.agents[id] = { ...state.agents[id], behavior, expression, bubble: bubble || null, inGroupEvent: true, groupTarget: groupTarget || null }
@@ -46,6 +55,7 @@ function makeFakeStore() {
   return {
     getState: () => api,
     _updateTimeCalls: () => updateTimeCalls,
+    _setHour: (h) => { state.hour = h },
   }
 }
 
@@ -231,6 +241,78 @@ describe('officeLife — rare event (participants: all) lifecycle', () => {
     expect(store.getState().activeEvent).toBe(null)
     // Once cleared, a new event can start again.
     expect(triggerInteractiveEvent(store, 'dog-visit')).toBe(true)
+
+    cleanup()
+  })
+})
+
+// ─── R72: hour-14 post-lunch drowsiness must not corrupt group events ───
+// The 14:00 drowsiness time-event applies a 'tired' expression via setAgentBehavior,
+// which does NOT honour inGroupEvent. Before R72 it overwrote the behavior/
+// expression/bubble of agents mid-group-event (a standup straddling 14:00) and the
+// 30s release reverted ANY 'tired' agent — including an organic 'tired'. The fix
+// snapshots the precise drowsy set and skips in-group agents in both loops.
+describe('officeLife — hour-14 drowsiness respects group events (R72)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    // Monday so no Friday group-meeting fires alongside the hour-14 branch.
+    vi.setSystemTime(new Date('2026-01-05T13:59:30'))
+  })
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+  })
+
+  it('does NOT overwrite an agent that is locked in a group event', () => {
+    const store = makeFakeStore()
+    store._setHour(14)
+    const cleanup = startOfficeLife(store)
+
+    // dev is mid group event (e.g. a standup straddling the 14:00 boundary).
+    store.getState().setAgentGroupEvent('dev', {
+      behavior: 'meeting', expression: 'focused', bubble: 'Standup', groupTarget: null,
+    })
+
+    // First time-event interval tick fires the hour-14 drowsiness branch.
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100)
+
+    const dev = store.getState().agents.dev
+    // The group event's fields must survive — officeLife owns them during a group event.
+    expect(dev.inGroupEvent).toBe(true)
+    expect(dev.behavior).toBe('meeting')
+    expect(dev.expression).toBe('focused')
+    expect(dev.bubble).toBe('Standup')
+
+    // A non-group agent IS made drowsy.
+    expect(store.getState().agents.qa.expression).toBe('tired')
+
+    cleanup()
+  })
+
+  it('the 30s release reverts only the agents it made drowsy, skipping group events', () => {
+    const store = makeFakeStore()
+    store._setHour(14)
+    const cleanup = startOfficeLife(store)
+
+    // qa is free → becomes drowsy. dev is free at apply time too.
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100)
+    expect(store.getState().agents.qa.expression).toBe('tired')
+    expect(store.getState().agents.dev.expression).toBe('tired')
+
+    // dev joins a group event AFTER being made drowsy — the 30s release must not
+    // clobber the group event even though dev's expression was 'tired'.
+    store.getState().setAgentGroupEvent('dev', {
+      behavior: 'meeting', expression: 'happy', bubble: 'Meeting', groupTarget: null,
+    })
+
+    // 30s release fires.
+    vi.advanceTimersByTime(30000)
+
+    // qa reverted to normal; dev's in-progress group event untouched.
+    expect(store.getState().agents.qa.expression).toBe('normal')
+    expect(store.getState().agents.dev.inGroupEvent).toBe(true)
+    expect(store.getState().agents.dev.expression).toBe('happy')
+    expect(store.getState().agents.dev.behavior).toBe('meeting')
 
     cleanup()
   })

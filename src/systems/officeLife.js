@@ -587,17 +587,34 @@ export function startOfficeLife(store) {
       }, 45000)
     }
 
-    // 14:00-14:30 — Post-lunch drowsiness: everyone gets sleepy expression
+    // 14:00-14:30 — Post-lunch drowsiness: everyone gets sleepy expression.
+    // Skip agents currently locked in a group event: officeLife owns behavior/
+    // expression/bubble during a group event, and setAgentBehavior does NOT honour
+    // inGroupEvent — applying 'tired' here would corrupt an in-progress meeting/
+    // standup animation that straddles the 14:00 minute boundary (every other
+    // behavior-touching path — applyExternalStatus, clearExternalStatus,
+    // onWaypointReached, doSchedule, watchdog — guards on inGroupEvent for exactly
+    // this reason). Snapshot the precise set made drowsy so the 30s release reverts
+    // ONLY those agents — never an agent that organically picked a 'tired'
+    // expression via getNextBehavior, and never one that has since joined a group
+    // event.
     if (hour === 14) {
+      const drowsyIds = []
       agentIds.forEach((id) => {
-        store.getState().setAgentBehavior(id, store.getState().agents[id]?.behavior || 'typing', 'tired', null)
+        const s = store.getState()
+        if (s.agents[id]?.inGroupEvent) return
+        s.setAgentBehavior(id, s.agents[id]?.behavior || 'typing', 'tired', null)
+        drowsyIds.push(id)
       })
       setTimeout(() => {
         if (cancelled.value) return
-        agentIds.forEach((id) => {
+        drowsyIds.forEach((id) => {
           const s = store.getState()
-          if (s.agents[id]?.expression === 'tired') {
-            s.setAgentBehavior(id, s.agents[id].behavior, 'normal', null)
+          const a = s.agents[id]
+          // Only revert agents this handler made drowsy that are still drowsy and
+          // not now in a group event — never clobber a group event or an organic 'tired'.
+          if (a && !a.inGroupEvent && a.expression === 'tired') {
+            s.setAgentBehavior(id, a.behavior, 'normal', null)
           }
         })
       }, 30000)
