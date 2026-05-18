@@ -51,8 +51,14 @@ function computeMood() {
 
   if (events.length === 0) return 'idle'
 
-  // 1. Rushing: 5+ events in last 10 seconds
-  const recentCount = events.filter(e => now - e.timestamp < RUSHING_WINDOW).length
+  // 1. Rushing: 5+ events in last 10 seconds.
+  // Count with a plain loop — `.filter(...).length` allocated a throwaway array (up to
+  // MAX_EVENTS entries) on every computeMood call just to read its length. computeMood
+  // runs on every incoming status update via updateStoreMood.
+  let recentCount = 0
+  for (const e of events) {
+    if (now - e.timestamp < RUSHING_WINDOW) recentCount++
+  }
   if (recentCount >= RUSHING_THRESHOLD) return 'rushing'
 
   // 2. Frustrated: last 3 events are all blocked or error

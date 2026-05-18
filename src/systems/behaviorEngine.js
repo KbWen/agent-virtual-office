@@ -75,10 +75,25 @@ function weightedRandom(weights) {
 // pinning the CPU in a tight re-schedule loop.
 const FALLBACK_BEHAVIOR = { id: 'typing', expr: 'focused', msgs: 'typing', duration: [18000, 45000] }
 
-function pickBehavior(agentId, category) {
-  const baseRole = agentId.includes('~') ? agentId.split('~').pop() : agentId
+// Cache of role-filtered behavior pools, keyed "category|baseRole". pickBehavior runs
+// once per agent per behavior cycle; the `.filter(b => !b.only || b.only.includes(...))`
+// scan + array allocation is invariant for a given (category, role) pair — the behavior
+// catalogue is static. Resolve each pair once, then reuse the cached filtered array.
+const _validBehaviorCache = new Map()
+
+function getValidBehaviors(category, baseRole) {
+  const key = `${category}|${baseRole}`
+  const cached = _validBehaviorCache.get(key)
+  if (cached) return cached
   const pool = behaviors[category] || behaviors.work
   const valid = pool.filter((b) => !b.only || b.only.includes(baseRole))
+  _validBehaviorCache.set(key, valid)
+  return valid
+}
+
+function pickBehavior(agentId, category) {
+  const baseRole = agentId.includes('~') ? agentId.split('~').pop() : agentId
+  const valid = getValidBehaviors(category, baseRole)
   if (valid.length === 0) return FALLBACK_BEHAVIOR
   return valid[Math.floor(Math.random() * valid.length)]
 }
