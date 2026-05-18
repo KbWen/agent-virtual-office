@@ -135,8 +135,12 @@ export function generateContextBubble(agentId, update, allExternalStatus) {
 function generateCrossReaction(agentId, allExternalStatus) {
   if (!allExternalStatus) return null
 
-  for (const [otherId, ext] of Object.entries(allExternalStatus)) {
+  // Iterate keys directly — Object.entries() allocates an array of [id,ext] pair
+  // arrays. This runs on the SSE/poll message path (generateContextBubble per
+  // agent per applyExternalStatus); the id and ext are both read in place.
+  for (const otherId of Object.keys(allExternalStatus)) {
     if (otherId === agentId) continue
+    const ext = allExternalStatus[otherId]
 
     // React to blocked colleague
     if (ext.status === 'blocked') {

@@ -204,7 +204,11 @@ export function scanAndMerge(dir, projectRoot) {
       _seq: maxSeq,
       type: 'office-status',
       agents: allAgents,
-      activeCount: allAgents.filter(a => a.status === 'working' || a.status === 'blocked').length,
+      // Every entry in allAgents is a `pick` already filtered to working/blocked
+      // (see the .filter above) before being pushed — so activeCount is exactly
+      // allAgents.length. The previous .filter(...).length re-scanned the array
+      // and allocated a throwaway filtered copy on every GET/SSE multi-session tick.
+      activeCount: allAgents.length,
       workflow,
       source: 'multi-session',
       sessionCount: sessions.length,

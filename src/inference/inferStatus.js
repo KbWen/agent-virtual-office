@@ -751,7 +751,11 @@ export function startStatusIntegration(store) {
   const expiryInterval = setInterval(() => {
     const s = store.getState()
     const now = Date.now()
-    for (const [id, ext] of Object.entries(s.externalStatus)) {
+    // Iterate keys directly — Object.entries() allocates a [id,ext] pairs array
+    // on every 5s expiry tick. Both id and ext are read in place below.
+    const ext0 = s.externalStatus
+    for (const id of Object.keys(ext0)) {
+      const ext = ext0[id]
       if (ext.expiresAt && now > ext.expiresAt) {
         // Re-read fresh state: a new applyExternalStatus call may have renewed
         // expiresAt between the snapshot above and this clear — don't clobber it.

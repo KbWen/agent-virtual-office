@@ -363,8 +363,12 @@ function OfficeDog() {
   )
 }
 
+// Sorts IN PLACE — the sole caller passes a freshly-allocated Object.values()
+// array it does not retain, so the previous defensive `[...agents]` copy spread
+// that throwaway array a second time for nothing. Sorting the input directly is
+// safe given the single known call site (the agentList useMemo below).
 function sortByY(agents) {
-  return [...agents].sort((a, b) => {
+  return agents.sort((a, b) => {
     const ay = (a.targetPosition || a.position || {}).y || 0
     const by = (b.targetPosition || b.position || {}).y || 0
     return ay - by
