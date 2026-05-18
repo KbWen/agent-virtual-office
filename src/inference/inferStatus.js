@@ -457,13 +457,18 @@ export function startStatusIntegration(store) {
   let pendingMsg = null
   let lastAppliedSeq = null  // cross-channel stale-drop: tracks highest numeric _seq applied
 
+  // Only hook-origin sources share a clock (both produced by Date.now() on the same machine).
+  // External sources (postMessage, BroadcastChannel, window global, hash/title) have independent
+  // clocks and must not poison lastAppliedSeq or be compared against it for stale-drop.
+  const HOOK_ORIGIN = new Set(['claude-cli', 'multi-session', 'file-watcher'])
+  const isHookOrigin = s => HOOK_ORIGIN.has(s)
+
   function applyMessage(msg) {
     if (torn) return
-    // Only track numeric _seq values as the high-water mark for cross-channel stale-drop.
-    // Colon-joined multi-session seqs ("ts1:ts2") and hash-bridge seqs ("hash:...") are
-    // not comparable, so updating lastAppliedSeq with them would permanently disarm the
-    // guard by making the /^\d+$/ test fail for all subsequent single-session deliveries.
-    if (msg._seq && /^\d+$/.test(String(msg._seq))) lastAppliedSeq = msg._seq
+    // Only track numeric _seq from hook-origin sources as the high-water mark.
+    // External sources (window global, hash-bridge, postMessage) have independent clocks
+    // and would poison the guard if their _seq were treated as comparable to hook seqs.
+    if (msg._seq && /^\d+$/.test(String(msg._seq)) && isHookOrigin(msg.source)) lastAppliedSeq = msg._seq
     const s = store.getState()
 
     // Set mood override BEFORE feeding events so pushEventBatch's updateStoreMood sees it
@@ -507,8 +512,12 @@ export function startStatusIntegration(store) {
     // the pendingMsg check, a burst of 3 messages in the 150ms window lets a stale
     // heartbeat body (lower seq) clobber a fresher SSE push already in the debounce slot,
     // because lastAppliedSeq hasn't been updated until applyMessage actually runs.
+    // Stale-drop only applies to hook-origin messages — they share the same clock.
+    // External channels (postMessage, BroadcastChannel, window global, hash/title) have
+    // independent clocks and must not be stale-dropped against or used to stale-drop hooks.
     const isNumericSeq = s => s && /^\d+$/.test(s)
-    if (isNumericSeq(msg._seq)) {
+    const hookOriginMsg = isHookOrigin(msg.source)
+    if (isNumericSeq(msg._seq) && hookOriginMsg) {
       // Clock-skew tolerance: if the incoming seq is more than 5 minutes behind the
       // high-water mark, treat it as a clock reset (NTP large correction, manual change,
       // or a new hook process group) and accept the message rather than freezing updates
@@ -517,13 +526,24 @@ export function startStatusIntegration(store) {
       if (isNumericSeq(lastAppliedSeq)) {
         const gap = Number(lastAppliedSeq) - Number(msg._seq)
         if (gap > SKEW_TOLERANCE_MS) {
-          lastAppliedSeq = null  // reset high-water mark; accept this message as a fresh start
+          // Reset is incomplete without also clearing pendingMsg: if pendingMsg holds a
+          // stale high-seq value, the first post-reset message would be dropped by the
+          // pendingMsg comparison below even though lastAppliedSeq was just nulled.
+          lastAppliedSeq = null
+          pendingMsg = null
+          if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null }
         } else if (gap > 0) {
           return  // genuine stale drop within tolerance window
         }
       }
-      if (pendingMsg && isNumericSeq(pendingMsg._seq) && Number(msg._seq) < Number(pendingMsg._seq)) return
+      // Only compare against a hook-origin pendingMsg: a non-hook-origin pending (e.g.
+      // window global with an independent clock) must not evict a legitimate hook message.
+      if (pendingMsg && isHookOrigin(pendingMsg.source) && isNumericSeq(pendingMsg._seq) && Number(msg._seq) < Number(pendingMsg._seq)) return
     }
+    // Passive/non-hook-origin messages must not evict a queued hook-origin message from the
+    // debounce slot: a hash-change or title-change within the 150ms window would otherwise
+    // discard a fresher SSE/file-poll delivery whose seq comparison block was skipped.
+    if (!hookOriginMsg && pendingMsg && isHookOrigin(pendingMsg.source) && isNumericSeq(pendingMsg._seq)) return
     pendingMsg = msg
     if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(() => {

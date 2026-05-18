@@ -734,7 +734,11 @@ function processEvent(event) {
     // Turn-boundary fields for straggler detection:
     // _promptId advances on each UserPromptSubmit; _preToolPromptId is set by PreToolUse
     // to the _promptId at entry so PostToolUse can detect if a new turn started.
-    _promptId: newPromptId || existingPromptId,
+    // On fresh install (both existingPromptId and newPromptId are null), seed _promptId with
+    // capturedPromptId so _promptId and _preToolPromptId form a matched pair. Without this,
+    // _preToolPromptId = "__t:..." while _promptId = null — the PostToolUse gate requires
+    // BOTH non-null, so with only _preToolPromptId set the gate is still structurally dead.
+    _promptId: newPromptId || existingPromptId || (hookEvent === 'PreToolUse' ? capturedPromptId : null),
     _preToolPromptId: hookEvent === 'PreToolUse'
       ? (capturedPromptId !== null ? capturedPromptId : existingPromptId)
       : existingPreToolPromptId,

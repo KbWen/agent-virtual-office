@@ -116,7 +116,6 @@ export function scanAndMerge(dir, projectRoot) {
     const allAgents = []
     let workflow = null
     for (const { slug, data } of sessions) {
-      if (!workflow && data.workflow) workflow = data.workflow
       // Pick the single most urgent agent from this session.
       // Role is the tiebreaker so the sort is stable across calls (C1).
       const pick = (data.agents || [])
@@ -126,6 +125,10 @@ export function scanAndMerge(dir, projectRoot) {
           return pd !== 0 ? pd : (a.role < b.role ? -1 : a.role > b.role ? 1 : 0)
         })[0]
       if (pick && typeof pick.role === 'string') {
+        // Only adopt workflow from a session that is actively contributing an agent.
+        // A finished session (all agents done) can leave a stale workflow string that
+        // would otherwise appear as a phantom banner over an unrelated active session.
+        if (!workflow && data.workflow) workflow = data.workflow
         allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
       }
     }
