@@ -1,6 +1,14 @@
 import { VALID_ROLES, VALID_STATUSES, VALID_MOODS, MAX_MOOD_DURATION } from '../systems/constants.js'
 export { VALID_ROLES, VALID_STATUSES, VALID_MOODS, MAX_MOOD_DURATION }
 
+// Monotonic integer seq — prevents duplicate _seq when called multiple times per ms
+let _seqLast = 0
+function nextSeq() {
+  const now = Date.now()
+  _seqLast = now > _seqLast ? now : _seqLast + 1
+  return String(_seqLast)
+}
+
 function clampMoodDuration(raw) {
   if (raw == null) return null
   const n = Number(raw)
@@ -40,7 +48,7 @@ export function normalizePost(body) {
       mood,
       moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
       source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
-      _seq: String(Date.now()),
+      _seq: nextSeq(),
     }
   }
   const agents = []

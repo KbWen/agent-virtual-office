@@ -219,15 +219,16 @@ function isAuthorized(req) {
 const postCounts = new Map()
 const RATE_WINDOW = 10000, RATE_LIMIT = 30
 
-function checkRateLimit(req) {
+function checkRateLimit(req, endpoint = '') {
   if (req.method !== 'POST') return true
   const ip = req.socket?.remoteAddress || 'unknown'
+  const key = endpoint ? `${ip}:${endpoint}` : ip
   const now = Date.now()
-  const ts = postCounts.get(ip) || []
+  const ts = postCounts.get(key) || []
   const fresh = ts.filter(t => now - t < RATE_WINDOW)
-  if (fresh.length >= RATE_LIMIT) { postCounts.set(ip, fresh); return false }
+  if (fresh.length >= RATE_LIMIT) { postCounts.set(key, fresh); return false }
   fresh.push(now)
-  postCounts.set(ip, fresh)
+  postCounts.set(key, fresh)
   return true
 }
 
@@ -257,7 +258,6 @@ function handleStatus(req, res) {
   setCors(res, req.headers.origin)
 
   if (req.method === 'OPTIONS') return handlePreflight(req, res)
-  if (!checkRateLimit(req)) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
 
   if (req.method === 'GET') {
     try {
@@ -318,7 +318,8 @@ function handleStatus(req, res) {
             .sort((a, b) => (PRI[a.status] ?? 9) - (PRI[b.status] ?? 9))[0]
           if (pick) allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
         }
-        merged = { _seq: nextSeq(), type: 'office-status', agents: allAgents, activeCount: allAgents.filter(a => a.status === 'working' || a.status === 'blocked').length, workflow, source: 'multi-session', sessionCount: sessions.length }
+        const mergedSeq = sessions.reduce((max, { data }) => { const s = parseInt(data._seq, 10); return Number.isFinite(s) && s > max ? s : max }, 0)
+        merged = { _seq: String(mergedSeq || Date.now()), type: 'office-status', agents: allAgents, activeCount: allAgents.filter(a => a.status === 'working' || a.status === 'blocked').length, workflow, source: 'multi-session', sessionCount: sessions.length }
       }
 
       const data = JSON.stringify(merged)
@@ -333,6 +334,7 @@ function handleStatus(req, res) {
     const reqOrigin = req.headers.origin
     if (reqOrigin && !isAllowedOrigin(reqOrigin)) { res.statusCode = 403; return res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })) }
     if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
+    if (!checkRateLimit(req, 'status')) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
     req.setEncoding('utf-8')
     let body = '', aborted = false
     req.on('data', chunk => {
@@ -365,11 +367,11 @@ function handleLang(req, res) {
   res.setHeader('Cache-Control', 'no-store')
   setCors(res, req.headers.origin, 'POST, OPTIONS')
   if (req.method === 'OPTIONS') return handlePreflight(req, res)
-  if (req.method !== 'POST') { res.statusCode = 405; return res.end() }
+  if (req.method !== 'POST') { res.setHeader('Allow', 'POST, OPTIONS'); res.statusCode = 405; return res.end(JSON.stringify({ error: 'Method not allowed' })) }
   const reqOriginL = req.headers.origin
   if (reqOriginL && !isAllowedOrigin(reqOriginL)) { res.statusCode = 403; return res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })) }
   if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
-  if (!checkRateLimit(req)) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
+  if (!checkRateLimit(req, 'lang')) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
   req.setEncoding('utf-8')
   let body = '', aborted = false
   req.on('data', chunk => {
@@ -420,7 +422,7 @@ function handleEvent(req, res) {
   const reqOriginE = req.headers.origin
   if (reqOriginE && !isAllowedOrigin(reqOriginE)) { res.statusCode = 403; return res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })) }
   if (!isAuthorized(req)) { res.statusCode = 401; return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' })) }
-  if (!checkRateLimit(req)) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
+  if (!checkRateLimit(req, 'event')) { res.statusCode = 429; return res.end(JSON.stringify({ ok: false, error: 'Too many requests' })) }
   req.setEncoding('utf-8')
   let body = '', aborted = false
   req.on('data', chunk => {

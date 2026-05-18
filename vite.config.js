@@ -128,15 +128,16 @@ function officeStatusPlugin() {
     return isWin ? a.toLowerCase() === b.toLowerCase() : a === b
   }
 
-  function checkRateLimit(req) {
+  function checkRateLimit(req, endpoint = '') {
     if (req.method !== 'POST') return true
     const ip = req.socket?.remoteAddress || 'unknown'
+    const key = endpoint ? `${ip}:${endpoint}` : ip
     const now = Date.now()
-    const ts = postCounts.get(ip) || []
+    const ts = postCounts.get(key) || []
     const fresh = ts.filter(t => now - t < RATE_WINDOW)
-    if (fresh.length >= RATE_LIMIT) { postCounts.set(ip, fresh); return false }
+    if (fresh.length >= RATE_LIMIT) { postCounts.set(key, fresh); return false }
     fresh.push(now)
-    postCounts.set(ip, fresh)
+    postCounts.set(key, fresh)
     return true
   }
 
@@ -163,13 +164,6 @@ function officeStatusPlugin() {
           res.setHeader('Access-Control-Max-Age', '600')
           res.statusCode = 204
           res.end()
-          return
-        }
-
-        // Rate limiting for POST
-        if (!checkRateLimit(req)) {
-          res.statusCode = 429
-          res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
           return
         }
 
@@ -218,6 +212,7 @@ function officeStatusPlugin() {
                   const parsed = JSON.parse(raw)
                   const seq = parseInt(parsed._seq, 10)
                   if (!seq || now - seq > 300000 || seq > now + 60000) continue
+                  if (parsed.source === 'file-watcher') continue
                   const slug = file === 'office-status.json' ? 'main'
                     : file.replace(/^office-status-/, '').replace(/\.json$/, '')
                   sessions.push({ slug, data: parsed })
@@ -264,8 +259,9 @@ function officeStatusPlugin() {
                 const pick = active[0]
                 if (pick) allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
               }
+              const mergedSeq = sessions.reduce((max, { data }) => { const s = parseInt(data._seq, 10); return Number.isFinite(s) && s > max ? s : max }, 0)
               merged = {
-                _seq: nextSeq(),
+                _seq: String(mergedSeq || Date.now()),
                 type: 'office-status',
                 agents: allAgents,
                 activeCount: allAgents.filter(a => a.status === 'working' || a.status === 'blocked').length,
@@ -299,6 +295,11 @@ function officeStatusPlugin() {
             res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
             return
           }
+          if (!checkRateLimit(req, 'status')) {
+            res.statusCode = 429
+            res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
+            return
+          }
           req.setEncoding('utf-8')
           let body = ''
           let aborted = false
@@ -318,7 +319,6 @@ function officeStatusPlugin() {
             try {
               const parsed = JSON.parse(body)
               const normalized = normalizePost(parsed)
-              normalized._seq = nextSeq()
               normalized._cwd = process.cwd()
               const dir = path.dirname(statusPath)
               if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
@@ -394,7 +394,7 @@ function officeStatusPlugin() {
             res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
             return
           }
-          if (!checkRateLimit(req)) {
+          if (!checkRateLimit(req, 'lang')) {
             res.statusCode = 429
             res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
             return
@@ -440,6 +440,7 @@ function officeStatusPlugin() {
           })
           return
         }
+        res.setHeader('Allow', 'POST, OPTIONS')
         res.statusCode = 405
         res.end(JSON.stringify({ error: 'Method not allowed' }))
       })
@@ -494,7 +495,7 @@ function officeStatusPlugin() {
           res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
           return
         }
-        if (!checkRateLimit(req)) {
+        if (!checkRateLimit(req, 'event')) {
           res.statusCode = 429
           res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
           return
@@ -575,7 +576,7 @@ function officeStatusPlugin() {
         if (req.method !== 'GET' && req.method !== 'HEAD') {
           res.statusCode = 405; res.end(JSON.stringify({ error: 'Method not allowed' })); return
         }
-        res.end(JSON.stringify({ ok: true }))
+        res.end(JSON.stringify({ ok: true, uptime: process.uptime() }))
       })
 
       // Sweep rate-limiter map so it doesn't grow unbounded under IP rotation.

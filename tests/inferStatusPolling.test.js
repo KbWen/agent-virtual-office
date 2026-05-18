@@ -43,6 +43,19 @@ describe('pollFileStatusOnce', () => {
     expect(state.lastSeq).toBe('same')
   })
 
+  it('resets backoff after a 304 Not Modified response', async () => {
+    const state = createFilePollingState()
+    state.consecutive404 = 12  // in backoff, but 12 % 3 === 0 so this poll runs
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 304, headers: { get: () => null } })
+    const callback = vi.fn()
+
+    const result = await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(result).toMatchObject({ ok: true, unchanged: true })
+    expect(state.consecutive404).toBe(0)  // server is alive — clear backoff
+    expect(callback).not.toHaveBeenCalled()
+  })
+
   it('resets backoff after a successful fetch', async () => {
     const state = createFilePollingState()
     state.consecutive404 = 11

@@ -148,7 +148,7 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
     const headers = {}
     if (state.lastEtag) headers['If-None-Match'] = state.lastEtag
     const resp = await fetchImpl('/api/status', { headers })
-    if (resp.status === 304) return { ok: true, unchanged: true }
+    if (resp.status === 304) { state.consecutive404 = 0; return { ok: true, unchanged: true } }
     if (!resp.ok) {
       if (resp.status === 404) {
         state.consecutive404++
