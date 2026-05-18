@@ -208,7 +208,7 @@ function startFilePolling(callback, baseIntervalMs = 1000, onProbe = null) {
   function schedulePoll() {
     if (stopped) return
     timer = setTimeout(async () => {
-      const result = await pollFileStatusOnce(fetch, pollingState, callback)
+      const result = await pollFileStatusOnce(fetch, pollingState, (m) => { if (!stopped) callback(m) })
       if (onProbe && result) onProbe(result)
       // Adaptive interval: double after 5 consecutive idle polls, reset on activity.
       // Idle = unchanged (304/dup), active = delivered a new message.
@@ -242,6 +242,7 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
 
   let es = null
   let reconnectTimer = null
+  let stabilityTimer = null  // hoisted so cleanup can always cancel it
   let reconnectDelay = 2000
   let stopped = false
   let consecutiveErrors = 0
@@ -255,7 +256,6 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
   function connect() {
     if (stopped) return
     es = new EventSource('/api/status/stream')
-    let stabilityTimer = null
 
     es.addEventListener('open', () => {
       // Schedule streak reset after MIN_STABLE_MS of connection uptime.
@@ -285,8 +285,11 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
 
     es.onerror = () => {
       clearTimeout(stabilityTimer)
-      es.close()
+      // Capture and null-out es before closing — onerror can fire multiple times
+      // for the same connection; calling .close() on a nulled variable throws TypeError.
+      const dead = es
       es = null
+      if (dead) { try { dead.close() } catch {} }
       if (stopped) return
       consecutiveErrors++
       if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
@@ -306,6 +309,7 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
   return () => {
     stopped = true
     clearTimeout(reconnectTimer)
+    clearTimeout(stabilityTimer)
     if (es) { es.close(); es = null }
   }
 }

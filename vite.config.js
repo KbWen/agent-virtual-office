@@ -604,10 +604,23 @@ function fileWatcherFallbackPlugin() {
     const last = recentEdits.get(role)
     if (last && now - last.time < DEBOUNCE_MS) return
 
-    // Don't overwrite richer hook-generated status — skip if hooks recently wrote
+    // Don't write when hooks are actively running. Hooks write to office-status-<slug>.json,
+    // not this bare file, so checking the bare file for 'claude-cli' only catches curl/API
+    // callers. The correct check is whether any recent slugged hook session exists.
+    // (scanAndMerge's strict-pass exclusion is the real dedup, but skipping writes
+    //  reduces filesystem noise and unnecessary SSE broadcasts.)
+    try {
+      const hookDir = path.dirname(statusPath)
+      for (const f of fs.readdirSync(hookDir)) {
+        if (!/^office-status-.+\.json$/.test(f)) continue
+        const d = JSON.parse(fs.readFileSync(path.join(hookDir, f), 'utf-8'))
+        if (d.source === 'claude-cli' && d._seq && now - parseInt(d._seq, 10) < 10_000) return
+      }
+    } catch {}
+    // Also skip if a POST/curl caller recently wrote to the bare file directly
     try {
       const existing = JSON.parse(fs.readFileSync(statusPath, 'utf-8'))
-      if (existing.source === 'claude-cli' && existing._seq && now - parseInt(existing._seq, 10) < 10000) return
+      if (existing.source === 'claude-cli' && existing._seq && now - parseInt(existing._seq, 10) < 10_000) return
     } catch {}
 
     recentEdits.set(role, { file, time: now })
