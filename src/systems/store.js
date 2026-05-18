@@ -202,6 +202,21 @@ const LOGGABLE_BEHAVIORS = new Set([
   'goto-coffee-machine', 'nap', 'scratch-head', 'desk-slam',
 ])
 
+// Static lookup tables for applyExternalStatus — hoisted to module scope so they
+// are NOT reallocated on every update inside the per-update loop. behaviorMap maps
+// a work status to its visual behavior/expression; roleItems maps a base role to
+// the desk item its growth accumulates. Both are pure constants.
+const STATUS_BEHAVIOR_MAP = {
+  working: { behavior: { Bash: 'typing', Read: 'reading-screen', Grep: 'research', Glob: 'research' }, expression: 'focused' },
+  blocked: { behavior: 'scratch-head', expression: 'confused' },
+  done:    { behavior: 'thumbs-up', expression: 'happy' },
+}
+const ROLE_GROWTH_ITEMS = {
+  pm: 'sticky', arch: 'books', dev: 'coffee',
+  qa: 'sticky', ops: 'coffee', res: 'books',
+  gate: 'sticky', designer: 'sticky',
+}
+
 
 const initAgents = (mode) => {
   const roster = characters[mode] || characters.agentcortex
@@ -479,25 +494,31 @@ export const useOfficeStore = create((set) => ({
           // done: 10s expiry (brief celebration then back to idle)
           expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
         }
-        // Immediately set behavior + expression to match work status
-        const behaviorMap = {
-          working: { behavior: u.task === 'Bash' ? 'typing' : u.task === 'Read' ? 'reading-screen' : u.task === 'Grep' || u.task === 'Glob' ? 'research' : 'typing', expression: 'focused' },
-          blocked: { behavior: 'scratch-head', expression: 'confused' },
-          done:    { behavior: 'thumbs-up', expression: 'happy' },
-        }
-        const bm = behaviorMap[u.status] || {}
+        // Immediately set behavior + expression to match work status. Behavior/
+        // expression/bubble are all folded into a SINGLE object spread below —
+        // the previous code re-spread agents[u.agentId] up to three times per
+        // update (status, then bubble, then deskItemCount), allocating three
+        // objects where one suffices.
+        const bm = STATUS_BEHAVIOR_MAP[u.status] || {}
+        // working maps task→behavior via a sub-table; non-working statuses use a
+        // scalar behavior. Default to 'typing' when a working task has no entry.
+        const bmBehavior = u.status === 'working'
+          ? (bm.behavior[u.task] || 'typing')
+          : bm.behavior
         // Don't overwrite behavior/expression during group events (officeLife controls those)
-        const inGroup = agents[u.agentId].inGroupEvent
-        agents[u.agentId] = {
-          ...agents[u.agentId],
-          status: u.status,
-          behavior: inGroup ? agents[u.agentId].behavior : (bm.behavior || agents[u.agentId].behavior),
-          expression: inGroup ? agents[u.agentId].expression : (bm.expression || agents[u.agentId].expression),
-        }
+        const prevAgent = agents[u.agentId]
+        const inGroup = prevAgent.inGroupEvent
         // Context-aware bubble > status pool fallback
         const bubble = generateContextBubble(u.agentId, u, ext)
           || randomBubble(u.status === 'blocked' ? 'blocked-status' : u.status === 'done' ? 'done-status' : 'working-status')
-        if (bubble && !inGroup) agents[u.agentId] = { ...agents[u.agentId], bubble }
+        const nextAgent = {
+          ...prevAgent,
+          status: u.status,
+          behavior: inGroup ? prevAgent.behavior : (bmBehavior || prevAgent.behavior),
+          expression: inGroup ? prevAgent.expression : (bm.expression || prevAgent.expression),
+        }
+        if (bubble && !inGroup) nextAgent.bubble = bubble
+        agents[u.agentId] = nextAgent
         // Log activity inline (single loop instead of two)
         if (u.status === 'done' || u.status === 'blocked' || (u.status === 'working' && u.label)) {
           activities.push(mkActivity({ type: 'status', agentId: u.agentId, status: u.status, message: u.label || u.status }))
@@ -513,20 +534,15 @@ export const useOfficeStore = create((set) => ({
             if (eventKey) {
               dailyDoneLedger.seenEventKeys = [...dailyDoneLedger.seenEventKeys, eventKey].slice(-500)
             }
-            // Growth system: accumulate desk items on fresh, deduplicated done events
-            const roleItems = {
-              pm: 'sticky', arch: 'books', dev: 'coffee',
-              qa: 'sticky', ops: 'coffee', res: 'books',
-              gate: 'sticky', designer: 'sticky',
-            }
+            // Growth system: accumulate desk items on fresh, deduplicated done events.
+            // `nextAgent` is the fresh per-update clone created above and is owned by
+            // this iteration — mutate its deskItemCount in place instead of re-spreading
+            // the whole agent a fourth time.
             const baseRole = u.agentId.includes('~') ? u.agentId.split('~').pop() : u.agentId
-            const growthItem = roleItems[baseRole] || 'coffee'
-            const agent = agents[u.agentId]
-            if (agent) {
-              const count = { ...agent.deskItemCount }
-              count[growthItem] = (count[growthItem] || 0) + 1
-              agents[u.agentId] = { ...agent, deskItemCount: count }
-            }
+            const growthItem = ROLE_GROWTH_ITEMS[baseRole] || 'coffee'
+            const count = { ...nextAgent.deskItemCount }
+            count[growthItem] = (count[growthItem] || 0) + 1
+            nextAgent.deskItemCount = count
           }
         }
       }
