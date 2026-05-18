@@ -2,7 +2,6 @@
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
-const { execSync } = require('child_process')
 
 const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
 const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
@@ -29,12 +28,28 @@ function coerceSeq(raw) {
 function getSessionSlug() {
   const cwdHash = require('crypto').createHash('md5').update(process.cwd()).digest('hex').slice(0, 4)
   try {
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim()
-    if (branch && branch !== 'HEAD') {
-      return branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) + `-${cwdHash}`
+    // Read .git/HEAD directly instead of spawning `git rev-parse` — a child process
+    // adds ~10-30ms latency to every status write. Mirrors office-status-hook.js,
+    // which was already optimized this way; the codex hook had been left on execSync.
+    const gitEntry = path.join(process.cwd(), '.git')
+    let headContent = null
+    if (fs.existsSync(gitEntry)) {
+      const stat = fs.statSync(gitEntry)
+      if (stat.isFile()) {
+        // Worktree: .git is a file "gitdir: <path>" — resolve HEAD relative to it.
+        const ref = fs.readFileSync(gitEntry, 'utf-8').trim()
+        const m = ref.match(/^gitdir:\s*(.+)$/)
+        if (m) headContent = fs.readFileSync(path.resolve(path.dirname(gitEntry), m[1], 'HEAD'), 'utf-8').trim()
+      } else {
+        headContent = fs.readFileSync(path.join(gitEntry, 'HEAD'), 'utf-8').trim()
+      }
+    }
+    if (headContent) {
+      const refMatch = headContent.match(/^ref:\s+refs\/heads\/(.+)$/)
+      const branch = refMatch ? refMatch[1] : null  // null = detached HEAD → fall through
+      if (branch) {
+        return branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) + `-${cwdHash}`
+      }
     }
   } catch {}
 

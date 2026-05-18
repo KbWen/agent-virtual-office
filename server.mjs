@@ -36,6 +36,14 @@ function clampMoodDuration(raw) {
   return Math.min(Math.max(Number.isFinite(n) ? n : 60000, 1000), MAX_MOOD_DURATION)
 }
 
+// Count working/blocked agents without allocating a throwaway filtered array
+// (mirrors src/utils/normalizePost.js — keep both in sync).
+function countActive(agents) {
+  let n = 0
+  for (const a of agents) if (a.status === 'working' || a.status === 'blocked') n++
+  return n
+}
+
 function normalizePost(body) {
   if (body == null || typeof body !== 'object') body = {}
   if (body.type === 'office-status') {
@@ -59,7 +67,7 @@ function normalizePost(body) {
     return {
       type: 'office-status',
       agents,
-      activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
+      activeCount: countActive(agents),
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood,
       moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
@@ -84,7 +92,7 @@ function normalizePost(body) {
   const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
   return {
     _seq: nextSeq(), type: 'office-status', agents,
-    activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
+    activeCount: countActive(agents),
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
     mood,
@@ -431,7 +439,7 @@ function handleEvent(req, res) {
       const output = {
         _seq: nextSeq(),
         type: 'office-status', agents,
-        activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
+        activeCount: countActive(agents),
         workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : eventName,
         source: 'webhook',
       }

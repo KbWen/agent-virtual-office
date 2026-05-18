@@ -142,7 +142,14 @@ export function scanAndMerge(dir, projectRoot) {
     // stays armed during multi-session. A session exit can transiently lower _seq, but
     // the remaining session's next write advances it again within seconds. Colon-joined
     // strings fail the /^\d+$/ guard in inferStatus.js and silently disarm it entirely.
-    const maxSeq = String(Math.max(...sessions.map(({ data }) => parseInt(data._seq, 10) || 0)))
+    // Plain loop instead of Math.max(...sessions.map(...)) — avoids the intermediate
+    // mapped array and the argument-spread, both in the GET/SSE hot path.
+    let maxSeqNum = 0
+    for (const { data } of sessions) {
+      const s = parseInt(data._seq, 10) || 0
+      if (s > maxSeqNum) maxSeqNum = s
+    }
+    const maxSeq = String(maxSeqNum)
     merged = {
       _seq: maxSeq,
       type: 'office-status',

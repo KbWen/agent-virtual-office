@@ -15,6 +15,14 @@ function clampMoodDuration(raw) {
   return Math.min(Math.max(Number.isFinite(n) ? n : 60000, 1000), MAX_MOOD_DURATION)
 }
 
+// Count working/blocked agents without allocating a throwaway filtered array
+// just to read its .length — normalizePost runs on every POST.
+function countActive(agents) {
+  let n = 0
+  for (const a of agents) if (a.status === 'working' || a.status === 'blocked') n++
+  return n
+}
+
 /**
  * Normalize POST body to the unified office-status format.
  * Handles both shorthand ({ dev: "working" }) and full format ({ type: "office-status", agents: [...] }).
@@ -43,7 +51,7 @@ export function normalizePost(body) {
     return {
       type: 'office-status',
       agents,
-      activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
+      activeCount: countActive(agents),
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood,
       moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
@@ -70,7 +78,7 @@ export function normalizePost(body) {
     _seq: nextSeq(),
     type: 'office-status',
     agents,
-    activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
+    activeCount: countActive(agents),
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
     mood,

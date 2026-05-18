@@ -26,6 +26,14 @@ function clampMoodDuration(raw) {
   return Math.min(Math.max(Number.isFinite(n) ? n : 60000, 1000), MAX_MOOD_DURATION)
 }
 
+// Mirrors server.mjs's countActive — counts working/blocked agents without
+// allocating a throwaway filtered array.
+function countActive(agents) {
+  let n = 0
+  for (const a of agents) if (a.status === 'working' || a.status === 'blocked') n++
+  return n
+}
+
 let _seqLast = 0
 function nextSeq() {
   const now = Date.now()
@@ -56,7 +64,7 @@ function serverNormalizePost(body) {
     return {
       type: 'office-status',
       agents,
-      activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
+      activeCount: countActive(agents),
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood,
       moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
@@ -81,7 +89,7 @@ function serverNormalizePost(body) {
   const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
   return {
     _seq: nextSeq(), type: 'office-status', agents,
-    activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
+    activeCount: countActive(agents),
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
     mood,
