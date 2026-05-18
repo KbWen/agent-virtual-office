@@ -258,6 +258,35 @@ describe('normalizeStatusMessage', () => {
     it('R62: parses count with explicit radix 10 (no octal/hex surprises)', () => {
       expect(buildHashStatusMessage('#count=08').activeCount).toBe(8)
     })
+
+    it('R78 Fix F: #count=0 is treated as an inert message (returns null)', () => {
+      // The string '0' is truthy, so a raw `!params.get('count')` guard would treat
+      // '#count=0' as a valid count message. parseInt gives 0 = "no active agents",
+      // making applyMessage's `activeCount > 0` branch a no-op — but the message would
+      // still be delivered and reset the 2-min staleness timer, keeping a stale external
+      // status alive. A zero-count hash with no roles/workflow must build to null.
+      expect(buildHashStatusMessage('#count=0')).toBeNull()
+    })
+
+    it('R78 Fix F: a negative or non-numeric count is also inert', () => {
+      expect(buildHashStatusMessage('#count=-3')).toBeNull()
+      expect(buildHashStatusMessage('#count=abc')).toBeNull()
+    })
+
+    it('R78 Fix F: #count=0 alongside a role key still builds (role drives the message)', () => {
+      // count=0 must not suppress a message that carries real role keys.
+      const msg = buildHashStatusMessage('#dev=working&count=0')
+      expect(msg).not.toBeNull()
+      expect(msg.agents).toHaveLength(1)
+      expect(msg.activeCount).toBe(0)
+    })
+
+    it('R78 Fix F: #count=0 with a workflow still builds (workflow drives the message)', () => {
+      const msg = buildHashStatusMessage('#workflow=Sprint&count=0')
+      expect(msg).not.toBeNull()
+      expect(msg.workflow).toBe('Sprint')
+      expect(msg.activeCount).toBe(0)
+    })
   })
 
   describe('R62: office-vibe length capping', () => {

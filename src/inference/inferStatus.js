@@ -461,12 +461,22 @@ export function buildHashStatusMessage(hash) {
     })
   }
 
-  if (agents.length === 0 && !params.get('workflow') && !params.get('count')) return null
+  // Parse the count ONCE. A literal '#count=0' yields the string '0' — truthy, so a
+  // raw `!params.get('count')` guard would treat it as a valid count message. parseInt
+  // gives 0 (= "no active agents"), which makes the message inert: applyMessage's
+  // `activeCount > 0` branch is skipped. An inert message must not be delivered at all —
+  // delivering it still triggers resetStalenessTimer(), so a stray '#count=0' would keep
+  // a stale external status alive for another 2 minutes. Only treat count as present
+  // when it parses to a positive integer.
+  const parsedCount = parseInt(params.get('count'), 10)
+  const hasCount = Number.isFinite(parsedCount) && parsedCount > 0
+
+  if (agents.length === 0 && !params.get('workflow') && !hasCount) return null
 
   return {
     type: 'office-status',
     agents,
-    activeCount: parseInt(params.get('count'), 10) || 0,
+    activeCount: hasCount ? parsedCount : 0,
     workflow: capStr(params.get('workflow')),
     source: capStr(params.get('source')) || 'hash-bridge',
     _seq: `hash:${rawHash}`,
@@ -607,6 +617,16 @@ export function startStatusIntegration(store) {
         seq: msg._seq || null,
         skipHintDismiss,
       })
+      // If that eviction left zero external agents, transition statusSource back to
+      // 'organic' immediately. Otherwise the store keeps statusSource:'external' (a green
+      // "live" dot) over an empty office for up to STALENESS_TIMEOUT (2 min) until the
+      // staleness timer fires clearExternalStatus. clearExternalStatus only flips to
+      // 'organic' when it itself empties externalStatus — here applyExternalStatus did the
+      // emptying, so nothing flips the source without this explicit check.
+      if (Object.keys(store.getState().externalStatus).length === 0) {
+        s.setStatusSource('organic')
+        s.setIntegrationSource?.(null)
+      }
     }
 
     if ('workflow' in msg) s.setActiveWorkflow(msg.workflow ?? null)

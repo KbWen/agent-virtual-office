@@ -1,5 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { useOfficeStore } from '../src/systems/store.js'
+
+// Pristine agentcortex roster captured at module load — used to fully restore the
+// singleton store after a suite that swaps the roster (e.g. the lightweight-mode tests).
+// resetStore() only FILTERS s.agents, it never re-adds; without this snapshot a roster
+// swap would leave later suites without their static agents.
+const PRISTINE_MODE = useOfficeStore.getState().mode
+const PRISTINE_AGENTS = JSON.parse(JSON.stringify(useOfficeStore.getState().agents))
 
 // Reset the singleton store between tests so dynamic agents / externalStatus don't leak.
 function resetStore() {
@@ -120,6 +127,11 @@ describe('applyExternalStatus — multi-session ghost reconciliation (R63)', () 
     expect(s.externalStatus['feat-b~qa']).toBeUndefined()
     // Static roster agents are untouched.
     expect(s.agents['dev']).toBeTruthy()
+    // R78 Fix G precondition: the eviction leaves externalStatus completely empty.
+    // applyMessage's empty-multi-session branch keys on exactly this to decide whether to
+    // transition statusSource back to 'organic' immediately (instead of waiting out the
+    // 2-min staleness timer with a misleading green "live" dot over an empty office).
+    expect(Object.keys(s.externalStatus)).toHaveLength(0)
   })
 })
 
@@ -429,6 +441,122 @@ describe('selectedAgent — eviction when a selected dynamic agent disappears (R
     // The static agent still exists — the inspector selection must survive.
     expect(useOfficeStore.getState().agents.dev).toBeTruthy()
     expect(useOfficeStore.getState().selectedAgent).toBe('dev')
+  })
+})
+
+describe('applyExternalStatus — non-agentcortex roster fallback (R78 Fix E)', () => {
+  // The 'lightweight' mode roster is planner/worker/checker — none of the VALID_ROLES
+  // ids (dev/qa/pm/…). A fallback-count or hash message routes to VALID_ROLES ids, so
+  // applyExternalStatus's dynamic-agent branch finds neither s.agents[baseRole] nor
+  // s.agents['dev']. Before Fix E, baseAgent was undefined → `continue` silently dropped
+  // the agent, so a '#count=N' hash did nothing in lightweight mode.
+  function lightweightAgent(id) {
+    return {
+      id, name: id, color: '#888', behavior: 'idle', expression: 'normal',
+      bubble: null, status: 'idle', deskItemCount: { coffee: 0, sticky: 0, books: 0 },
+      position: { x: 200, y: 200 }, targetPosition: { x: 200, y: 200 },
+      isMoving: false, facing: 'down', inGroupEvent: false, groupTarget: null,
+    }
+  }
+
+  beforeEach(() => {
+    useOfficeStore.setState({
+      mode: 'lightweight',
+      agents: {
+        planner: lightweightAgent('planner'),
+        worker: lightweightAgent('worker'),
+        checker: lightweightAgent('checker'),
+      },
+      externalStatus: {},
+      statusSource: 'organic',
+      activeWorkflow: null,
+      activityLog: [],
+      selectedAgent: null,
+      dailyDoneLedger: { dayKey: 'reset', counts: {}, seenEventKeys: [] },
+    })
+  })
+
+  // Fully restore the pristine agentcortex roster + mode so later suites that depend on
+  // static agents (dev/qa/…) are not left with the lightweight roster.
+  afterEach(() => {
+    useOfficeStore.setState({
+      mode: PRISTINE_MODE,
+      agents: JSON.parse(JSON.stringify(PRISTINE_AGENTS)),
+      externalStatus: {},
+      statusSource: 'organic',
+      activeWorkflow: null,
+      activityLog: [],
+      selectedAgent: null,
+      dailyDoneLedger: { dayKey: 'reset', counts: {}, seenEventKeys: [] },
+    })
+  })
+
+  it('creates a count-fallback agent in lightweight mode instead of silently dropping it', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    // distributeFallbackCount(2) → ['dev','qa']; neither exists in the lightweight roster.
+    applyExternalStatus(
+      [
+        { agentId: 'dev', status: 'working', task: null, label: null },
+        { agentId: 'qa', status: 'working', task: null, label: null },
+      ],
+      { source: 'hash-bridge' },
+    )
+    const s = useOfficeStore.getState()
+    // Both must be spawned as dynamic overflow agents (cloning a lightweight visual style).
+    expect(s.agents['dev']).toBeTruthy()
+    expect(s.agents['qa']).toBeTruthy()
+    expect(s.externalStatus['dev']?.status).toBe('working')
+    expect(s.externalStatus['qa']?.status).toBe('working')
+  })
+
+  it('clearExternalStatus DELETES a non-roster count-fallback agent (no phantom leak)', () => {
+    const { applyExternalStatus, clearExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'dev', status: 'working', task: null, label: null }],
+      { source: 'hash-bridge' },
+    )
+    expect(useOfficeStore.getState().agents['dev']).toBeTruthy()
+    // 'dev' is NOT in the lightweight roster — clearing must DELETE it, not idle it.
+    // A `.session`-only discriminator would wrongly keep it (session is null), leaving a
+    // phantom overflow character on screen forever.
+    clearExternalStatus('dev')
+    expect(useOfficeStore.getState().agents['dev']).toBeUndefined()
+  })
+
+  it('clearExternalStatus clear-all path also deletes non-roster fallback agents', () => {
+    const { applyExternalStatus, clearExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [
+        { agentId: 'dev', status: 'working', task: null, label: null },
+        { agentId: 'qa', status: 'working', task: null, label: null },
+      ],
+      { source: 'hash-bridge' },
+    )
+    clearExternalStatus()  // staleness sweep
+    const s = useOfficeStore.getState()
+    expect(s.agents['dev']).toBeUndefined()
+    expect(s.agents['qa']).toBeUndefined()
+    // The real lightweight roster agents survive.
+    expect(s.agents['planner']).toBeTruthy()
+    expect(s.agents['worker']).toBeTruthy()
+    expect(s.agents['checker']).toBeTruthy()
+  })
+})
+
+describe('clearExternalStatus — static agents are idled, not deleted (R78 Fix E regression guard)', () => {
+  beforeEach(resetStore)
+
+  it('a static roster agent (agentcortex mode) is reset to idle, never deleted', () => {
+    const { applyExternalStatus, clearExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'dev', status: 'working', task: 'Bash', label: null }],
+      { source: 'claude-cli' },
+    )
+    clearExternalStatus('dev')
+    const dev = useOfficeStore.getState().agents.dev
+    // 'dev' IS in the agentcortex roster — must survive as an idle static agent.
+    expect(dev).toBeTruthy()
+    expect(dev.status).toBe('idle')
   })
 })
 

@@ -405,7 +405,14 @@ export const useOfficeStore = create((set) => ({
         if (!agents[u.agentId]) {
           // Dynamic worktree agent — clone base role's visual style, place in overflow spot
           const baseRole = u.agentId.includes('~') ? u.agentId.split('~').pop() : u.agentId
+          // Visual-style donor: the matching static role, then 'dev', then ANY static
+          // roster agent. The final fallback matters for non-agentcortex modes: the
+          // 'lightweight' roster is planner/worker/checker, so a fallback-count or hash
+          // message routed to a VALID_ROLES id ('dev', 'qa', …) finds neither s.agents
+          // [baseRole] nor s.agents['dev'] — without an any-roster fallback the agent was
+          // silently dropped and a '#count=N' hash did nothing in lightweight mode.
           const baseAgent = s.agents[baseRole] || s.agents['dev']
+            || Object.values(s.agents).find(a => a && !a.session) || null
           if (!baseAgent) continue
           // Place the agent in the LOWEST overflow slot not already occupied by another
           // dynamic agent. A naive "count of existing dynamic agents" only yields a free
@@ -568,6 +575,16 @@ export const useOfficeStore = create((set) => ({
         if (a.inGroupEvent) return { ...a, status: 'idle' }
         return { ...a, status: 'idle', behavior: 'idle', expression: 'normal', bubble: null }
       }
+      // Authoritative dynamic/static discriminator — the SAME one applyExternalStatus uses.
+      // A `.session` check alone is wrong: a fallback-count or hash message routes to a
+      // VALID_ROLES id ('dev', 'qa', …) with session:null, but in a non-agentcortex mode
+      // (e.g. 'lightweight' = planner/worker/checker) such an id is NOT in the roster, so
+      // applyExternalStatus spawns it as a DYNAMIC overflow agent. If clearExternalStatus
+      // keyed only on `.session` it would treat that agent as static and merely idle it —
+      // leaving a phantom overflow character lingering forever. Anything outside the static
+      // roster is dynamic and must be DELETED on clear, regardless of `.session`.
+      const staticRosterIds = new Set((characters[s.mode] || characters.agentcortex).map(c => c.id))
+      const isDynamic = (id, a) => Boolean(a && a.session) || !staticRosterIds.has(id)
       // Drop a dangling inspector selection when its target dynamic agent is deleted —
       // a deleted id left in selectedAgent makes a future same-id click toggle the
       // panel off instead of open (see applyExternalStatus reconciliation for the
@@ -578,8 +595,8 @@ export const useOfficeStore = create((set) => ({
         const agents = { ...s.agents }
         let evictedSelected = false
         if (agents[agentId]) {
-          // Dynamic session agents disappear when they expire; base agents go idle
-          if (agents[agentId].session) {
+          // Dynamic agents disappear when they expire; static roster agents go idle.
+          if (isDynamic(agentId, agents[agentId])) {
             delete agents[agentId]
             if (s.selectedAgent === agentId) evictedSelected = true
           } else {
@@ -597,7 +614,7 @@ export const useOfficeStore = create((set) => ({
       let evictedSelected = false
       for (const id of Object.keys(s.externalStatus)) {
         if (agents[id]) {
-          if (agents[id].session) {
+          if (isDynamic(id, agents[id])) {
             delete agents[id]
             if (s.selectedAgent === id) evictedSelected = true
           } else {
