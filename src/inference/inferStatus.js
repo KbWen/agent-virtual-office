@@ -245,25 +245,32 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
   let reconnectDelay = 2000
   let stopped = false
   let consecutiveErrors = 0
-  let connectionOpenedAt = 0
   let lastSseSeq = null
   const MAX_CONSECUTIVE_ERRORS = 5
-  // Minimum connection lifetime before a successful event resets the error streak.
-  // Without this, a server that accepts → sends initial snapshot → crashes resets
-  // consecutiveErrors every time, defeating backoff and never calling onGiveUp.
+  // After this many ms of uptime the error streak resets, even if no events arrived.
+  // Fixes the R24 regression where quiet servers (no tool calls) never sent a 'status'
+  // event after the initial snapshot, so consecutiveErrors could never decay.
   const MIN_STABLE_MS = 10_000
 
   function connect() {
     if (stopped) return
-    connectionOpenedAt = Date.now()
     es = new EventSource('/api/status/stream')
+    let stabilityTimer = null
+
+    es.addEventListener('open', () => {
+      // Schedule streak reset after MIN_STABLE_MS of connection uptime.
+      // Fires regardless of whether the server has sent any events — covers quiet
+      // servers where no tool calls are in flight for extended periods.
+      clearTimeout(stabilityTimer)
+      stabilityTimer = setTimeout(() => {
+        if (!stopped && es) {
+          consecutiveErrors = 0
+          reconnectDelay = 2000
+        }
+      }, MIN_STABLE_MS)
+    })
+
     es.addEventListener('status', (e) => {
-      // Only reset error streak if the connection has been alive long enough
-      // to prove it's stable (not just the always-sent initial snapshot).
-      if (Date.now() - connectionOpenedAt > MIN_STABLE_MS) {
-        consecutiveErrors = 0
-        reconnectDelay = 2000
-      }
       try {
         const data = JSON.parse(e.data)
         // Dedup: server fires broadcastSSE on both POST and file-watcher;
@@ -275,7 +282,9 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
         if (onProbe) onProbe({ ok: true, delivered: Boolean(msg) })
       } catch {}
     })
+
     es.onerror = () => {
+      clearTimeout(stabilityTimer)
       es.close()
       es = null
       if (stopped) return
@@ -501,26 +510,27 @@ export function startStatusIntegration(store) {
   // Try SSE first; fall back to 1s polling if SSE isn't available.
   // When SSE is active, reduce HTTP polling to a 10s heartbeat (catches missed pushes).
   // If SSE permanently gives up (5 consecutive errors), restart file polling at the fast rate.
-  let filePollingCleanup = null
-  let filePollingActive = false
+  // Object ref so the onGiveUp closure always sees the current cleanup function,
+  // regardless of when SSE gives up relative to polling startup.
+  const polling = { cleanup: null, active: false }
 
   function startFastPolling() {
-    if (filePollingActive) return
-    filePollingActive = true
-    filePollingCleanup = startFilePolling(handleIncoming, STATUS_POLL_INTERVAL, handleProbe)
+    if (polling.active) return
+    polling.active = true
+    polling.cleanup = startFilePolling(handleIncoming, STATUS_POLL_INTERVAL, handleProbe)
   }
 
   const sseCleanup = startSSEListening(handleIncoming, handleProbe, () => {
     // SSE permanently failed — stop the slow heartbeat poller and restart at fast rate
-    if (filePollingCleanup) { filePollingCleanup(); filePollingActive = false }
+    if (polling.cleanup) { polling.cleanup(); polling.active = false }
     startFastPolling()
   })
 
   if (sseCleanup) {
-    filePollingActive = true
+    polling.active = true
     // null onProbe: when SSE is active it already feeds handleProbe; the 10s
     // heartbeat poller is just a catch-all for missed pushes, not a health signal.
-    filePollingCleanup = startFilePolling(handleIncoming, 10_000, null)
+    polling.cleanup = startFilePolling(handleIncoming, 10_000, null)
   } else {
     startFastPolling()
   }
@@ -532,7 +542,7 @@ export function startStatusIntegration(store) {
     startPolling(handleIncoming),                     // window global (CLI injection)
     listenHashChanges(handleIncoming),                // URL hash (passive, any platform)
     listenTitleChanges(handleIncoming),               // title monitoring (heuristic)
-    () => { if (filePollingCleanup) filePollingCleanup() }, // /api/status fallback
+    () => { if (polling.cleanup) polling.cleanup() }, // /api/status fallback
     ...(sseCleanup ? [sseCleanup] : []),              // SSE push channel
   ]
 

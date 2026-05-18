@@ -449,6 +449,7 @@ function officeStatusPlugin() {
           return
         }
         if (req.method !== 'POST') {
+          res.setHeader('Allow', 'POST, OPTIONS')
           res.statusCode = 405
           res.end(JSON.stringify({ error: 'Method not allowed' }))
           return
