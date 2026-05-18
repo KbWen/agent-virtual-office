@@ -582,6 +582,13 @@ export function startOfficeLife(store) {
         nappers.forEach((id) => {
           if (s.agents[id]?.inGroupEvent) {
             s.clearAgentGroupEvent(id)
+            // Pair clearBubble with clearAgentGroupEvent — setMultipleAgentGroupEvents
+            // installed an eventBubble('lunch-nap') speech bubble. Every other release
+            // path (executeEvent cleanup, releaseAllGroupEvents teardown) clears both;
+            // omitting it here strands the "lunch nap" bubble over the agent until the
+            // next doSchedule tick happens to overwrite it (up to a full behavior cycle
+            // later — longer if the next behavior defers its label until arrival).
+            s.clearBubble(id)
           }
         })
       }, 45000)
