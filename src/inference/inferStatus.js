@@ -161,6 +161,7 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
     }
 
     state.consecutive404 = 0
+    const prevEtag = state.lastEtag
     state.lastEtag = resp.headers.get('ETag')
 
     let data
@@ -170,7 +171,10 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
       return { ok: false, parseError: true }
     }
     if (!data) return { ok: true, empty: true }
-    if (data._seq && data._seq === state.lastSeq) return { ok: true, duplicate: true }
+    // Skip _seq dedup when ETag proves the body changed (200 + new ETag is authoritative).
+    // Only fall back to _seq dedup for ETag-less servers where 200 can repeat unchanged content.
+    const etagChanged = state.lastEtag && state.lastEtag !== prevEtag
+    if (!etagChanged && data._seq && data._seq === state.lastSeq) return { ok: true, duplicate: true }
 
     state.lastSeq = data._seq || null
     const msg = normalizeStatusMessage(data)
@@ -246,7 +250,7 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
   let reconnectDelay = 2000
   let stopped = false
   let consecutiveErrors = 0
-  let lastSseSeq = null
+  let lastSseData = null  // dedup on exact wire bytes; _seq is not unique across same-ms processes
   const MAX_CONSECUTIVE_ERRORS = 5
   // After this many ms of uptime the error streak resets, even if no events arrived.
   // Fixes the R24 regression where quiet servers (no tool calls) never sent a 'status'
@@ -272,11 +276,13 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
 
     es.addEventListener('status', (e) => {
       try {
+        // Dedup: server fires broadcastSSE on both POST and file-watcher; the same
+        // merged payload can arrive twice with identical wire bytes. Dedup on the raw
+        // data string (not _seq) so two distinct events that share a _seq due to
+        // same-millisecond hook writes are both delivered.
+        if (e.data === lastSseData) return
+        lastSseData = e.data
         const data = JSON.parse(e.data)
-        // Dedup: server fires broadcastSSE on both POST and file-watcher;
-        // the same merged payload can arrive twice with the same _seq.
-        if (data._seq && data._seq === lastSseSeq) return
-        lastSseSeq = data._seq || null
         const msg = normalizeStatusMessage(data)
         if (msg) callback(msg)
         if (onProbe) onProbe({ ok: true, delivered: Boolean(msg) })

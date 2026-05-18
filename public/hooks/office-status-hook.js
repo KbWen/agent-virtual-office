@@ -579,14 +579,20 @@ function processEvent(event) {
 
   // Re-check _stopped: if Stop ran DURING our processing window (after the entry guard passed),
   // abort rather than overwriting the idle state with stale working/done data.
-  // Fail-closed: ENOENT means first-ever write (safe to proceed); any other error (EBUSY,
-  // EPERM) means Stop's atomic rename is in flight — abort to avoid clobbering idle state.
-  try {
-    const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-    const stoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
-    if (latest._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
-  } catch (err) {
-    if (err.code !== 'ENOENT') return  // EBUSY/EPERM = Stop is writing, abort
+  // UserPromptSubmit is exempt: it is the event that legitimately clears _stopped, and
+  // suppressing it would prevent the office from showing the PM re-entering planning on
+  // rapid back-to-back prompts (very common in normal usage).
+  if (hookEvent !== 'UserPromptSubmit') {
+    try {
+      const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+      const stoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
+      if (latest._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
+    } catch (err) {
+      // Only abort on rename-contention codes (EBUSY/EPERM = Stop's atomic rename in flight).
+      // ENOENT = first-ever write; EACCES/EMFILE/other = persistent FS error — proceed
+      // optimistically so we don't permanently drop events for unrelated FS problems.
+      if (err.code === 'EBUSY' || err.code === 'EPERM') return
+    }
   }
 
   const output = {

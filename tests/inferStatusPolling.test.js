@@ -23,15 +23,16 @@ describe('pollFileStatusOnce', () => {
     expect(callback).not.toHaveBeenCalled()
   })
 
-  it('skips duplicate _seq payloads so external status is not re-applied', async () => {
+  it('skips duplicate _seq payloads on ETag-less servers so external status is not re-applied', async () => {
+    // ETag-less server: _seq dedup is the only guard against re-delivery
     const state = createFilePollingState()
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(makeResponse({
-        etag: 'v1',
+        etag: null,
         jsonData: { type: 'office-status', _seq: 'same', agents: [{ role: 'dev', status: 'working' }] },
       }))
       .mockResolvedValueOnce(makeResponse({
-        etag: 'v2',
+        etag: null,
         jsonData: { type: 'office-status', _seq: 'same', agents: [{ role: 'dev', status: 'working' }] },
       }))
     const callback = vi.fn()
@@ -41,6 +42,27 @@ describe('pollFileStatusOnce', () => {
 
     expect(callback).toHaveBeenCalledTimes(1)
     expect(state.lastSeq).toBe('same')
+  })
+
+  it('delivers when ETag changes even if _seq is unchanged (same-ms hook writes)', async () => {
+    // Two hook processes writing in the same millisecond produce identical _seq integers.
+    // ETag (body hash) is the authoritative change signal; a fresh 200 + new ETag must deliver.
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(makeResponse({
+        etag: 'hash-a',
+        jsonData: { type: 'office-status', _seq: '1000', agents: [{ role: 'dev', status: 'working', label: 'A' }] },
+      }))
+      .mockResolvedValueOnce(makeResponse({
+        etag: 'hash-b',
+        jsonData: { type: 'office-status', _seq: '1000', agents: [{ role: 'dev', status: 'done', label: 'B' }] },
+      }))
+    const callback = vi.fn()
+
+    await pollFileStatusOnce(fetchImpl, state, callback)
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(callback).toHaveBeenCalledTimes(2)
   })
 
   it('resets backoff after a 304 Not Modified response', async () => {
