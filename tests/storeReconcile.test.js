@@ -7,7 +7,11 @@ function resetStore() {
   // Remove any dynamic (session-carrying) agents from a previous test.
   const agents = {}
   for (const [id, a] of Object.entries(s.agents)) {
-    if (!a.session) agents[id] = { ...a, status: 'idle', bubble: null, deskItemCount: { coffee: 0, sticky: 0, books: 0 } }
+    if (!a.session) agents[id] = {
+      ...a, status: 'idle', behavior: 'idle', expression: 'normal', bubble: null,
+      inGroupEvent: false, groupTarget: null,
+      deskItemCount: { coffee: 0, sticky: 0, books: 0 },
+    }
   }
   useOfficeStore.setState({
     agents,
@@ -215,6 +219,69 @@ describe('applyExternalStatus — setup-prompt dismissal contract (R67)', () => 
       { source: 'file-watcher', skipHintDismiss: true },
     )
     expect(useOfficeStore.getState().hasEverReceivedStatus).toBe(true)
+  })
+})
+
+describe('clearExternalStatus — behavior/group-event reset contract (R68)', () => {
+  beforeEach(resetStore)
+
+  it('resets behavior to idle so it stays consistent with the cleared status', () => {
+    const { applyExternalStatus, clearExternalStatus } = useOfficeStore.getState()
+    // A blocked external status drives behavior:'scratch-head' + expression:'confused'.
+    applyExternalStatus(
+      [{ agentId: 'dev', status: 'blocked', task: null, label: null }],
+      { source: 'claude-cli' },
+    )
+    expect(useOfficeStore.getState().agents.dev.behavior).toBe('scratch-head')
+
+    clearExternalStatus('dev')
+    const dev = useOfficeStore.getState().agents.dev
+    // Before R68: status went idle but behavior stayed frozen at 'scratch-head',
+    // producing an inconsistent pair until the next organic tick.
+    expect(dev.status).toBe('idle')
+    expect(dev.behavior).toBe('idle')
+    expect(dev.expression).toBe('normal')
+    expect(dev.bubble).toBeNull()
+  })
+
+  it('does NOT clobber an in-progress group event when external status expires', () => {
+    const { applyExternalStatus, setAgentGroupEvent, clearExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'dev', status: 'working', task: 'Bash', label: null }],
+      { source: 'claude-cli' },
+    )
+    // officeLife locks the agent into a meeting animation.
+    setAgentGroupEvent('dev', { behavior: 'meeting', expression: 'happy', bubble: 'In a meeting' })
+
+    // External status expires mid-meeting.
+    clearExternalStatus('dev')
+    const dev = useOfficeStore.getState().agents.dev
+    // The meeting animation must survive — officeLife owns these fields during a group event.
+    expect(dev.inGroupEvent).toBe(true)
+    expect(dev.behavior).toBe('meeting')
+    expect(dev.expression).toBe('happy')
+    expect(dev.bubble).toBe('In a meeting')
+    expect(dev.status).toBe('idle')
+  })
+
+  it('clear-all path also resets behavior and respects group events', () => {
+    const { applyExternalStatus, setAgentGroupEvent, clearExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [
+        { agentId: 'dev', status: 'working', task: 'Bash', label: null },
+        { agentId: 'qa', status: 'done', task: 'Edit', label: null },
+      ],
+      { source: 'claude-cli' },
+    )
+    setAgentGroupEvent('qa', { behavior: 'meeting', expression: 'happy', bubble: 'Standup' })
+
+    clearExternalStatus()  // clear-all (staleness sweep)
+    const { dev, qa } = useOfficeStore.getState().agents
+    expect(dev.behavior).toBe('idle')
+    expect(dev.status).toBe('idle')
+    // qa is mid group event — must keep its animation.
+    expect(qa.behavior).toBe('meeting')
+    expect(qa.bubble).toBe('Standup')
   })
 })
 

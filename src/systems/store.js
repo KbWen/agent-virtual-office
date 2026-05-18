@@ -515,6 +515,18 @@ export const useOfficeStore = create((set) => ({
 
   clearExternalStatus: (agentId) =>
     set((s) => {
+      // Reset a static agent to the SAME baseline initAgents seeds: status/behavior 'idle',
+      // expression 'normal', no bubble. applyExternalStatus drives behavior+expression from
+      // status (typing/scratch-head/thumbs-up + focused/confused/happy); clearing only
+      // status/expression left behavior frozen at the work value, producing an inconsistent
+      // pair (e.g. behavior:'scratch-head' + expression:'normal') until the next organic
+      // tick. It also mirrors applyExternalStatus's inGroup guard: officeLife owns
+      // behavior/expression/bubble during a group event, so an external status that
+      // expires mid-event must NOT wipe the in-progress meeting animation.
+      const resetStaticAgent = (a) => {
+        if (a.inGroupEvent) return { ...a, status: 'idle' }
+        return { ...a, status: 'idle', behavior: 'idle', expression: 'normal', bubble: null }
+      }
       if (agentId) {
         const ext = { ...s.externalStatus }
         delete ext[agentId]
@@ -522,7 +534,7 @@ export const useOfficeStore = create((set) => ({
         if (agents[agentId]) {
           // Dynamic session agents disappear when they expire; base agents go idle
           if (agents[agentId].session) delete agents[agentId]
-          else agents[agentId] = { ...agents[agentId], status: 'idle', expression: 'normal', bubble: null }
+          else agents[agentId] = resetStaticAgent(agents[agentId])
         }
         if (Object.keys(ext).length === 0) {
           return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null }
@@ -534,7 +546,7 @@ export const useOfficeStore = create((set) => ({
       for (const id of Object.keys(s.externalStatus)) {
         if (agents[id]) {
           if (agents[id].session) delete agents[id]
-          else agents[id] = { ...agents[id], status: 'idle', expression: 'normal', bubble: null }
+          else agents[id] = resetStaticAgent(agents[id])
         }
       }
       return { externalStatus: {}, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null }
