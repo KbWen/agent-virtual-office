@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { createHash } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { normalizePost, VALID_ROLES, VALID_STATUSES } from './src/utils/normalizePost.js'
+import { scanAndMerge, getSessionStats } from './src/server/scanSessions.mjs'
 
 // Middleware: Universal status API
 //   GET  /api/status → read current status (browser polls this)
@@ -42,6 +43,38 @@ function getServerIPs() {
 
 const SERVER_IPS = getServerIPs()
 
+// Monotonic _seq: plain integer string, identical implementation as server.mjs.
+// Number(_seq) and parseInt(_seq,10) both work identically; no suffix to truncate.
+let _seqLast = 0
+function nextSeq() {
+  const now = Date.now()
+  _seqLast = now > _seqLast ? now : _seqLast + 1
+  return String(_seqLast)
+}
+
+// Constant-time token comparison — prevents timing oracle attacks.
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false
+  const ha = createHash('sha256').update(a).digest()
+  const hb = createHash('sha256').update(b).digest()
+  return timingSafeEqual(ha, hb)
+}
+
+// Atomic write: temp file + rename to prevent partial-read corruption.
+function atomicWrite(filePath, content) {
+  const tmp = filePath + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+  try {
+    fs.writeFileSync(tmp, content)
+    fs.renameSync(tmp, filePath)
+    return true
+  } catch {
+    let ok = false
+    try { fs.writeFileSync(filePath, content); ok = true } catch {}
+    try { fs.unlinkSync(tmp) } catch {}
+    return ok
+  }
+}
+
 export function getOfficeApiConfig(env = process.env) {
   const token = env.OFFICE_API_TOKEN?.trim() || null
   const allowedOrigins = (env.OFFICE_API_ALLOWED_ORIGINS || '')
@@ -73,11 +106,12 @@ export function getAllowedOriginHeader(origin, config = getOfficeApiConfig()) {
 
 export function isAuthorizedOfficeRequest(req, config = getOfficeApiConfig()) {
   if (!config.token) return true
-  const header = req.headers['x-office-token']
-  const auth = req.headers.authorization
-  if (header === config.token) return true
-  if (typeof auth === 'string' && auth === `Bearer ${config.token}`) return true
-  return false
+  const h = req.headers['x-office-token']
+  const a = req.headers.authorization
+  // Evaluate both before OR-ing — avoids timing oracle from short-circuit evaluation.
+  const m1 = typeof h === 'string' && safeEqual(h, config.token)
+  const m2 = typeof a === 'string' && safeEqual(a, `Bearer ${config.token}`)
+  return m1 || m2
 }
 
 function officeStatusPlugin() {
@@ -89,29 +123,28 @@ function officeStatusPlugin() {
   const RATE_WINDOW = 10000
   const RATE_LIMIT = 30
 
-  // Case-insensitive path comparison on Windows (C:\users vs C:\Users are the same)
-  const isWin = process.platform === 'win32'
-  function pathsEqual(a, b) {
-    return isWin ? a.toLowerCase() === b.toLowerCase() : a === b
+  // SSE clients — receives pushes from both POST updates and file-watcher events
+  const sseClients = new Set()
+
+  function broadcastSSE(merged) {
+    if (sseClients.size === 0) return
+    const payload = `event: status\ndata: ${JSON.stringify(merged)}\n\n`
+    for (const client of [...sseClients]) {
+      try { client.write(payload) } catch { sseClients.delete(client) }
+    }
   }
 
+  // M4: keyed on IP only — shared 30 POST/10s budget across all write endpoints
   function checkRateLimit(req) {
     if (req.method !== 'POST') return true
     const ip = req.socket?.remoteAddress || 'unknown'
     const now = Date.now()
-    const entry = postCounts.get(ip)
-    if (!entry || now - entry.start > RATE_WINDOW) {
-      // Clean up stale entries periodically (every 100 checks)
-      if (postCounts.size > 50) {
-        for (const [k, v] of postCounts) {
-          if (now - v.start > RATE_WINDOW) postCounts.delete(k)
-        }
-      }
-      postCounts.set(ip, { start: now, count: 1 })
-      return true
-    }
-    entry.count++
-    return entry.count <= RATE_LIMIT
+    const ts = postCounts.get(ip) || []
+    const fresh = ts.filter(t => now - t < RATE_WINDOW)
+    if (fresh.length >= RATE_LIMIT) { postCounts.set(ip, fresh); return false }
+    fresh.push(now)
+    postCounts.set(ip, fresh)
+    return true
   }
 
   return {
@@ -120,6 +153,7 @@ function officeStatusPlugin() {
       server.middlewares.use('/api/status', (req, res) => {
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('X-Content-Type-Options', 'nosniff')
         const allowedOrigin = getAllowedOriginHeader(req.headers.origin, apiConfig)
         if (allowedOrigin) res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -133,129 +167,19 @@ function officeStatusPlugin() {
             res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
             return
           }
+          res.setHeader('Access-Control-Max-Age', '600')
           res.statusCode = 204
           res.end()
           return
         }
 
-        // Rate limiting for POST
-        if (!checkRateLimit(req)) {
-          res.statusCode = 429
-          res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
-          return
-        }
-
         // GET → merge all active session files (multi-worktree support)
+        // Scan/dedup/merge delegated to shared scanAndMerge (src/server/scanSessions.mjs)
         if (req.method === 'GET') {
           try {
             const clientEtag = req.headers['if-none-match']
-            // NOTE: No fast-path ETag skip here — session files are written directly
-            // to disk by hooks and don't go through POST, so we must always re-scan.
-
-            const dir = path.dirname(statusPath)
-            const now = Date.now()
-
-            // Scan ~/.claude/office-status-*.json (only sessions from THIS project)
-            const projectRoot = process.cwd()
-            const sessions = []
-            if (fs.existsSync(dir)) {
-              for (const file of fs.readdirSync(dir)) {
-                if (!file.match(/^office-status(-[^.]+)?\.json$/)) continue
-                try {
-                  const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
-                  const parsed = JSON.parse(raw)
-                  const seq = parseInt(parsed._seq, 10)
-                  if (!seq || now - seq > 300000) {  // stale or no valid _seq
-                    // Clean up very old files (>1 hour) to prevent ~/.claude/ clutter
-                    if (seq && now - seq > 3600000 && file !== 'office-status.json') {
-                      try { fs.unlinkSync(path.join(dir, file)) } catch {}
-                    }
-                    continue
-                  }
-                  // Skip sessions from other projects (hooks write _cwd).
-                  // Slugged files without _cwd are from old hooks — skip them too (bare main is OK as fallback).
-                  if (parsed._cwd && !pathsEqual(path.resolve(parsed._cwd), path.resolve(projectRoot))) continue
-                  if (!parsed._cwd && file !== 'office-status.json') continue
-                  // Skip file-watcher sessions in multi-session merge — they fire on every
-                  // JS edit and would make single-worktree users appear as multi-session.
-                  if (parsed.source === 'file-watcher') continue
-                  const slug = file === 'office-status.json' ? 'main'
-                    : file.replace(/^office-status-/, '').replace(/\.json$/, '')
-                  sessions.push({ slug, data: parsed })
-                } catch {}
-              }
-            }
-
-            // Fallback: if no sessions match this project, show all non-stale sessions
-            // (better to show something than a blank office with no feedback)
-            if (sessions.length === 0 && fs.existsSync(dir)) {
-              for (const file of fs.readdirSync(dir)) {
-                if (!file.match(/^office-status(-[^.]+)?\.json$/)) continue
-                try {
-                  const raw = fs.readFileSync(path.join(dir, file), 'utf-8')
-                  const parsed = JSON.parse(raw)
-                  const seq = parseInt(parsed._seq, 10)
-                  if (!seq || now - seq > 300000) continue
-                  const slug = file === 'office-status.json' ? 'main'
-                    : file.replace(/^office-status-/, '').replace(/\.json$/, '')
-                  sessions.push({ slug, data: parsed })
-                } catch {}
-              }
-            }
-
-            if (sessions.length === 0) { res.end('null'); return }
-
-            // Dedup: if bare `office-status.json` ("main") has a _seq within 2s of any
-            // slugged session, it's a duplicate from an old user-level hook. Drop it.
-            // Exception: keep main if it carries a workflow that slugged sessions lack,
-            // since that means it was an independent API POST, not a hook duplicate.
-            if (sessions.length > 1) {
-              const mainIdx = sessions.findIndex(s => s.slug === 'main')
-              if (mainIdx !== -1) {
-                const mainSeq = parseInt(sessions[mainIdx].data._seq, 10) || 0
-                const mainWorkflow = sessions[mainIdx].data.workflow
-                const isDup = sessions.some((s, i) => i !== mainIdx
-                  && Math.abs((parseInt(s.data._seq, 10) || 0) - mainSeq) < 2000)
-                const hasUniqueWorkflow = mainWorkflow && !sessions.some((s, i) => i !== mainIdx && s.data.workflow === mainWorkflow)
-                if (isDup && !hasUniqueWorkflow) sessions.splice(mainIdx, 1)
-              }
-            }
-
-            let merged
-            if (sessions.length === 1) {
-              // Single session — return as-is (backward compat, plain role IDs)
-              merged = { ...sessions[0].data }
-              delete merged._cwd
-            } else {
-              // Multi-session — one representative agent per session (the most active one)
-              // Rule: only working/blocked agents spawn extra characters; done agents are transient
-              // Priority: blocked > working (shows the most urgent state per session)
-              const STATUS_PRIORITY = { blocked: 0, working: 1, done: 2, idle: 3 }
-              const allAgents = []
-              let latestSeq = 0
-              let workflow = null
-              for (const { slug, data } of sessions) {
-                const seq = parseInt(data._seq, 10) || 0
-                if (seq > latestSeq) latestSeq = seq
-                if (!workflow && data.workflow) workflow = data.workflow
-                // Pick the single most active agent from this session
-                const active = (data.agents || [])
-                  .filter(a => a.status === 'working' || a.status === 'blocked')
-                  .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9))
-                const pick = active[0]
-                if (pick) allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
-              }
-              merged = {
-                _seq: String(latestSeq),
-                type: 'office-status',
-                agents: allAgents,
-                activeCount: allAgents.filter(a => a.status !== 'done').length,
-                workflow,
-                source: 'multi-session',
-                sessionCount: sessions.length,
-              }
-            }
-
+            const merged = scanAndMerge(path.dirname(statusPath), process.cwd())
+            if (!merged) { res.end('null'); return }
             const data = JSON.stringify(merged)
             const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
             if (clientEtag === etag) { res.statusCode = 304; res.end(); return }
@@ -269,52 +193,160 @@ function officeStatusPlugin() {
 
         // POST → update status (16KB limit to prevent abuse)
         if (req.method === 'POST') {
+          const reqOrigin = req.headers.origin
+          if (reqOrigin && !isAllowedOrigin(reqOrigin, apiConfig)) {
+            res.statusCode = 403
+            res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
+            return
+          }
           if (!isAuthorizedOfficeRequest(req, apiConfig)) {
             res.statusCode = 401
             res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
             return
           }
-          let body = ''
-          let aborted = false
+          if (!checkRateLimit(req)) {
+            res.statusCode = 429
+            res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
+            return
+          }
+          req.setEncoding('utf-8')
+          let body = '', aborted = false, receivedBytes = 0
           const MAX_BODY = 16 * 1024
           req.on('data', chunk => {
             if (aborted) return
-            body += chunk
-            if (body.length > MAX_BODY) {
+            receivedBytes += Buffer.byteLength(chunk, 'utf8')
+            if (receivedBytes > MAX_BODY) {
               aborted = true
               res.statusCode = 413
               res.end(JSON.stringify({ ok: false, error: 'Body too large' }))
-              req.destroy()
+              req.resume()
+              return
             }
+            body += chunk
           })
           req.on('end', () => {
             if (aborted) return
+            let normalized
             try {
               const parsed = JSON.parse(body)
-              const normalized = normalizePost(parsed)
+              normalized = normalizePost(parsed)
               normalized._cwd = process.cwd()
-              // Ensure directory exists
               const dir = path.dirname(statusPath)
               if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-              const json = JSON.stringify(normalized, null, 2)
-              fs.writeFileSync(statusPath, json)
-              res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
+              if (!atomicWrite(statusPath, JSON.stringify(normalized, null, 2))) {
+                res.statusCode = 500
+                return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
+              }
             } catch {
               res.statusCode = 400
               res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }))
+              return
+            }
+            // Write succeeded — respond 200 BEFORE the SSE broadcast. The broadcast is a
+            // best-effort side-effect (push to already-connected clients); if scanAndMerge
+            // or broadcastSSE throws, the client must NOT be told its valid, persisted
+            // update was rejected. Misreporting a 400 here would make clients retry/double-post.
+            res.end(JSON.stringify({ ok: true, agents: normalized.agents?.length ?? 0 }))
+            // Skip the broadcast scan entirely when no SSE clients are connected —
+            // scanAndMerge re-reads and re-parses every status file in ~/.claude/.
+            // Running it for a broadcast that has no recipients is pure waste.
+            if (sseClients.size > 0) {
+              try {
+                const sseData = scanAndMerge(path.dirname(statusPath), process.cwd())
+                if (sseData) broadcastSSE(sseData)
+              } catch {}
             }
           })
           return
         }
 
+        res.setHeader('Allow', 'GET, POST, OPTIONS')
         res.statusCode = 405
         res.end(JSON.stringify({ error: 'Method not allowed' }))
       })
 
+      // SSE push: GET /api/status/stream
+      // Clients receive an immediate snapshot then pushed updates on every hook write
+      // or API POST — no polling needed when connected.
+      server.middlewares.use('/api/status/stream', (req, res) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff')
+        const allowedSse = getAllowedOriginHeader(req.headers.origin, apiConfig)
+        if (allowedSse) res.setHeader('Access-Control-Allow-Origin', allowedSse)
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        res.setHeader('Access-Control-Allow-Headers', 'X-Office-Token, Authorization')
+        res.setHeader('Vary', 'Origin')
+        if (req.method === 'OPTIONS') {
+          if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
+            res.setHeader('Content-Type', 'application/json')
+            res.statusCode = 403; res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })); return
+          }
+          res.setHeader('Access-Control-Max-Age', '600')
+          res.statusCode = 204; res.end(); return
+        }
+        if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); res.statusCode = 405; res.end(); return }
+        res.setHeader('Content-Type', 'text/event-stream')
+        res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('X-Accel-Buffering', 'no')  // disable Nginx response buffering
+        res.flushHeaders()
+        sseClients.add(res)
+        req.on('close', () => sseClients.delete(res))
+        req.on('error', () => sseClients.delete(res))
+        res.on('error', () => sseClients.delete(res))
+        const snapshot = scanAndMerge(path.dirname(statusPath), process.cwd())
+        if (snapshot) {
+          try { res.write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`) }
+          catch { sseClients.delete(res) }
+        }
+      })
+
+      // Watch ~/.claude/ for hook-written file changes and push via SSE
+      // (hooks write directly to disk, not through POST, so we can't intercept them otherwise)
+      const watchDir = path.dirname(statusPath)
+      // Always register — chokidar watches non-existent dirs and picks them up when created
+      if (!fs.existsSync(watchDir)) fs.mkdirSync(watchDir, { recursive: true })
+      server.watcher.add(watchDir)
+      // Debounce: an atomic temp-file rename fires two watcher events on some
+      // platforms (one for the tmp unlink, one for the rename target). Without
+      // debouncing, a single hook write triggers two full scanAndMerge passes
+      // and two SSE broadcasts. Mirrors server.mjs's 80ms watcher debounce.
+      let watchDebounce = null
+      const onWatchChange = (file) => {
+        if (!path.basename(file).match(/^office-status(-[^.]+)?\.json$/)) return
+        if (sseClients.size === 0) return
+        clearTimeout(watchDebounce)
+        watchDebounce = setTimeout(() => {
+          const merged = scanAndMerge(path.dirname(statusPath), process.cwd())
+          if (merged) broadcastSSE(merged)
+        }, 80)
+        if (watchDebounce.unref) watchDebounce.unref()
+      }
+      server.watcher.on('change', onWatchChange)
+      server.httpServer?.on('close', () => {
+        server.watcher.off('change', onWatchChange)
+        clearTimeout(watchDebounce)
+      })
+
+      // Heartbeat: keep SSE connections alive through proxies and load balancers
+      const sseHeartbeat = setInterval(() => {
+        if (sseClients.size === 0) return
+        for (const client of [...sseClients]) {
+          try { client.write(':heartbeat\n\n') } catch { sseClients.delete(client) }
+        }
+      }, 30_000)
+      if (sseHeartbeat.unref) sseHeartbeat.unref()
+      if (server.httpServer) {
+        server.httpServer.on('close', () => clearInterval(sseHeartbeat))
+      } else {
+        // middleware mode: httpServer is null, fall back to SIGTERM/exit cleanup
+        const cleanup = () => clearInterval(sseHeartbeat)
+        process.once('SIGTERM', cleanup)
+        process.once('exit', cleanup)
+      }
+
       const EVENT_TO_STATUS = {
         'pr-merged':      [{ role: 'ops', status: 'done',    label: '🚀 PR merged!' },
-                           { role: 'dev', status: 'done',    label: '✅ 上了！' }],
-        'pr-opened':      [{ role: 'dev', status: 'working', label: '📋 PR 開好了' }],
+                           { role: 'dev', status: 'done',    label: '✅ Shipped!' }],
+        'pr-opened':      [{ role: 'dev', status: 'working', label: '📋 PR opened' }],
         'pr-reviewed':    [{ role: 'qa',  status: 'done',    label: '✅ PR reviewed' }],
         'test-passed':    [{ role: 'qa',  status: 'done',    label: '✅ Tests passed!' }],
         'test-failed':    [{ role: 'qa',  status: 'blocked', label: '❌ Tests failed' }],
@@ -335,40 +367,56 @@ function officeStatusPlugin() {
       }
 
       server.middlewares.use('/api/lang', (req, res) => {
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Cache-Control', 'no-store')
+        res.setHeader('X-Content-Type-Options', 'nosniff')
+        res.setHeader('Vary', 'Origin')
+        const allowedOriginL = getAllowedOriginHeader(req.headers.origin, apiConfig)
+        if (allowedOriginL) res.setHeader('Access-Control-Allow-Origin', allowedOriginL)
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match, X-Office-Token, Authorization')
         if (req.method === 'OPTIONS') {
           if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
             res.statusCode = 403
-            res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
             return
           }
+          res.setHeader('Access-Control-Max-Age', '600')
           res.statusCode = 204
-          res.setHeader('Access-Control-Allow-Origin', getAllowedOriginHeader(req.headers.origin, apiConfig))
-          res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Office-Token, Authorization')
           res.end()
           return
         }
         if (req.method === 'POST') {
+          const reqOriginL = req.headers.origin
+          if (reqOriginL && !isAllowedOrigin(reqOriginL, apiConfig)) {
+            res.statusCode = 403
+            res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
+            return
+          }
           if (!isAuthorizedOfficeRequest(req, apiConfig)) {
             res.statusCode = 401
-            res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }))
             return
           }
-          let body = ''
+          if (!checkRateLimit(req)) {
+            res.statusCode = 429
+            res.end(JSON.stringify({ ok: false, error: 'Too many requests' }))
+            return
+          }
+          req.setEncoding('utf-8')
+          let body = '', langAborted = false, langReceivedBytes = 0
           const MAX_LANG_BODY = 16  // lang codes are tiny
-          let langAborted = false
           req.on('data', chunk => {
             if (langAborted) return
-            body += chunk
-            if (body.length > MAX_LANG_BODY) {
+            langReceivedBytes += Buffer.byteLength(chunk, 'utf8')
+            if (langReceivedBytes > MAX_LANG_BODY) {
               langAborted = true
               res.statusCode = 413
               res.end(JSON.stringify({ ok: false, error: 'Body too large' }))
-              req.destroy()
+              req.resume()
               return
             }
+            body += chunk
           })
           req.on('end', () => {
             if (langAborted) return
@@ -378,7 +426,11 @@ function officeStatusPlugin() {
               try {
                 const dir = path.dirname(langFile)
                 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-                fs.writeFileSync(langFile, lang)
+                if (!atomicWrite(langFile, lang)) {
+                  res.statusCode = 500
+                  res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
+                  return
+                }
                 res.statusCode = 200
                 res.end(JSON.stringify({ ok: true }))
               } catch {
@@ -392,8 +444,9 @@ function officeStatusPlugin() {
           })
           return
         }
+        res.setHeader('Allow', 'POST, OPTIONS')
         res.statusCode = 405
-        res.end()
+        res.end(JSON.stringify({ error: 'Method not allowed' }))
       })
 
       // ─── /api/event — one-shot CI/CD webhook ────────────────────────────
@@ -411,10 +464,12 @@ function officeStatusPlugin() {
 
       server.middlewares.use('/api/event', (req, res) => {
         res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Cache-Control', 'no-store')
+        res.setHeader('X-Content-Type-Options', 'nosniff')
         const allowedOrigin = getAllowedOriginHeader(req.headers.origin, apiConfig)
         if (allowedOrigin) res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
         res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Office-Token, Authorization')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match, X-Office-Token, Authorization')
         res.setHeader('Vary', 'Origin')
 
         if (req.method === 'OPTIONS') {
@@ -423,13 +478,21 @@ function officeStatusPlugin() {
             res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
             return
           }
+          res.setHeader('Access-Control-Max-Age', '600')
           res.statusCode = 204
           res.end()
           return
         }
         if (req.method !== 'POST') {
+          res.setHeader('Allow', 'POST, OPTIONS')
           res.statusCode = 405
           res.end(JSON.stringify({ error: 'Method not allowed' }))
+          return
+        }
+        const reqOriginE = req.headers.origin
+        if (reqOriginE && !isAllowedOrigin(reqOriginE, apiConfig)) {
+          res.statusCode = 403
+          res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' }))
           return
         }
         if (!isAuthorizedOfficeRequest(req, apiConfig)) {
@@ -443,57 +506,115 @@ function officeStatusPlugin() {
           return
         }
 
-        let body = ''
-        let aborted = false
+        req.setEncoding('utf-8')
+        let body = '', aborted = false, receivedBytes = 0
         req.on('data', chunk => {
           if (aborted) return
+          receivedBytes += Buffer.byteLength(chunk, 'utf8')
+          if (receivedBytes > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.resume(); return }
           body += chunk
-          if (body.length > 8192) { aborted = true; res.statusCode = 413; res.end(JSON.stringify({ ok: false, error: 'Payload too large' })); req.destroy() }
         })
         req.on('end', () => {
           if (aborted) return
+          let eventName = ''
+          let agents
           try {
             const parsed = JSON.parse(body)
-            const eventName = parsed.event || ''
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+              res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: 'Invalid payload' })); return
+            }
+            eventName = typeof parsed.event === 'string' ? parsed.event : ''
 
-            let agents
             if (eventName === 'custom' && parsed.role && parsed.status) {
               if (!VALID_ROLES.includes(parsed.role) || !VALID_STATUSES.includes(parsed.status)) {
                 res.statusCode = 400
                 res.end(JSON.stringify({ ok: false, error: `Invalid role or status` }))
                 return
               }
-              agents = [{ role: parsed.role, status: parsed.status, label: (parsed.label ? String(parsed.label).slice(0, 200) : eventName) }]
+              agents = [{ role: parsed.role, status: parsed.status, label: (typeof parsed.label === 'string' ? parsed.label.slice(0, 200) : eventName.slice(0, 200)) }]
             } else {
-              agents = EVENT_TO_STATUS[eventName]
+              agents = Object.prototype.hasOwnProperty.call(EVENT_TO_STATUS, eventName) ? EVENT_TO_STATUS[eventName] : undefined
               if (!agents) {
                 res.statusCode = 400
                 res.end(JSON.stringify({ ok: false, error: 'Unknown event' }))
                 return
               }
               // Allow label override
-              if (parsed.label) agents = agents.map((a, i) => i === 0 ? { ...a, label: String(parsed.label).slice(0, 200) } : a)
+              if (typeof parsed.label === 'string') agents = agents.map((a, i) => i === 0 ? { ...a, label: parsed.label.slice(0, 200) } : a)
             }
 
             const output = {
-              _seq: String(Date.now()),
+              _seq: nextSeq(),
               _cwd: process.cwd(),
               type: 'office-status',
               agents,
-              activeCount: agents.filter(a => a.status !== 'done').length,
-              workflow: parsed.workflow ? String(parsed.workflow).slice(0, 200) : eventName,
+              activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
+              workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : eventName,
               source: 'webhook',
             }
             const dir = path.dirname(statusPath)
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-            fs.writeFileSync(statusPath, JSON.stringify(output, null, 2))
-            res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
+            if (!atomicWrite(statusPath, JSON.stringify(output, null, 2))) {
+              res.statusCode = 500
+              res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
+              return
+            }
           } catch {
             res.statusCode = 400
             res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }))
+            return
+          }
+          // Write succeeded — respond before the best-effort SSE broadcast so a
+          // scanAndMerge/broadcastSSE failure cannot misreport a persisted event as a 400.
+          res.end(JSON.stringify({ ok: true, event: eventName, agents: agents.length }))
+          // Skip the broadcast scan when no SSE clients are connected (see POST handler).
+          if (sseClients.size > 0) {
+            try {
+              const sseData = scanAndMerge(path.dirname(statusPath), process.cwd())
+              if (sseData) broadcastSSE(sseData)
+            } catch {}
           }
         })
       })
+
+      server.middlewares.use('/api/health', (req, res) => {
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Cache-Control', 'no-store')
+        res.setHeader('X-Content-Type-Options', 'nosniff')
+        const allowedH = getAllowedOriginHeader(req.headers.origin, apiConfig)
+        if (allowedH) res.setHeader('Access-Control-Allow-Origin', allowedH)
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        res.setHeader('Vary', 'Origin')
+        if (req.method === 'OPTIONS') {
+          if (!isAllowedOrigin(req.headers.origin, apiConfig)) {
+            res.statusCode = 403; res.end(JSON.stringify({ ok: false, error: 'Origin not allowed' })); return
+          }
+          res.setHeader('Access-Control-Max-Age', '600')
+          res.statusCode = 204; res.end(); return
+        }
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          res.setHeader('Allow', 'GET, HEAD, OPTIONS')
+          res.statusCode = 405; res.end(JSON.stringify({ error: 'Method not allowed' })); return
+        }
+        const stats = getSessionStats(path.dirname(statusPath), process.cwd())
+        res.end(JSON.stringify({ ok: true, uptime: Math.floor(process.uptime()), ...stats }))
+      })
+
+      // Sweep rate-limiter map so it doesn't grow unbounded under IP rotation.
+      const rlSweep = setInterval(() => {
+        const cutoff = Date.now() - RATE_WINDOW
+        for (const [ip, ts] of postCounts) {
+          const fresh = ts.filter(t => t >= cutoff)
+          if (fresh.length === 0) postCounts.delete(ip)
+          else postCounts.set(ip, fresh)
+        }
+      }, 600_000)
+      if (rlSweep.unref) rlSweep.unref()
+      if (server.httpServer) {
+        server.httpServer.once('close', () => clearInterval(rlSweep))
+      } else {
+        process.once('exit', () => clearInterval(rlSweep))
+      }
     }
   }
 }
@@ -528,10 +649,25 @@ function fileWatcherFallbackPlugin() {
     const last = recentEdits.get(role)
     if (last && now - last.time < DEBOUNCE_MS) return
 
-    // Don't overwrite richer hook-generated status — skip if hooks recently wrote
+    // Don't write when hooks are actively running. Hooks write to office-status-<slug>.json,
+    // not this bare file. scanAndMerge's strict-pass exclusion is the real dedup, but
+    // skipping writes reduces filesystem noise and unnecessary SSE broadcasts.
+    try {
+      const hookDir = path.dirname(statusPath)
+      const hookFiles = fs.readdirSync(hookDir)
+      for (const f of hookFiles) {
+        if (!/^office-status-.+\.json$/.test(f)) continue
+        try {
+          const d = JSON.parse(fs.readFileSync(path.join(hookDir, f), 'utf-8'))
+          if (d.source !== 'file-watcher' && d._seq && now - parseInt(d._seq, 10) < 10_000) return
+        } catch {}  // file may have been deleted/truncated between readdir and read
+      }
+    } catch {}
+    // Also skip if a recent non-file-watcher write was made to the bare file (curl/API/webhook)
     try {
       const existing = JSON.parse(fs.readFileSync(statusPath, 'utf-8'))
-      if (existing.source === 'claude-cli' && existing._seq && now - parseInt(existing._seq, 10) < 10000) return
+      if (existing.source && existing.source !== 'file-watcher' && existing._seq
+          && now - parseInt(existing._seq, 10) < 10_000) return
     } catch {}
 
     recentEdits.set(role, { file, time: now })
@@ -547,7 +683,7 @@ function fileWatcherFallbackPlugin() {
     }
 
     const output = {
-      _seq: String(now),
+      _seq: nextSeq(),
       type: 'office-status',
       agents,
       activeCount: agents.length,
@@ -557,7 +693,7 @@ function fileWatcherFallbackPlugin() {
     try {
       const dir = path.dirname(statusPath)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(statusPath, JSON.stringify(output, null, 2))
+      atomicWrite(statusPath, JSON.stringify(output, null, 2))
     } catch {}
   }
 
@@ -565,13 +701,15 @@ function fileWatcherFallbackPlugin() {
     name: 'office-file-watcher-fallback',
     configureServer(server) {
       // Watch project source files for changes (Vite's watcher covers src/)
-      server.watcher.on('change', (file) => {
+      const onFallbackChange = (file) => {
         // Skip node_modules, dist, .git, and the status file itself
         if (/node_modules|dist|\.git/.test(file)) return
         if (file.includes('office-status')) return
         const role = fileToRole(file)
         writeStatus(role, file)
-      })
+      }
+      server.watcher.on('change', onFallbackChange)
+      server.httpServer?.on('close', () => server.watcher.off('change', onFallbackChange))
     }
   }
 }

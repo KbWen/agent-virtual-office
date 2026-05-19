@@ -48,7 +48,8 @@ if (command === 'setup') {
   let settings = {}
   if (fs.existsSync(settingsPath)) {
     try {
-      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
+      const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
+      settings = (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {}
     } catch (e) {
       console.error('  Error: ' + settingsPath + ' contains invalid JSON.')
       console.error('  Please fix or back up the file, then re-run setup.')
@@ -61,26 +62,38 @@ if (command === 'setup') {
   const hookEntry = { type: 'command', command: hookCmd }
 
   // Add hooks for all relevant events
-  if (!settings.hooks) settings.hooks = {}
+  if (!settings.hooks || typeof settings.hooks !== 'object' || Array.isArray(settings.hooks)) settings.hooks = {}
   for (const event of ['PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'UserPromptSubmit', 'Stop']) {
     if (!Array.isArray(settings.hooks[event])) settings.hooks[event] = []
     // Check if already installed (avoid duplicates)
     const existing = settings.hooks[event]
     const hasHook = existing.some(h =>
-      (h.hooks || []).some(hh => hh.command && hh.command.includes('office-status-hook'))
+      h && typeof h === 'object' && (h.hooks || []).some(hh => hh && hh.command && hh.command.includes('office-status-hook'))
     )
     if (!hasHook) {
       existing.push({ hooks: [hookEntry] })
     }
   }
 
-  // Write back
+  // Write back atomically to prevent corruption on crash/disk-full.
+  // tmp name = pid + random suffix so two concurrent setup runs (or a leftover
+  // tmp from a prior crashed run) never collide on the same path — matches the
+  // atomicWrite convention in server.mjs / the hooks.
+  const settingsTmp = settingsPath + '.tmp.' + process.pid + '.' +
+    (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
   try {
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
+    fs.writeFileSync(settingsTmp, JSON.stringify(settings, null, 2))
+    fs.renameSync(settingsTmp, settingsPath)
   } catch (e) {
-    console.error('  Error: Cannot write to ' + settingsPath)
-    console.error('  Check file permissions for ~/.claude/')
-    process.exit(1)
+    try { fs.unlinkSync(settingsTmp) } catch {}
+    // Fallback: direct write (e.g. Windows EBUSY on rename)
+    try {
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
+    } catch {
+      console.error('  Error: Cannot write to ' + settingsPath)
+      console.error('  Check file permissions for ~/.claude/')
+      process.exit(1)
+    }
   }
 
   console.log(`
@@ -117,7 +130,9 @@ if (command === 'uninstall') {
   try {
     const files = fs.readdirSync(claudeDir)
     for (const file of files) {
-      if (file.startsWith('office-status') || file.startsWith('office-skill-') || file === 'office-lang') {
+      if (/^office-status(-[^.]+)?\.json(\.tmp\.\d+\.[a-z0-9]+)?$/.test(file) ||
+          /^office-skill-[^.]+\.json(\.tmp\.\d+\.[a-z0-9]+)?$/.test(file) ||
+          /^office-lang(\.tmp\.\d+\.[a-z0-9]+)?$/.test(file)) {
         const filePath = path.join(claudeDir, file)
         fs.unlinkSync(filePath)
         console.log('  Removed: ' + filePath)
@@ -154,6 +169,60 @@ if (command === 'uninstall') {
   process.exit(0)
 }
 
+// ─── serve: production static server ───────────────────────────────────────
+if (command === 'serve') {
+  const serverScript = path.join(root, 'server.mjs')
+  if (!fs.existsSync(serverScript)) {
+    console.error('  Error: server.mjs not found. Your installation may be corrupted.')
+    console.error('    npm install -g agent-virtual-office')
+    process.exit(1)
+  }
+  if (!fs.existsSync(path.join(root, 'dist', 'index.html'))) {
+    console.error('  Error: production bundle not found. Build first:')
+    console.error('    npm run build')
+    process.exit(1)
+  }
+  // Forward remaining flags to server.mjs
+  const serverArgs = process.argv.slice(3)
+  const child = spawn(process.execPath, [serverScript, ...serverArgs], {
+    cwd: root,
+    stdio: 'inherit',
+    shell: false,
+  })
+  child.on('error', (err) => {
+    console.error(`\n  Failed to start production server: ${err.message}\n`)
+    process.exit(1)
+  })
+  let _hardTimer = null
+  child.on('close', (code, signal) => {
+    if (_hardTimer) clearTimeout(_hardTimer)
+    // SIGINT/SIGTERM = user-initiated clean stop → exit 0
+    // SIGKILL/crash signal = abnormal → exit 1 so supervisors restart
+    const cleanSignal = signal === 'SIGINT' || signal === 'SIGTERM'
+    process.exit(cleanSignal ? 0 : (signal ? 1 : (code || 0)))
+  })
+  // Forward signals to the child; child.on('close') handles actual exit.
+  // Hard-exit after 12s in case server.mjs's 10s drain timer never fires.
+  let _forwarding = false
+  function forwardSignal(sig) {
+    if (_forwarding) return
+    _forwarding = true
+    if (process.platform === 'win32') {
+      if (child.exitCode === null && child.signalCode === null) {
+        try { execSync(`taskkill /T /F /PID ${child.pid}`, { stdio: 'ignore' }) } catch {}
+      }
+    } else {
+      try { child.kill(sig) } catch {}
+    }
+    _hardTimer = setTimeout(() => process.exit(1), 12000)
+    // no .unref() — this timer must keep the process alive so it can force-exit a stuck child
+  }
+  process.on('SIGINT',  () => forwardSignal('SIGINT'))
+  process.on('SIGTERM', () => forwardSignal('SIGTERM'))
+  // Don't fall through to dev server
+  return
+}
+
 // Parse flags
 const port = args.find(a => a.startsWith('--port='))?.split('=')[1] || '5174'
 if (!/^\d+$/.test(port) || parseInt(port, 10) < 1 || parseInt(port, 10) > 65535) {
@@ -161,6 +230,10 @@ if (!/^\d+$/.test(port) || parseInt(port, 10) < 1 || parseInt(port, 10) > 65535)
   process.exit(1)
 }
 const lang = args.find(a => a.startsWith('--lang='))?.split('=')[1]
+if (lang && lang !== 'en' && lang !== 'zh-TW') {
+  console.error('  Invalid --lang: ' + lang + '. Use "en" or "zh-TW".')
+  process.exit(1)
+}
 const open = !args.includes('--no-open')
 const help = args.includes('--help') || args.includes('-h')
 
@@ -172,17 +245,24 @@ if (help) {
     npx agent-virtual-office [options]
     npx agent-virtual-office setup       Install Claude Code hooks (one-time)
     npx agent-virtual-office uninstall   Remove hooks
+    npx agent-virtual-office serve       Serve production build (no Vite needed)
 
   Options:
     --port=PORT    Port number (default: 5174)
     --lang=LANG    Language: en, zh-TW (default: auto-detect)
     --no-open      Don't open browser automatically
-    --no-host      Don't expose to network (localhost only)
+    --no-host      Dev mode only: don't expose to LAN (dev server binds 0.0.0.0 by
+                   default; serve mode is loopback-only by default, so --no-host is
+                   a no-op there)
     --help, -h     Show this help
 
   Quick start:
     npx agent-virtual-office setup   # one-time: install hooks
-    npx agent-virtual-office         # start the office
+    npx agent-virtual-office         # start the office (dev mode)
+
+  Production / static deploy:
+    npm run build                    # build to dist/
+    npx agent-virtual-office serve   # serve dist/ + /api/status
 
   Then use Claude Code in any project — the office lights up automatically.
 `)

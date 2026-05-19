@@ -10,8 +10,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "vite",
+    "start": "node server.mjs",
     "build:single": "vite build --outDir dist-single",
+    "serve": "node server.mjs",
     "test": "vitest run",
     "prepublishOnly": "npm test"
   },
@@ -29,7 +30,7 @@
   "author": "KbWen",
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "homepage": "https://github.com/KbWen/agent-virtual-office#readme",
   "repository": {
@@ -43,7 +44,11 @@
     "src/",
     "index.html",
     "vite.config.js",
-    "package.json"
+    "server.mjs",
+    "package.json",
+    "Dockerfile",
+    "docker-compose.yml",
+    "docs/deployment/"
   ],
   "dependencies": {
     "@tailwindcss/vite": "^4.2.1",

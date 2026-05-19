@@ -30,7 +30,7 @@ export function extractContext(label) {
   // Strip emoji prefix: "✏️ 改 App.jsx" → "改 App.jsx" → "App.jsx"
   // Pattern: optional emoji(s) + optional Chinese verb + space + context
   const stripped = label
-    .replace(/^[\p{Emoji}\p{Emoji_Component}\u200d\ufe0f\s]+/u, '') // leading emoji
+    .replace(/^(?:[\p{Extended_Pictographic}\u200d\ufe0f]|[0-9#*]\ufe0f?\u20e3|\s)+/u, '') // leading emoji
     .replace(/^(改|寫|讀|找|搜|跑|派)\s*/u, '')                     // zh verb
     .replace(/^(editing|writing|reading|searching|running)\s*/i, '') // en verb
     .trim()
@@ -45,7 +45,13 @@ function fromTemplate(key, ctx) {
   if (!Array.isArray(pool) || pool.length === 0) return null
   const template = pick(pool)
   if (!template) return null
-  return ctx ? template.replace(/\{ctx\}/g, ctx) : template.replace(/\s*\{ctx\}\s*/g, '')
+  // Use a function replacer (not a string) so `$`-sequences in ctx — which can be
+  // a real filename or task string like `$&`, `$1`, `` $` `` — are inserted
+  // literally rather than interpreted as String.prototype.replace substitution
+  // patterns. A string replacement of "$&" would re-inject the matched "{ctx}".
+  return ctx
+    ? template.replace(/\{ctx\}/g, () => ctx)
+    : template.replace(/\s*\{ctx\}\s*/g, '')
 }
 
 /**
@@ -61,6 +67,7 @@ export function toolToAction(task) {
     case 'Grep': case 'Glob': return 'search'
     case 'Agent': return 'delegate'
     case 'WebFetch': case 'WebSearch': return 'web'
+    case 'NotebookEdit': return 'edit'
     default: return 'generic'
   }
 }
@@ -74,7 +81,10 @@ export function toolToAction(task) {
  * @returns {string|null} bubble text
  */
 export function generateContextBubble(agentId, update, allExternalStatus) {
-  if (!update) return null
+  if (!update || typeof agentId !== 'string') return null
+
+  // Strip worktree session prefix so 'feat-x~dev' resolves to 'dev' templates
+  const baseRole = agentId.includes('~') ? agentId.split('~').pop() : agentId
 
   const { status, task, label, hint } = update
   const ctx = extractContext(label)
@@ -82,26 +92,26 @@ export function generateContextBubble(agentId, update, allExternalStatus) {
 
   // 1. Error reactions — highest priority, always show
   if (hint === 'error' || status === 'blocked') {
-    const errorBubble = fromTemplate(`${agentId}-error`, ctx)
+    const errorBubble = fromTemplate(`${baseRole}-error`, ctx)
       || fromTemplate('any-error', ctx)
     if (errorBubble) return errorBubble
   }
 
   // 2. Done reactions
   if (status === 'done') {
-    const doneBubble = fromTemplate(`${agentId}-done`, ctx)
+    const doneBubble = fromTemplate(`${baseRole}-done`, ctx)
       || fromTemplate('any-done', ctx)
     if (doneBubble) return doneBubble
   }
 
   // 3. Role × action specific (e.g., dev-edit, qa-search, ops-bash)
   if (action) {
-    const specific = fromTemplate(`${agentId}-${action}`, ctx)
+    const specific = fromTemplate(`${baseRole}-${action}`, ctx)
     if (specific) return specific
   }
 
   // 4. Role generic working
-  const working = fromTemplate(`${agentId}-working`, ctx)
+  const working = fromTemplate(`${baseRole}-working`, ctx)
   if (working) return working
 
   // 5. Cross-agent awareness — react to other agents
@@ -125,8 +135,12 @@ export function generateContextBubble(agentId, update, allExternalStatus) {
 function generateCrossReaction(agentId, allExternalStatus) {
   if (!allExternalStatus) return null
 
-  for (const [otherId, ext] of Object.entries(allExternalStatus)) {
+  // Iterate keys directly — Object.entries() allocates an array of [id,ext] pair
+  // arrays. This runs on the SSE/poll message path (generateContextBubble per
+  // agent per applyExternalStatus); the id and ext are both read in place.
+  for (const otherId of Object.keys(allExternalStatus)) {
     if (otherId === agentId) continue
+    const ext = allExternalStatus[otherId]
 
     // React to blocked colleague
     if (ext.status === 'blocked') {

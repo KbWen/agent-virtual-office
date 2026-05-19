@@ -3,7 +3,7 @@
 # Agent Virtual Office
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
 [![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev)
 [![Vite 6](https://img.shields.io/badge/vite-6-646cff.svg)](https://vitejs.dev)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/KbWen/agent-virtual-office/pulls)
@@ -68,7 +68,10 @@ Options:
 --port=PORT    Port number (default: 5174)
 --lang=LANG    Language: en, zh-TW (default: auto-detect)
 --no-open      Don't open browser automatically
+--no-host      Restrict to localhost only (dev server binds all interfaces by default)
 ```
+
+> **Note:** The dev server (`npx agent-virtual-office`) exposes to LAN by default and has no authentication. Use `--no-host` to restrict to localhost, or use `serve` mode with an `OFFICE_API_TOKEN` for a secured deployment.
 
 ### Option 2: Clone & dev
 
@@ -80,6 +83,67 @@ npm run dev
 ```
 
 Open your browser and watch your agents work. That's it. No backend, no database, no WebSocket.
+
+### Option 3: Production build (serve dist/)
+
+Use this when you want to host the compiled office on a server or share it with teammates, without needing Vite running.
+
+```bash
+# Build once
+npm run build
+
+# Start the standalone production server (serves dist/ + /api/status)
+npx agent-virtual-office serve
+
+# Or use the npm script
+npm run serve
+```
+
+The `serve` command requires a pre-built `dist/` — run `npm run build` first (it will exit with an error if `dist/` is missing). Options:
+```
+--port=PORT    Port number (default: 5174)
+--host         Expose to LAN (default: localhost only)
+--no-open      Don't open browser automatically
+--lang=LANG    Language: en, zh-TW
+```
+
+**Environment variables** (optional):
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `OFFICE_API_TOKEN` | Token required in `X-Office-Token` or `Authorization: Bearer` header for POST/event requests | `mysecret123` |
+| `OFFICE_API_ALLOWED_ORIGINS` | Comma-separated allowed CORS origins (default: loopback + server IPs) | `http://office.internal:5174` |
+
+```bash
+OFFICE_API_TOKEN=secret npx agent-virtual-office serve --host
+```
+
+**Health check:** `GET /api/health` returns `{ ok: true, uptime: <seconds> }`.
+
+### Option 4: Docker
+
+Run the production server in a container. The build is multi-stage — Vite compiles `dist/` in a builder image, and the runtime image ships only `server.mjs` (zero runtime dependencies).
+
+```bash
+docker compose up -d
+```
+
+Then open `http://localhost:5174`.
+
+The compose file mounts `~/.claude` read-write into the container so the server can both read hook-written status files and accept POST writes.
+
+> **Pre-flight (first run only):** The container runs as UID 1000. Make `~/.claude` writable by that UID (not `$USER`, which may differ):
+> ```bash
+> mkdir -p ~/.claude && sudo chown 1000 ~/.claude
+> ```
+
+Pass an optional `OFFICE_API_TOKEN` to gate POST/event requests:
+
+```bash
+OFFICE_API_TOKEN=secret docker compose up -d
+```
+
+> For Nginx reverse proxy, PM2, and systemd service instructions, see [docs/deployment/DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md).
 
 ---
 
@@ -130,6 +194,34 @@ curl -X POST http://localhost:5174/api/event \
 **Supported events:** `pr-merged` · `pr-opened` · `pr-reviewed` · `review-approved` · `test-passed` · `test-failed` · `build-success` · `build-failed` · `deploy-start` · `deploy-success` · `deploy-failed` · `release` · `release-cut` · `rollback` · `incident-start` · `incident-resolved` · `custom`
 
 Named events use predefined agents — `role` and `status` are only needed for `custom` events (validated, invalid values return HTTP 400).
+
+#### GitHub Actions example
+
+Add a step to any workflow to light up the office on CI events:
+
+```yaml
+# .github/workflows/deploy.yml
+- name: Notify office — deploy started
+  run: |
+    curl -s -X POST ${{ vars.OFFICE_URL }}/api/event \
+      -H "Content-Type: application/json" \
+      -H "X-Office-Token: ${{ secrets.OFFICE_API_TOKEN }}" \
+      -d '{"event":"deploy-start"}'
+
+- name: Deploy
+  run: npm run deploy
+
+- name: Notify office — deploy result
+  if: always()
+  run: |
+    EVENT=$([[ "${{ job.status }}" == "success" ]] && echo "deploy-success" || echo "deploy-failed")
+    curl -s -X POST ${{ vars.OFFICE_URL }}/api/event \
+      -H "Content-Type: application/json" \
+      -H "X-Office-Token: ${{ secrets.OFFICE_API_TOKEN }}" \
+      -d "{\"event\":\"$EVENT\"}"
+```
+
+Set `OFFICE_URL` (e.g. `http://office.internal:5174`) as a repository variable and `OFFICE_API_TOKEN` as a secret. For self-hosted runners on the same LAN the server is reachable without any extra tunneling.
 
 ### Claude Code Hook Install
 
@@ -300,9 +392,9 @@ npx agent-virtual-office --no-host
 ```
 
 ### Node.js version error
-Requires Node.js 20 or higher:
+Requires Node.js 22 or higher:
 ```bash
-node --version  # must be >= 20
+node --version  # must be >= 22
 ```
 
 </details>

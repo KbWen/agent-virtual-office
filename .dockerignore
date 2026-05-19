@@ -1,0 +1,20 @@
+# Dependencies & build artifacts (rebuilt inside the image)
+node_modules
+dist
+dist-single
+output
+test-results
+
+# Version control & framework state
+.git
+.gitignore
+.claude
+.agent
+.agentcortex
+.agents
+
+# Packaged tarball
+*.tgz
+
+# Docs are not needed by the Vite build.
+*.md

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { useOfficeStore, STATUS_COLORS } from '../systems/store'
+import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
 import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale } from '../i18n'
-import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT } from '../systems/constants'
+import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
 
 // ═══ PIXEL ART SPRITE SYSTEM ═══
@@ -314,9 +314,15 @@ function PixelSprite({ grid, flipX = false, scale = 1 }) {
 }
 
 // ─── Full Sprite with shadow ──────────────────────────────────────────
-function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing }) {
+// React.memo: AgentCharacter re-renders ~30fps while the character walks (setRenderPos
+// fires every other RAF frame). Of CharacterPixelSprite's five props only walkFrame
+// (250ms cadence) and isMoving change during a walk — charId/expression/facing are
+// stable. Memo elides the component invocation (and its baseRole string-split +
+// CHAR_STYLES lookup) on the ~28-of-30 frames per second where no prop changed; the
+// inner useMemos only guarded the sprite-grid generation, not the function body itself.
+const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing }) {
   // Strip session prefix for style lookup: "feat-x~dev" → use dev's style
-  const baseRole = charId.includes('~') ? charId.split('~')[1] : charId
+  const baseRole = charId.includes('~') ? charId.split('~').pop() : charId
   const style = CHAR_STYLES[charId] || CHAR_STYLES[baseRole] || CHAR_STYLES.pm
   const gender = style.gender || 'male'
 
@@ -343,11 +349,15 @@ function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing 
       <PixelSprite grid={grid} flipX={flipX} scale={1} />
     </g>
   )
-}
+})
 
 // ═══ BEHAVIOR INDICATOR ICONS ═══
 // Small pixel-art icons that appear next to the character based on current behavior
-function BehaviorIndicator({ behavior }) {
+// React.memo: AgentCharacter re-renders on every useLocale / reducedMotion / agentState
+// change. BehaviorIndicator's only prop is `behavior` (a stable string) — memo prevents a
+// parent-triggered re-render when the behavior is unchanged. Its own 600ms `frame` interval
+// still drives the icon animation independently.
+const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
   const [frame, setFrame] = useState(0)
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
 
@@ -564,7 +574,7 @@ function BehaviorIndicator({ behavior }) {
     default:
       return null
   }
-}
+})
 
 // ─── Unicode-aware text width for monospace SVG ──────────────────────
 // CJK chars ~10 units, ASCII ~7 units at fontSize 12 monospace
@@ -591,6 +601,20 @@ function AgentCharacter({ agent }) {
   const movingStuckRef = useRef(0)
   const pendingBehaviorRef = useRef(null) // deferred behavior for location-based actions
   const [walkFrame, setWalkFrame] = useState(0)
+  // Tracks every fire-and-forget setTimeout (bubble clears, handoff steps) so the
+  // unmount cleanup can cancel them. Without this, a deferred clearBubble/handoff
+  // callback fires up to ~4s after the component unmounts and mutates the store
+  // against a torn-down character.
+  const deferredTimersRef = useRef(new Set())
+  const scheduleDeferred = useCallback((fn, ms) => {
+    const handle = setTimeout(() => {
+      deferredTimersRef.current.delete(handle)
+      if (isUnmountedRef.current) return
+      fn()
+    }, ms)
+    deferredTimersRef.current.add(handle)
+    return handle
+  }, [])
 
   // RAF-based smooth movement — only runs while walking
   const visualPosRef = useRef(null)
@@ -603,7 +627,15 @@ function AgentCharacter({ agent }) {
   // Use refs for callbacks accessed inside RAF to avoid stale closures
   const onWaypointReachedRef = useRef(null)
 
-  // Initialize visual position from agent's home position
+  // Initialize visual position from agent's home position.
+  // Depend on agentState's PRESENCE (a boolean), not the agentState object itself.
+  // agentState is s.agents[id], whose identity changes on every mutation — behavior,
+  // bubble, and ~30×/sec position updates while walking. The old `[agentState]` dep
+  // therefore re-fired this effect on every walk frame, even though its body is a
+  // one-shot guarded by `!visualPosRef.current` and does nothing after the first run.
+  // The seed only needs to happen once, when the agent first appears (false→true),
+  // so a presence boolean is the precise dependency.
+  const agentPresent = !!agentState
   useEffect(() => {
     if (!agentState) return
     const home = agentState.position || { x: 300, y: 250 }
@@ -612,7 +644,8 @@ function AgentCharacter({ agent }) {
       targetPosRef.current = { ...home }
       setRenderPos({ ...home })
     }
-  }, [agentState])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentPresent])
 
   // Walk animation timer (leg alternation)
   useEffect(() => {
@@ -675,48 +708,64 @@ function AgentCharacter({ agent }) {
     rafRef.current = requestAnimationFrame(animate)
   }, [])
 
-  // Cleanup RAF on unmount
+  // Cleanup RAF + deferred timers on unmount
   useEffect(() => {
     isUnmountedRef.current = false
+    const deferred = deferredTimersRef.current
     return () => {
       isUnmountedRef.current = true
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null
       }
+      // Cancel any in-flight bubble-clear / handoff timers so they don't fire
+      // against a torn-down component after unmount.
+      for (const handle of deferred) clearTimeout(handle)
+      deferred.clear()
     }
   }, [])
 
   // Handle arriving at a waypoint
   const onWaypointReached = useCallback(() => {
     const store = useOfficeStore.getState()
-    store.setAgentArrived(id)
 
     if (pathRef.current.length > 0) {
       const next = pathRef.current.shift()
       // Continue to next waypoint
       targetPosRef.current = { ...next }
+      // Merge "arrived at this waypoint" + "retarget to next" into one store write.
+      // The old code did setAgentArrived() then setAgentTarget() — two set() calls,
+      // two subscriber wake-ups per intermediate waypoint. advanceAgentWaypoint snaps
+      // position onto the reached target and sets the next leg in a single set().
       if (visualPosRef.current) {
         const facing = calcFacing(visualPosRef.current.x, visualPosRef.current.y, next.x, next.y)
-        store.setAgentTarget(id, next, facing)
+        store.advanceAgentWaypoint(id, next, facing)
+      } else {
+        store.advanceAgentWaypoint(id, next)
       }
       startRaf()
     } else {
+      store.setAgentArrived(id)
       movingRef.current = false
       setIsWalking(false)
-      // Apply deferred behavior now that character has arrived at destination
+      // Apply deferred behavior now that character has arrived at destination.
       const pending = pendingBehaviorRef.current
       if (pending) {
         pendingBehaviorRef.current = null
-        store.setAgentBehavior(id, pending.behaviorId, pending.expression, pending.bubble)
-        if (pending.effect === 'coffee') store.incrementDeskItem(id, 'coffee')
-        // Clear bubble after a while
-        if (pending.bubble) {
-          setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(pending.duration * 0.5, 4000))
+        // If a group event took over while this character was walking (the groupTarget
+        // effect redirects the in-flight walk), the deferred behavior is stale — applying
+        // it would overwrite the group event's behavior/bubble with whatever doSchedule
+        // had queued. officeLife owns behavior during group events; drop the pending one.
+        if (!store.agents[id]?.inGroupEvent) {
+          store.setAgentBehavior(id, pending.behaviorId, pending.expression, pending.bubble)
+          // Clear bubble after a while
+          if (pending.bubble) {
+            scheduleDeferred(() => useOfficeStore.getState().clearBubble(id), Math.min(pending.duration * 0.5, 4000))
+          }
         }
       }
     }
-  }, [id, startRaf])
+  }, [id, startRaf, scheduleDeferred])
 
   // Keep ref in sync
   onWaypointReachedRef.current = onWaypointReached
@@ -774,7 +823,10 @@ function AgentCharacter({ agent }) {
       movingStuckRef.current = 0
 
       const next = getNextBehavior(id, agent.status || 'idle', new Date().getHours(), store.mood || 'normal')
-      nextDelay = next.duration
+      // Guard the re-schedule delay: a non-finite or non-positive duration would make
+      // setTimeout(doSchedule, nextDelay) fire on the next tick, spinning the behavior
+      // chain in a tight CPU loop. Fall back to the 8s default if the value is unusable.
+      nextDelay = (Number.isFinite(next.duration) && next.duration > 0) ? next.duration : 8000
 
       // Walk to behavior location
       const destination = getTargetForBehavior(id, next.behaviorId, store.agents)
@@ -803,10 +855,9 @@ function AgentCharacter({ agent }) {
         pendingBehaviorRef.current = null
         // Desk behavior or already at location — apply immediately
         store.setAgentBehavior(id, next.behaviorId, next.expression, next.bubble)
-        if (next.effect === 'coffee') store.incrementDeskItem(id, 'coffee')
         // Clear bubble after a while
         if (next.bubble) {
-          setTimeout(() => useOfficeStore.getState().clearBubble(id), Math.min(next.duration * 0.5, 4000))
+          scheduleDeferred(() => useOfficeStore.getState().clearBubble(id), Math.min(next.duration * 0.5, 4000))
         }
       }
 
@@ -816,11 +867,11 @@ function AgentCharacter({ agent }) {
         if (others.length > 0) {
           const targetId = others[Math.floor(Math.random() * others.length)]
           store.addHandoff(id, targetId)
-          setTimeout(() => {
+          scheduleDeferred(() => {
             const s = useOfficeStore.getState()
             if (!s.agents[targetId]?.inGroupEvent) {
               s.setAgentBehavior(targetId, 'reading-screen', 'normal', eventBubble('handoff-received'))
-              setTimeout(() => s.clearBubble(targetId), 3000)
+              scheduleDeferred(() => s.clearBubble(targetId), 3000)
             }
           }, 1500)
         }
@@ -831,12 +882,15 @@ function AgentCharacter({ agent }) {
 
     // ALWAYS schedule next — even if an error occurred above
     timerRef.current = setTimeout(doSchedule, nextDelay)
-  }, [id, startWalkTo])
+  }, [id, startWalkTo, scheduleDeferred])
 
   // Watch for group event movement targets
   const lastGroupTargetRef = useRef(null)
   useEffect(() => {
-    if (!agentState?.groupTarget || !visualPosRef.current) return
+    // When a group event clears (groupTarget → null), reset the dedup ref so the NEXT
+    // group event always re-evaluates — even if it happens to assign the same coords.
+    if (!agentState?.groupTarget) { lastGroupTargetRef.current = null; return }
+    if (!visualPosRef.current) return
     const gt = agentState.groupTarget
     // Only trigger if target actually changed
     const last = lastGroupTargetRef.current
@@ -859,11 +913,19 @@ function AgentCharacter({ agent }) {
     const delay = 500 + Math.random() * 3000
     timerRef.current = setTimeout(doSchedule, delay)
 
-    // Watchdog: if no behavior change in 45s, force restart the chain
+    // Watchdog: if no behavior change for WATCHDOG_TIMEOUT, force restart the chain.
+    // The timeout must stay above the longest legitimate behavior duration so a slow
+    // (not dead) behavior is never truncated — see constants.js for the budget.
     const lastBehaviorRef = { behavior: null, since: Date.now() }
     const watchdog = setInterval(() => {
       const agent = useOfficeStore.getState().agents[id]
       if (!agent) return
+      // Don't fire during group events — officeLife controls behavior and duration
+      if (agent.inGroupEvent) {
+        lastBehaviorRef.behavior = agent.behavior
+        lastBehaviorRef.since = Date.now()
+        return
+      }
       if (agent.behavior !== lastBehaviorRef.behavior) {
         lastBehaviorRef.behavior = agent.behavior
         lastBehaviorRef.since = Date.now()
@@ -893,13 +955,26 @@ function AgentCharacter({ agent }) {
     setSelectedAgent(id)
   }, [id, setSelectedAgent])
 
+  // Stable keyboard handler — the root <g> re-renders ~30fps while the character walks
+  // (setRenderPos). A fresh inline `onKeyDown={(e) => ...}` arrow allocated a new closure
+  // on every one of those frames; useCallback over the already-stable handleClick keeps
+  // one closure for the component's lifetime.
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(e) }
+  }, [handleClick])
+
   const state = agentState || {}
   const pos = renderPos || state.position || { x: 0, y: 0 }
   const session = state.session || null
 
-  // Name tag dimensions (lifted from render for clarity)
-  const tagW = estimateTextWidth(name) + 16
-  const tagHalfW = tagW / 2
+  // Name tag dimensions — memoized on `name`. estimateTextWidth runs a per-codepoint
+  // loop; AgentCharacter re-renders ~30fps while walking (setRenderPos) and `name`
+  // changes only on a locale switch, so without this memo the char-width loop ran on
+  // every walk frame for a result that is constant for the whole walk.
+  const { tagW, tagHalfW } = useMemo(() => {
+    const w = estimateTextWidth(name) + 16
+    return { tagW: w, tagHalfW: w / 2 }
+  }, [name])
   const tagFill = state.status !== 'idle' ? (STATUS_COLORS[state.status] || color) : color
   const statusIcon = state.status === 'working' ? '⚡' : state.status === 'blocked' ? '✕' : state.status === 'done' ? '✓' : null
   const glowColor = STATUS_COLORS[state.status]
@@ -908,7 +983,7 @@ function AgentCharacter({ agent }) {
     <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}
       style={{ cursor: 'pointer' }} onClick={handleClick}
       role="button" aria-label={name} tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(e) } }}>
+      onKeyDown={handleKeyDown}>
       {/* Working glow ring */}
       {state.status === 'working' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.5">

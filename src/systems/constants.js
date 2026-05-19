@@ -8,7 +8,12 @@ export const WALK_FRAME_INTERVAL = 250  // ms between leg alternation
 export const BEHAVIOR_STUCK_RETRIES = 10   // retries before force-unstick (~15s)
 export const BEHAVIOR_STUCK_RETRY_MS = 1500
 export const WATCHDOG_INTERVAL = 10000     // ms between watchdog checks
-export const WATCHDOG_TIMEOUT = 20000      // ms before watchdog force-restarts behavior chain
+// Must exceed the longest legitimate behavior duration, otherwise the watchdog
+// force-restarts a behavior that is simply still running. The longest behavior
+// is 'meeting' at 50000ms (behaviorEngine.js); add walk-time (~5s) + stuck-retry
+// slack (BEHAVIOR_STUCK_RETRIES × BEHAVIOR_STUCK_RETRY_MS ≈ 15s) for safety.
+// 20s here truncated >half the work/away behaviors mid-action.
+export const WATCHDOG_TIMEOUT = 90000      // ms before watchdog force-restarts behavior chain
 
 // Movement
 export const MIN_AGENT_DIST = 35        // minimum px between any two agents
@@ -25,6 +30,8 @@ export const TIME_CHECK_INTERVAL = 60000               // 1 min
 export const STATUS_POLL_INTERVAL = 1000   // ms — matches startFilePolling default
 export const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
 export const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
+export const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
+export const MAX_MOOD_DURATION = 3_600_000  // 1 hour in ms
 
 export const STATUS_COLORS = {
   idle: '#888',

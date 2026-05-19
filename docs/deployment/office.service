@@ -1,0 +1,79 @@
+# systemd service unit for agent-virtual-office.
+# Install:
+#   sudo cp docs/deployment/office.service /etc/systemd/system/office.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now office.service
+#
+# Secrets (e.g. OFFICE_API_TOKEN):
+#   sudo mkdir -p /etc/agent-virtual-office
+#   echo "OFFICE_API_TOKEN=your-secret" | sudo tee /etc/agent-virtual-office/office.env
+#   sudo chmod 600 /etc/agent-virtual-office/office.env
+#
+# Update workflow:
+#   cd /path/to/agent-virtual-office && git pull && npm ci && npm run build
+#   sudo systemctl restart office.service
+#
+# Manage:
+#   sudo systemctl status  office.service
+#   sudo journalctl -u     office.service -f
+#   sudo systemctl restart office.service
+#   sudo systemctl stop    office.service
+
+[Unit]
+Description=Agent Virtual Office
+After=network.target
+
+[Service]
+Type=simple
+# Replace 'youruser' with the OS user who owns the project directory.
+User=youruser
+Group=youruser
+WorkingDirectory=/path/to/agent-virtual-office
+# Runs on 127.0.0.1 (loopback) by default — Nginx terminates external traffic.
+# Add --host only for direct LAN access without a reverse proxy.
+ExecStart=/usr/bin/node /path/to/agent-virtual-office/server.mjs --no-open
+
+Environment=NODE_ENV=production
+# Load secrets from a 0600-mode file so they are not visible in `systemctl show`.
+# Create the file per the instructions above; the leading '-' means missing file is OK.
+EnvironmentFile=-/etc/agent-virtual-office/office.env
+
+Restart=on-failure
+RestartSec=5
+
+# Graceful shutdown: send SIGTERM first, wait up to 15 s for drain, then SIGKILL.
+# TimeoutStopSec must exceed server.mjs's 10 s hard-exit timer.
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+# ── Systemd security hardening ──────────────────────────────────────────────
+NoNewPrivileges=true
+ProtectSystem=strict
+# ProtectHome=tmpfs hides the entire home tree (replaces it with a tmpfs overlay)
+# then BindPaths re-exposes only ~/.claude as a read-write bind mount.
+# This is the documented pattern from systemd.exec(5) for exposing a single
+# subdirectory without granting access to the rest of the home tree.
+ProtectHome=tmpfs
+BindPaths=%h/.claude
+ReadWritePaths=%h/.claude
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+LockPersonality=true
+# MemoryDenyWriteExecute can crash Node's JIT on some kernels (V8 mprotect).
+# Node 22 usually survives it (W^X), but it is not guaranteed. Uncomment only
+# after confirming the service starts and stays up under your kernel:
+#MemoryDenyWriteExecute=true
+RestrictSUIDSGID=true
+# Two-tier memory control per systemd.resource-control(5):
+# MemoryHigh throttles allocation gradually; MemoryMax is the hard OOM ceiling.
+MemoryHigh=224M
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

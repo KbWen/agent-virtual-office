@@ -60,7 +60,7 @@
 
 | # | Feature | Priority | Status | Notes |
 |---|---------|----------|--------|-------|
-| 16 | **靜態部署無 /api/status** — `npm run build` → dist/ 部署到 S3/Nginx 後，/api/status 不存在，hook 整合全斷。需要 standalone API server 或改用純 hash/postMessage 模式 | P1 | Pending | 架構限制：Vite middleware 僅開發時可用；dist/ 只有 hash/postMessage/BroadcastChannel 能用 |
+| 16 | **靜態部署無 /api/status** — `npm run build` → dist/ 部署到 S3/Nginx 後，/api/status 不存在，hook 整合全斷。需要 standalone API server 或改用純 hash/postMessage 模式 | P1 | Done | ✅ `server.mjs` 純 Node.js built-in 實作，`npx agent-virtual-office serve` 或 `npm run serve`，自動 build 若 dist/ 不存在 |
 | 17 | **file:// 協定下 fetch 失敗** — 直接開 dist/index.html 時 fetch('/api/status') 報 CORS。偵測 file:// 並跳過 polling | P2 | Done | ✅ `inferStatus.js` 加 protocol guard，file:// 和 HTTPS cross-origin 自動跳過 polling |
 | 18 | **README 缺 Troubleshooting 章節** — port 衝突、npm install 失敗、git 未安裝、瀏覽器沒打開等常見問題無文件 | P1 | Done | ✅ README 加 Troubleshooting `<details>` 段落 |
 | 19 | **README 缺 Gemini CLI 具體整合步驟** — 標題寫支援 Gemini 但沒有實際整合教學 | P1 | Done | ✅ README 加 Gemini CLI Integration 子段落含 curl + generic-llm-bridge 範例 |

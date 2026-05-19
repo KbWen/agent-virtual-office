@@ -14,11 +14,19 @@
 
 const HOOK_VERSION = '1.0.0'
 
-let _seqCounter = 0
-
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+
+// Monotonic _seq: plain integer, matches server.mjs / vite.config.js canonical form.
+// Monotonic within a process run; two runs in the same ms can produce equal values,
+// which is acceptable — staleness is checked against a 300s window, not 1ms precision.
+let _seqLast = 0
+function nextSeq() {
+  const now = Date.now()
+  _seqLast = now > _seqLast ? now : _seqLast + 1
+  return String(_seqLast)
+}
 
 // ─── Bilingual labels ───
 function detectHookLang() {
@@ -53,24 +61,44 @@ function getSessionSlug() {
   // would otherwise write to the same file and overwrite each other).
   const cwdHash = require('crypto').createHash('md5').update(process.cwd()).digest('hex').slice(0, 4)
   try {
-    const branch = require('child_process')
-      .execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
-      .trim()
-    if (branch && branch !== 'HEAD') {
-      const slug = branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) || 'default'
-      return `${slug}-${cwdHash}`
+    // Read .git/HEAD directly — avoids spawning a git process on every hook invocation
+    // (git rev-parse adds ~10-30ms latency per Claude Code tool call).
+    const gitEntry = path.join(process.cwd(), '.git')
+    let headContent = null
+    if (fs.existsSync(gitEntry)) {
+      const stat = fs.statSync(gitEntry)
+      if (stat.isFile()) {
+        // Worktree: .git is a file "gitdir: <path>"
+        const ref = fs.readFileSync(gitEntry, 'utf-8').trim()
+        const m = ref.match(/^gitdir:\s*(.+)$/)
+        // Resolve relative to the worktree root (.git file's dir), not process.cwd()
+        if (m) headContent = fs.readFileSync(path.resolve(path.dirname(gitEntry), m[1], 'HEAD'), 'utf-8').trim()
+      } else {
+        headContent = fs.readFileSync(path.join(gitEntry, 'HEAD'), 'utf-8').trim()
+      }
+    }
+    if (headContent) {
+      const refMatch = headContent.match(/^ref:\s+refs\/heads\/(.+)$/)
+      const branch = refMatch ? refMatch[1] : null  // null = detached HEAD → fall through
+      if (branch) {
+        const slug = branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').slice(0, 28).replace(/^-+|-+$/g, '') || 'default'
+        return `${slug}-${cwdHash}`
+      }
     }
   } catch {}
-  const cwdSlug = path.basename(process.cwd())
+  const cwdSlug = (path.basename(process.cwd())
     .replace(/[^a-zA-Z0-9]/g, '-')
     .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 28) || 'default'
+    .slice(0, 28)
+    .replace(/^-+|-+$/g, '')) || 'default'
   return `${cwdSlug}-${cwdHash}`
 }
 
 const SESSION_SLUG = getSessionSlug()
 const STATUS_FILE = path.join(os.homedir(), '.claude', `office-status-${SESSION_SLUG}.json`)
+
+// ─── Shared role list — single source for Stop handler and merge logic ───
+const VALID_HOOK_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
 
 // ─── Role mapping ───
 
@@ -332,7 +360,15 @@ function saveSkillContext(agentId, role, skillName) {
     const p = skillContextPath(agentId)
     const dir = path.dirname(p)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(p, JSON.stringify({ role, skillName }))
+    const json = JSON.stringify({ role, skillName })
+    const tmp = p + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+    try {
+      fs.writeFileSync(tmp, json)
+      fs.renameSync(tmp, p)
+    } catch {
+      try { fs.writeFileSync(p, json) } catch {}
+      try { fs.unlinkSync(tmp) } catch {}
+    }
   } catch {}
 }
 
@@ -357,19 +393,45 @@ function processEvent(event) {
   const agentId = event.agent_id || null
 
   let role, task, status, label, hint = null
+  let clearWorkflow = false
+  let workflowOverride = null  // only SubagentStart sets this; PreToolUse/PostToolUse must not clobber workflow
+  let capturedPromptId = null  // PreToolUse captures current _promptId for straggler detection
+  let newPromptId = null       // UserPromptSubmit sets a fresh _promptId each turn
 
   switch (hookEvent) {
     case 'UserPromptSubmit': {
-      // User sent a message — PM enters thinking/planning mode
+      // New user message — PM enters planning mode.
+      // Writes a fresh _promptId so PostToolUse straggler detection (re-check below) can
+      // distinguish old-turn stragglers from legitimate new-turn tool calls.
       role = 'pm'
       task = 'thinking'
       status = 'working'
+      clearWorkflow = true  // reset subagent workflow on each new turn
+      newPromptId = nextSeq()  // unique turn token; advances when user submits a new prompt
       label = pick(LANG === 'en'
         ? ['🤔 Thinking...', '📊 Got it, planning', '💡 Good question...', '🧠 Analyzing']
         : ['🤔 想一下...', '📊 收到，規劃中', '💡 好問題...', '🧠 分析中'])
       break
     }
     case 'PreToolUse': {
+      // Suppress if Stop fired and no new UserPromptSubmit has fired yet.
+      // Use a 30s window so a failed write can't permanently wedge the guard.
+      // _stoppedAt is a dedicated timestamp written by Stop; fall back to _seq for
+      // files written before this field was added. Future _seq (monotonic counter
+      // overshoot) cannot wedge the guard because we use _stoppedAt preferentially.
+      // Also capture _promptId at entry — PreToolUse writes it as _preToolPromptId so
+      // a later PostToolUse straggler can detect if UserPromptSubmit fired between them.
+      try {
+        const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+        const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
+        if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
+        capturedPromptId = cur._promptId || null
+      } catch {}
+      // Synthesize OUTSIDE the try so ENOENT (file absent on fresh install — no prior Stop
+      // has run yet) does not kill the synthesis path. Without this, the catch swallows the
+      // missing-file exception AND capturedPromptId stays null, leaving the PostToolUse
+      // straggler gate structurally dead for the entire first turn.
+      if (capturedPromptId === null) capturedPromptId = `__t:${nextSeq()}`
       const fullPath = extractFilePath(tool, toolInput)
       // If inside a subagent with skill context, prefer the skill's role
       const skillCtx = readSkillContext(agentId)
@@ -381,6 +443,13 @@ function processEvent(event) {
       break
     }
     case 'PostToolUse': {
+      // Suppress straggler PostToolUse events that arrive after Stop.
+      // Same _stoppedAt guard as PreToolUse — see comment above.
+      try {
+        const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+        const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
+        if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
+      } catch {}
       const fullPath = extractFilePath(tool, toolInput)
       const skillCtx = readSkillContext(agentId)
       role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
@@ -400,40 +469,71 @@ function processEvent(event) {
       task = agentType
       status = 'working'
       label = skillLabel(agentType, false)
+      workflowOverride = agentType  // set workflow to the subagent type on start
       // Persist skill context so tool calls within this subagent stay on the right role
       if (agentId) saveSkillContext(agentId, role, agentType)
       break
     }
     case 'SubagentStop': {
+      // Guard against stale SubagentStop stragglers (same _stopped check as PreToolUse).
+      // clearSkillContext runs on the suppressed path too — turn is already over so the
+      // context file is safe to remove regardless. The key fix is that the status write
+      // (which would erase done-agents from Stop) must not happen on the suppressed path.
+      try {
+        const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+        const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
+        if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) {
+          if (agentId) clearSkillContext(agentId)
+          return
+        }
+      } catch {}
       role = skillToRoleExtended(agentType)
       task = agentType
       status = 'done'
       label = skillLabel(agentType, true)
+      clearWorkflow = true  // subagent workflow ends; reset so it doesn't stick forever
       if (agentId) clearSkillContext(agentId)
       break
     }
     case 'Stop': {
-      // Claude's turn is over — mark all current agents as done
+      // Claude's turn is over — mark all current agents as done.
+      // _stopped: true prevents straggler PostToolUse events from overwriting this idle state.
       try {
         const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-        const doneAgents = (data.agents || []).map(a => ({
-          ...a, status: 'done', label: pick(LANG === 'en'
-            ? ['✅ All done', '✅ Round complete', '✅ Over to you']
-            : ['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了'])
-        }))
+        const doneAgents = (Array.isArray(data.agents) ? data.agents : [])
+          .filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
+          .map(a => ({
+            role: a.role,
+            task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
+            status: 'done',
+            label: pick(LANG === 'en'
+              ? ['✅ All done', '✅ Round complete', '✅ Over to you']
+              : ['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了']),
+            hint: null,
+          }))
         const output = {
-          _seq: `${Date.now()}-${++_seqCounter}`,
+          _seq: nextSeq(),
+          _stopped: true,
+          _stoppedAt: Date.now(),
           _cwd: process.cwd(),
           type: 'office-status',
           agents: doneAgents,
           activeCount: 0,
-          workflow: data.workflow || null,
+          // Clear workflow if a subagent set it (_workflowAgentId present) — the session
+          // is ending so the subagent's workflow should not persist past Stop.
+          workflow: data._workflowAgentId ? null : (data.workflow || null),
+          // Preserve R45/R46 identity fields so a SubagentStop arriving after Stop still
+          // uses the precise _workflowAgentId match rather than falling back to type-string.
+          _workflowAgentId: typeof data._workflowAgentId === 'string' ? data._workflowAgentId : null,
+          _workflowPromptId: typeof data._workflowPromptId === 'string' ? data._workflowPromptId : null,
           source: 'claude-cli',
+          _promptId: data._promptId || null,
+          _preToolPromptId: data._preToolPromptId || null,
         }
         const dir = path.dirname(STATUS_FILE)
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
         const json = JSON.stringify(output, null, 2)
-        const tmp = STATUS_FILE + '.tmp.' + process.pid
+        const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
         try {
           fs.writeFileSync(tmp, json)
           fs.renameSync(tmp, STATUS_FILE)
@@ -452,13 +552,15 @@ function processEvent(event) {
           workflow: null,
           source: 'claude-cli',
           _cwd: process.cwd(),
-          _seq: `${Date.now()}-${++_seqCounter}`,
+          _seq: nextSeq(),
+          _stopped: true,
+          _stoppedAt: Date.now(),
         }
         const dir = path.dirname(STATUS_FILE)
         try {
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
           const json = JSON.stringify(output, null, 2)
-          const tmp = STATUS_FILE + '.tmp.' + process.pid
+          const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
           try {
             fs.writeFileSync(tmp, json)
             fs.renameSync(tmp, STATUS_FILE)
@@ -477,47 +579,224 @@ function processEvent(event) {
   // Read existing status to merge (keep other agents' states + workflow)
   let existing = []
   let existingWorkflow = null
+  let existingWorkflowAgentId = null
+  let existingWorkflowPromptId = null
+  let existingPromptId = null
+  let existingPreToolPromptId = null
+  let existingStopped = false
+  let existingStoppedAt = null
   try {
     const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-    existing = data.agents || []
-    existingWorkflow = data.workflow || null
+    existing = Array.isArray(data.agents)
+      ? data.agents
+          .filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
+          .map(a => ({
+            role: a.role,
+            status: typeof a.status === 'string' ? a.status : 'working',
+            task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
+            label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
+            hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
+          }))
+      : []
+    existingWorkflow = typeof data.workflow === 'string' ? data.workflow.slice(0, 200) : null
+    existingWorkflowAgentId = typeof data._workflowAgentId === 'string' ? data._workflowAgentId : null
+    existingWorkflowPromptId = typeof data._workflowPromptId === 'string' ? data._workflowPromptId : null
+    existingPromptId = data._promptId || null
+    existingPreToolPromptId = data._preToolPromptId || null
+    existingStopped = Boolean(data._stopped)
+    existingStoppedAt = typeof data._stoppedAt === 'number' ? data._stoppedAt : null
   } catch {}
+
+  // Detect stale workflow from a previous turn. Two conditions that independently indicate
+  // the workflow no longer belongs to the current turn:
+  // 1. _workflowPromptId !== _promptId: the workflow was set in a different turn (the normal
+  //    mismatch case — SubagentStop suppressed + UPS ran and advanced _promptId).
+  // 2. existingStopped && existingWorkflowAgentId: the prior turn ended (_stopped=true is still
+  //    set) but UPS never successfully landed to advance _promptId. _workflowPromptId equals
+  //    _promptId (both stale) so the normal mismatch can't fire — but _stopped is unambiguous
+  //    evidence that the workflow belongs to a completed turn.
+  // SubagentStart is excluded from both: it sets workflowOverride and must always install
+  // its own workflow regardless of existing state.
+  const workflowTurnMismatch = hookEvent !== 'SubagentStart' && !!(
+    (existingWorkflowAgentId && existingWorkflowPromptId && existingPromptId &&
+     existingWorkflowPromptId !== existingPromptId) ||
+    // Dropped-UPS case: workflow belongs to a completed turn. Gate on 30s window so a
+    // stale _stopped from a prior session (>30s old) doesn't wipe the new session's
+    // workflow on PreToolUse events that arrive before the new SubagentStart.
+    (existingWorkflowAgentId && existingStopped &&
+     (existingStoppedAt == null || Date.now() - existingStoppedAt < 30_000))
+  )
 
   // Replace agent with same role, or add new
   const newAgents = [
     ...existing.filter(a => a.role !== role),
-    { role, task, status, label, hint },
+    {
+      role,
+      task: typeof task === 'string' ? task.slice(0, 200) : null,
+      status,
+      label: typeof label === 'string' ? label.slice(0, 200) : null,
+      hint: typeof hint === 'string' ? hint.slice(0, 200) : null,
+    },
   ]
 
-  const activeCount = newAgents.filter(a => a.status !== 'done').length
+  const activeCount = newAgents.filter(a => a.status === 'working' || a.status === 'blocked').length
+
+  // Re-check _stopped: if Stop ran DURING our processing window (after the entry guard passed),
+  // abort rather than overwriting the idle state with stale working/done data.
+  // UserPromptSubmit is the ONLY exempt event: it is the event that legitimately clears
+  // _stopped, and suppressing it would prevent the office from showing the PM re-entering
+  // planning on rapid back-to-back prompts.
+  // SubagentStart is NOT exempt: if _stopped is still true when SubagentStart fires, UPS
+  // has not yet run for the new turn, meaning this SubagentStart is a straggler from the
+  // old turn. Once UPS clears _stopped, any SubagentStart for the new turn passes normally.
+  // recheckStopped/recheckStoppedAt: sourced from the re-check guard's fresh file read,
+  // not the earlier merge read. The carry-through must use these values so a UPS that
+  // fires between the merge read and the re-check guard clears _stopped before it reaches
+  // the carry-through — using the stale merge-read value would re-assert _stopped:true
+  // after UPS already cleared it, freezing subsequent events for up to 30s.
+  let recheckStopped = existingStopped
+  let recheckStoppedAt = existingStoppedAt
+
+  if (hookEvent !== 'UserPromptSubmit') {
+    try {
+      const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+      // Update recheck fields from the freshest read (single consistent snapshot for guard + carry-through).
+      recheckStopped = Boolean(latest._stopped)
+      recheckStoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : null
+      const stoppedAt = recheckStoppedAt ?? parseInt(latest._seq, 10)
+      if (latest._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
+      // SubagentStart with _stopped is unconditionally a straggler — no time limit.
+      // A legitimate new-turn SubagentStart is always preceded by a UPS that clears _stopped.
+      // Without this, a straggler SubagentStart arriving >30s after Stop reinstalls a phantom
+      // workflow banner AND drops _stopped, re-enabling further straggler PostToolUse events.
+      if (latest._stopped && hookEvent === 'SubagentStart') return
+      // PostToolUse straggler detection: PreToolUse captures _promptId as _preToolPromptId.
+      // If UserPromptSubmit advanced _promptId after our PreToolUse, _promptId !== _preToolPromptId
+      // → new turn started in our window → abort so we don't clobber the fresh PM state.
+      if (hookEvent === 'PostToolUse'
+          && latest._promptId && latest._preToolPromptId
+          && latest._promptId !== latest._preToolPromptId) return
+      // Fresh-install guard: if both tokens are synthesized (__t: prefix) AND the session
+      // is stopped, no UPS has ever run — there is no legitimate new turn, so any PostToolUse
+      // arriving after the 30s window is unconditionally a straggler. The normal mismatch
+      // gate above is structurally inert when tokens are equal (no UPS advanced _promptId).
+      if (hookEvent === 'PostToolUse' && latest._stopped
+          && typeof latest._promptId === 'string' && latest._promptId.startsWith('__t:')
+          && typeof latest._preToolPromptId === 'string' && latest._preToolPromptId.startsWith('__t:')) return
+    } catch (err) {
+      // Only abort on rename-contention codes (EBUSY/EPERM = Stop's atomic rename in flight).
+      // ENOENT = first-ever write; EACCES/EMFILE/other = persistent FS error — proceed
+      // optimistically so we don't permanently drop events for unrelated FS problems.
+      if (err.code === 'EBUSY' || err.code === 'EPERM') return
+    }
+  }
+
+  // SubagentStop straggler guard: only clear workflow if it still belongs to this subagent.
+  // Type-string comparison (R39) can't distinguish same-type subagents running back-to-back:
+  // a straggler SubagentStop for a completed /review would clear the workflow of a new /review
+  // that's currently running. Use _workflowAgentId (the agent_id that set the workflow) for
+  // precise identity matching so same-type subagent overlap can't clobber each other.
+  const effectiveClearWorkflow = workflowTurnMismatch || (
+    (hookEvent === 'SubagentStop' && clearWorkflow)
+      ? (existingWorkflowAgentId ? existingWorkflowAgentId === agentId : existingWorkflow === (agentType || '').slice(0, 200))
+      : clearWorkflow
+  )
+
+  // Derive the workflow owner fields for the output.
+  // workflowOverride (SubagentStart) sets all three; effectiveClearWorkflow (UPS/SubagentStop/
+  // turn-mismatch) clears all three; otherwise preserve existing values unchanged.
+  const outWorkflow = effectiveClearWorkflow ? null
+    : (workflowOverride ? workflowOverride.slice(0, 200) : existingWorkflow)
+  // Never inherit a prior agent's id when setting a new workflow: each SubagentStart owns
+  // its own workflow independently, so if agentId is absent fall back to null rather than
+  // the prior agent's id (which would make SubagentStop's identity check permanently fail).
+  const outWorkflowAgentId = effectiveClearWorkflow ? null
+    : (workflowOverride ? (agentId || null) : existingWorkflowAgentId)
+  // _workflowPromptId records the _promptId current when the workflow was set so future
+  // PreToolUse/PostToolUse can detect a stale workflow from a now-dead turn.
+  const outWorkflowPromptId = effectiveClearWorkflow ? null
+    : (workflowOverride ? existingPromptId : existingWorkflowPromptId)
 
   const output = {
-    _seq: `${Date.now()}-${++_seqCounter}`,
+    _seq: nextSeq(),
     _cwd: process.cwd(),
     type: 'office-status',
     agents: newAgents,
     activeCount,
-    workflow: agentType || existingWorkflow,
+    workflow: outWorkflow,
+    _workflowAgentId: outWorkflowAgentId,
+    _workflowPromptId: outWorkflowPromptId,
     source: 'claude-cli',
+    // Carry _stopped/_stoppedAt forward when they are set: a non-UPS event has no
+    // authority to clear Stop's idle signal. Without this, a PostToolUse that wins a
+    // last-writer-wins race with Stop erases _stopped=true, re-opening the straggler
+    // window for subsequent events. UserPromptSubmit is the only event that legitimately
+    // clears _stopped — it does so by omitting these keys from its own output.
+    // Use recheckStopped (from the re-check guard's fresh read) not existingStopped (stale
+    // merge read) so a UPS that fires between the two reads is reflected here. Fall back to
+    // Date.now() when _stoppedAt is absent: a missing timestamp causes _seq to be used as a
+    // proxy, and a newly-written _seq ≈ now restarts the 30s window on every write.
+    ...(recheckStopped && hookEvent !== 'UserPromptSubmit'
+      ? { _stopped: true, _stoppedAt: recheckStoppedAt ?? Date.now() }
+      : {}),
+    // Turn-boundary fields for straggler detection:
+    // _promptId advances on each UserPromptSubmit; _preToolPromptId is set by PreToolUse
+    // to the _promptId at entry so PostToolUse can detect if a new turn started.
+    // On fresh install (both existingPromptId and newPromptId are null), seed _promptId with
+    // capturedPromptId so _promptId and _preToolPromptId form a matched pair. Without this,
+    // _preToolPromptId = "__t:..." while _promptId = null — the PostToolUse gate requires
+    // BOTH non-null, so with only _preToolPromptId set the gate is still structurally dead.
+    _promptId: newPromptId || existingPromptId || (hookEvent === 'PreToolUse' ? capturedPromptId : null),
+    _preToolPromptId: hookEvent === 'PreToolUse'
+      ? (capturedPromptId !== null ? capturedPromptId : existingPromptId)
+      : existingPreToolPromptId,
   }
 
-  // Write with retry (Windows file locking can cause EBUSY on rename)
+  // Write with retry (Windows file locking can cause EBUSY on rename).
+  // UserPromptSubmit AND PreToolUse retry harder (3 attempts): both write turn-boundary
+  // tokens (_promptId / _preToolPromptId) that the PostToolUse straggler gate depends on.
+  // A dropped PreToolUse write leaves _preToolPromptId stale, causing the next PostToolUse
+  // to see a false mismatch and abort as a straggler even though it belongs to this turn.
   const dir = path.dirname(STATUS_FILE)
   const json = JSON.stringify(output, null, 2)
-  const tmp = STATUS_FILE + '.tmp.' + process.pid
+  const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+  const writeAttempts = (hookEvent === 'UserPromptSubmit' || hookEvent === 'PreToolUse') ? 3 : 1
+  let writeOk = false
   try {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(tmp, json)
-    fs.renameSync(tmp, STATUS_FILE)
-  } catch {
-    // Rename failed (EBUSY / file locked) — write directly as fallback
-    try { fs.writeFileSync(STATUS_FILE, json) } catch {}
-    try { fs.unlinkSync(tmp) } catch {}
-  }
+    for (let i = 0; i < writeAttempts && !writeOk; i++) {
+      // Re-check _stopped before each retry (not the first attempt — that's already covered
+      // by the re-check guard above). If Stop fired during the first attempt's contention,
+      // a successful second write would clobber Stop's idle state with stale working data.
+      if (i > 0 && hookEvent !== 'UserPromptSubmit') {
+        try {
+          const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+          const sAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
+          if (latest._stopped && Number.isFinite(sAt) && Date.now() - sAt < 30_000) {
+            try { fs.unlinkSync(tmp) } catch {}
+            return
+          }
+          // New turn started between our first write attempt and this retry — abort so we
+          // don't overwrite UPS's fresh PM-planning state with old-turn working data.
+          if (hookEvent === 'PreToolUse' && capturedPromptId && latest._promptId
+              && latest._promptId !== capturedPromptId) {
+            try { fs.unlinkSync(tmp) } catch {}
+            return
+          }
+        } catch (err) {
+          if (err.code === 'EBUSY' || err.code === 'EPERM') { try { fs.unlinkSync(tmp) } catch {}; return }
+        }
+      }
+      try { fs.writeFileSync(tmp, json); fs.renameSync(tmp, STATUS_FILE); writeOk = true } catch {}
+      if (!writeOk) { try { fs.writeFileSync(STATUS_FILE, json); writeOk = true } catch {} }
+    }
+    try { fs.unlinkSync(tmp) } catch {}  // clean up tmp; ENOENT (already renamed) is swallowed
+  } catch {}
 }
 
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)
 if (typeof module !== 'undefined') {
-  module.exports = { HOOK_VERSION, toolToRole, skillToRole, shortFile, shortCommand, extractContext,
+  module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
+    shortFile, shortCommand, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext }
 }

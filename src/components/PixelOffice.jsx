@@ -12,6 +12,54 @@ import {
   ServerRack, Clock, Printer, Rug, CoffeeCup, DeskLamp
 } from './TopDownFurniture'
 
+// ─── Sprint Kanban Board ─────────────────────────────────────────────────
+// React.memo: PixelOffice re-renders on every minute/hour tick and every
+// agentOrderSignature change. SprintKanban's props (x, y, doneCount) are
+// unchanged on a clock tick, so memo skips re-building its ~25 SVG elements.
+const SprintKanban = React.memo(function SprintKanban({ x, y, doneCount = 0 }) {
+  const W = 78, H = 52
+  const MAX_CELLS = 6  // 3 rows × 2 per row, leaves row 4 for overflow text
+  const filled = Math.min(doneCount, MAX_CELLS)
+  const overflow = doneCount > MAX_CELLS ? doneCount - MAX_CELLS : 0
+  const todoCards = ['#F5A623', '#7F77DD', '#4A90D9']
+  const doingCards = ['#1D9E75', '#E24B4A']
+  return (
+    <g>
+      <rect x={x} y={y} width={W} height={H} rx={2} fill="#F8F4E8" stroke="#C8C0A8" strokeWidth="0.8" />
+      {/* Header bar */}
+      <rect x={x} y={y} width={W} height={10} rx={2} fill="#7070A0" opacity="0.9" />
+      <text x={x + 28} y={y + 7} textAnchor="middle" fontSize="5" fill="white" fontFamily="monospace" fontWeight="bold">SPRINT</text>
+      <text x={x + W - 4} y={y + 7} textAnchor="end" fontSize="4.5" fill="#FFE08A" fontFamily="monospace" fontWeight="bold">{doneCount}</text>
+      {/* Column dividers */}
+      <line x1={x + 26} y1={y + 10} x2={x + 26} y2={y + H} stroke="#D8D0C0" strokeWidth="0.6" />
+      <line x1={x + 52} y1={y + 10} x2={x + 52} y2={y + H} stroke="#D8D0C0" strokeWidth="0.6" />
+      {/* Column headers */}
+      <text x={x + 13} y={y + 17} textAnchor="middle" fontSize="3.5" fill="#999" fontFamily="monospace">TODO</text>
+      <text x={x + 39} y={y + 17} textAnchor="middle" fontSize="3.5" fill="#999" fontFamily="monospace">DOING</text>
+      <text x={x + 65} y={y + 17} textAnchor="middle" fontSize="3.5" fill={filled > 0 ? '#2E7D32' : '#999'} fontFamily="monospace" fontWeight={filled > 0 ? 'bold' : 'normal'}>DONE</text>
+      {/* TODO column: static colored task cards */}
+      {todoCards.map((color, i) => (
+        <rect key={i} x={x + 3} y={y + 20 + i * 8} width={20} height={6} rx={1} fill={color} opacity="0.25" />
+      ))}
+      {/* DOING column: static cards */}
+      {doingCards.map((color, i) => (
+        <rect key={i} x={x + 29} y={y + 20 + i * 8} width={20} height={6} rx={1} fill={color} opacity="0.35" />
+      ))}
+      {/* DONE column: fills dynamically — max 6 cells (3 rows × 2) */}
+      {Array.from({ length: filled }).map((_, i) => (
+        <rect key={i}
+          x={x + 55 + (i % 2) * 9} y={y + 20 + Math.floor(i / 2) * 8}
+          width={7} height={6} rx={1} fill="#4CAF50" opacity="0.75"
+        />
+      ))}
+      {/* Row 4: overflow indicator when done count exceeds 6 */}
+      {overflow > 0 && (
+        <text x={x + 65} y={y + 47} textAnchor="middle" fontSize="4" fill="#2E7D32" fontFamily="monospace" fontWeight="bold">+{overflow}</text>
+      )}
+    </g>
+  )
+})
+
 // ─── Flying Document Animation ──────────────────────────────────────────
 function FlyingDocument({ fromPos, toPos, onComplete }) {
   const [progress, setProgress] = React.useState(0)
@@ -68,10 +116,16 @@ function FlyingDocument({ fromPos, toPos, onComplete }) {
 
 function FlyingDocuments() {
   const handoffs = useOfficeStore((s) => s.handoffs)
-  const agents = useOfficeStore((s) => s.agents)
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
 
   if (reducedMotion) return null
+  // Read agent positions via getState() rather than subscribing to s.agents.
+  // A FlyingDocument animates a fixed arc between its from/to coords captured at
+  // mount — it never needs live position updates. Subscribing to s.agents made
+  // FlyingDocuments re-render on EVERY agent RAF position tick (~30fps per walking
+  // agent) even when handoffs was empty. Now it re-renders only when handoffs
+  // itself changes (a handful of times per minute).
+  const agents = useOfficeStore.getState().agents
   return handoffs.map((h) => {
     const fromAgent = agents[h.from]
     const toAgent = agents[h.to]
@@ -168,6 +222,20 @@ function getLightingOverlay(hour) {
   if (hour >= 7) return { fill: '#ffd080', opacity: 0.07 }
   if (hour >= 6) return { fill: '#FFD093', opacity: 0.05 }
   return { fill: '#050510', opacity: 0.45 }
+}
+
+// ─── Clock widget — isolates the per-minute subscription ──────────────────
+// PixelOffice's full SVG tree (~1000 elements) is reconciled on every store change
+// that hits one of its subscriptions. `minute` advances every 60s, `hour` only once
+// per hour — so 59 of every 60 PixelOffice re-renders per hour were driven SOLELY by
+// the minute hand. Isolating the `minute` (and `hour`) subscription into this tiny
+// wrapper means PixelOffice no longer subscribes to `minute` at all: the minute tick
+// now re-renders only this 1-element <Clock>, not the whole office. PixelOffice still
+// subscribes to `hour` independently (NightSky / lighting / WallWindow need it).
+function ClockWidget({ x, y, r }) {
+  const hour = useOfficeStore((s) => s.hour)
+  const minute = useOfficeStore((s) => s.minute)
+  return <Clock x={x} y={y} r={r} hour={hour} minute={minute} />
 }
 
 // ─── Boss character that walks through during boss-visit event ─────────
@@ -295,8 +363,12 @@ function OfficeDog() {
   )
 }
 
+// Sorts IN PLACE — the sole caller passes a freshly-allocated Object.values()
+// array it does not retain, so the previous defensive `[...agents]` copy spread
+// that throwaway array a second time for nothing. Sorting the input directly is
+// safe given the single known call site (the agentList useMemo below).
 function sortByY(agents) {
-  return [...agents].sort((a, b) => {
+  return agents.sort((a, b) => {
     const ay = (a.targetPosition || a.position || {}).y || 0
     const by = (b.targetPosition || b.position || {}).y || 0
     return ay - by
@@ -313,7 +385,12 @@ function growthLevel(count) {
 }
 
 // ─── Personalized desk with character-specific items ─────────────────────
-function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0, stickyCount = 0, booksCount = 0, onDeployClick }) {
+// React.memo: each PersonalDesk renders ~80 SVG elements. PixelOffice re-renders
+// on every minute/hour tick and every agentOrderSignature change (an agent
+// walking), none of which alter a desk's props. Without memo all 7 desks
+// re-execute on every such render. The ops desk's onDeployClick is stabilized
+// with useCallback in PixelOffice so its identity stays constant across renders.
+const PersonalDesk = React.memo(function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0, stickyCount = 0, booksCount = 0, onDeployClick }) {
   const W = 60, H = 38
   return (
     <g>
@@ -453,10 +530,14 @@ function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0, stickyCoun
       )}
     </g>
   )
-}
+})
 
 // ─── Night sky visible through windows ───────────────────────────────────────
-function NightSky({ hour }) {
+// React.memo: PixelOffice re-renders every minute (the `minute` clock tick). NightSky's
+// only prop is `hour` — its ~20-element SVG tree changes solely when `hour` crosses the
+// 6/19 day-night boundary. Memo skips the rebuild on the 59 of 60 minute-ticks per hour
+// where `hour` is unchanged.
+const NightSky = React.memo(function NightSky({ hour }) {
   if (hour >= 6 && hour < 19) return null
 
   return (
@@ -516,7 +597,7 @@ function NightSky({ hour }) {
       </g>
     </g>
   )
-}
+})
 
 // Static desk positions matching WAYPOINTS — defined outside component to avoid re-creation
 const DESK_DATA = [
@@ -553,12 +634,30 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   // Only re-render PixelOffice when agent IDs change, not on every property update.
   // AgentCharacter subscribes to its own agent state independently.
   const agentOrderSignature = useOfficeStore(useShallow((s) => getAgentOrderSignature(s.agents)))
-  // Targeted selector — only re-renders when coffee counts change, not on every agent tick
-  const coffeeCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.coffee || 0)))
-  const stickyCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.sticky || 0)))
-  const booksCounts = useOfficeStore(useShallow((s) => DESK_IDS.map((id) => s.agents[id]?.deskItemCount?.books || 0)))
+  // Targeted selector — only re-renders when desk-item counts change, not on every
+  // agent tick. The three growth items (coffee/sticky/books) are read in ONE flat
+  // selector instead of three: a separate useShallow per item ran the selector and
+  // allocated a 7-element array three times per store setState. One selector → one
+  // allocation. Layout: [coffee×7, sticky×7, books×7].
+  const deskItemCounts = useOfficeStore(useShallow((s) => {
+    const out = []
+    for (const id of DESK_IDS) out.push(s.agents[id]?.deskItemCount?.coffee || 0)
+    for (const id of DESK_IDS) out.push(s.agents[id]?.deskItemCount?.sticky || 0)
+    for (const id of DESK_IDS) out.push(s.agents[id]?.deskItemCount?.books || 0)
+    return out
+  }))
+  // Subscribe to the ledger reference (changes only on a done event or day rollover),
+  // then sum in a memo. The previous inline `Object.values().reduce()` selector re-ran
+  // the reduction on EVERY store mutation — every RAF position tick, every behavior
+  // change — even though the done-count only changes a few times per minute.
+  const dailyDoneCounts = useOfficeStore((s) => s.dailyDoneLedger?.counts)
+  const totalDoneToday = useMemo(
+    () => Object.values(dailyDoneCounts || {}).reduce((sum, c) => sum + c, 0),
+    [dailyDoneCounts]
+  )
   const hour = useOfficeStore((s) => s.hour)
-  const minute = useOfficeStore((s) => s.minute)
+  // `minute` is intentionally NOT subscribed here — ClockWidget owns that subscription
+  // so the per-minute tick re-renders only the clock, not PixelOffice's whole SVG tree.
   const activeEvent = useOfficeStore((s) => s.activeEvent)
   const activeWorkflow = useOfficeStore((s) => s.activeWorkflow)
   const hasEverReceivedStatus = useOfficeStore((s) => s.hasEverReceivedStatus)
@@ -574,27 +673,39 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     return cleanup
   }, [])
 
-  // Memoize agent list — only re-sort when IDs change (not on every property update)
+  // Memoize agent list — re-sort only when the order signature changes (an agent's
+  // id set or rounded-y changes), NOT on every property update. `agentOrderSignature`
+  // is derived from Object.keys(s.agents), so the agent id set it represents is exactly
+  // Object.keys(getState().agents) — sort those values directly. The previous code
+  // round-tripped each signature entry through `.split('|', 1)[0]` to recover the id it
+  // had just joined in; that split allocated a throwaway array per agent every time the
+  // signature changed. `agentOrderSignature` stays in the dep array (it is the precise
+  // change trigger); the body just no longer parses it.
   const agentList = useMemo(
-    () => {
-      const agents = useOfficeStore.getState().agents
-      return sortByY(agentOrderSignature.map((entry) => entry.split('|', 1)[0]).map(id => agents[id]).filter(Boolean))
-    },
+    () => sortByY(Object.values(useOfficeStore.getState().agents)),
     [agentOrderSignature]
   )
-  const coffeeCountMap = useMemo(
-    () => Object.fromEntries(DESK_IDS.map((id, index) => [id, coffeeCounts[index] || 0])),
-    [coffeeCounts]
-  )
-  const stickyCountMap = useMemo(
-    () => Object.fromEntries(DESK_IDS.map((id, index) => [id, stickyCounts[index] || 0])),
-    [stickyCounts]
-  )
-  const booksCountMap = useMemo(
-    () => Object.fromEntries(DESK_IDS.map((id, index) => [id, booksCounts[index] || 0])),
-    [booksCounts]
-  )
+  // Single memo derives all three id→count maps from the flat selector array.
+  // The flat layout is [coffee×N, sticky×N, books×N] where N = DESK_IDS.length.
+  const { coffeeCountMap, stickyCountMap, booksCountMap } = useMemo(() => {
+    const n = DESK_IDS.length
+    const coffee = {}, sticky = {}, books = {}
+    for (let i = 0; i < n; i++) {
+      const id = DESK_IDS[i]
+      coffee[id] = deskItemCounts[i] || 0
+      sticky[id] = deskItemCounts[n + i] || 0
+      books[id] = deskItemCounts[2 * n + i] || 0
+    }
+    return { coffeeCountMap: coffee, stickyCountMap: sticky, booksCountMap: books }
+  }, [deskItemCounts])
   const lightOverlay = getLightingOverlay(hour)
+
+  // Stable handler for the ops desk's deploy button — a fresh inline arrow on
+  // every render would defeat PersonalDesk's React.memo for the ops desk.
+  const handleDeployClick = useCallback(
+    () => triggerInteractiveEvent(useOfficeStore, 'deploy-success'),
+    []
+  )
 
   // Panel mode: auto-adapt viewBox to container shape
   const isPanel = mode === 'panel'
@@ -620,14 +731,28 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     }
   }, [isPanel])
 
+  // rAF-coalesce the resize handler. ResizeObserver and the window 'resize' backup
+  // can both fire for a single drag-resize frame — each invocation reads clientWidth/
+  // clientHeight (a forced layout flush) and runs the ratio math. Collapsing bursts to
+  // one call per frame dedupes that double-work; the pending handle is cancelled on
+  // cleanup so a queued frame can't fire updatePanelViewBox against an unmounted panel.
   useEffect(() => {
     if (!isPanel || !containerRef.current) return
+    let rafId = null
+    const schedule = () => {
+      if (rafId != null) return
+      rafId = requestAnimationFrame(() => { rafId = null; updatePanelViewBox() })
+    }
     updatePanelViewBox()
-    const ro = new ResizeObserver(updatePanelViewBox)
+    const ro = new ResizeObserver(schedule)
     ro.observe(containerRef.current)
     // Backup: window resize for iframe/webview embedding
-    window.addEventListener('resize', updatePanelViewBox)
-    return () => { ro.disconnect(); window.removeEventListener('resize', updatePanelViewBox) }
+    window.addEventListener('resize', schedule)
+    return () => {
+      if (rafId != null) cancelAnimationFrame(rafId)
+      ro.disconnect()
+      window.removeEventListener('resize', schedule)
+    }
   }, [isPanel, updatePanelViewBox])
 
   const viewBox = isPanel ? panelViewBox : '0 0 800 560'
@@ -695,8 +820,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <WallWindow x={240} y={141} w={36} h={18} hour={hour} />
       <WallWindow x={340} y={141} w={36} h={18} hour={hour} />
       <WallWindow x={440} y={141} w={36} h={18} hour={hour} />
-      {/* Clock mounted on north wall */}
-      <Clock x={540} y={150} r={10} hour={hour} minute={minute} />
+      {/* Clock mounted on north wall — own subscription so the minute tick doesn't
+          re-render the whole office */}
+      <ClockWidget x={540} y={150} r={10} />
 
       {/* ═══ DOOR OPENINGS (cut through thick walls) ═══ */}
       {/* Entrance → Main Office (north wall) */}
@@ -771,6 +897,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <text x={40} y={184} textAnchor="middle" fontSize="5.5" fill="#7F77DD" fontFamily="monospace">SHIP IT</text>
       <text x={40} y={193} textAnchor="middle" fontSize="4.5" fill="#888" fontFamily="monospace">everyday</text>
 
+      {/* Sprint Kanban board on north wall, planning area (clear of door at x=88-140) */}
+      <SprintKanban x={160} y={165} doneCount={totalDoneToday} />
+
       {/* Team area labels */}
       <text x={200} y={200} textAnchor="middle" fontSize="7" fill="#378ADD" fontFamily="monospace" opacity="0.4">PLANNING</text>
       <text x={460} y={200} textAnchor="middle" fontSize="7" fill="#BA7517" fontFamily="monospace" opacity="0.4">REVIEW</text>
@@ -787,7 +916,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           coffeeCount={coffeeCountMap[d.id] || 0}
           stickyCount={stickyCountMap[d.id] || 0}
           booksCount={booksCountMap[d.id] || 0}
-          onDeployClick={d.id === 'ops' ? () => triggerInteractiveEvent(useOfficeStore, 'deploy-success') : undefined}
+          onDeployClick={d.id === 'ops' ? handleDeployClick : undefined}
         />
       ))}
 

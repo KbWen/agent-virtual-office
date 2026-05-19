@@ -62,21 +62,53 @@ describe('routeTaskToAgent', () => {
     expect(routeTaskToAgent('grant permission and approve access')).toBe('gate')  // permission+approve=2
   })
 
+  it('matches gate for auth as a word or word-prefix (auth, authn, authz, authentication, authorization)', () => {
+    expect(routeTaskToAgent('auth token required for the endpoint')).toBe('gate')
+    expect(routeTaskToAgent('authn configuration for SSO')).toBe('gate')
+    expect(routeTaskToAgent('authz policy enforcement')).toBe('gate')
+    expect(routeTaskToAgent('authentication required for the endpoint')).toBe('gate')
+    expect(routeTaskToAgent('authorize the new role')).toBe('gate')
+    expect(routeTaskToAgent('authorization flow')).toBe('gate')
+  })
+
+  it('does not match gate for "auth" embedded inside unrelated words', () => {
+    // \bauth regex requires a word boundary before "auth" AND excludes author/authority
+    expect(routeTaskToAgent('write the author biography')).not.toBe('gate')       // author → not gate
+    expect(routeTaskToAgent('oauth setup for provider')).not.toBe('gate')         // oauth has no \b before auth
+  })
+
   it('matches designer keywords', () => {
     expect(routeTaskToAgent('design the onboarding UI')).toBe('designer')
     expect(routeTaskToAgent('update CSS styles for dark mode')).toBe('designer')
     expect(routeTaskToAgent('review the typography and spacing')).toBe('designer')
   })
 
-  it('returns highest-scoring role for multi-keyword tasks', () => {
-    // "implement" (dev) + "test" (qa) — dev wins only if it scores higher
-    // both score 1, so whichever comes first in iteration wins; just assert it returns something
-    const result = routeTaskToAgent('implement and test the feature')
-    expect(result).not.toBeNull()
+  it('breaks multi-keyword ties by FALLBACK_ORDER priority', () => {
+    // "implement" → dev (score 1), "test" → qa (score 1) — FALLBACK_ORDER puts dev before qa
+    // strict-greater tie-break keeps the first → dev
+    expect(routeTaskToAgent('implement and test the feature')).toBe('dev')
   })
 
   it('returns null for unrecognized task with no matches', () => {
     expect(routeTaskToAgent('do something unrecognizable xyz123')).toBeNull()
+  })
+
+  it('returns null for non-string truthy inputs (no crash)', () => {
+    expect(routeTaskToAgent(42)).toBeNull()
+    expect(routeTaskToAgent({})).toBeNull()
+    expect(routeTaskToAgent([])).toBeNull()
+    expect(routeTaskToAgent(true)).toBeNull()
+  })
+
+  it('does not match res for words that only contain "read" as substring', () => {
+    expect(routeTaskToAgent('thread the needle')).not.toBe('res')
+    expect(routeTaskToAgent('already done')).not.toBe('res')
+    expect(routeTaskToAgent('spread the load')).not.toBe('res')
+  })
+
+  it('matches res for "read" as a standalone word', () => {
+    expect(routeTaskToAgent('read the documentation')).toBe('res')
+    expect(routeTaskToAgent('read and study the codebase')).toBe('res')
   })
 })
 
@@ -163,6 +195,62 @@ describe('routeExternalAgents', () => {
     const ids = result.map(r => r.agentId)
     expect(new Set(ids).size).toBe(8)
   })
+
+  it('silently skips null/non-object entries without crashing', () => {
+    const result = routeExternalAgents([null, undefined, 42, { role: 'dev', status: 'working' }])
+    expect(result).toHaveLength(1)
+    expect(result[0].agentId).toBe('dev')
+  })
+
+  it('tier 1: rejects role not in FALLBACK_ORDER, falls through to tier 2/3', () => {
+    const result = routeExternalAgents([{ role: 'hacker', task: 'xyz', status: 'working' }])
+    expect(result).toHaveLength(1)
+    expect(result[0].agentId).not.toBe('hacker')
+    expect(result[0].agentId).toBe('dev')  // tier 3 fallback (no keyword match)
+  })
+
+  it('tier 1: rejects __proto__ role injection', () => {
+    const result = routeExternalAgents([{ role: '__proto__', status: 'working' }])
+    expect(result[0].agentId).not.toBe('__proto__')
+    expect(['dev', 'qa', 'pm', 'ops', 'arch', 'res', 'designer', 'gate']).toContain(result[0].agentId)
+  })
+
+  it('R62: tier 1 routes a multi-session composite role to its own composite id', () => {
+    // Before R62, FALLBACK_ORDER.includes('feat-x~dev') was false → the entry fell
+    // to tier 2 keyword routing and was collapsed onto a base character, destroying
+    // the per-worktree identity.
+    const result = routeExternalAgents([
+      { role: 'feat-x~dev', task: 'run the test suite', status: 'working', session: 'feat-x' },
+    ])
+    expect(result).toHaveLength(1)
+    expect(result[0].agentId).toBe('feat-x~dev')   // NOT keyword-routed to 'qa'
+    expect(result[0].session).toBe('feat-x')
+  })
+
+  it('R62: composite agents from different worktrees never collide', () => {
+    const result = routeExternalAgents([
+      { role: 'feat-a~dev', status: 'working', session: 'feat-a' },
+      { role: 'feat-b~dev', status: 'working', session: 'feat-b' },
+    ])
+    expect(result).toHaveLength(2)
+    expect(result.map(r => r.agentId)).toEqual(['feat-a~dev', 'feat-b~dev'])
+  })
+
+  it('R62: composite role with invalid base segment falls through to tier 3', () => {
+    const result = routeExternalAgents([{ role: 'feat-x~hacker', task: 'xyz', status: 'working' }])
+    expect(result[0].agentId).not.toBe('feat-x~hacker')
+    expect(['dev', 'qa', 'pm', 'ops', 'arch', 'res', 'designer', 'gate']).toContain(result[0].agentId)
+  })
+
+  it('R62: a composite and a bare role with the same base coexist as distinct agents', () => {
+    const result = routeExternalAgents([
+      { role: 'feat-x~dev', status: 'working', session: 'feat-x' },
+      { role: 'dev', status: 'blocked' },
+    ])
+    expect(result).toHaveLength(2)
+    expect(result[0].agentId).toBe('feat-x~dev')
+    expect(result[1].agentId).toBe('dev')
+  })
 })
 
 describe('distributeFallbackCount', () => {
@@ -186,5 +274,13 @@ describe('distributeFallbackCount', () => {
 
   it('returns stable order across calls', () => {
     expect(distributeFallbackCount(4)).toEqual(distributeFallbackCount(4))
+  })
+
+  it('handles NaN count as 0', () => {
+    expect(distributeFallbackCount(NaN)).toEqual([])
+  })
+
+  it('floors float inputs', () => {
+    expect(distributeFallbackCount(2.9)).toEqual(['dev', 'qa'])
   })
 })

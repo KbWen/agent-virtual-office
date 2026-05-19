@@ -55,30 +55,55 @@
       "participants": "random-2-3",
       "duration": 20000,
       "description": "2-3人走到會議室開會"
+    },
+    {
+      "id": "dev-arch-disagree",
+      "name": "技術爭論",
+      "participants": ["dev", "arch"],
+      "duration": 20000,
+      "description": "dev 和 arch 對設計方向不同意見，來回辯論後妥協"
+    },
+    {
+      "id": "ops-dev-deploy-check",
+      "name": "能部署了嗎",
+      "participants": ["ops", "dev"],
+      "duration": 16000,
+      "description": "ops 問 dev 能不能 deploy，dev 猶豫後答應"
+    },
+    {
+      "id": "pm-all-meeting",
+      "name": "臨時小會",
+      "participants": "all",
+      "duration": 18000,
+      "description": "PM 宣布臨時開會，其他人翻白眼後勉強去會議室"
     }
   ],
   "rare": [
     {
       "id": "dog-visit",
       "name": "有人帶狗",
+      "participants": "all",
       "duration": 20000,
       "description": "小狗在辦公室跑來跑去"
     },
     {
       "id": "ac-broken",
       "name": "空調壞了",
+      "participants": "all",
       "duration": 15000,
       "description": "所有人搧風動作，冒汗滴"
     },
     {
       "id": "boss-visit",
       "name": "老闆巡視",
+      "participants": "all",
       "duration": 10000,
       "description": "所有人回座位坐好假裝忙"
     },
     {
       "id": "group-stretch",
       "name": "集體伸懶腰",
+      "participants": "all",
       "duration": 8000,
       "description": "所有人同時伸懶腰"
     }

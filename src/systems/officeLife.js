@@ -1,13 +1,62 @@
 import eventsData from '../config/officeEvents.json'
-import { WAYPOINTS, MEETING_CHAIRS, HOME_POSITIONS } from './movementSystem'
-import { eventBubble, eventName as getEventName } from '../i18n'
-import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL } from './constants'
+import { WAYPOINTS, MEETING_CHAIRS, HOME_POSITIONS } from './movementSystem.js'
+import { eventBubble } from '../i18n'
+import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL } from './constants.js'
 
 let dailyTimer = null
 let rareTimer = null
+let timeInterval = null
+let timeEventInterval = null
+// Module-level cancellation flag so a double-init can fully cancel the PRIOR instance.
+// startOfficeLife's closures all read activeCancelled by reference, so reassigning it
+// here both starts a fresh flag and lets the double-init guard flip the old one true.
+let activeCancelled = null
+// Cancellation flags for in-flight interactive events (coffee machine, whiteboard,
+// deploy button). Tracked so teardown cancels their deferred callbacks too — otherwise
+// a click followed by unmount/HMR leaves multi-stage setTimeout callbacks firing
+// against a stale store.
+const interactiveCancellers = new Set()
+// Handles of the per-event deregistration timers (the setTimeout that removes a
+// canceller from interactiveCancellers once the event lifetime elapsed). Tracked so
+// teardown can clearTimeout them — otherwise each leaks as a pending handle until it
+// fires a now-useless Set.delete on an already-cleared Set.
+const interactiveDeregTimers = new Set()
+
+// id → event lookup, built once at module load. triggerInteractiveEvent previously
+// rebuilt `[...daily, ...rare]` and ran an O(catalog) .find() on every user click of
+// the coffee machine / whiteboard / deploy button. The catalog is static, so resolve
+// it to an O(1) map once instead of allocating + scanning per click.
+const EVENT_BY_ID = (() => {
+  const map = {}
+  for (const e of eventsData.daily || []) map[e.id] = e
+  for (const e of eventsData.rare || []) map[e.id] = e
+  return map
+})()
 
 function randomInterval(range) {
   return range[0] + Math.random() * (range[1] - range[0])
+}
+
+// Release EVERY agent currently locked in a group event back to organic scheduling.
+// Group-event cleanup normally happens in executeEvent's per-event setTimeout, but that
+// timer early-returns when `cancelled` is flipped (teardown / HMR / StrictMode remount /
+// double-init). The store's `inGroupEvent` flag is NOT persisted and NOT reset by the
+// module-level zustand store across an HMR boundary, so a cancelled event leaves its
+// participants stuck `inGroupEvent: true` forever: doSchedule skips them and the watchdog
+// explicitly ignores in-group agents — the agent freezes permanently. Teardown MUST
+// release them directly rather than trusting a cancelled cleanup timer.
+function releaseAllGroupEvents(store) {
+  try {
+    const s = store.getState()
+    if (!s || !s.agents) return
+    for (const id of Object.keys(s.agents)) {
+      if (s.agents[id]?.inGroupEvent) {
+        s.clearAgentGroupEvent(id)
+        s.clearBubble(id)
+      }
+    }
+    s.clearActiveEvent()
+  } catch { /* store may be torn down — best effort */ }
 }
 
 function jitter(pos, amount = 20) {
@@ -141,6 +190,7 @@ const EVENT_HANDLERS = {
   },
 
   'eureka': (store, participants) => {
+    if (!participants.includes('arch')) return
     const s = store.getState()
     if (!s.agents['arch']) return
     s.setAgentGroupEvent('arch', {
@@ -152,6 +202,7 @@ const EVENT_HANDLERS = {
   },
 
   'review-debate': (store, participants, cancelled) => {
+    if (!participants.includes('dev') || !participants.includes('qa')) return
     const s = store.getState()
     if (!s.agents['dev'] || !s.agents['qa']) return
     const devPos = HOME_POSITIONS.dev || { x: 340, y: 364 }
@@ -185,6 +236,7 @@ const EVENT_HANDLERS = {
   },
 
   'deploy-success': (store, participants, cancelled) => {
+    if (!participants.includes('ops')) return
     const s = store.getState()
     if (!s.agents['ops']) return
     s.setAgentGroupEvent('ops', {
@@ -223,6 +275,92 @@ const EVENT_HANDLERS = {
       if (active.length > 0) s.setAgentBehavior(active[0], 'meeting', 'focused', eventBubble('meeting-lead'))
       if (active.length > 1) s.setAgentBehavior(active[1], 'meeting', 'normal', eventBubble('meeting-agree'))
     }, 8000)
+  },
+
+  'dev-arch-disagree': (store, participants, cancelled) => {
+    if (!participants.includes('dev') || !participants.includes('arch')) return
+    const s = store.getState()
+    if (!s.agents['dev'] || !s.agents['arch']) return
+    const meetPoint = { x: 300, y: 305 }
+    s.setAgentGroupEvent('dev', {
+      behavior: 'chat', expression: 'confused',
+      bubble: eventBubble('dev-arch-dis-1'),
+      groupTarget: jitter({ x: meetPoint.x - 20, y: meetPoint.y }, 8),
+    })
+    s.setAgentGroupEvent('arch', {
+      behavior: 'whiteboard', expression: 'focused',
+      bubble: eventBubble('arch-dis-1'),
+      groupTarget: jitter({ x: meetPoint.x + 20, y: meetPoint.y }, 8),
+    })
+    setTimeout(() => {
+      if (cancelled?.value) return
+      const s = store.getState()
+      if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'chat', 'focused', eventBubble('dev-arch-dis-2'))
+      if (s.agents.arch?.inGroupEvent) s.setAgentBehavior('arch', 'chat', 'normal', eventBubble('arch-dis-2'))
+    }, 6000)
+    setTimeout(() => {
+      if (cancelled?.value) return
+      const s = store.getState()
+      if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'typing', 'normal', eventBubble('dev-arch-dis-3'))
+      if (s.agents.arch?.inGroupEvent) s.setAgentBehavior('arch', 'chat', 'happy', eventBubble('arch-dis-3'))
+    }, 13000)
+  },
+
+  'ops-dev-deploy-check': (store, participants, cancelled) => {
+    if (!participants.includes('ops') || !participants.includes('dev')) return
+    const s = store.getState()
+    if (!s.agents['ops'] || !s.agents['dev']) return
+    const devPos = HOME_POSITIONS.dev || { x: 340, y: 364 }
+    // Lock dev in place so doSchedule doesn't move them away while ops walks over
+    s.setAgentGroupEvent('dev', {
+      behavior: 'typing', expression: 'normal',
+      bubble: null, groupTarget: null,
+    })
+    s.setAgentGroupEvent('ops', {
+      behavior: 'chat', expression: 'normal',
+      bubble: eventBubble('ops-dev-check-1'),
+      groupTarget: jitter({ x: devPos.x + 35, y: devPos.y }, 10),
+    })
+    setTimeout(() => {
+      if (cancelled?.value) return
+      const s = store.getState()
+      if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'scratch-head', 'confused', eventBubble('dev-ops-check-1'))
+      if (s.agents.ops?.inGroupEvent) s.setAgentBehavior('ops', 'chat', 'normal', eventBubble('ops-dev-check-2'))
+    }, 4000)
+    setTimeout(() => {
+      if (cancelled?.value) return
+      const s = store.getState()
+      if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'thumbs-up', 'happy', eventBubble('dev-ops-check-2'))
+      if (s.agents.ops?.inGroupEvent) s.setAgentBehavior('ops', 'deploy-button', 'happy', eventBubble('ops-dev-check-3'))
+    }, 10000)
+  },
+
+  'pm-all-meeting': (store, participants, cancelled) => {
+    if (!participants.includes('pm')) return
+    const s = store.getState()
+    if (!s.agents['pm']) return
+    s.setAgentGroupEvent('pm', {
+      behavior: 'chat', expression: 'happy',
+      bubble: eventBubble('pm-meeting-call'),
+      groupTarget: null,
+    })
+    setTimeout(() => {
+      if (cancelled?.value) return
+      const chairs = [...MEETING_CHAIRS].sort(() => Math.random() - 0.5)
+      const otherIds = participants.filter(id => id !== 'pm')
+      store.getState().setMultipleAgentGroupEvents(
+        otherIds.map((id, i) => ({
+          id, behavior: 'meeting', expression: 'confused',
+          bubble: eventBubble('pm-meeting-react'),
+          groupTarget: jitter(chairs[(i + 1) % chairs.length], 6),
+        }))
+      )
+      store.getState().setAgentGroupEvent('pm', {
+        behavior: 'meeting', expression: 'happy',
+        bubble: eventBubble('pm-meeting-lead'),
+        groupTarget: jitter(chairs[0], 6),
+      })
+    }, 2500)
   },
 
   // ─── Rare events ─────────────────────────────────────────────────
@@ -343,32 +481,68 @@ export function triggerInteractiveEvent(store, eventId) {
   const state = store.getState()
   if (state.isPaused || state.activeEvent) return false
 
-  const allEvents = [...(eventsData.daily || []), ...(eventsData.rare || [])]
-  const event = allEvents.find(e => e.id === eventId)
+  const event = EVENT_BY_ID[eventId]
   if (!event) return false
 
   const participants = pickParticipants(event, state.agents, state.externalStatus)
   const cancelled = { value: false }
+  // Register so startOfficeLife teardown can cancel this event's deferred callbacks.
+  interactiveCancellers.add(cancelled)
 
   state.setActiveEvent(event)
   executeEvent(store, event, participants, cancelled)
+
+  // Deregister once the event's lifetime (plus a margin past the longest deferred
+  // handler step) has elapsed — keeps the Set from growing unbounded. The handle is
+  // tracked so startOfficeLife teardown can clear it instead of leaving it pending.
+  const deregTimer = setTimeout(() => {
+    interactiveCancellers.delete(cancelled)
+    interactiveDeregTimers.delete(deregTimer)
+  }, event.duration + 15000)
+  interactiveDeregTimers.add(deregTimer)
 
   return true
 }
 
 export function startOfficeLife(store) {
-  // Guard against double-init (React StrictMode)
-  if (dailyTimer || rareTimer) {
+  // Guard against double-init (React StrictMode, HMR, missed cleanup).
+  // Fully tear down ANY prior instance — including its timeInterval/timeEventInterval
+  // and its cancellation flag. Previously only dailyTimer/rareTimer were module-level,
+  // so a re-init without cleanup leaked the two setInterval loops and left the prior
+  // instance's stale event callbacks firing (its `cancelled` flag never flipped).
+  if (dailyTimer || rareTimer || timeInterval || timeEventInterval) {
+    if (activeCancelled) activeCancelled.value = true
     clearTimeout(dailyTimer)
     clearTimeout(rareTimer)
-    dailyTimer = null
-    rareTimer = null
+    clearInterval(timeInterval)
+    clearInterval(timeEventInterval)
+    dailyTimer = rareTimer = timeInterval = timeEventInterval = null
+    // Cancel any in-flight interactive events from the prior instance.
+    for (const c of interactiveCancellers) c.value = true
+    interactiveCancellers.clear()
+    for (const t of interactiveDeregTimers) clearTimeout(t)
+    interactiveDeregTimers.clear()
+    // Cancelling the prior instance flips its `cancelled` flag, which makes every
+    // pending executeEvent cleanup early-return WITHOUT releasing its participants.
+    // Release them here so no agent is stranded `inGroupEvent: true` (frozen forever).
+    releaseAllGroupEvents(store)
   }
 
-  // Shared cancellation flag — prevents stale event callbacks from firing after stop()
+  // Shared cancellation flag — prevents stale event callbacks from firing after stop().
+  // Tracked at module level so the next startOfficeLife() can cancel this instance.
   const cancelled = { value: false }
+  activeCancelled = cancelled
 
+  // Guard the setTimeout creation itself on `cancelled`. The reschedule call sits at the
+  // BOTTOM of each callback (after the event work), so teardown can run between a
+  // callback's top-of-body `cancelled` check and its reschedule — clearTimeout(dailyTimer)
+  // then clears the OLD (already-fired) handle while the still-running callback proceeds
+  // to setTimeout a NEW timer that teardown's clearTimeout never saw. That orphan would
+  // fire 1-3 min later (harmless — its own cancelled check stops it — but it is a leaked
+  // handle and reassigns the module-level dailyTimer). Checking `cancelled` here makes a
+  // post-teardown reschedule a no-op, so no orphan timer is ever created.
   const scheduleDaily = () => {
+    if (cancelled.value) return
     dailyTimer = setTimeout(() => {
       if (cancelled.value) return
       const state = store.getState()
@@ -385,6 +559,7 @@ export function startOfficeLife(store) {
   }
 
   const scheduleRare = () => {
+    if (cancelled.value) return
     rareTimer = setTimeout(() => {
       if (cancelled.value) return
       const state = store.getState()
@@ -404,14 +579,14 @@ export function startOfficeLife(store) {
   scheduleRare()
 
   // Update time every minute
-  const timeInterval = setInterval(() => {
+  timeInterval = setInterval(() => {
     store.getState().updateTime()
   }, TIME_CHECK_INTERVAL)
 
   // ─── Time-linked events ──────────────────────────────────────────────
   // Check every minute for time-specific behaviors
   let lastTriggeredHour = -1
-  const timeEventInterval = setInterval(() => {
+  timeEventInterval = setInterval(() => {
     if (cancelled.value) return
     const state = store.getState()
     if (state.isPaused || state.activeEvent) return
@@ -439,22 +614,46 @@ export function startOfficeLife(store) {
         nappers.forEach((id) => {
           if (s.agents[id]?.inGroupEvent) {
             s.clearAgentGroupEvent(id)
+            // Pair clearBubble with clearAgentGroupEvent — setMultipleAgentGroupEvents
+            // installed an eventBubble('lunch-nap') speech bubble. Every other release
+            // path (executeEvent cleanup, releaseAllGroupEvents teardown) clears both;
+            // omitting it here strands the "lunch nap" bubble over the agent until the
+            // next doSchedule tick happens to overwrite it (up to a full behavior cycle
+            // later — longer if the next behavior defers its label until arrival).
+            s.clearBubble(id)
           }
         })
       }, 45000)
     }
 
-    // 14:00-14:30 — Post-lunch drowsiness: everyone gets sleepy expression
+    // 14:00-14:30 — Post-lunch drowsiness: everyone gets sleepy expression.
+    // Skip agents currently locked in a group event: officeLife owns behavior/
+    // expression/bubble during a group event, and setAgentBehavior does NOT honour
+    // inGroupEvent — applying 'tired' here would corrupt an in-progress meeting/
+    // standup animation that straddles the 14:00 minute boundary (every other
+    // behavior-touching path — applyExternalStatus, clearExternalStatus,
+    // onWaypointReached, doSchedule, watchdog — guards on inGroupEvent for exactly
+    // this reason). Snapshot the precise set made drowsy so the 30s release reverts
+    // ONLY those agents — never an agent that organically picked a 'tired'
+    // expression via getNextBehavior, and never one that has since joined a group
+    // event.
     if (hour === 14) {
+      const drowsyIds = []
       agentIds.forEach((id) => {
-        store.getState().setAgentBehavior(id, store.getState().agents[id]?.behavior || 'typing', 'tired', null)
+        const s = store.getState()
+        if (s.agents[id]?.inGroupEvent) return
+        s.setAgentBehavior(id, s.agents[id]?.behavior || 'typing', 'tired', null)
+        drowsyIds.push(id)
       })
       setTimeout(() => {
         if (cancelled.value) return
-        agentIds.forEach((id) => {
+        drowsyIds.forEach((id) => {
           const s = store.getState()
-          if (s.agents[id]?.expression === 'tired') {
-            s.setAgentBehavior(id, s.agents[id].behavior, 'normal', null)
+          const a = s.agents[id]
+          // Only revert agents this handler made drowsy that are still drowsy and
+          // not now in a group event — never clobber a group event or an organic 'tired'.
+          if (a && !a.inGroupEvent && a.expression === 'tired') {
+            s.setAgentBehavior(id, a.behavior, 'normal', null)
           }
         })
       }, 30000)
@@ -462,7 +661,7 @@ export function startOfficeLife(store) {
 
     // 10:00 or 15:00 — Auto tea break
     if (hour === 10 || hour === 15) {
-      const teaEvent = eventsData.daily.find(e => e.id === 'tea-break')
+      const teaEvent = EVENT_BY_ID['tea-break']
       if (teaEvent) {
         const participants = pickParticipants(teaEvent, state.agents, state.externalStatus)
         store.getState().setActiveEvent(teaEvent)
@@ -473,7 +672,7 @@ export function startOfficeLife(store) {
     // Friday 15:00+ — Social boost (handled via behavior weights already, but trigger a group-meeting)
     const day = new Date().getDay()
     if (day === 5 && hour === 15) {
-      const meetEvent = eventsData.daily.find(e => e.id === 'group-meeting')
+      const meetEvent = EVENT_BY_ID['group-meeting']
       if (meetEvent) {
         const participants = pickParticipants(meetEvent, state.agents, state.externalStatus)
         store.getState().setActiveEvent(meetEvent)
@@ -488,5 +687,20 @@ export function startOfficeLife(store) {
     clearTimeout(rareTimer)
     clearInterval(timeInterval)
     clearInterval(timeEventInterval)
+    dailyTimer = rareTimer = timeInterval = timeEventInterval = null
+    // Cancel any in-flight interactive events so their deferred callbacks don't
+    // fire against a torn-down store.
+    for (const c of interactiveCancellers) c.value = true
+    interactiveCancellers.clear()
+    for (const t of interactiveDeregTimers) clearTimeout(t)
+    interactiveDeregTimers.clear()
+    // Flipping `cancelled` makes every pending executeEvent cleanup early-return
+    // without releasing its participants. Release them directly so an unmount mid-event
+    // never strands an agent `inGroupEvent: true` (doSchedule + watchdog both skip
+    // in-group agents — the agent would freeze permanently).
+    releaseAllGroupEvents(store)
+    // Only release the module-level flag if it still points at THIS instance —
+    // a newer startOfficeLife() may have already replaced it.
+    if (activeCancelled === cancelled) activeCancelled = null
   }
 }

@@ -26,7 +26,7 @@ const behaviors = {
     { id: 'meeting', expr: 'normal', msgs: 'thinking', duration: [25000, 50000] },
   ],
   daily: [
-    { id: 'drink-coffee', expr: 'happy', msgs: 'coffee', duration: [12000, 25000], effect: 'coffee' },
+    { id: 'drink-coffee', expr: 'happy', msgs: 'coffee', duration: [12000, 25000] },
     { id: 'drink-water', expr: 'normal', msgs: null, duration: [10000, 20000] },
     { id: 'stretch', expr: 'happy', msgs: 'stretch', duration: [8000, 15000] },
     { id: 'look-window', expr: 'normal', msgs: null, duration: [15000, 28000] },
@@ -53,20 +53,48 @@ const behaviors = {
 }
 
 function weightedRandom(weights) {
-  const entries = Object.entries(weights)
-  const total = entries.reduce((s, [, w]) => s + w, 0)
+  // Iterate keys directly — Object.entries() would allocate an array of [key,value]
+  // pairs on every call (once per agent per behavior cycle). A single Object.keys
+  // pass is enough; total and selection both read weights[key] in place.
+  const keys = Object.keys(weights)
+  let total = 0
+  for (const key of keys) total += weights[key]
   let r = Math.random() * total
-  for (const [key, w] of entries) {
-    r -= w
+  for (const key of keys) {
+    r -= weights[key]
     if (r <= 0) return key
   }
-  return entries[0][0]
+  return keys[0]
+}
+
+// Fallback behavior entry — used when a category has zero behaviors valid for a
+// role. MUST share the exact shape of a `behaviors` pool entry ({ id, expr, msgs,
+// duration:[min,max] }). A mismatched shape (e.g. { behaviorId, duration:number })
+// would make getNextBehavior read behavior.id === undefined and feed a scalar to
+// randomDuration → NaN duration → doSchedule's setTimeout(_, NaN) fires immediately,
+// pinning the CPU in a tight re-schedule loop.
+const FALLBACK_BEHAVIOR = { id: 'typing', expr: 'focused', msgs: 'typing', duration: [18000, 45000] }
+
+// Cache of role-filtered behavior pools, keyed "category|baseRole". pickBehavior runs
+// once per agent per behavior cycle; the `.filter(b => !b.only || b.only.includes(...))`
+// scan + array allocation is invariant for a given (category, role) pair — the behavior
+// catalogue is static. Resolve each pair once, then reuse the cached filtered array.
+const _validBehaviorCache = new Map()
+
+function getValidBehaviors(category, baseRole) {
+  const key = `${category}|${baseRole}`
+  const cached = _validBehaviorCache.get(key)
+  if (cached) return cached
+  const pool = behaviors[category] || behaviors.work
+  const valid = pool.filter((b) => !b.only || b.only.includes(baseRole))
+  _validBehaviorCache.set(key, valid)
+  return valid
 }
 
 function pickBehavior(agentId, category) {
-  const pool = behaviors[category] || behaviors.work
-  const valid = pool.filter((b) => !b.only || b.only.includes(agentId))
-  if (valid.length === 0) return { behaviorId: 'typing', msgKey: null, duration: 8000 }
+  const baseRole = agentId.includes('~') ? agentId.split('~').pop() : agentId
+  const valid = getValidBehaviors(category, baseRole)
+  if (valid.length === 0) return FALLBACK_BEHAVIOR
   return valid[Math.floor(Math.random() * valid.length)]
 }
 
@@ -75,13 +103,20 @@ function pickMessage(msgKey) {
   // Try i18n locale first, fall back to officeEvents.json
   const localized = randomBubble(msgKey)
   if (localized) return localized
-  const pool = eventsData.bubbleMessages[msgKey]
+  const pool = eventsData.bubbleMessages?.[msgKey]
   if (!pool || pool.length === 0) return null
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
+// Resolve a duration range to a concrete ms value. Guards against a malformed
+// `duration` (non-array, or array with non-finite endpoints): a NaN duration would
+// flow into doSchedule's setTimeout(_, NaN) and re-fire on every tick — a CPU spin.
+const DEFAULT_DURATION = 8000
 function randomDuration(range) {
-  return range[0] + Math.random() * (range[1] - range[0])
+  if (!Array.isArray(range) || range.length < 2) return DEFAULT_DURATION
+  const [min, max] = range
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return DEFAULT_DURATION
+  return min + Math.random() * (max - min)
 }
 
 // Status-specific bubble chance and message pools
@@ -162,7 +197,6 @@ export function getNextBehavior(agentId, status = 'idle', hour = new Date().getH
     bubble: message,
     duration,
     category,
-    effect: behavior.effect || null,
   }
 }
 
