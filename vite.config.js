@@ -150,7 +150,9 @@ function officeStatusPlugin() {
   return {
     name: 'office-status-api',
     configureServer(server) {
-      server.middlewares.use('/api/status', (req, res) => {
+      server.middlewares.use('/api/status', (req, res, next) => {
+        // Pass sub-paths (e.g. /stream) to their own handlers registered below.
+        if (req.url && req.url !== '/' && !req.url.startsWith('?')) { next(); return }
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Cache-Control', 'no-cache')
         res.setHeader('X-Content-Type-Options', 'nosniff')
