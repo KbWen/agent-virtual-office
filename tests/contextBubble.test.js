@@ -82,6 +82,54 @@ describe('toolToAction', () => {
   })
 })
 
+describe('generateContextBubble — guard conditions', () => {
+  it('returns null for null update', () => {
+    expect(generateContextBubble('dev', null, {})).toBeNull()
+  })
+
+  it('returns null for non-string agentId', () => {
+    expect(generateContextBubble(42, { status: 'working', task: 'Edit', label: null, hint: null }, {})).toBeNull()
+    expect(generateContextBubble(null, { status: 'working', task: 'Edit', label: null, hint: null }, {})).toBeNull()
+  })
+
+  it('blocked status routes through error templates — bubble is non-null', () => {
+    const bubble = generateContextBubble('dev', { status: 'blocked', task: null, label: null, hint: null }, {})
+    // dev-error or any-error pool must produce a string.
+    expect(bubble).toBeTruthy()
+    expect(typeof bubble).toBe('string')
+  })
+
+  it('hint=error routes through error templates even when status is "working"', () => {
+    const bubble = generateContextBubble('qa', { status: 'working', task: null, label: null, hint: 'error' }, {})
+    expect(bubble).toBeTruthy()
+    expect(typeof bubble).toBe('string')
+  })
+
+  it('done status routes through done templates — bubble is non-null', () => {
+    const bubble = generateContextBubble('dev', { status: 'done', task: null, label: '✏️ store.js', hint: null }, {})
+    // dev-done or any-done pool must produce a string.
+    expect(bubble).toBeTruthy()
+    expect(typeof bubble).toBe('string')
+    expect(bubble).not.toContain('{ctx}')
+  })
+
+  it('composite agentId (feat-x~dev) extracts base role — generates a bubble from dev templates', () => {
+    const composite = generateContextBubble(
+      'feat-x~dev',
+      { status: 'working', task: 'Edit', label: 'index.js', hint: null },
+      {},
+    )
+    const bare = generateContextBubble(
+      'dev',
+      { status: 'working', task: 'Edit', label: 'index.js', hint: null },
+      {},
+    )
+    // Both should be truthy — composite gets the same pool as the bare dev role.
+    expect(composite).toBeTruthy()
+    expect(bare).toBeTruthy()
+  })
+})
+
 describe('generateContextBubble — {ctx} substitution safety (R64)', () => {
   // String.prototype.replace interprets `$`-sequences in a *string* replacement
   // ($&, $1, $`, $') as substitution patterns. A filename or task containing
