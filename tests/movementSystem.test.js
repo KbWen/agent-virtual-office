@@ -416,6 +416,127 @@ describe('HOME_POSITIONS and OVERFLOW_POSITIONS bounds', () => {
   })
 })
 
+// ─── Position constraint: obstacle avoidance invariant ───────────────
+// Mirror OBSTACLE_RECTS to guard clampToFloor regression.
+// If these diverge from movementSystem.js, tests will alert to recalibrate.
+const OBSTACLE_RECTS_MIRROR = [
+  { x1: 105, y1: 215, x2: 175, y2: 260 },  // PM desk
+  { x1: 225, y1: 215, x2: 295, y2: 260 },  // Arch desk
+  { x1: 365, y1: 195, x2: 435, y2: 240 },  // QA desk
+  { x1: 485, y1: 195, x2: 555, y2: 240 },  // Res desk
+  { x1: 305, y1: 315, x2: 375, y2: 360 },  // Dev desk
+  { x1: 425, y1: 315, x2: 495, y2: 360 },  // Ops desk
+  { x1: 105, y1: 335, x2: 175, y2: 370 },  // Designer desk
+  { x1: 650, y1: 128, x2: 760, y2: 195 },  // Meeting table
+  { x1: 525, y1: 278, x2: 590, y2: 342 },  // Whiteboard area
+  { x1: 338, y1: 443, x2: 422, y2: 502 },  // WC area
+  { x1: 278, y1: 438, x2: 412, y2: 458 },  // Bookshelves
+  { x1: 15,  y1: 438, x2: 70,  y2: 465 },  // Coffee machine area
+]
+
+function isOnAnyObstacle(x, y) {
+  return OBSTACLE_RECTS_MIRROR.some(r => x >= r.x1 && x <= r.x2 && y >= r.y1 && y <= r.y2)
+}
+
+describe('getTargetForBehavior — obstacle avoidance invariant', () => {
+  const namedBehaviors = [
+    'goto-coffee-machine', 'drink-coffee', 'drink-water', 'whiteboard',
+    'nap', 'phone-call', 'toilet', 'research', 'print',
+    'look-window', 'eat-snack', 'stretch', 'check-phone', 'meeting',
+  ]
+
+  it('no named-destination behavior lands on any obstacle rect after clampToFloor (30 runs each)', () => {
+    for (const b of namedBehaviors) {
+      for (let i = 0; i < 30; i++) {
+        const pos = getTargetForBehavior('dev', b, {})
+        if (pos === null) continue
+        expect(
+          isOnAnyObstacle(pos.x, pos.y),
+          `behavior "${b}" run ${i}: (${pos.x.toFixed(1)},${pos.y.toFixed(1)}) is on an obstacle`
+        ).toBe(false)
+      }
+    }
+  })
+
+  it('social chat position never lands on obstacle (30 runs)', () => {
+    const allAgents = { arch: { position: { x: 260, y: 264 } } }
+    for (let i = 0; i < 30; i++) {
+      const pos = getTargetForBehavior('dev', 'chat', allAgents)
+      if (pos === null) continue
+      expect(
+        isOnAnyObstacle(pos.x, pos.y),
+        `chat run ${i}: (${pos.x.toFixed(1)},${pos.y.toFixed(1)}) on obstacle`
+      ).toBe(false)
+    }
+  })
+
+  it('all HOME_POSITIONS are not on any obstacle rect (desk chairs are behind desks)', () => {
+    for (const [role, pos] of Object.entries(HOME_POSITIONS)) {
+      expect(
+        isOnAnyObstacle(pos.x, pos.y),
+        `HOME_POSITIONS.${role} (${pos.x},${pos.y}) collides with obstacle`
+      ).toBe(false)
+    }
+  })
+})
+
+// ─── Floor zone membership for key destinations ──────────────────────
+// Mirror FLOOR_ZONES to verify positions land in the correct room.
+const FLOOR_ZONES_MIRROR = [
+  { id: 'entrance',      x1: 15,  y1: 15,  x2: 593, y2: 133 },
+  { id: 'mainOffice',    x1: 15,  y1: 168, x2: 593, y2: 394 },
+  { id: 'meetingRoom',   x1: 628, y1: 15,  x2: 785, y2: 413 },
+  { id: 'lounge',        x1: 15,  y1: 424, x2: 451, y2: 545 },
+  { id: 'research',      x1: 469, y1: 424, x2: 785, y2: 545 },
+  { id: 'door-entrance', x1: 90,  y1: 133, x2: 138, y2: 168 },
+  { id: 'door-lounge',   x1: 215, y1: 394, x2: 266, y2: 424 },
+  { id: 'door-research', x1: 510, y1: 394, x2: 561, y2: 424 },
+  { id: 'door-meeting',  x1: 593, y1: 187, x2: 628, y2: 233 },
+]
+
+function isOnWalkableFloor(x, y) {
+  return FLOOR_ZONES_MIRROR.some(z => x >= z.x1 && x <= z.x2 && y >= z.y1 && y <= z.y2)
+}
+
+describe('getTargetForBehavior — floor zone membership', () => {
+  it('drink-coffee positions land on walkable floor (lounge zone)', () => {
+    for (let i = 0; i < 20; i++) {
+      const pos = getTargetForBehavior('dev', 'drink-coffee', {})
+      expect(isOnWalkableFloor(pos.x, pos.y), `coffee[${i}] at (${pos.x.toFixed(1)},${pos.y.toFixed(1)}) not on floor`).toBe(true)
+    }
+  })
+
+  it('toilet positions land on walkable floor (lounge zone, below WC obstacle)', () => {
+    for (let i = 0; i < 20; i++) {
+      const pos = getTargetForBehavior('dev', 'toilet', {})
+      expect(isOnWalkableFloor(pos.x, pos.y), `toilet[${i}] at (${pos.x.toFixed(1)},${pos.y.toFixed(1)}) not on floor`).toBe(true)
+    }
+  })
+
+  it('look-window positions land on walkable floor (entrance zone)', () => {
+    for (let i = 0; i < 20; i++) {
+      const pos = getTargetForBehavior('dev', 'look-window', {})
+      expect(isOnWalkableFloor(pos.x, pos.y), `window[${i}] at (${pos.x.toFixed(1)},${pos.y.toFixed(1)}) not on floor`).toBe(true)
+    }
+  })
+
+  it('research positions land on walkable floor (research zone)', () => {
+    for (let i = 0; i < 20; i++) {
+      const pos = getTargetForBehavior('dev', 'research', {})
+      expect(isOnWalkableFloor(pos.x, pos.y), `research[${i}] at (${pos.x.toFixed(1)},${pos.y.toFixed(1)}) not on floor`).toBe(true)
+    }
+  })
+
+  it('all HOME_POSITIONS are on walkable floor zones', () => {
+    for (const [role, pos] of Object.entries(HOME_POSITIONS)) {
+      expect(
+        isOnWalkableFloor(pos.x, pos.y),
+        `HOME_POSITIONS.${role} (${pos.x},${pos.y}) is not on a floor zone`
+      ).toBe(true)
+    }
+  })
+})
+
 // ─── Exported constants integrity ────────────────────────────────────
 describe('exported constants integrity', () => {
   it('OVERFLOW_SLOT_BY_XY maps every OVERFLOW_POSITIONS entry to its index', () => {
