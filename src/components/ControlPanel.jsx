@@ -6,25 +6,20 @@ import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eve
 const statusOptions = ['idle', 'working', 'blocked', 'done']
 
 export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
-  // ControlPanel only needs id/color/behavior/status per agent — NOT position.
-  // Subscribing to the whole `agents` object re-rendered the panel on every RAF
-  // position tick (~30fps while any agent walks). useShallow over a projected
-  // {id,color,behavior,status} list makes the panel re-render only when one of
-  // those four display fields actually changes.
-  const agentList = useOfficeStore(useShallow((s) =>
-    Object.values(s.agents).map((a) => ({
-      id: a.id, color: a.color, behavior: a.behavior, status: a.status,
-    }))
-  ))
+  // Return full agent objects so useShallow can compare by reference. Mapping to
+  // new projected objects {id,color,behavior,status} on every call means the inner
+  // objects are never Object.is-equal, which breaks React 19's useSyncExternalStore
+  // consistency check and causes an infinite update loop.
+  const agentList = useOfficeStore(useShallow((s) => Object.values(s.agents)))
   const isPaused = useOfficeStore((s) => s.isPaused)
   const togglePause = useOfficeStore((s) => s.togglePause)
   const triggerWorkflow = useOfficeStore((s) => s.triggerWorkflow)
-  const activeEvent = useOfficeStore((s) => s.activeEvent)
+  const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
   const hour = useOfficeStore((s) => s.hour)
   const minute = useOfficeStore((s) => s.minute)
-  const externalStatus = useOfficeStore((s) => s.externalStatus)
+  const externalStatus = useOfficeStore(useShallow((s) => s.externalStatus))
   const statusSource = useOfficeStore((s) => s.statusSource)
-  const integrationHealth = useOfficeStore((s) => s.integrationHealth)
+  const integrationHealth = useOfficeStore(useShallow((s) => s.integrationHealth))
 
   const [showTest, setShowTest] = useState(false)
   const [showInfo, setShowInfo] = useState(() => {

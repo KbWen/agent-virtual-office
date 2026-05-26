@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore } from '../systems/store'
 import { charName, eventName, useLocale, t } from '../i18n'
 import { formatTimeAgo } from '../utils/formatTime'
@@ -12,8 +13,8 @@ const typeIcons = {
 export default function ActivityFeed({ mode = 'full' }) {
   useLocale()
   const [collapsed, setCollapsed] = useState(true)
-  const activityLog = useOfficeStore((s) => s.activityLog)
-  const activeEvent = useOfficeStore((s) => s.activeEvent)
+  const activityLog = useOfficeStore(useShallow((s) => s.activityLog))
+  const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
 
   // Inject live event into feed
   const entries = useMemo(() => {
