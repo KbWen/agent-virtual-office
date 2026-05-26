@@ -560,6 +560,68 @@ describe('clearExternalStatus — static agents are idled, not deleted (R78 Fix 
   })
 })
 
+describe('applyExternalStatus — clearSourceIfEmpty flag (R78 Fix G)', () => {
+  beforeEach(resetStore)
+
+  it('reverts statusSource to organic and integrationSource to null when empty multi-session eviction leaves ext empty', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    // Establish two dynamic agents with an external source.
+    applyExternalStatus(
+      [
+        { agentId: 'feat-a~dev', status: 'working', task: null, label: null, session: 'feat-a' },
+        { agentId: 'feat-b~qa',  status: 'working', task: null, label: null, session: 'feat-b' },
+      ],
+      { source: 'multi-session', statusSource: 'external', integrationSource: 'multi-session' },
+    )
+    expect(useOfficeStore.getState().statusSource).toBe('external')
+    expect(useOfficeStore.getState().integrationSource).toBe('multi-session')
+
+    // Empty multi-session payload with clearSourceIfEmpty: all dynamic agents are evicted,
+    // ext becomes empty → statusSource must flip back to 'organic' in the SAME set().
+    applyExternalStatus([], { source: 'multi-session', clearSourceIfEmpty: true })
+    const s = useOfficeStore.getState()
+    expect(Object.keys(s.externalStatus)).toHaveLength(0)
+    expect(s.statusSource).toBe('organic')
+    expect(s.integrationSource).toBeNull()
+  })
+
+  it('does NOT revert to organic when a static agent still has external status after eviction', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    // Static 'dev' gets an external status.
+    applyExternalStatus(
+      [{ agentId: 'dev', status: 'working', task: null, label: null }],
+      { source: 'claude-cli', statusSource: 'external', integrationSource: 'claude-cli' },
+    )
+    // Also add a dynamic agent from the same multi-session update.
+    applyExternalStatus(
+      [{ agentId: 'feat-a~dev', status: 'working', task: null, label: null, session: 'feat-a' }],
+      { source: 'multi-session' },
+    )
+    expect(useOfficeStore.getState().statusSource).toBe('external')
+
+    // Empty multi-session payload evicts only the dynamic agent; static 'dev' stays in ext.
+    applyExternalStatus([], { source: 'multi-session', clearSourceIfEmpty: true })
+    const s = useOfficeStore.getState()
+    // ext still holds 'dev' → must NOT revert to organic.
+    expect(s.externalStatus['dev']).toBeTruthy()
+    expect(s.statusSource).toBe('external')
+  })
+
+  it('clearSourceIfEmpty without the flag does not revert source', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'feat-x~dev', status: 'working', task: null, label: null, session: 'feat-x' }],
+      { source: 'multi-session', statusSource: 'external', integrationSource: 'multi-session' },
+    )
+    // Same eviction without the clearSourceIfEmpty flag: source stays as-is.
+    applyExternalStatus([], { source: 'multi-session' })
+    const s = useOfficeStore.getState()
+    // Dynamic agent evicted but source was not asked to revert.
+    expect(s.agents['feat-x~dev']).toBeUndefined()
+    expect(s.statusSource).toBe('external')
+  })
+})
+
 describe('addHandoff — unique ids (R65)', () => {
   beforeEach(() => useOfficeStore.setState({ handoffs: [] }))
 
