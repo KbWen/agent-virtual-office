@@ -11,8 +11,8 @@
 | # | Feature | Priority | Status | Notes |
 |---|---------|----------|--------|-------|
 | 1 | **角色成長系統** — `done` 事件累積工作量，桌上咖啡杯 / 便利貼 / 書堆跟真實 tool call 次數連動 | P1 | Done | shipped 2026-05-16; spec: docs/specs/character-growth-system.md |
-| 2 | **角色間關係動態** — dev×arch「設計不對」、ops×dev「能不能 deploy」、pm×全員「開個小會被翻白眼」等新對話事件 | P2 | Pending | 擴展 `officeEvents.json` + 對應 handler |
-| 3 | **時間感豐富化** — 週五 happy hour、月底 deadline 週（rushing 鎖定 + 便利貼爆炸）、早上有人遲到走進辦公室 | P2 | Pending | 擴展 `officeLife.js` 時間事件分支 |
+| 2 | **角色間關係動態** — dev×arch「設計不對」、ops×dev「能不能 deploy」、pm×全員「開個小會被翻白眼」等新對話事件 | P2 | Done | shipped via PR #19; `officeLife.js:104–458` 含 dev-arch-disagree、ops-dev-deploy-check、pm-all-meeting 等 15 個多角色事件；stateless（無跨 session 關係記憶） |
+| 3 | **時間感豐富化** — 週五 happy hour、月底 deadline 週（rushing 鎖定 + 便利貼爆炸）、早上有人遲到走進辦公室 | P2 | Done | shipped via PR #19; `officeLife.js:587–682` 含午休、下午茶、週五 social boost；`behaviorEngine.js:203–208` 依時段調整行為權重 |
 
 ---
 
@@ -20,7 +20,7 @@
 
 | # | Feature | Priority | Status | Notes |
 |---|---------|----------|--------|-------|
-| 4 | **Sprint 進度看板** — 辦公室牆上小 Kanban，格子隨 `done` 事件填滿 | P2 | Pending | SVG 靜態元件 + store `doneCount` |
+| 4 | **Sprint 進度看板** — 辦公室牆上小 Kanban，格子隨 `done` 事件填滿 | P2 | Done | shipped via PR #19; `PixelOffice.jsx:18–60` SVG kanban on north wall，動態顯示 `totalDoneToday`，最多 6 格 + overflow indicator |
 | 5 | **Inspector 資訊加強** — 顯示今日完成數、當前 mood 指示、`activeWorkflow` 名稱 | P1 | Done | shipped with durable same-day count + Codex parity follow-up; specs: `docs/specs/agent-inspector-info-enhancement.md`, `docs/specs/codex-status-parity-and-done-count.md` |
 | 6 | **底部效能指標** — status bar 顯示今日 done / blocked 比率 | P3 | Pending | 需在 store 中累積 session 統計 |
 
@@ -32,7 +32,7 @@
 |---|---------|----------|--------|-------|
 | 7 | **可點擊辦公室物件** — 點咖啡機觸發角色走去拿咖啡、點白板觸發 eureka、點紅色按鈕觸發 deploy-success | P1 | Done | shipped in v0.10 (commit 5b79616); spec: docs/specs/clickable-office-objects.md |
 | 8 | **桌面通知** — blocked 超過 30s 發瀏覽器 Notification | P2 | Pending | `Notification API`，需用戶授權；inferStatus.js 加計時 |
-| 9 | **辦公室廣播 Workflow Banner** — `activeWorkflow` 觸發牆上大字動畫 + PM 拿麥克風 | P2 | Pending | `activeWorkflow` 已存 store，需加 SVG 動畫元件 |
+| 9 | **辦公室廣播 Workflow Banner** — `activeWorkflow` 觸發牆上大字動畫 + PM 拿麥克風 | P2 | Done | shipped via PR #19; `PixelOffice.jsx:1056–1089` 含 pulse 動畫 + broadcast tower icon，訂閱 `store.activeWorkflow` |
 
 ---
 
@@ -50,7 +50,7 @@
 
 | # | Feature | Priority | Status | Notes |
 |---|---------|----------|--------|-------|
-| 13 | **夜間模式辦公室** — 22:00+ 燈光變暗、部分角色加班、窗外月亮 | P2 | Pending | `PixelOffice.jsx` 加 `hour` 觸發的 SVG filter / 色調調整 |
+| 13 | **夜間模式辦公室** — 22:00+ 燈光變暗、部分角色加班、窗外月亮 | P2 | Done | shipped via PR #19; `PixelOffice.jsx:215–223` 6 層光線 overlay（早晨→黃昏→深夜），`NightSky` 元件含星星 + 月亮，`WallWindow` 依時段調整亮度 |
 | 14 | **天氣系統** — 窗外晴/雨/雷雨跟 mood 呼應（`frustrated` → 下雨） | P3 | Pending | 純裝飾 SVG 動畫，連接 `store.mood` |
 | 15 | **白板手寫動畫** — eureka 事件時線條慢慢出現 | P2 | Pending | SVG `stroke-dashoffset` 動畫，觸發於 eureka handler |
 
