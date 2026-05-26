@@ -213,6 +213,209 @@ describe('getTargetForBehavior', () => {
   })
 })
 
+// ─── calcFacing — tie and threshold edge cases ───────────────────────
+describe('calcFacing — tie and threshold edge cases', () => {
+  it('when |dx| === |dy|, vertical direction wins (> not >=)', () => {
+    expect(calcFacing(0, 0,   10,  10)).toBe('down')
+    expect(calcFacing(0, 10,  10,   0)).toBe('up')
+    expect(calcFacing(0, 0,  -10, -10)).toBe('up')
+    expect(calcFacing(0, 0,  -10,  10)).toBe('down')
+  })
+
+  it('dx=2 is NOT < 2, triggers horizontal (threshold is strict <)', () => {
+    // condition: Math.abs(dx) < 2 && Math.abs(dy) < 2 — both must be strictly < 2
+    // dx=2 fails the < 2 check → falls to directional → 'right'
+    expect(calcFacing(0, 0, 2, 0)).toBe('right')
+    expect(calcFacing(0, 0, -2, 0)).toBe('left')
+    expect(calcFacing(0, 0, 0, 2)).toBe('down')
+    expect(calcFacing(0, 0, 0, -2)).toBe('up')
+  })
+
+  it('dx=1 and dy=1 both satisfy < 2, still returns "down"', () => {
+    expect(calcFacing(0, 0, 1, 1)).toBe('down') // both < 2 → early return
+    expect(calcFacing(0, 0, -1, -1)).toBe('down')
+  })
+})
+
+// ─── calculatePath — additional zone coverage ────────────────────────
+describe('calculatePath — additional zone coverage', () => {
+  it('same zone lounge → lounge (no desk check) → direct [to]', () => {
+    const from = { x: 100, y: 470 }
+    const to   = { x: 380, y: 520 }
+    const path = calculatePath(from, to)
+    assertPathInvariants(path, to)
+    expect(path).toHaveLength(1)
+  })
+
+  it('same zone meetingRoom → meetingRoom → direct [to]', () => {
+    const from = { x: 650, y: 100 }
+    const to   = { x: 750, y: 380 }
+    const path = calculatePath(from, to)
+    assertPathInvariants(path, to)
+    expect(path).toHaveLength(1)
+  })
+
+  it('same zone mainOffice corridor-to-corridor (no desk blocking) → direct [to]', () => {
+    // y=290 sits between the desk rows — horizontal line hits no desk
+    const from = { x: 300, y: 290 }
+    const to   = { x: 550, y: 290 }
+    const path = calculatePath(from, to)
+    assertPathInvariants(path, to)
+    expect(path).toHaveLength(1)
+  })
+
+  it('same point (from === to) → [to]', () => {
+    const pt = { x: 300, y: 280 }
+    const path = calculatePath(pt, { ...pt })
+    assertPathInvariants(path, pt)
+    expect(path).toHaveLength(1)
+  })
+
+  it('cross-zone mainOffice → lounge routes through door', () => {
+    const from = { x: 300, y: 280 }
+    const to   = { x: 100, y: 490 }
+    for (let i = 0; i < 10; i++) {
+      const path = calculatePath(from, to)
+      assertPathInvariants(path, to)
+      expect(path.length).toBeGreaterThanOrEqual(2)
+    }
+  })
+
+  it('cross-zone mainOffice → research routes through door', () => {
+    const from = { x: 300, y: 280 }
+    const to   = { x: 620, y: 490 }
+    for (let i = 0; i < 10; i++) {
+      const path = calculatePath(from, to)
+      assertPathInvariants(path, to)
+      expect(path.length).toBeGreaterThanOrEqual(2)
+    }
+  })
+
+  it('multi-zone research → meetingRoom has ≥ 3 waypoints', () => {
+    const from = { x: 620, y: 490 } // research
+    const to   = { x: 700, y: 200 } // meetingRoom
+    for (let i = 0; i < 10; i++) {
+      const path = calculatePath(from, to)
+      assertPathInvariants(path, to)
+      expect(path.length).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('all cross-zone pairs produce valid paths', () => {
+    // Spot-check representative point in each zone
+    const zones = {
+      entrance:    { x: 150, y: 60  },
+      mainOffice:  { x: 300, y: 280 },
+      meetingRoom: { x: 700, y: 200 },
+      lounge:      { x: 180, y: 490 },
+      research:    { x: 620, y: 490 },
+    }
+    for (const [fromName, from] of Object.entries(zones)) {
+      for (const [toName, to] of Object.entries(zones)) {
+        if (fromName === toName) continue
+        const path = calculatePath(from, to)
+        assertPathInvariants(path, to)
+      }
+    }
+  })
+})
+
+// ─── getTargetForBehavior — full BEHAVIOR_LOCATIONS sweep ─────────────
+describe('getTargetForBehavior — all named destination behaviors', () => {
+  const FLOOR = { xMin: 15, xMax: 785, yMin: 15, yMax: 545 }
+
+  function assertOnFloor(pos, label) {
+    expect(pos, label).not.toBeNull()
+    expect(pos.x, `${label}.x`).toBeGreaterThanOrEqual(FLOOR.xMin)
+    expect(pos.x, `${label}.x`).toBeLessThanOrEqual(FLOOR.xMax)
+    expect(pos.y, `${label}.y`).toBeGreaterThanOrEqual(FLOOR.yMin)
+    expect(pos.y, `${label}.y`).toBeLessThanOrEqual(FLOOR.yMax)
+  }
+
+  it('every BEHAVIOR_LOCATIONS entry returns a non-null on-floor position', () => {
+    const behaviors = [
+      'goto-coffee-machine', 'drink-coffee', 'drink-water', 'whiteboard',
+      'nap', 'phone-call', 'toilet', 'research', 'print',
+      'look-window', 'eat-snack', 'stretch', 'check-phone',
+    ]
+    for (const b of behaviors) {
+      for (let i = 0; i < 5; i++) {
+        assertOnFloor(getTargetForBehavior('dev', b, {}), `${b}[${i}]`)
+      }
+    }
+  })
+
+  it('look-window stays in entrance/hallway (y ≤ 133)', () => {
+    // WAYPOINTS.window = { x:340, y:100 } — entrance floor zone y2:133
+    for (let i = 0; i < 15; i++) {
+      const pos = getTargetForBehavior('dev', 'look-window', {})
+      expect(pos).not.toBeNull()
+      expect(pos.y).toBeLessThanOrEqual(133)
+    }
+  })
+
+  it('all social behaviors return on-floor positions when other agents present', () => {
+    const allAgents = { arch: { position: { x: 260, y: 264 } } }
+    for (const b of ['chat', 'thumbs-up', 'pass-document']) {
+      for (let i = 0; i < 10; i++) {
+        assertOnFloor(getTargetForBehavior('dev', b, allAgents), `${b}[${i}]`)
+      }
+    }
+  })
+
+  it('meeting with all chairs occupied still returns a valid position (uses fallback)', () => {
+    // Fill all 8 MEETING_CHAIRS slots so every chair fails the isFree check
+    const allAgents = {}
+    MEETING_CHAIRS.forEach((c, i) => {
+      allAgents[`agent${i}`] = { position: { x: c.x, y: c.y } }
+    })
+    for (let i = 0; i < 10; i++) {
+      const pos = getTargetForBehavior('dev', 'meeting', allAgents)
+      expect(pos).not.toBeNull()
+      assertOnFloor(pos, `occupied-meeting[${i}]`)
+    }
+  })
+
+  it('works correctly for all valid core roles as agentId', () => {
+    for (const role of ['pm', 'arch', 'dev', 'ops', 'qa', 'res', 'designer']) {
+      const pos = getTargetForBehavior(role, 'drink-coffee', {})
+      assertOnFloor(pos, `${role}/drink-coffee`)
+    }
+  })
+
+  it('agent with targetPosition contributes to occupied list (not just position)', () => {
+    // social behavior — occupied list reads targetPosition when present
+    const allAgents = {
+      arch: { position: { x: 260, y: 264 }, targetPosition: { x: 400, y: 300 } },
+    }
+    for (let i = 0; i < 10; i++) {
+      const pos = getTargetForBehavior('dev', 'chat', allAgents)
+      assertOnFloor(pos, `targetPosition chat[${i}]`)
+    }
+  })
+})
+
+// ─── HOME_POSITIONS and OVERFLOW_POSITIONS bounds ─────────────────────
+describe('HOME_POSITIONS and OVERFLOW_POSITIONS bounds', () => {
+  it('all HOME_POSITIONS are within global floor bounds', () => {
+    for (const [role, pos] of Object.entries(HOME_POSITIONS)) {
+      expect(pos.x, `${role}.x`).toBeGreaterThanOrEqual(15)
+      expect(pos.x, `${role}.x`).toBeLessThanOrEqual(785)
+      expect(pos.y, `${role}.y`).toBeGreaterThanOrEqual(15)
+      expect(pos.y, `${role}.y`).toBeLessThanOrEqual(545)
+    }
+  })
+
+  it('all OVERFLOW_POSITIONS are in entrance/hallway (y ≤ 133)', () => {
+    for (const pos of OVERFLOW_POSITIONS) {
+      expect(pos.x).toBeGreaterThanOrEqual(15)
+      expect(pos.x).toBeLessThanOrEqual(593)
+      expect(pos.y).toBeGreaterThanOrEqual(15)
+      expect(pos.y).toBeLessThanOrEqual(133)
+    }
+  })
+})
+
 // ─── Exported constants integrity ────────────────────────────────────
 describe('exported constants integrity', () => {
   it('OVERFLOW_SLOT_BY_XY maps every OVERFLOW_POSITIONS entry to its index', () => {
