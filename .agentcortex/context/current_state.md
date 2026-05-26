@@ -11,8 +11,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-05-16
-- **Update Sequence**: 5
+- **Last Updated**: 2026-05-26
+- **Update Sequence**: 6
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -31,7 +31,7 @@
     - #1 角色成長系統 — deskItemCount daily reset, 4-level growthLevel(), % 6 bug fixed, shouldCount gate
     - #7 可點擊辦公室物件 — all three objects clickable (coffee machine→tea-break, whiteboard→eureka, deploy button→deploy-success); shipped in v0.10 (5b79616), closure-documented 2026-05-16
   - **Remaining P1**: #16 靜態部署無 /api/status (架構限制 — Vite middleware 僅開發時可用)
-  - **Branch status**: `claude/condescending-raman-1e48a0` active
+  - **Branch status**: All feature branches closed/merged. main is HEAD (98dd8bd).
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
   - [feature] docs/specs/agent-inspector-info-enhancement.md [Shipped]
@@ -85,6 +85,11 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### feat-v10-office-vitality-2026-05-26 (superseded / closed)
+
+- PR #17 closed without merge: core v0.10 vitality features (growth fix, 3 events, sprint kanban) and production deployment infra (server.mjs, Docker, Nginx, PM2, systemd) were superseded and shipped via PR #19 with deeper hardening (R48–R86 + 30 perf rounds). Merging would have regressed main. Branch deleted.
+- Branch cleanup: 12 stale remote branches deleted (all merged/closed PRs), 2 local branches deleted.
 
 ### claude-condescending-raman-1e48a0-2026-05-16 (closure)
 
