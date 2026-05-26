@@ -61,3 +61,75 @@ describe('behaviorEngine — getNextBehavior contract', () => {
     expect(getHourModifiers(21)).toMatchObject({ work: expect.any(Number) })
   })
 })
+
+describe('behaviorEngine — getHourModifiers exact values', () => {
+  it('hour 12: lunch break weights (strong away)', () => {
+    expect(getHourModifiers(12)).toEqual({ away: 40, daily: 30, work: 20, social: 10 })
+  })
+
+  it('hour 14: post-lunch weights (mixed)', () => {
+    expect(getHourModifiers(14)).toEqual({ work: 30, daily: 35, social: 15, away: 20 })
+  })
+
+  it('hour 20: overtime weights (heavy work)', () => {
+    expect(getHourModifiers(20)).toEqual({ work: 70, daily: 15, social: 5, away: 10 })
+  })
+
+  it('hours 13 and 15-19 fall outside all special windows → null', () => {
+    for (const h of [13, 15, 16, 17, 18, 19]) {
+      expect(getHourModifiers(h), `hour ${h}`).toBeNull()
+    }
+  })
+
+  it('hours 0-11 (excluding 12) return null', () => {
+    for (const h of [0, 1, 5, 7, 9, 10, 11]) {
+      expect(getHourModifiers(h), `hour ${h}`).toBeNull()
+    }
+  })
+
+  it('hour window boundaries: 11 → null, 12 → lunch, 13 → null, 14 → drowsy, 15 → null, 20 → overtime', () => {
+    expect(getHourModifiers(11)).toBeNull()
+    expect(getHourModifiers(12)).not.toBeNull()
+    expect(getHourModifiers(13)).toBeNull()
+    expect(getHourModifiers(14)).not.toBeNull()
+    expect(getHourModifiers(15)).toBeNull()
+    expect(getHourModifiers(20)).not.toBeNull()
+  })
+})
+
+describe('behaviorEngine — role-specific behavior filtering', () => {
+  it('pm-only "gantt-chart" appears for pm in working/intense (in 500 runs)', () => {
+    let sawGantt = false
+    for (let i = 0; i < 500; i++) {
+      const next = getNextBehavior('pm', 'working', 9, 'intense')
+      if (next.behaviorId === 'gantt-chart') { sawGantt = true; break }
+    }
+    expect(sawGantt).toBe(true)
+  })
+
+  it('pm-only "gantt-chart" never appears for dev (500 runs)', () => {
+    for (let i = 0; i < 500; i++) {
+      expect(getNextBehavior('dev', 'working', 9, 'intense').behaviorId).not.toBe('gantt-chart')
+    }
+  })
+
+  it('qa-only "magnifier" never appears for ops (500 runs)', () => {
+    for (let i = 0; i < 500; i++) {
+      expect(getNextBehavior('ops', 'working', 9, 'intense').behaviorId).not.toBe('magnifier')
+    }
+  })
+
+  it('ops-only "deploy-button" never appears for arch (500 runs)', () => {
+    for (let i = 0; i < 500; i++) {
+      expect(getNextBehavior('arch', 'working', 9, 'normal').behaviorId).not.toBe('deploy-button')
+    }
+  })
+
+  it('composite agentId "feat-x~dev" extracts dev role: no role-restricted behaviors from other roles', () => {
+    const otherRoleOnly = ['gantt-chart', 'magnifier', 'deploy-button', 'shield-verify']
+    for (let i = 0; i < 300; i++) {
+      const next = getNextBehavior('feat-x~dev', 'working', 9, 'intense')
+      expect(otherRoleOnly, `feat-x~dev got restricted behavior: ${next.behaviorId}`).not.toContain(next.behaviorId)
+    }
+  })
+})
