@@ -458,3 +458,59 @@ describe('officeLife — pickParticipants filtering', () => {
     cleanup()
   })
 })
+
+// ─── triggerInteractiveEvent guard conditions ─────────────────────────
+describe('triggerInteractiveEvent — guards (isPaused, unknown event)', () => {
+  // Minimal inline store — triggerInteractiveEvent only reads isPaused and activeEvent
+  // on the fast-return path, so we don't need the full officeLife fake store here.
+  function makeGuardStore({ isPaused = false, activeEvent = null } = {}) {
+    const state = { isPaused, activeEvent, agents: {}, externalStatus: {}, hour: 9 }
+    return {
+      getState: () => ({
+        get isPaused()    { return state.isPaused },
+        get activeEvent() { return state.activeEvent },
+        agents: state.agents,
+        externalStatus: state.externalStatus,
+        hour: state.hour,
+        updateTime:              () => {},
+        setActiveEvent:          (e) => { state.activeEvent = e },
+        clearActiveEvent:        () => { state.activeEvent = null },
+        setAgentBehavior:        () => {},
+        setAgentGroupEvent:      () => {},
+        setMultipleAgentGroupEvents: () => {},
+        clearAgentGroupEvent:    () => {},
+        clearBubble:             () => {},
+      }),
+    }
+  }
+
+  it('returns false and fires no event when isPaused is true', () => {
+    const store = makeGuardStore({ isPaused: true })
+    const result = triggerInteractiveEvent(store, 'review-debate')
+    expect(result).toBe(false)
+    expect(store.getState().activeEvent).toBeNull()
+  })
+
+  it('returns false and fires no event when an event is already active', () => {
+    const store = makeGuardStore({ activeEvent: { id: 'standup' } })
+    const result = triggerInteractiveEvent(store, 'dog-visit')
+    expect(result).toBe(false)
+    // activeEvent stays as the original (not overwritten).
+    expect(store.getState().activeEvent?.id).toBe('standup')
+  })
+
+  it('returns false for an unknown event id with no side-effects', () => {
+    const store = makeGuardStore()
+    const result = triggerInteractiveEvent(store, 'totally-made-up-event-id')
+    expect(result).toBe(false)
+    expect(store.getState().activeEvent).toBeNull()
+  })
+
+  it('returns true for a known event id when nothing blocks it', () => {
+    // Smoke check: all guards pass, EVENT_BY_ID lookup succeeds.
+    const store = makeGuardStore()
+    const result = triggerInteractiveEvent(store, 'boss-visit')
+    // EVENT_BY_ID['boss-visit'] exists → should return true.
+    expect(result).toBe(true)
+  })
+})
