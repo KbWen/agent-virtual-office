@@ -40,7 +40,7 @@ export function setLocale(lang) {
     localStorage.setItem('office-lang', lang)
     document.documentElement.lang = lang
     // Persist to ~/.claude/office-lang so hooks can read it
-    fetch('/api/lang', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: lang }).catch(() => {})
+    fetch('/api/lang', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: lang }).catch((err) => console.warn('[Office] Failed to persist language preference:', err))
   }
   listeners.forEach(fn => fn(lang))
 }

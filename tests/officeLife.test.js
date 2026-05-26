@@ -325,3 +325,136 @@ describe('officeLife — hour-14 drowsiness respects group events (R72)', () => 
     cleanup()
   })
 })
+
+// ─── pickParticipants filtering behaviour ────────────────────────────
+// pickParticipants is private — tested via triggerInteractiveEvent.
+// Key invariant: array-participant events exclude externally-busy agents;
+// 'all' events fall back to the full roster when <2 agents are available.
+describe('officeLife — pickParticipants filtering', () => {
+  // 3-agent fake store so we can block one and still have ≥2 available.
+  function make3AgentStore(externalStatus = {}) {
+    const state = {
+      isPaused: false, activeEvent: null,
+      agents: {
+        dev:  { id: 'dev',  inGroupEvent: false, groupTarget: null, behavior: 'typing', expression: 'normal', bubble: null, position: { x: 100, y: 100 } },
+        qa:   { id: 'qa',   inGroupEvent: false, groupTarget: null, behavior: 'typing', expression: 'normal', bubble: null, position: { x: 200, y: 200 } },
+        arch: { id: 'arch', inGroupEvent: false, groupTarget: null, behavior: 'typing', expression: 'normal', bubble: null, position: { x: 300, y: 200 } },
+      },
+      externalStatus,
+      hour: 9,
+    }
+    const api = {
+      get agents()         { return state.agents },
+      get isPaused()       { return state.isPaused },
+      get activeEvent()    { return state.activeEvent },
+      get externalStatus() { return state.externalStatus },
+      get hour()           { return state.hour },
+      updateTime: () => {},
+      setActiveEvent:   (e) => { state.activeEvent = e },
+      clearActiveEvent: ()  => { state.activeEvent = null },
+      setAgentBehavior: (id, behavior, expression, bubble) => {
+        if (!state.agents[id]) return
+        state.agents[id] = { ...state.agents[id], behavior, expression: expression || state.agents[id].expression, bubble: bubble || null }
+      },
+      setAgentGroupEvent: (id, { behavior, expression, bubble, groupTarget } = {}) => {
+        if (!state.agents[id]) return
+        state.agents[id] = { ...state.agents[id], behavior, expression, bubble: bubble || null, inGroupEvent: true, groupTarget: groupTarget || null }
+      },
+      setMultipleAgentGroupEvents: (updates) => { for (const u of updates) api.setAgentGroupEvent(u.id, u) },
+      clearAgentGroupEvent: (id) => {
+        if (!state.agents[id]) return
+        state.agents[id] = { ...state.agents[id], inGroupEvent: false, groupTarget: null }
+      },
+      clearBubble: (id) => {
+        if (!state.agents[id]) return
+        state.agents[id] = { ...state.agents[id], bubble: null }
+      },
+    }
+    return { getState: () => api }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-05T09:00:00'))
+    // Pin random so scheduled daily/rare events arm far beyond the test window.
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999)
+  })
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('array participants: both dev+qa free → review-debate locks both', () => {
+    const store = make3AgentStore({})
+    const cleanup = startOfficeLife(store)
+
+    expect(triggerInteractiveEvent(store, 'review-debate')).toBe(true)
+    expect(store.getState().agents.dev.inGroupEvent).toBe(true)
+    expect(store.getState().agents.qa.inGroupEvent).toBe(true)
+    expect(store.getState().agents.arch.inGroupEvent).toBe(false)
+
+    cleanup()
+  })
+
+  it('array participants: dev is working externally → excluded → review-debate handler early-returns (no one locked)', () => {
+    const store = make3AgentStore({
+      dev: { status: 'working', expiresAt: Date.now() + 300000 },
+    })
+    const cleanup = startOfficeLife(store)
+
+    // pickParticipants(['dev','qa']) returns ['qa'] only.
+    // review-debate handler: if (!participants.includes('dev') || ...) return → no group event
+    triggerInteractiveEvent(store, 'review-debate')
+
+    expect(store.getState().agents.dev.inGroupEvent).toBe(false)
+    expect(store.getState().agents.qa.inGroupEvent).toBe(false)
+
+    cleanup()
+  })
+
+  it('all participants: with ≥2 available, blocked agent is excluded', () => {
+    // dev is working → available = [qa, arch] (≥2) → group-stretch uses [qa, arch]
+    const store = make3AgentStore({
+      dev: { status: 'working', expiresAt: Date.now() + 300000 },
+    })
+    const cleanup = startOfficeLife(store)
+
+    expect(triggerInteractiveEvent(store, 'group-stretch')).toBe(true)
+    vi.advanceTimersByTime(4000) // staggered setAgentGroupEvent callbacks
+
+    expect(store.getState().agents.dev.inGroupEvent).toBe(false)  // excluded (working)
+    expect(store.getState().agents.qa.inGroupEvent).toBe(true)
+    expect(store.getState().agents.arch.inGroupEvent).toBe(true)
+
+    cleanup()
+  })
+
+  it('random-1-neighbor (coffee-spill): always produces 1-2 participants', () => {
+    const store = make3AgentStore({})
+    const cleanup = startOfficeLife(store)
+
+    expect(triggerInteractiveEvent(store, 'coffee-spill')).toBe(true)
+    vi.advanceTimersByTime(3000) // inner 1500ms setTimeout fires
+
+    const locked = Object.values(store.getState().agents).filter((a) => a.inGroupEvent)
+    expect(locked.length).toBeGreaterThanOrEqual(1)
+    expect(locked.length).toBeLessThanOrEqual(2)
+
+    cleanup()
+  })
+
+  it('done/idle external status is treated as available — not excluded', () => {
+    const store = make3AgentStore({
+      dev: { status: 'done', expiresAt: Date.now() + 10000 },
+    })
+    const cleanup = startOfficeLife(store)
+
+    // dev is 'done' → isAvailable → included in review-debate
+    triggerInteractiveEvent(store, 'review-debate')
+    expect(store.getState().agents.dev.inGroupEvent).toBe(true)
+    expect(store.getState().agents.qa.inGroupEvent).toBe(true)
+
+    cleanup()
+  })
+})

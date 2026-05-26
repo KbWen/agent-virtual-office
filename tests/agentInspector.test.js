@@ -322,3 +322,100 @@ describe('AgentInspector', () => {
     expect(markup).not.toContain('Workflow')
   })
 })
+
+// ─── countAgentDoneToday — edge cases ────────────────────────────────
+describe('countAgentDoneToday — edge cases', () => {
+  const NOW = new Date('2026-04-08T18:00:00+08:00').getTime()
+  const TODAY_START = new Date('2026-04-08T00:00:00+08:00').getTime()
+
+  it('ledger with wrong dayKey → returns 0 (stale ledger from yesterday)', () => {
+    expect(countAgentDoneToday({
+      dayKey: '2026-04-07',
+      counts: { dev: 5 },
+      seenEventKeys: [],
+    }, 'dev', NOW)).toBe(0)
+  })
+
+  it('ledger with correct dayKey but agentId not in counts → returns 0', () => {
+    expect(countAgentDoneToday({
+      dayKey: '2026-04-08',
+      counts: { qa: 2 },
+      seenEventKeys: [],
+    }, 'dev', NOW)).toBe(0)
+  })
+
+  it('ledger with null counts → returns 0', () => {
+    expect(countAgentDoneToday({
+      dayKey: '2026-04-08',
+      counts: null,
+      seenEventKeys: [],
+    }, 'dev', NOW)).toBe(0)
+  })
+
+  it('null activityLog → returns 0', () => {
+    expect(countAgentDoneToday(null, 'dev', NOW)).toBe(0)
+  })
+
+  it('undefined activityLog → returns 0', () => {
+    expect(countAgentDoneToday(undefined, 'dev', NOW)).toBe(0)
+  })
+
+  it('empty array → returns 0', () => {
+    expect(countAgentDoneToday([], 'dev', NOW)).toBe(0)
+  })
+
+  it('timestamp exactly at startOfDay boundary is counted (inclusive)', () => {
+    expect(countAgentDoneToday([
+      { agentId: 'dev', type: 'status', status: 'done', timestamp: TODAY_START },
+    ], 'dev', NOW)).toBe(1)
+  })
+
+  it('timestamp 1ms before startOfDay is NOT counted', () => {
+    expect(countAgentDoneToday([
+      { agentId: 'dev', type: 'status', status: 'done', timestamp: TODAY_START - 1 },
+    ], 'dev', NOW)).toBe(0)
+  })
+
+  it('mixed valid/invalid entries: only correct agentId + type + status + today counted', () => {
+    expect(countAgentDoneToday([
+      { agentId: 'dev', type: 'status', status: 'done',    timestamp: NOW - 1000 },  // ✓
+      { agentId: 'qa',  type: 'status', status: 'done',    timestamp: NOW - 1000 },  // wrong agent
+      { agentId: 'dev', type: 'event',  status: 'done',    timestamp: NOW - 1000 },  // wrong type
+      { agentId: 'dev', type: 'status', status: 'working', timestamp: NOW - 1000 },  // wrong status
+      { agentId: 'dev', type: 'status', status: 'done',    timestamp: NOW - 90000000 }, // yesterday
+      null,                                                                             // null entry
+      { agentId: 'dev', type: 'status', status: 'done',    timestamp: 'bad' },        // bad timestamp
+    ], 'dev', NOW)).toBe(1)
+  })
+})
+
+// ─── applyExternalStatus — day rollover ──────────────────────────────
+describe('store — dailyDoneLedger day rollover via applyExternalStatus', () => {
+  it('crossing midnight resets ledger dayKey, counts, and all deskItemCounts', () => {
+    const base = useOfficeStore.getState().agents
+    useOfficeStore.setState({
+      agents: {
+        ...base,
+        dev: { ...base.dev, status: 'idle', inGroupEvent: false, deskItemCount: { coffee: 4, sticky: 1, books: 0 } },
+      },
+      externalStatus: {},
+      dailyDoneLedger: { dayKey: '2026-04-08', counts: { dev: 4 }, seenEventKeys: ['claude-cli:x:dev'] },
+    })
+
+    const nextDayNow = new Date('2026-04-09T09:00:00+08:00').getTime()
+    useOfficeStore.getState().applyExternalStatus(
+      [{ agentId: 'dev', status: 'done', task: 'Edit', label: 'New day work' }],
+      { source: 'claude-cli', seq: 'nd1', now: nextDayNow },
+    )
+
+    const state = useOfficeStore.getState()
+    // Ledger rolled to the new day.
+    expect(state.dailyDoneLedger.dayKey).toBe('2026-04-09')
+    // Fresh done on the new day is counted as 1 (reset from 4, then +1 for this event).
+    expect(state.dailyDoneLedger.counts.dev).toBe(1)
+    // deskItemCount resets to 0 at midnight, then this fresh 'done' increments dev's
+    // coffee by 1 — so coffee ends at 1 (not 4) and sticky ends at 0 (was 1, reset).
+    expect(state.agents.dev.deskItemCount.coffee).toBe(1)  // reset to 0, then +1 for fresh done
+    expect(state.agents.dev.deskItemCount.sticky).toBe(0)  // was 1, reset to 0, not incremented
+  })
+})
