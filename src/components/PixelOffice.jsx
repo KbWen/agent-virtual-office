@@ -115,7 +115,7 @@ function FlyingDocument({ fromPos, toPos, onComplete }) {
 }
 
 function FlyingDocuments() {
-  const handoffs = useOfficeStore((s) => s.handoffs)
+  const handoffs = useOfficeStore(useShallow((s) => s.handoffs))
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
 
   if (reducedMotion) return null
@@ -144,7 +144,7 @@ function FlyingDocuments() {
 }
 
 function WhiteboardAnimation() {
-  const activeEvent = useOfficeStore((s) => s.activeEvent)
+  const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
   const [progress, setProgress] = React.useState(0)
   const rafRef = React.useRef(null)
   const startRef = React.useRef(null)
@@ -650,7 +650,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   // then sum in a memo. The previous inline `Object.values().reduce()` selector re-ran
   // the reduction on EVERY store mutation — every RAF position tick, every behavior
   // change — even though the done-count only changes a few times per minute.
-  const dailyDoneCounts = useOfficeStore((s) => s.dailyDoneLedger?.counts)
+  const dailyDoneCounts = useOfficeStore(useShallow((s) => s.dailyDoneLedger?.counts))
   const totalDoneToday = useMemo(
     () => Object.values(dailyDoneCounts || {}).reduce((sum, c) => sum + c, 0),
     [dailyDoneCounts]
@@ -658,7 +658,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const hour = useOfficeStore((s) => s.hour)
   // `minute` is intentionally NOT subscribed here — ClockWidget owns that subscription
   // so the per-minute tick re-renders only the clock, not PixelOffice's whole SVG tree.
-  const activeEvent = useOfficeStore((s) => s.activeEvent)
+  const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
   const activeWorkflow = useOfficeStore((s) => s.activeWorkflow)
   const hasEverReceivedStatus = useOfficeStore((s) => s.hasEverReceivedStatus)
   useLocale() // re-render on language switch so hint text updates
