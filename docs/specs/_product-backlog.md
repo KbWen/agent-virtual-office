@@ -51,8 +51,8 @@
 | # | Feature | Priority | Status | Notes |
 |---|---------|----------|--------|-------|
 | 13 | **夜間模式辦公室** — 22:00+ 燈光變暗、部分角色加班、窗外月亮 | P2 | Done | shipped via PR #19; `PixelOffice.jsx:215–223` 6 層光線 overlay（早晨→黃昏→深夜），`NightSky` 元件含星星 + 月亮，`WallWindow` 依時段調整亮度 |
-| 14 | **天氣系統** — 窗外晴/雨/雷雨跟 mood 呼應（`frustrated` → 下雨） | P3 | Pending | 純裝飾 SVG 動畫，連接 `store.mood` |
-| 15 | **白板手寫動畫** — eureka 事件時線條慢慢出現 | P2 | Pending | SVG `stroke-dashoffset` 動畫，觸發於 eureka handler |
+| 14 | **天氣系統** — 窗外晴/雨/雷雨跟 mood 呼應（`frustrated` → 下雨） | P3 | Done | shipped 2026-05-29; `TopDownFurniture.jsx` 加 `moodToWeather()` + `WeatherOverlay`（rain/cloudy/thunderstorm）；`PixelOffice.jsx` subscribe `mood`+`reducedMotion`，inject keyframes 一次；`stuck`→thunderstorm, `frustrated`→rain, `rushing`→cloudy；lightning capped 0.35/5s 防 photosensitivity |
+| 15 | **白板手寫動畫** — eureka 事件時線條慢慢出現 | P2 | Done | confirmed pre-existing on 2026-05-29 — `PixelOffice.jsx:146` `WhiteboardAnimation` subscribes `activeEvent`, triggers on `eureka`, animates 3 lines + circle + `!` over 3000ms via `stroke-dashoffset`；closure-documented at #14 ship time (similar to #7 closure pattern) |
 
 ---
 

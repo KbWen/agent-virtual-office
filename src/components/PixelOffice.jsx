@@ -9,8 +9,40 @@ import AgentInspector from './AgentInspector'
 import {
   Bookshelf, Plant, Couch, RoundTable, MeetingTable,
   CoffeeMachine, WaterCooler, GateBooth, WallWindow, Whiteboard,
-  ServerRack, Clock, Printer, Rug, CoffeeCup, DeskLamp
+  ServerRack, Clock, Printer, Rug, CoffeeCup, DeskLamp,
+  moodToWeather,
 } from './TopDownFurniture'
+
+// Weather animation keyframes — emitted once via a module-scope <style> tag (see
+// WeatherKeyframes component below). All six WallWindow instances share these
+// animations. Kept out of index.css to avoid polluting global selectors with
+// names that only the office uses; rendered inside the SVG so cleanup follows
+// component lifecycle. The `lightning-flash` keyframe caps opacity at 0.35 and
+// fires twice per 5-second cycle to stay well clear of photosensitive seizure
+// thresholds (which start around 3 Hz at high luminance).
+function WeatherKeyframes() {
+  return (
+    <style>{`
+      @keyframes weather-raindrop-fall {
+        0%   { transform: translateY(-100%); opacity: 0; }
+        15%  { opacity: 0.7; }
+        85%  { opacity: 0.7; }
+        100% { transform: translateY(100%); opacity: 0; }
+      }
+      @keyframes weather-cloud-drift {
+        0%   { transform: translateX(-30%); }
+        100% { transform: translateX(30%); }
+      }
+      @keyframes weather-lightning-flash {
+        0%, 88%, 100% { opacity: 0; }
+        90%           { opacity: 0.35; }
+        92%           { opacity: 0; }
+        94%           { opacity: 0.20; }
+        96%           { opacity: 0; }
+      }
+    `}</style>
+  )
+}
 
 // ─── Sprint Kanban Board ─────────────────────────────────────────────────
 // React.memo: PixelOffice re-renders on every minute/hour tick and every
@@ -661,6 +693,12 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
   const activeWorkflow = useOfficeStore((s) => s.activeWorkflow)
   const hasEverReceivedStatus = useOfficeStore((s) => s.hasEverReceivedStatus)
+  // Weather follows team mood. `mood` is a string enum so primitive equality is
+  // fine — no useShallow needed. `reducedMotion` toggles only on user-pref change
+  // or pause/resume, so the cost of a wide PixelOffice re-render on those is OK.
+  const mood = useOfficeStore((s) => s.mood)
+  const reducedMotion = useOfficeStore((s) => s.reducedMotion)
+  const weather = moodToWeather(mood)
   useLocale() // re-render on language switch so hint text updates
 
   useEffect(() => {
@@ -765,6 +803,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       style={isPanel ? {} : { maxHeight: 'calc(100vh - 44px)', minWidth: '480px' }}
       preserveAspectRatio="xMidYMid meet"
     >
+      <WeatherKeyframes />
       <defs>
         <filter id="bubble-shadow" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000" floodOpacity="0.12" />
@@ -816,10 +855,10 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <rect x="456" y="419" width="8" height="131" fill="#5a4a3a" />
 
       {/* ═══ WINDOWS IN NORTH WALL ═══ */}
-      <WallWindow x={140} y={141} w={36} h={18} hour={hour} />
-      <WallWindow x={240} y={141} w={36} h={18} hour={hour} />
-      <WallWindow x={340} y={141} w={36} h={18} hour={hour} />
-      <WallWindow x={440} y={141} w={36} h={18} hour={hour} />
+      <WallWindow x={140} y={141} w={36} h={18} hour={hour} weather={weather} reducedMotion={reducedMotion} />
+      <WallWindow x={240} y={141} w={36} h={18} hour={hour} weather={weather} reducedMotion={reducedMotion} />
+      <WallWindow x={340} y={141} w={36} h={18} hour={hour} weather={weather} reducedMotion={reducedMotion} />
+      <WallWindow x={440} y={141} w={36} h={18} hour={hour} weather={weather} reducedMotion={reducedMotion} />
       {/* Clock mounted on north wall — own subscription so the minute tick doesn't
           re-render the whole office */}
       <ClockWidget x={540} y={150} r={10} />
@@ -861,8 +900,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <rect x="790" y="0" width="10" height="560" fill="#2a2018" />
 
       {/* ═══ ENTRANCE ═══ */}
-      <WallWindow x={18} y={14} w={44} h={28} hour={hour} />
-      <WallWindow x={72} y={14} w={44} h={28} hour={hour} />
+      <WallWindow x={18} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={reducedMotion} />
+      <WallWindow x={72} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={reducedMotion} />
       <GateBooth x={100} y={90} />
       <Plant x={170} y={100} />
       <Plant x={170} y={50} />
@@ -870,10 +909,10 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <text x={100} y={129} textAnchor="middle" fontSize="5" fill="#C8A878" fontFamily="monospace" opacity="0.8">WELCOME</text>
 
       {/* ═══ HALLWAY (connecting entrance to meeting room) ═══ */}
-      <WallWindow x={250} y={14} w={44} h={28} hour={hour} />
-      <WallWindow x={350} y={14} w={44} h={28} hour={hour} />
-      <WallWindow x={450} y={14} w={44} h={28} hour={hour} />
-      <WallWindow x={550} y={14} w={44} h={28} hour={hour} />
+      <WallWindow x={250} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={reducedMotion} />
+      <WallWindow x={350} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={reducedMotion} />
+      <WallWindow x={450} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={reducedMotion} />
+      <WallWindow x={550} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={reducedMotion} />
       {/* Notice board */}
       <rect x={220} y={55} width={50} height={35} rx={2} fill="#8B7355" stroke="#6B5335" strokeWidth="1" />
       <rect x={223} y={58} width={10} height={7} fill="#FFE066" />
@@ -934,8 +973,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <MeetingTable x={705} y={162} w={100} h={60} />
       <Plant x={630} y={55} />
       <Plant x={782} y={55} />
-      <WallWindow x={632} y={14} w={44} h={26} hour={hour} />
-      <WallWindow x={696} y={14} w={44} h={26} hour={hour} />
+      <WallWindow x={632} y={14} w={44} h={26} hour={hour} weather={weather} reducedMotion={reducedMotion} />
+      <WallWindow x={696} y={14} w={44} h={26} hour={hour} weather={weather} reducedMotion={reducedMotion} />
 
       {/* ═══ RESEARCH ═══ */}
       <text x={700} y={432} textAnchor="middle" fontSize="7" fill="#6060A0" fontFamily="monospace" opacity="0.7">RESEARCH</text>
