@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore } from '../systems/store'
 import { startOfficeLife, triggerInteractiveEvent } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
+import { startDesktopNotifier } from '../inference/desktopNotifier'
 import { eventName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import AgentInspector from './AgentInspector'
@@ -708,6 +709,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
   useEffect(() => {
     const cleanup = startStatusIntegration(useOfficeStore)
+    return cleanup
+  }, [])
+
+  useEffect(() => {
+    // Desktop notifications (#8): blocked >30s + tab hidden + permission granted → notify.
+    // Permission is requested via the ControlPanel 🔔 button — this just starts the
+    // poll loop which is a no-op until permission lands.
+    const cleanup = startDesktopNotifier(useOfficeStore)
     return cleanup
   }, [])
 

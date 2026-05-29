@@ -31,7 +31,7 @@
 | # | Feature | Priority | Status | Notes |
 |---|---------|----------|--------|-------|
 | 7 | **可點擊辦公室物件** — 點咖啡機觸發角色走去拿咖啡、點白板觸發 eureka、點紅色按鈕觸發 deploy-success | P1 | Done | shipped in v0.10 (commit 5b79616); spec: docs/specs/clickable-office-objects.md |
-| 8 | **桌面通知** — blocked 超過 30s 發瀏覽器 Notification | P2 | Pending | `Notification API`，需用戶授權；inferStatus.js 加計時 |
+| 8 | **桌面通知** — blocked 超過 30s 發瀏覽器 Notification | P2 | Done | shipped 2026-05-29; `src/inference/desktopNotifier.js` polls 5s, fires Notification at 30s blocked + tab hidden + permission granted; per-episode dedupe (tag=`office-blocked-<id>`); ControlPanel 🔔 button requests permission on user gesture; i18n + sr-only |
 | 9 | **辦公室廣播 Workflow Banner** — `activeWorkflow` 觸發牆上大字動畫 + PM 拿麥克風 | P2 | Done | shipped via PR #19; `PixelOffice.jsx:1056–1089` 含 pulse 動畫 + broadcast tower icon，訂閱 `store.activeWorkflow` |
 
 ---
