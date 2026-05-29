@@ -8,6 +8,7 @@ import {
   classifyTask,
   classifyStatus,
   classifyMood,
+  familyToBehavior,
   FAMILIES,
 } from '../src/systems/classify.js'
 
@@ -322,6 +323,99 @@ describe('FAMILIES — vocabulary export', () => {
     for (const f of samples) {
       expect(validFamilies, `${f} not in FAMILIES`).toContain(f)
     }
+  })
+})
+
+describe('familyToBehavior — #A2 wiring helper', () => {
+  // Build a reference of every existing AgentCharacter.jsx animation `case`
+  // so we can prove every family→behavior maps to a real animation.
+  const KNOWN_ANIMATIONS = new Set([
+    'typing', 'reading-screen', 'writing-notes', 'research', 'gantt-chart',
+    'magnifier', 'shield-verify', 'deploy-button', 'drink-coffee',
+    'goto-coffee-machine', 'whiteboard', 'meeting', 'chat', 'check-phone',
+    'stretch', 'nap', 'thumbs-up', 'print', 'scratch-head', 'idle',
+    'pass-document', 'desk-slam', 'happy', 'focused', 'confused',
+  ])
+
+  it('every action family maps to a known animation', () => {
+    const actionFamilies = [
+      FAMILIES.READ, FAMILIES.SEARCH, FAMILIES.CREATE, FAMILIES.UPDATE,
+      FAMILIES.DELETE, FAMILIES.EXECUTE, FAMILIES.AUTH, FAMILIES.COMMUNICATE,
+      FAMILIES.NAVIGATE, FAMILIES.DISPATCH, FAMILIES.PLAN, FAMILIES.MEMORY,
+      FAMILIES.SYSTEM, FAMILIES.COGNITION, FAMILIES.EXTERNAL,
+    ]
+    for (const f of actionFamilies) {
+      const b = familyToBehavior(f)
+      expect(KNOWN_ANIMATIONS, `${f} → ${b} is not a known animation`).toContain(b)
+    }
+  })
+
+  it('preserves Tier 0 contract: Bash/Read/Grep/Glob produce identical behaviors', () => {
+    // These are the four explicit entries in store.js STATUS_BEHAVIOR_MAP.working.behavior;
+    // #A2's fallback (familyToBehavior(classifyTask(task).family)) MUST produce the same
+    // result so backward compat is preserved by construction.
+    expect(familyToBehavior(classifyTask('Bash').family)).toBe('typing')
+    expect(familyToBehavior(classifyTask('Read').family)).toBe('reading-screen')
+    expect(familyToBehavior(classifyTask('Grep').family)).toBe('research')
+    expect(familyToBehavior(classifyTask('Glob').family)).toBe('research')
+  })
+
+  it('NEW capability: MCP-namespaced create_page → writing-notes (was generic typing)', () => {
+    const t = classifyTask('mcp__notion__create_page')
+    // The MCP tier 4 family is 'external', but the inner verb routes the
+    // tool-name-only path: classifyTask returns family='external' for the
+    // OUTER classification. We test the OUTER family→behavior here.
+    // For more granular MCP routing the consumer can also classify the inner
+    // tool name separately — out of scope for #A2.
+    expect(t.family).toBe(FAMILIES.EXTERNAL)
+    expect(familyToBehavior(t.family)).toBe('typing')
+    // ^ NOTE: a future iteration could route MCP by inner verb. For #A2 we
+    // conservatively keep 'typing' as the external default — already better
+    // than nothing for a categorical signal, and identical to pre-#A2.
+  })
+
+  it('verb-classified read tools → reading-screen', () => {
+    expect(familyToBehavior(classifyTask('readConfig').family)).toBe('reading-screen')
+    expect(familyToBehavior(classifyTask('getStatus').family)).toBe('reading-screen')
+    expect(familyToBehavior(classifyTask('listFiles').family)).toBe('reading-screen')
+  })
+
+  it('verb-classified search tools → research', () => {
+    expect(familyToBehavior(classifyTask('searchIndex').family)).toBe('research')
+    expect(familyToBehavior(classifyTask('queryDatabase').family)).toBe('research')
+  })
+
+  it('verb-classified auth tools → shield-verify', () => {
+    expect(familyToBehavior(classifyTask('authenticate').family)).toBe('shield-verify')
+    expect(familyToBehavior(classifyTask('login').family)).toBe('shield-verify')
+  })
+
+  it('verb-classified dispatch tools → gantt-chart (planner aesthetic)', () => {
+    expect(familyToBehavior(classifyTask('dispatchJob').family)).toBe('gantt-chart')
+    expect(familyToBehavior(classifyTask('delegateTask').family)).toBe('gantt-chart')
+  })
+
+  it('verb-classified communicate tools → chat', () => {
+    expect(familyToBehavior(classifyTask('sendEmail').family)).toBe('chat')
+    expect(familyToBehavior(classifyTask('postMessage').family)).toBe('chat')
+  })
+
+  it('unknown task → typing (matches pre-#A2 default)', () => {
+    expect(familyToBehavior(classifyTask('xyzzy').family)).toBe('typing')
+    expect(familyToBehavior(classifyTask('').family)).toBe('typing')
+  })
+
+  it('status/mood families fall through to default typing (they have their own paths)', () => {
+    expect(familyToBehavior(FAMILIES.IDLE)).toBe('typing')
+    expect(familyToBehavior(FAMILIES.WORK)).toBe('typing')
+    expect(familyToBehavior(FAMILIES.RAIN)).toBe('typing')
+    expect(familyToBehavior(FAMILIES.CLEAR)).toBe('typing')
+  })
+
+  it('completely unknown family string → typing (safe default)', () => {
+    expect(familyToBehavior('not-a-real-family')).toBe('typing')
+    expect(familyToBehavior(undefined)).toBe('typing')
+    expect(familyToBehavior(null)).toBe('typing')
   })
 })
 

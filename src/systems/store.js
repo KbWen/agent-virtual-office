@@ -5,6 +5,7 @@ import { randomBubble, setNameResolver, behaviorLabel } from '../i18n'
 import { generateContextBubble } from './contextBubble'
 import { detectProjectMode } from './platformDetect'
 import { STATUS_COLORS } from './constants.js'
+import { classifyTask, familyToBehavior } from './classify.js'
 
 export { STATUS_COLORS }
 
@@ -620,9 +621,14 @@ export const useOfficeStore = create((set) => ({
         // objects where one suffices.
         const bm = STATUS_BEHAVIOR_MAP[u.status] || {}
         // working maps task→behavior via a sub-table; non-working statuses use a
-        // scalar behavior. Default to 'typing' when a working task has no entry.
+        // scalar behavior. #A2 wiring: when the sub-table misses (MCP tools,
+        // verb-recognizable tools, anything not in the Tier 0 Bash/Read/Grep/Glob
+        // explicit list), defer to `classifyTask` + `familyToBehavior` so the
+        // animation reflects what the tool actually DOES rather than collapsing
+        // to a generic 'typing'. Tier 0 builtins still hit `bm.behavior[u.task]`
+        // first so their behavior is byte-identical to pre-#A2.
         const bmBehavior = u.status === 'working'
-          ? (bm.behavior[u.task] || 'typing')
+          ? (bm.behavior[u.task] || familyToBehavior(classifyTask(u.task).family))
           : bm.behavior
         // Don't overwrite behavior/expression during group events (officeLife controls those)
         const prevAgent = agents[u.agentId]

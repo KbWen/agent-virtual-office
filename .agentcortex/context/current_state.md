@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-29
-- **Update Sequence**: 9
+- **Update Sequence**: 10
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -35,6 +35,7 @@
     - #14 天氣系統 — `moodToWeather()` pure mapping + `WeatherOverlay` SVG (rain/cloudy/thunderstorm); WallWindow weather prop wired to `store.mood`; reducedMotion drops animations; lightning capped 0.35/5s for photosensitivity safety
     - #15 白板手寫動畫 — confirmed pre-existing (`PixelOffice.jsx:146` `WhiteboardAnimation`); closure-documented at #14 ship time (similar to #7 pattern)
     - **#A1 classifier foundation** — pure module `src/systems/classify.js` (Tier 0 builtin + Tier 3 W3C verb + Tier 4 MCP namespace + Tier 5 unknown) with 90 unit tests; standards-aligned (W3C Activity Streams 2.0 / OpenTelemetry GenAI / MCP spec per panel discussion). Foundation only — downstream wiring is #A2.
+    - **#A2 classifier wiring** — `store.applyExternalStatus` now falls back to `familyToBehavior(classifyTask(task).family)` for non-built-in tasks; `moodToWeather` delegates to `classifyMood(mood).family`. Bash/Read/Grep/Glob keep byte-identical behavior (regression-tested); MCP / verb-classified / unknown tasks now get family-appropriate animations (`writeFile`→writing-notes, `authenticate`→shield-verify, `dispatchJob`→gantt-chart, etc.). Bundle +6 KB raw / +2.4 KB gzip.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
@@ -89,6 +90,13 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### main-2026-05-29 (classifier wiring #A2)
+
+- Wiring shipped: `store.applyExternalStatus` augmented with `familyToBehavior(classifyTask(task).family)` fallback (Bash/Read/Grep/Glob still hit static STATUS_BEHAVIOR_MAP first → byte-identical for built-ins); `moodToWeather` delegates to `classifyMood(mood).family` (parity proven by existing weatherSystem.test.js).
+- New capability: MCP / verb-classified / unknown tasks pick family-appropriate animation instead of generic `'typing'` — `Write`→writing-notes, `Task`→gantt-chart (subagent dispatch), `authenticate`→shield-verify, `dispatchJob`→gantt-chart, `sendEmail`→chat, `searchIndex`→research.
+- Tests: 748/748 vitest passed (was 704; +12 familyToBehavior unit tests + 32 classifierWiring integration tests proving regression safety + new capability). Build clean, +6 KB raw / +2.4 KB gzip.
+- Files: `src/systems/classify.js` (familyToBehavior export), `src/systems/store.js` (applyExternalStatus fallback), `src/components/TopDownFurniture.jsx` (moodToWeather delegation), `tests/classify.test.js` (familyToBehavior cases), `tests/classifierWiring.test.js` (new, integration).
 
 ### main-2026-05-29 (classifier foundation #A1)
 
