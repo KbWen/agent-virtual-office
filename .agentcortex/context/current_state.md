@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-29
-- **Update Sequence**: 13
+- **Update Sequence**: 14
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -40,6 +40,7 @@
     - **#A3 unknownLog (self-improving classifier)** — `src/systems/unknownLog.js` aggregates Tier 5 unknown task/status/mood/role/workflow raws into dev-mode buckets (capped 200/kind). Exposes `window.__office_unknownLog` + `window.__office_logUnknowns()` for DevTools inspection. Production: zero-cost via `import.meta.env.PROD` gate. LangSmith-style — high-frequency unknowns reveal what needs Tier 0 promotion.
     - **#8 桌面通知** — `src/inference/desktopNotifier.js` 5s-poll loop; fires browser Notification when an agent stays blocked ≥30s + tab hidden + permission granted. Per-episode dedupe via `office-blocked-<id>` tag; transition out of blocked resets dedupe. ControlPanel 🔔 button requests permission on user gesture. Full i18n in en + zh-TW.
     - **#C idle-gap inference** — `src/inference/idleGapInfer.js` closes Pixel Agents' admitted heuristic gap. Conservative thresholds (working+45s gap → thinking; blocked+90s gap → awaiting-approval) injected back through `applyExternalStatus(source: 'idle-gap-infer')` so they pass through `decideBehavior` + `classifyStatus`. Inferred statuses already pre-registered in classify.js STATUS_TABLE since #A1. lastUpdatedAt stamped via zustand subscription on status/task signature changes only (not position ticks).
+    - **2 follow-up fixes from spawned chips** — (a) moodEngine `pushEventBatch([])` now strict no-op (`if (added > 0)` gate) so empty batches can't accidentally flip mood→idle; (b) classifyTask Tier 4 (MCP namespace) now bubbles the inner verb's family up — `mcp__notion__create_page` → CREATE → writing-notes, `mcp__notion__delete_page` → DELETE (high severity), `mcp__atlassian__search_*` → SEARCH → research. EXTERNAL fallback retained for MCP tools with no inner verb match.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
@@ -94,6 +95,13 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### main-2026-05-29 (2 follow-up fixes from spawned chips)
+
+- Fix 1: `src/systems/moodEngine.js` `pushEventBatch` wraps `resetIdleTimer()` + `updateStoreMood()` in `if (added > 0)`. Empty-array or all-skipped-entries batches no longer accidentally flip mood→idle. Two existing tests adjusted that relied on the prior `pushEventBatch([])` recompute hack.
+- Fix 2: `src/systems/classify.js` Tier 4 (MCP namespace) now returns `family: inner.family` when the inner verb matches — previously always returned a flat EXTERNAL. `decideBehavior()` now picks family-appropriate animations for MCP create/delete/search/read instead of collapsing all to `typing`. EXTERNAL fallback retained for MCP tools whose inner name doesnt match any verb pattern.
+- Tests: 925/925 vitest passed (was 915, +10 across the two fixes).
+- Files: `src/systems/moodEngine.js`, `src/systems/classify.js`, `tests/moodEngine.test.js`, `tests/weatherRealWorld.test.js`, `tests/classify.test.js`, `tests/classifierWiring.test.js`.
 
 ### main-2026-05-29 (#8 desktop notifications + #C idle-gap inference)
 
