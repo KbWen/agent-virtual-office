@@ -87,9 +87,21 @@ describe('#A2 new capability: classifier-derived behavior for non-built-in tasks
     expect(useOfficeStore.getState().agents.dev.behavior).toBe('research')
   })
 
-  it('working/mcp__notion__create_page → typing (Tier 4 EXTERNAL default)', () => {
+  it('working/mcp__notion__create_page → writing-notes (inner verb CREATE bubbles up)', () => {
     const { applyExternalStatus } = useOfficeStore.getState()
     applyExternalStatus([{ agentId: 'dev', status: 'working', task: 'mcp__notion__create_page' }])
+    expect(useOfficeStore.getState().agents.dev.behavior).toBe('writing-notes')
+  })
+
+  it('working/mcp__atlassian__search_issues → research (inner verb SEARCH bubbles up)', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([{ agentId: 'dev', status: 'working', task: 'mcp__atlassian__search_issues' }])
+    expect(useOfficeStore.getState().agents.dev.behavior).toBe('research')
+  })
+
+  it('working/mcp__notion__weirdtool → typing (no inner verb → EXTERNAL fallback)', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([{ agentId: 'dev', status: 'working', task: 'mcp__notion__weirdtool' }])
     expect(useOfficeStore.getState().agents.dev.behavior).toBe('typing')
   })
 
