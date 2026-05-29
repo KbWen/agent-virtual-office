@@ -11,8 +11,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-05-26
-- **Update Sequence**: 6
+- **Last Updated**: 2026-05-29
+- **Update Sequence**: 7
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -30,8 +30,9 @@
   - **Done (branch `claude/condescending-raman-1e48a0`, 2026-05-16)**:
     - #1 角色成長系統 — deskItemCount daily reset, 4-level growthLevel(), % 6 bug fixed, shouldCount gate
     - #7 可點擊辦公室物件 — all three objects clickable (coffee machine→tea-break, whiteboard→eureka, deploy button→deploy-success); shipped in v0.10 (5b79616), closure-documented 2026-05-16
-  - **Remaining P1**: #16 靜態部署無 /api/status (架構限制 — Vite middleware 僅開發時可用)
-  - **Branch status**: All feature branches closed/merged. main is HEAD (98dd8bd).
+  - **Done (branch `main`, 2026-05-29)**:
+    - #6 底部效能指標 — `dailyBlockedLedger` transition counter parallel to `dailyDoneLedger`; ControlPanel Full + Panel chip `✓N / ✗M` with i18n + sr-only + tooltip
+  - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
   - [feature] docs/specs/agent-inspector-info-enhancement.md [Shipped]
@@ -85,6 +86,12 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### main-2026-05-29
+
+- Feature shipped: #6 底部效能指標 — added `dailyBlockedLedger` (transition counter, parallel to `dailyDoneLedger`) and rendered `✓N / ✗M` chip in ControlPanel Full + Panel modes with i18n + sr-only + tooltip; day rollover resets both ledgers atomically.
+- Tests: Pass (552/552 vitest, build clean, preview EN+ZH chip reactivity verified)
+- Files: `src/systems/store.js`, `src/components/ControlPanel.jsx`, `src/locales/en.json`, `src/locales/zh-TW.json`, `tests/storeBlockedLedger.test.js` (new, 12 tests)
 
 ### feat-v10-office-vitality-2026-05-26 (superseded / closed)
 

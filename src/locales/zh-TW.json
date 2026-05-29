@@ -246,6 +246,8 @@
     "run": "執行",
     "test": "測試",
     "testHint": "設定 agent 狀態以改變行為權重 — 工作中：更多打字，卡住：焦躁，完成：慶祝",
+    "todayMetricsTooltip": "今日完成 {0} 次，阻塞 {1} 次",
+    "todayMetricsA11y": "今日完成 {0} 次，阻塞 {1} 次",
     "platforms": {
       "browser": "瀏覽器",
       "claude-cli": "Claude CLI",

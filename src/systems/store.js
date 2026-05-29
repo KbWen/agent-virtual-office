@@ -34,6 +34,19 @@ function ensureCurrentDailyDoneLedger(ledger, now = Date.now()) {
   return createDailyDoneLedger(now, ledger)
 }
 
+function createDailyBlockedLedger(now = Date.now(), seed = {}) {
+  return {
+    dayKey: getLocalDayKey(now),
+    counts: seed.counts && typeof seed.counts === 'object' ? { ...seed.counts } : {},
+  }
+}
+
+function ensureCurrentDailyBlockedLedger(ledger, now = Date.now()) {
+  const dayKey = getLocalDayKey(now)
+  if (!ledger || ledger.dayKey !== dayKey) return createDailyBlockedLedger(now)
+  return createDailyBlockedLedger(now, ledger)
+}
+
 function buildDoneEventKey(update, meta) {
   if (!update?.agentId) return null
   if (meta?.eventKey) return `${meta.eventKey}:${update.agentId}`
@@ -47,6 +60,7 @@ export function createPersistedState(state) {
     agents: {},
     // Don't persist transient state (mood, externalStatus, statusSource, activeWorkflow)
     dailyDoneLedger: ensureCurrentDailyDoneLedger(state.dailyDoneLedger),
+    dailyBlockedLedger: ensureCurrentDailyBlockedLedger(state.dailyBlockedLedger),
   }
   for (const [id, a] of Object.entries(state.agents)) {
     data.agents[id] = {
@@ -150,6 +164,21 @@ export function validatePersistedDailyDoneLedger(saved, now = Date.now()) {
     counts,
     seenEventKeys,
   }
+}
+
+export function validatePersistedDailyBlockedLedger(saved, now = Date.now()) {
+  if (!saved || typeof saved !== 'object') return null
+  const dayKey = typeof saved.dayKey === 'string' ? saved.dayKey : null
+  if (!dayKey) return null
+  if (dayKey !== getLocalDayKey(now)) return createDailyBlockedLedger(now)
+
+  const counts = {}
+  for (const [agentId, value] of Object.entries(saved.counts || {})) {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+      counts[agentId] = value
+    }
+  }
+  return { dayKey, counts }
 }
 
 // ─── Cached init-time computations (avoid redundant calls) ───
@@ -411,7 +440,12 @@ export const useOfficeStore = create((set) => ({
         for (const [id, a] of Object.entries(s.agents)) {
           agents[id] = a ? { ...a, deskItemCount: { coffee: 0, sticky: 0, books: 0 } } : a
         }
-        return { ...next, dailyDoneLedger: createDailyDoneLedger(now.getTime()), agents }
+        return {
+          ...next,
+          dailyDoneLedger: createDailyDoneLedger(now.getTime()),
+          dailyBlockedLedger: createDailyBlockedLedger(now.getTime()),
+          agents,
+        }
       }
       return next
     })
@@ -449,6 +483,7 @@ export const useOfficeStore = create((set) => ({
     consecutiveFailures: 0,
   },
   dailyDoneLedger: validatePersistedDailyDoneLedger(_persisted?.dailyDoneLedger) || createDailyDoneLedger(),
+  dailyBlockedLedger: validatePersistedDailyBlockedLedger(_persisted?.dailyBlockedLedger) || createDailyBlockedLedger(),
 
   applyExternalStatus: (updates, meta = {}) =>
     set((s) => {
@@ -479,6 +514,12 @@ export const useOfficeStore = create((set) => ({
       // its identity.
       let dailyDoneLedger = dayChanged ? rolledLedger : s.dailyDoneLedger
       let ledgerMutated = dayChanged
+      // Parallel clone-on-write for the blocked transition counter. Shares the same
+      // `dayChanged` gate so both ledgers reset atomically at midnight even if the
+      // first cross-midnight update only touches one of the two counters.
+      const rolledBlockedLedger = ensureCurrentDailyBlockedLedger(s.dailyBlockedLedger, now)
+      let dailyBlockedLedger = dayChanged ? rolledBlockedLedger : (s.dailyBlockedLedger || rolledBlockedLedger)
+      let blockedLedgerMutated = dayChanged
       if (dayChanged) {
         for (const id of Object.keys(agents)) {
           if (agents[id]) agents[id] = { ...agents[id], deskItemCount: { coffee: 0, sticky: 0, books: 0 } }
@@ -625,6 +666,22 @@ export const useOfficeStore = create((set) => ({
             count[growthItem] = (count[growthItem] || 0) + 1
             nextAgent.deskItemCount = count
           }
+        } else if (u.status === 'blocked') {
+          // Transition counter: only the first 'blocked' tick in a contiguous run counts.
+          // Two consecutive blocked updates from polling/SSE for the same stuck tool call
+          // should not double-count. No eventKey dedup — blocked has no PostToolUse-style
+          // anchor to key on, and a same-call working↔blocked flap is rare enough that the
+          // simpler transition rule is acceptable.
+          if (previousStatus !== 'blocked') {
+            if (!blockedLedgerMutated) {
+              dailyBlockedLedger = {
+                dayKey: dailyBlockedLedger.dayKey,
+                counts: { ...dailyBlockedLedger.counts },
+              }
+              blockedLedgerMutated = true
+            }
+            dailyBlockedLedger.counts[u.agentId] = (dailyBlockedLedger.counts[u.agentId] || 0) + 1
+          }
         }
       }
       // Multi-session reconciliation: scanAndMerge emits the COMPLETE set of active
@@ -687,7 +744,7 @@ export const useOfficeStore = create((set) => ({
         integrationPatch.activeWorkflow = meta.workflow ?? null
       }
       return {
-        externalStatus: ext, agents, activityLog: log, dailyDoneLedger,
+        externalStatus: ext, agents, activityLog: log, dailyDoneLedger, dailyBlockedLedger,
         hasEverReceivedStatus: meta.skipHintDismiss ? s.hasEverReceivedStatus : true,
         ...(evictedSelected ? { selectedAgent: null } : {}),
         ...integrationPatch,

@@ -20,6 +20,19 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const externalStatus = useOfficeStore(useShallow((s) => s.externalStatus))
   const statusSource = useOfficeStore((s) => s.statusSource)
   const integrationHealth = useOfficeStore(useShallow((s) => s.integrationHealth))
+  // Subscribe to ledger objects (clone-on-write — identity only changes on actual
+  // increment or day rollover). Sum in useMemo so the reduction doesn't re-run on
+  // unrelated re-renders (clock tick, agent move).
+  const dailyDoneCounts = useOfficeStore(useShallow((s) => s.dailyDoneLedger?.counts))
+  const dailyBlockedCounts = useOfficeStore(useShallow((s) => s.dailyBlockedLedger?.counts))
+  const totalDoneToday = React.useMemo(
+    () => Object.values(dailyDoneCounts || {}).reduce((sum, c) => sum + c, 0),
+    [dailyDoneCounts]
+  )
+  const totalBlockedToday = React.useMemo(
+    () => Object.values(dailyBlockedCounts || {}).reduce((sum, c) => sum + c, 0),
+    [dailyBlockedCounts]
+  )
 
   const [showTest, setShowTest] = useState(false)
   const [showInfo, setShowInfo] = useState(() => {
@@ -88,6 +101,15 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
               <span className="text-red-600 dark:text-red-400 font-medium">{t('status.offline', 'offline')}</span>
             </div>
           )}
+          <div
+            className="shrink-0 px-1 py-0.5 rounded text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 font-mono"
+            title={t('ui.todayMetricsTooltip', 'Today: {0} done, {1} blocked').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
+          >
+            <span aria-hidden="true">✓{totalDoneToday}/✗{totalBlockedToday}</span>
+            <span className="sr-only">
+              {t('ui.todayMetricsA11y', '{0} completed, {1} blocked today').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
+            </span>
+          </div>
           <button onClick={togglePause} className="px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={isPaused ? t('aria.resume', 'Resume') : t('aria.pause', 'Pause')}>
             {isPaused ? '▶' : '⏸'}
           </button>
@@ -182,6 +204,20 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             </span>
           </div>
         )}
+
+        <div
+          className="text-[10px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded shrink-0 font-mono"
+          title={t('ui.todayMetricsTooltip', 'Today: {0} done, {1} blocked').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
+        >
+          <span aria-hidden="true">
+            <span className="text-emerald-600 dark:text-emerald-400">✓{totalDoneToday}</span>
+            <span className="text-gray-400 dark:text-gray-500"> / </span>
+            <span className="text-red-600 dark:text-red-400">✗{totalBlockedToday}</span>
+          </span>
+          <span className="sr-only">
+            {t('ui.todayMetricsA11y', '{0} completed, {1} blocked today').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
+          </span>
+        </div>
 
         <div className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded shrink-0">
           {t('ui.platforms.' + platform, platform)}

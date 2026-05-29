@@ -246,6 +246,8 @@
     "run": "Run",
     "test": "Test",
     "testHint": "Set agent status to change behavior weights — working: more typing, blocked: frustrated, done: celebratory",
+    "todayMetricsTooltip": "Today: {0} done, {1} blocked",
+    "todayMetricsA11y": "{0} completed, {1} blocked today",
     "platforms": {
       "browser": "Browser",
       "claude-cli": "Claude CLI",
