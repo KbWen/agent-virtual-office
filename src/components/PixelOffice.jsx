@@ -4,6 +4,7 @@ import { useOfficeStore } from '../systems/store'
 import { startOfficeLife, triggerInteractiveEvent } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
 import { startDesktopNotifier } from '../inference/desktopNotifier'
+import { startIdleGapInference } from '../inference/idleGapInfer'
 import { eventName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import AgentInspector from './AgentInspector'
@@ -717,6 +718,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     // Permission is requested via the ControlPanel 🔔 button — this just starts the
     // poll loop which is a no-op until permission lands.
     const cleanup = startDesktopNotifier(useOfficeStore)
+    return cleanup
+  }, [])
+
+  useEffect(() => {
+    // Idle-gap inference (#C): working+45s gap → thinking; blocked+90s gap → awaiting-approval.
+    // Closes Pixel Agents' admitted heuristic gap; the inferred statuses are pre-registered
+    // in classify.js STATUS_TABLE and flow through decideBehavior normally.
+    const cleanup = startIdleGapInference(useOfficeStore)
     return cleanup
   }, [])
 

@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-29
-- **Update Sequence**: 12
+- **Update Sequence**: 13
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -38,6 +38,8 @@
     - **#A2 classifier wiring** — `store.applyExternalStatus` now falls back to `familyToBehavior(classifyTask(task).family)` for non-built-in tasks; `moodToWeather` delegates to `classifyMood(mood).family`. Bash/Read/Grep/Glob keep byte-identical behavior (regression-tested); MCP / verb-classified / unknown tasks now get family-appropriate animations (`writeFile`→writing-notes, `authenticate`→shield-verify, `dispatchJob`→gantt-chart, etc.). Bundle +6 KB raw / +2.4 KB gzip.
     - **#A2.1 role-aware classifier** — added `classifyRole`, `classifyWorkflow`, `decideBehavior` 4-priority resolver (status > workflow > role > family-default). Drove `store.applyExternalStatus` to use it. Same tool now produces different animations based on role + active workflow phase: `qa+Bash`→magnifier, `ops+Bash`→deploy-button, `gate+Bash`→shield-verify, `designer+Edit`→whiteboard, `pm+Write`→gantt-chart, `dev+Bash` during `/test`→magnifier, `dev+Bash` during `/ship`→deploy-button. dev role keeps zero overrides → all prior tests stay green. Driven by feedback "don't classify too casually" (saved as memory).
     - **#A3 unknownLog (self-improving classifier)** — `src/systems/unknownLog.js` aggregates Tier 5 unknown task/status/mood/role/workflow raws into dev-mode buckets (capped 200/kind). Exposes `window.__office_unknownLog` + `window.__office_logUnknowns()` for DevTools inspection. Production: zero-cost via `import.meta.env.PROD` gate. LangSmith-style — high-frequency unknowns reveal what needs Tier 0 promotion.
+    - **#8 桌面通知** — `src/inference/desktopNotifier.js` 5s-poll loop; fires browser Notification when an agent stays blocked ≥30s + tab hidden + permission granted. Per-episode dedupe via `office-blocked-<id>` tag; transition out of blocked resets dedupe. ControlPanel 🔔 button requests permission on user gesture. Full i18n in en + zh-TW.
+    - **#C idle-gap inference** — `src/inference/idleGapInfer.js` closes Pixel Agents' admitted heuristic gap. Conservative thresholds (working+45s gap → thinking; blocked+90s gap → awaiting-approval) injected back through `applyExternalStatus(source: 'idle-gap-infer')` so they pass through `decideBehavior` + `classifyStatus`. Inferred statuses already pre-registered in classify.js STATUS_TABLE since #A1. lastUpdatedAt stamped via zustand subscription on status/task signature changes only (not position ticks).
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
@@ -92,6 +94,13 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### main-2026-05-29 (#8 desktop notifications + #C idle-gap inference)
+
+- #8 shipped: `src/inference/desktopNotifier.js` polls store 5s, fires browser Notification when an agent stays blocked ≥30s + tab hidden + permission granted. Per-episode dedupe (blocked→working→blocked = 2 notifications, but same episode = 1). ControlPanel 🔔 button requests permission on user gesture (modern browsers require this). i18n + sr-only.
+- #C shipped: `src/inference/idleGapInfer.js` closes Pixel Agents' admitted gap. Conservative thresholds: working+45s → inferred 'thinking'; blocked+90s → inferred 'awaiting-approval'. Injected through `applyExternalStatus` so inferred statuses pass through `decideBehavior` (COGNITION/GATE family → reading-screen / shield-verify). Reversibility by construction — real hook events overwrite the inferred status. lastUpdatedAt stamped only on status/task signature changes (not movement ticks).
+- Tests: 915/915 vitest passed (was 875, +24 desktopNotifier + 16 idleGapInfer). Build clean, +5 KB raw / +1.6 KB gzip (two new modules + UI button).
+- Files added: `src/inference/desktopNotifier.js`, `src/inference/idleGapInfer.js`, `tests/desktopNotifier.test.js`, `tests/idleGapInfer.test.js`. Edits: `src/components/PixelOffice.jsx` (2 useEffect), `src/components/ControlPanel.jsx` (🔔 button), `src/locales/en.json` + `zh-TW.json` (notify.* keys), `docs/specs/_product-backlog.md` (#8 → Done).
 
 ### main-2026-05-29 (unknownLog #A3)
 
