@@ -325,8 +325,14 @@ describe('AgentInspector', () => {
 
 // ─── countAgentDoneToday — edge cases ────────────────────────────────
 describe('countAgentDoneToday — edge cases', () => {
-  const NOW = new Date('2026-04-08T18:00:00+08:00').getTime()
-  const TODAY_START = new Date('2026-04-08T00:00:00+08:00').getTime()
+  // Use the local-time constructor (y, m, d, h, m, s) so NOW and TODAY_START
+  // are computed in the SAME timezone as the function under test. The previous
+  // ISO string with explicit `+08:00` offset only matched the function's
+  // local-computed startOfDay on machines whose local TZ was UTC+8 — CI runs
+  // in UTC and tripped the boundary test. Local-time constructor is
+  // timezone-agnostic by construction.
+  const NOW = new Date(2026, 3, 8, 18, 0, 0).getTime()         // local 2026-04-08 18:00
+  const TODAY_START = new Date(2026, 3, 8, 0, 0, 0).getTime()  // local 2026-04-08 00:00
 
   it('ledger with wrong dayKey → returns 0 (stale ledger from yesterday)', () => {
     expect(countAgentDoneToday({
