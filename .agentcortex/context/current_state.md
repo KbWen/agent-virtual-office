@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-29
-- **Update Sequence**: 10
+- **Update Sequence**: 11
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -36,6 +36,7 @@
     - #15 白板手寫動畫 — confirmed pre-existing (`PixelOffice.jsx:146` `WhiteboardAnimation`); closure-documented at #14 ship time (similar to #7 pattern)
     - **#A1 classifier foundation** — pure module `src/systems/classify.js` (Tier 0 builtin + Tier 3 W3C verb + Tier 4 MCP namespace + Tier 5 unknown) with 90 unit tests; standards-aligned (W3C Activity Streams 2.0 / OpenTelemetry GenAI / MCP spec per panel discussion). Foundation only — downstream wiring is #A2.
     - **#A2 classifier wiring** — `store.applyExternalStatus` now falls back to `familyToBehavior(classifyTask(task).family)` for non-built-in tasks; `moodToWeather` delegates to `classifyMood(mood).family`. Bash/Read/Grep/Glob keep byte-identical behavior (regression-tested); MCP / verb-classified / unknown tasks now get family-appropriate animations (`writeFile`→writing-notes, `authenticate`→shield-verify, `dispatchJob`→gantt-chart, etc.). Bundle +6 KB raw / +2.4 KB gzip.
+    - **#A2.1 role-aware classifier** — added `classifyRole`, `classifyWorkflow`, `decideBehavior` 4-priority resolver (status > workflow > role > family-default). Drove `store.applyExternalStatus` to use it. Same tool now produces different animations based on role + active workflow phase: `qa+Bash`→magnifier, `ops+Bash`→deploy-button, `gate+Bash`→shield-verify, `designer+Edit`→whiteboard, `pm+Write`→gantt-chart, `dev+Bash` during `/test`→magnifier, `dev+Bash` during `/ship`→deploy-button. dev role keeps zero overrides → all prior tests stay green. Driven by feedback "don't classify too casually" (saved as memory).
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
@@ -90,6 +91,15 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### main-2026-05-29 (role-aware classifier #A2.1)
+
+- Wiring shipped: `classifyRole(roleId)` (extracts base role from `slug~role` composites, classifies into orchestrator/builder/verifier/deployer/investigator families); `classifyWorkflow(workflow)` (normalizes leading-slash and case, recognizes 26 AgentCortex lifecycle phases); `decideBehavior({task, role, status, workflow})` central 4-priority resolver (status > workflow > role > family-default).
+- AgentCortex skill associations drive role overrides: pm/arch own writing-plans → gantt-chart bias; qa/checker own TDD+red-team → magnifier bias; ops owns finishing-a-development-branch → deploy-button bias; res owns doc-lookup → research bias; gate owns auth-security → shield-verify bias; designer owns frontend-patterns → whiteboard bias.
+- Workflow overrides outrank role: `/ship`→deploy-button, `/test`→magnifier, `/research`→research, `/plan`→gantt-chart, `/review` & `/audit`→magnifier.
+- Tests: 851/851 vitest passed (was 748, +67 unit + 36 integration). Build clean, +1.4 KB raw / +0.3 KB gzip.
+- Files: `src/systems/classify.js` (+~140 lines: ROLE/WORKFLOW override tables + 3 new exports), `src/systems/store.js` (1 wiring line swap), `tests/classify.test.js` (+~150 lines), `tests/classifierRoleContext.test.js` (new, +220 lines, 36 tests).
+- Memory: saved `feedback_classification_rigor.md` so future classifier work checks `.agent/skills/` + `.agent/workflows/` BEFORE defaulting to generic W3C/schema.org taxonomies.
 
 ### main-2026-05-29 (classifier wiring #A2)
 
