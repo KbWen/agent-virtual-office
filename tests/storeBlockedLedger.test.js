@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   useOfficeStore,
   validatePersistedDailyBlockedLedger,
+  createPersistedState,
 } from '../src/systems/store.js'
 
 // Pristine snapshot so tests don't leak into one another.
@@ -123,6 +124,162 @@ describe('dailyBlockedLedger — transition counter (#6 perf metrics)', () => {
     updateTime()
     expect(useOfficeStore.getState().dailyBlockedLedger.counts).toEqual({})
     expect(useOfficeStore.getState().dailyDoneLedger.counts).toEqual({})
+  })
+})
+
+describe('dailyBlockedLedger — additional scenarios (code review pass)', () => {
+  beforeEach(resetStore)
+
+  it('idle → blocked counts (default initial status is idle)', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    // All agents start with status='idle' from initAgents. First blocked tick should count.
+    applyExternalStatus([{ agentId: 'dev', status: 'blocked' }])
+    expect(useOfficeStore.getState().dailyBlockedLedger.counts.dev).toBe(1)
+  })
+
+  it('blocked → done → blocked counts as 2 (done is a fresh transition out of blocked)', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([{ agentId: 'dev', status: 'blocked' }])
+    applyExternalStatus([{ agentId: 'dev', status: 'done' }])
+    applyExternalStatus([{ agentId: 'dev', status: 'blocked' }])
+    expect(useOfficeStore.getState().dailyBlockedLedger.counts.dev).toBe(2)
+  })
+
+  it('multi-agent batch update: ONE clone for N blocked transitions in same applyExternalStatus call', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    // Settle today's dayKey first
+    applyExternalStatus([{ agentId: 'dev', status: 'working' }])
+    const before = useOfficeStore.getState().dailyBlockedLedger
+
+    // Single call with 4 blocked transitions
+    applyExternalStatus([
+      { agentId: 'dev', status: 'blocked' },
+      { agentId: 'qa', status: 'blocked' },
+      { agentId: 'ops', status: 'blocked' },
+      { agentId: 'gate', status: 'blocked' },
+    ])
+    const after = useOfficeStore.getState().dailyBlockedLedger
+
+    expect(after).not.toBe(before)
+    expect(after.counts).toEqual({ dev: 1, qa: 1, ops: 1, gate: 1 })
+    // Original ledger must remain untouched (clone-on-write contract)
+    expect(before.counts).toEqual({})
+  })
+
+  it('mixed-status batch update increments correct counters', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([
+      { agentId: 'dev', status: 'blocked' },
+      { agentId: 'qa', status: 'done' },
+      { agentId: 'ops', status: 'working' },
+      { agentId: 'gate', status: 'blocked' },
+    ])
+    const state = useOfficeStore.getState()
+    expect(state.dailyBlockedLedger.counts).toEqual({ dev: 1, gate: 1 })
+    expect(state.dailyDoneLedger.counts).toEqual({ qa: 1 })
+  })
+
+  it('empty updates array does not crash and preserves ledger identity', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([{ agentId: 'dev', status: 'working' }]) // settle dayKey
+    const before = useOfficeStore.getState().dailyBlockedLedger
+    expect(() => applyExternalStatus([])).not.toThrow()
+    const after = useOfficeStore.getState().dailyBlockedLedger
+    // Empty payload should not allocate a new ledger
+    expect(after).toBe(before)
+  })
+
+  it('dynamic worktree agent id (slug~role) counts independently', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'feat-foo~dev', status: 'blocked', session: 'feat-foo' }],
+      { source: 'multi-session' }
+    )
+    applyExternalStatus(
+      [
+        { agentId: 'feat-foo~dev', status: 'working', session: 'feat-foo' },
+        { agentId: 'feat-bar~dev', status: 'blocked', session: 'feat-bar' },
+      ],
+      { source: 'multi-session' }
+    )
+    applyExternalStatus(
+      [{ agentId: 'feat-foo~dev', status: 'blocked', session: 'feat-foo' }],
+      { source: 'multi-session' }
+    )
+    const counts = useOfficeStore.getState().dailyBlockedLedger.counts
+    expect(counts['feat-foo~dev']).toBe(2)
+    expect(counts['feat-bar~dev']).toBe(1)
+  })
+
+  it('persistence round-trip: createPersistedState includes dailyBlockedLedger', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([{ agentId: 'dev', status: 'blocked' }])
+    applyExternalStatus([{ agentId: 'qa', status: 'done' }])
+
+    const persisted = createPersistedState(useOfficeStore.getState())
+    expect(persisted.dailyBlockedLedger).toBeDefined()
+    expect(persisted.dailyBlockedLedger.counts.dev).toBe(1)
+    expect(persisted.dailyDoneLedger.counts.qa).toBe(1)
+  })
+
+  it('persistence round-trip: validate restores counts when dayKey is today', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([{ agentId: 'dev', status: 'blocked' }])
+    const persisted = createPersistedState(useOfficeStore.getState())
+
+    // Simulate reload: validate the persisted shape
+    const restored = validatePersistedDailyBlockedLedger(persisted.dailyBlockedLedger)
+    expect(restored.counts.dev).toBe(1)
+    expect(restored.dayKey).toBe(persisted.dailyBlockedLedger.dayKey)
+  })
+
+  it('dayKey drift defense: blocked ledger stuck on yesterday must not accept new counts onto stale day', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+
+    // Settle done ledger to today, then force-drift blocked ledger to yesterday.
+    applyExternalStatus([{ agentId: 'dev', status: 'working' }])
+    const todayKey = useOfficeStore.getState().dailyDoneLedger.dayKey
+
+    useOfficeStore.setState((s) => ({
+      dailyBlockedLedger: { dayKey: '1999-12-31', counts: { dev: 99 } },
+    }))
+
+    // Now record a blocked event. Done ledger is fresh → dayChanged=false.
+    // BUG if: blocked counter increments on the stale yesterday ledger (99 → 100).
+    // CORRECT: blocked ledger rolls to today, drops 99, starts fresh.
+    applyExternalStatus([{ agentId: 'dev', status: 'blocked' }])
+
+    const blocked = useOfficeStore.getState().dailyBlockedLedger
+    expect(blocked.dayKey).toBe(todayKey)
+    // The stale 99 must be discarded — only the new transition counts
+    expect(blocked.counts).toEqual({ dev: 1 })
+  })
+
+  it('multiple consecutive applyExternalStatus calls without transitions preserve ledger identity', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([{ agentId: 'dev', status: 'working' }]) // settle
+    const ref = useOfficeStore.getState().dailyBlockedLedger
+    applyExternalStatus([{ agentId: 'qa', status: 'working' }])
+    applyExternalStatus([{ agentId: 'ops', status: 'done' }])
+    applyExternalStatus([{ agentId: 'gate', status: 'working' }])
+    expect(useOfficeStore.getState().dailyBlockedLedger).toBe(ref)
+  })
+
+  it('ledger updates correctly when day rolls via applyExternalStatus (not just updateTime)', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([{ agentId: 'dev', status: 'blocked' }])
+    expect(useOfficeStore.getState().dailyBlockedLedger.counts.dev).toBe(1)
+
+    // Stamp both ledgers with yesterday's dayKey to simulate cross-midnight applyExternalStatus
+    useOfficeStore.setState((s) => ({
+      dailyDoneLedger: { ...s.dailyDoneLedger, dayKey: '1999-12-31' },
+      dailyBlockedLedger: { ...s.dailyBlockedLedger, dayKey: '1999-12-31' },
+    }))
+
+    applyExternalStatus([{ agentId: 'qa', status: 'blocked' }])
+    const blocked = useOfficeStore.getState().dailyBlockedLedger
+    expect(blocked.dayKey).not.toBe('1999-12-31')
+    expect(blocked.counts).toEqual({ qa: 1 }) // dev:1 from yesterday gone
   })
 })
 
