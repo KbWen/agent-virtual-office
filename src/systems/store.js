@@ -507,18 +507,27 @@ export const useOfficeStore = create((set) => ({
       // on a same-day update keep s.dailyDoneLedger by reference until a count is
       // actually about to be incremented (the `if (shouldCount)` branch below clones it).
       const rolledLedger = ensureCurrentDailyDoneLedger(s.dailyDoneLedger, now)
-      const dayChanged = s.dailyDoneLedger.dayKey !== rolledLedger.dayKey
+      const rolledBlockedLedger = ensureCurrentDailyBlockedLedger(s.dailyBlockedLedger, now)
+      // `dayChanged` triggers when EITHER ledger has rolled (the previously stored
+      // dayKey differs from today's). Independent drift defense: if the blocked ledger
+      // is somehow stuck on yesterday while done is fresh (or vice versa — only possible
+      // via direct setState in tests or future code that touches one without the other),
+      // we still roll both atomically and reset desk items. The OR keeps cross-midnight
+      // applyExternalStatus correct even when one ledger was touched after midnight
+      // before the other had a chance to be updated by updateTime's 60s tick.
+      const dayChanged = (
+        s.dailyDoneLedger.dayKey !== rolledLedger.dayKey ||
+        !s.dailyBlockedLedger || s.dailyBlockedLedger.dayKey !== rolledBlockedLedger.dayKey
+      )
       // `dailyDoneLedger` starts as the rolled ledger (a new object) on a day change, or
       // the existing reference on a same-day update. `ledgerMutated` tracks whether the
       // final returned value differs from s.dailyDoneLedger so an unchanged ledger keeps
       // its identity.
       let dailyDoneLedger = dayChanged ? rolledLedger : s.dailyDoneLedger
       let ledgerMutated = dayChanged
-      // Parallel clone-on-write for the blocked transition counter. Shares the same
-      // `dayChanged` gate so both ledgers reset atomically at midnight even if the
-      // first cross-midnight update only touches one of the two counters.
-      const rolledBlockedLedger = ensureCurrentDailyBlockedLedger(s.dailyBlockedLedger, now)
-      let dailyBlockedLedger = dayChanged ? rolledBlockedLedger : (s.dailyBlockedLedger || rolledBlockedLedger)
+      // Parallel clone-on-write for the blocked transition counter. Same `dayChanged`
+      // gate above guarantees atomic rollover.
+      let dailyBlockedLedger = dayChanged ? rolledBlockedLedger : s.dailyBlockedLedger
       let blockedLedgerMutated = dayChanged
       if (dayChanged) {
         for (const id of Object.keys(agents)) {
