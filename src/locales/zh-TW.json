@@ -292,5 +292,19 @@
     "secondsAgo": "{0}秒前",
     "minutesAgo": "{0}分鐘前",
     "hoursAgo": "{0}小時前"
+  },
+  "notify": {
+    "blockedTitle": "Agent 卡住了",
+    "blockedBody": "{0} 已經被擋住 30 秒以上",
+    "tooltip": {
+      "default": "啟用桌面通知（agent 卡住時告知你）",
+      "granted": "通知已啟用",
+      "denied": "通知已封鎖 — 請到瀏覽器設定調整"
+    },
+    "aria": {
+      "default": "啟用桌面通知",
+      "granted": "桌面通知已啟用",
+      "denied": "桌面通知已拒絕"
+    }
   }
 }

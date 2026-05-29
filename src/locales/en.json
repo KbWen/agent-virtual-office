@@ -292,5 +292,19 @@
     "secondsAgo": "{0}s ago",
     "minutesAgo": "{0}m ago",
     "hoursAgo": "{0}h ago"
+  },
+  "notify": {
+    "blockedTitle": "Agent stuck",
+    "blockedBody": "{0} has been blocked for 30+ seconds",
+    "tooltip": {
+      "default": "Enable desktop notifications when an agent is stuck",
+      "granted": "Notifications enabled",
+      "denied": "Notifications blocked — change in browser settings"
+    },
+    "aria": {
+      "default": "Enable desktop notifications",
+      "granted": "Desktop notifications enabled",
+      "denied": "Desktop notifications denied"
+    }
   }
 }

@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName } from '../i18n'
+import { requestNotificationPermission, getNotificationState } from '../inference/desktopNotifier'
 
 const statusOptions = ['idle', 'working', 'blocked', 'done']
 
@@ -39,6 +40,12 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
     if (typeof window === 'undefined') return false
     return !localStorage.getItem('office-onboarded')
   })
+  // Notification permission state (#8). Init from current state; refresh after request.
+  const [notifyState, setNotifyState] = useState(() => getNotificationState())
+  const handleRequestNotify = async () => {
+    const r = await requestNotificationPermission()
+    setNotifyState(r)
+  }
   const lang = useLocale()
   const isPanel = mode === 'panel'
 
@@ -224,6 +231,28 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Notification permission toggle (#8). 'default' = ask, 'granted' = on,
+              'denied' = blocked, 'unsupported' = no API. Clicking when 'default'
+              triggers requestPermission within a user-gesture (modern browsers
+              require this). After 'granted' / 'denied', the button is a non-action
+              status indicator. */}
+          {notifyState !== 'unsupported' && (
+            <button
+              onClick={handleRequestNotify}
+              disabled={notifyState === 'granted' || notifyState === 'denied'}
+              className={`px-2 py-1 rounded border transition-colors text-[10px] ${
+                notifyState === 'granted'
+                  ? 'border-emerald-400 text-emerald-600 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 cursor-default'
+                  : notifyState === 'denied'
+                    ? 'border-red-400 text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 cursor-default'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+              title={t(`notify.tooltip.${notifyState}`, notifyState === 'granted' ? 'Notifications on' : notifyState === 'denied' ? 'Notifications blocked' : 'Enable notifications')}
+              aria-label={t(`notify.aria.${notifyState}`, notifyState === 'granted' ? 'Notifications enabled' : notifyState === 'denied' ? 'Notifications denied' : 'Enable desktop notifications')}
+            >
+              {notifyState === 'granted' ? '🔔' : notifyState === 'denied' ? '🔕' : '🔔'}
+            </button>
+          )}
           <button onClick={cycleLang} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 text-[10px]" title={`${t('aria.switchLang', 'Switch language')} (L)`} aria-label={t('aria.switchLang', 'Switch language')}>
             {nextLangLabel}
           </button>
