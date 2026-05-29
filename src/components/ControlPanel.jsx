@@ -1,10 +1,22 @@
 import React, { useState, useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
+import { classifyTask } from '../systems/classify'
 import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName } from '../i18n'
 import { requestNotificationPermission, getNotificationState } from '../inference/desktopNotifier'
 
 const statusOptions = ['idle', 'working', 'blocked', 'done']
+
+// Collapse a raw tool/task name into the same short chip the character's
+// TaskLabel (AVO-103) shows, so the control panel never displays the ugly
+// `mcp__Server__tool` wire form while the SVG label above the head shows the
+// collapsed `Server::tool`. Built-ins stay short (`Bash`), MCP tools collapse
+// to `server::tool`, unknowns are truncated. Returns null for an empty task so
+// callers can fall back to the localized status label.
+export function taskChipLabel(task) {
+  if (!task) return null
+  return classifyTask(task).visualLabel
+}
 
 export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   // Return full agent objects so useShallow can compare by reference. Mapping to
@@ -89,7 +101,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             {agentList.map((agent) => {
               const ext = externalStatus[agent.id]
               return (
-                <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${charName(agent.id)}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
+                <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${charName(agent.id)}: ${ext ? (taskChipLabel(ext.task) || ext.status) : agent.behavior}`}>
                   <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: agent.color }} />
                   <span className="inline-block w-1 h-1 rounded-full" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} aria-hidden="true" />
                 </div>
@@ -160,10 +172,10 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             const ext = externalStatus[agent.id]
             const name = charName(agent.id)
             const label = ext
-              ? (ext.task ? ext.task.replace(/^\//, '') : t(`statusLabels.${ext.status}`, ext.status))
+              ? (ext.task ? taskChipLabel(ext.task) : t(`statusLabels.${ext.status}`, ext.status))
               : behaviorLabel(agent.behavior)
             return (
-              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${name}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
+              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${name}: ${ext ? (taskChipLabel(ext.task) || ext.status) : agent.behavior}`}>
                 <span className="inline-block w-2.5 h-2.5 rounded-full border border-white/50" style={{ backgroundColor: agent.color }} />
                 <span className="text-gray-700 dark:text-gray-200 font-medium">{name}</span>
                 <span className="text-gray-400 dark:text-gray-500">·</span>
