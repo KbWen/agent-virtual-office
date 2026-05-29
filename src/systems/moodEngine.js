@@ -142,8 +142,15 @@ export function pushEventBatch(eventList) {
   // Keep window size bounded — one splice is O(n) vs a shift loop's O(k·n)
   if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS)
 
-  if (added > 0) resetIdleTimer()
-  updateStoreMood()
+  if (added > 0) {
+    resetIdleTimer()
+    updateStoreMood()
+  }
+  // If `added === 0` (empty array / all-skipped entries), skip the mood recompute:
+  // computeMood with an empty buffer returns 'idle', so an unguarded call would
+  // silently flip mood→idle even though no real signal arrived. The production
+  // callers (inferStatus.applyMessage) gate with `if (updates.length > 0)` so
+  // this is defense in depth — future callers that forget the gate now stay safe.
 }
 
 /**
