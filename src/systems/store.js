@@ -878,9 +878,20 @@ export const useOfficeStore = create((set) => ({
 
   // Handoff animation state
   handoffs: [],
-  addHandoff: (from, to) =>
+  // `opts.subtle: true` — request the calmer visual variant used by AVO-105
+  // workflow handoffs (no sparkle trail, reduced rotation, no scale pulse).
+  // Organic handoffs (officeLife's pass-document behavior) leave it undefined
+  // and keep the original flashier animation.
+  addHandoff: (from, to, opts = {}) =>
     set((s) => {
-      const next = [...s.handoffs, { id: ++_handoffId, from, to, startTime: Date.now() }]
+      const entry = {
+        id: ++_handoffId,
+        from,
+        to,
+        startTime: Date.now(),
+        subtle: !!opts.subtle,
+      }
+      const next = [...s.handoffs, entry]
       return { handoffs: next.length > 20 ? next.slice(-20) : next }
     }),
   removeHandoff: (id) =>

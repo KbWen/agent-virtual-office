@@ -5,6 +5,7 @@ import { startOfficeLife, triggerInteractiveEvent } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
 import { startDesktopNotifier } from '../inference/desktopNotifier'
 import { startIdleGapInference } from '../inference/idleGapInfer'
+import { startWorkflowHandoffs } from '../inference/workflowHandoff'
 import { eventName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import AgentInspector from './AgentInspector'
@@ -70,7 +71,7 @@ const SprintKanban = React.memo(function SprintKanban({ x, y, doneCount = 0 }) {
 })
 
 // ─── Flying Document Animation ──────────────────────────────────────────
-function FlyingDocument({ fromPos, toPos, onComplete }) {
+function FlyingDocument({ fromPos, toPos, onComplete, subtle = false }) {
   const [progress, setProgress] = React.useState(0)
   const rafRef = React.useRef(null)
   const startRef = React.useRef(null)
@@ -99,21 +100,24 @@ function FlyingDocument({ fromPos, toPos, onComplete }) {
   const arcHeight = -60 * Math.sin(progress * Math.PI)  // arc up
   const y = fromPos.y + (toPos.y - fromPos.y) * progress + arcHeight
 
-  // Slight rotation during flight
-  const rotation = progress * 360
+  // Rotation + scale: subtle workflow handoffs use a calm 60° tilt with no scale
+  // pulse (per AVO-105 design "畫面要清楚好懂、不過分花俏"). Organic handoffs from
+  // officeLife keep the original 360° spin + 1→1.3→1 scale to read as celebratory.
+  const rotation = subtle ? progress * 60 : progress * 360
+  const scale = subtle ? 1 : (1 + Math.sin(progress * Math.PI) * 0.3)
 
   return (
     <g transform={`translate(${x}, ${y - 20})`} opacity={1 - progress * 0.3}>
       {/* Paper document */}
-      <g transform={`rotate(${rotation * 0.3}, 0, 0) scale(${1 + Math.sin(progress * Math.PI) * 0.3})`}>
+      <g transform={`rotate(${rotation * 0.3}, 0, 0) scale(${scale})`}>
         <rect x={-5} y={-6} width={10} height={12} rx={1} fill="white" stroke="#CCC" strokeWidth="0.5" />
         <line x1={-3} y1={-3} x2={3} y2={-3} stroke="#AAA" strokeWidth="0.5" />
         <line x1={-3} y1={-1} x2={3} y2={-1} stroke="#AAA" strokeWidth="0.5" />
         <line x1={-3} y1={1} x2={2} y2={1} stroke="#AAA" strokeWidth="0.5" />
         <line x1={-3} y1={3} x2={3} y2={3} stroke="#DDD" strokeWidth="0.5" />
       </g>
-      {/* Sparkle trail */}
-      {progress > 0.1 && progress < 0.9 && (
+      {/* Sparkle trail — organic mode only; workflow handoffs stay clean */}
+      {!subtle && progress > 0.1 && progress < 0.9 && (
         <>
           <circle cx={-8} cy={3} r={1.5} fill="#FFD700" opacity={0.6 * (1 - progress)} />
           <circle cx={-12} cy={6} r={1} fill="#FFD700" opacity={0.4 * (1 - progress)} />
@@ -146,6 +150,7 @@ function FlyingDocuments() {
         key={h.id}
         fromPos={fromPos}
         toPos={toPos}
+        subtle={h.subtle}
         onComplete={() => useOfficeStore.getState().removeHandoff(h.id)}
       />
     )
@@ -701,6 +706,15 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     // Closes Pixel Agents' admitted heuristic gap; the inferred statuses are pre-registered
     // in classify.js STATUS_TABLE and flow through decideBehavior normally.
     const cleanup = startIdleGapInference(useOfficeStore)
+    return cleanup
+  }, [])
+
+  useEffect(() => {
+    // Workflow handoff arrows (AVO-105): when activeWorkflow flips between phases
+    // (e.g. /plan → /implement), fire a subtle paper-document arc between the
+    // role pair that semantically owns that handoff (arch → dev for plan→implement).
+    // Subtle variant (no sparkle, calm rotation) per "clear and not flashy" brief.
+    const cleanup = startWorkflowHandoffs(useOfficeStore)
     return cleanup
   }, [])
 
