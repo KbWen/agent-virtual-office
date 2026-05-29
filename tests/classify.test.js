@@ -8,6 +8,9 @@ import {
   classifyTask,
   classifyStatus,
   classifyMood,
+  classifyRole,
+  classifyWorkflow,
+  decideBehavior,
   familyToBehavior,
   FAMILIES,
 } from '../src/systems/classify.js'
@@ -416,6 +419,202 @@ describe('familyToBehavior — #A2 wiring helper', () => {
     expect(familyToBehavior('not-a-real-family')).toBe('typing')
     expect(familyToBehavior(undefined)).toBe('typing')
     expect(familyToBehavior(null)).toBe('typing')
+  })
+})
+
+describe('classifyRole — AgentCortex roster taxonomy', () => {
+  it.each([
+    ['pm',       'orchestrator', true],
+    ['arch',     'orchestrator', true],
+    ['dev',      'builder',      false],  // dev is generalist — no overrides
+    ['qa',       'verifier',     true],
+    ['ops',      'deployer',     true],
+    ['res',      'investigator', true],
+    ['gate',     'verifier',     true],
+    ['designer', 'builder',      true],
+    ['planner',  'orchestrator', true],
+    ['worker',   'builder',      false],  // worker is dev-equivalent
+    ['checker',  'verifier',     true],
+  ])('%s → family=%s hasOverrides=%s', (role, family, hasOverrides) => {
+    const r = classifyRole(role)
+    expect(r.tier).toBe(0)
+    expect(r.family).toBe(family)
+    expect(r.hasOverrides).toBe(hasOverrides)
+  })
+
+  it('extracts base role from composite slug~role agent IDs', () => {
+    const r = classifyRole('feat-x~qa')
+    expect(r.tier).toBe(0)
+    expect(r.family).toBe('verifier')
+    expect(r.raw).toBe('feat-x~qa')
+  })
+
+  it('handles slugs that themselves contain ~ (splits on LAST separator)', () => {
+    const r = classifyRole('feat~with~tilde~dev')
+    expect(r.tier).toBe(0)
+    expect(r.family).toBe('builder')
+  })
+
+  it('unknown role → unknown family', () => {
+    const r = classifyRole('security-officer')
+    expect(r.tier).toBe(5)
+    expect(r.family).toBe(FAMILIES.UNKNOWN)
+    expect(r.raw).toBe('security-officer')
+  })
+
+  it('non-string defensive: never throws', () => {
+    expect(() => classifyRole(null)).not.toThrow()
+    expect(() => classifyRole(undefined)).not.toThrow()
+    expect(() => classifyRole(42)).not.toThrow()
+  })
+})
+
+describe('classifyWorkflow — AgentCortex lifecycle phases', () => {
+  it.each([
+    'bootstrap', 'plan', 'implement', 'review', 'test', 'ship', 'handoff',
+    'spec', 'spec-intake', 'app-init', 'adr',
+    'hotfix', 'research', 'brainstorm', 'audit',
+    'decide', 'retro', 'sync-docs', 'govern-docs',
+  ])('recognizes phase: %s', (phase) => {
+    const r = classifyWorkflow(phase)
+    expect(r.tier).toBe(0)
+    expect(r.family).toBe('workflow-phase')
+  })
+
+  it('accepts leading slash (/ship and ship both work)', () => {
+    expect(classifyWorkflow('/ship').tier).toBe(0)
+    expect(classifyWorkflow('ship').tier).toBe(0)
+    expect(classifyWorkflow('/ship').family).toBe('workflow-phase')
+  })
+
+  it('case-insensitive (Ship == ship)', () => {
+    expect(classifyWorkflow('Ship').tier).toBe(0)
+    expect(classifyWorkflow('SHIP').tier).toBe(0)
+  })
+
+  it('phases with workflow overrides are flagged hasOverrides=true', () => {
+    expect(classifyWorkflow('/ship').hasOverrides).toBe(true)
+    expect(classifyWorkflow('/test').hasOverrides).toBe(true)
+    expect(classifyWorkflow('/research').hasOverrides).toBe(true)
+  })
+
+  it('phases WITHOUT workflow overrides flagged hasOverrides=false', () => {
+    expect(classifyWorkflow('/handoff').hasOverrides).toBe(false)
+    expect(classifyWorkflow('/retro').hasOverrides).toBe(false)
+  })
+
+  it('unknown workflow → unknown family, raw preserved', () => {
+    const r = classifyWorkflow('/my-custom-flow')
+    expect(r.tier).toBe(5)
+    expect(r.family).toBe(FAMILIES.UNKNOWN)
+    expect(r.raw).toBe('/my-custom-flow')
+  })
+
+  it('null/undefined → unknown without crash', () => {
+    expect(() => classifyWorkflow(null)).not.toThrow()
+    expect(() => classifyWorkflow(undefined)).not.toThrow()
+    expect(classifyWorkflow(null).family).toBe(FAMILIES.UNKNOWN)
+  })
+})
+
+describe('decideBehavior — priority resolver (status > workflow > role > default)', () => {
+  describe('Priority 1: Status overrides everything', () => {
+    it('blocked → scratch-head regardless of task/role/workflow', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'qa', status: 'blocked', workflow: '/ship' })).toBe('scratch-head')
+      expect(decideBehavior({ task: 'Edit', role: 'designer', status: 'blocked' })).toBe('scratch-head')
+    })
+    it('done → thumbs-up regardless of task/role/workflow', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'ops', status: 'done', workflow: '/ship' })).toBe('thumbs-up')
+    })
+  })
+
+  describe('Priority 2: Workflow override beats role', () => {
+    it('qa + Bash + /ship → deploy-button (workflow wins over qa magnifier)', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'qa', status: 'working', workflow: '/ship' })).toBe('deploy-button')
+    })
+    it('dev + Bash + /test → magnifier (workflow > default)', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'dev', status: 'working', workflow: '/test' })).toBe('magnifier')
+    })
+    it('dev + Read + /research → research (workflow > default)', () => {
+      expect(decideBehavior({ task: 'Read', role: 'dev', status: 'working', workflow: '/research' })).toBe('research')
+    })
+    it('dev + Write + /plan → gantt-chart (workflow > default)', () => {
+      expect(decideBehavior({ task: 'Write', role: 'dev', status: 'working', workflow: '/plan' })).toBe('gantt-chart')
+    })
+    it('dev + Bash + /review → falls through (review only overrides READ/SEARCH, not EXECUTE)', () => {
+      // The override table for /review doesnt include EXECUTE; falls to default familyToBehavior('execute') = 'typing'
+      expect(decideBehavior({ task: 'Bash', role: 'dev', status: 'working', workflow: '/review' })).toBe('typing')
+    })
+  })
+
+  describe('Priority 3: Role override (no workflow override active)', () => {
+    it('qa + Bash → magnifier (qa role override on EXECUTE)', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'qa', status: 'working' })).toBe('magnifier')
+    })
+    it('ops + Bash → deploy-button (ops role override)', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'ops', status: 'working' })).toBe('deploy-button')
+    })
+    it('gate + Bash → shield-verify (gate role)', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'gate', status: 'working' })).toBe('shield-verify')
+    })
+    it('designer + Edit → whiteboard (designer override on UPDATE)', () => {
+      expect(decideBehavior({ task: 'Edit', role: 'designer', status: 'working' })).toBe('whiteboard')
+    })
+    it('designer + Write → whiteboard (designer override on CREATE)', () => {
+      expect(decideBehavior({ task: 'Write', role: 'designer', status: 'working' })).toBe('whiteboard')
+    })
+    it('pm + Write → gantt-chart (pm override on CREATE)', () => {
+      expect(decideBehavior({ task: 'Write', role: 'pm', status: 'working' })).toBe('gantt-chart')
+    })
+    it('arch + Write → gantt-chart (arch override on CREATE)', () => {
+      expect(decideBehavior({ task: 'Write', role: 'arch', status: 'working' })).toBe('gantt-chart')
+    })
+    it('res + Read → research (researcher digs into docs)', () => {
+      expect(decideBehavior({ task: 'Read', role: 'res', status: 'working' })).toBe('research')
+    })
+  })
+
+  describe('Priority 4: Default family→behavior (no overrides)', () => {
+    it('dev + Bash → typing (no overrides)', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'dev', status: 'working' })).toBe('typing')
+    })
+    it('dev + Read → reading-screen (no overrides)', () => {
+      expect(decideBehavior({ task: 'Read', role: 'dev', status: 'working' })).toBe('reading-screen')
+    })
+    it('worker + Bash → typing (worker = dev equivalent)', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'worker', status: 'working' })).toBe('typing')
+    })
+  })
+
+  describe('Dynamic agents (slug~role IDs)', () => {
+    it('feat-x~qa + Bash → magnifier (base role extracted)', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'feat-x~qa', status: 'working' })).toBe('magnifier')
+    })
+    it('hotfix~ops + Bash → deploy-button', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'hotfix~ops', status: 'working' })).toBe('deploy-button')
+    })
+  })
+
+  describe('Lightweight-mode roster', () => {
+    it('checker + Read → magnifier (checker = qa equivalent)', () => {
+      expect(decideBehavior({ task: 'Read', role: 'checker', status: 'working' })).toBe('magnifier')
+    })
+    it('planner + Write → gantt-chart (planner = pm equivalent)', () => {
+      expect(decideBehavior({ task: 'Write', role: 'planner', status: 'working' })).toBe('gantt-chart')
+    })
+  })
+
+  describe('Defensive', () => {
+    it('no args → typing default (status undefined → no override → family unknown → typing)', () => {
+      expect(decideBehavior()).toBe('typing')
+      expect(decideBehavior({})).toBe('typing')
+    })
+    it('unknown role → falls to family default', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'security-officer', status: 'working' })).toBe('typing')
+    })
+    it('unknown workflow → falls through to role/family', () => {
+      expect(decideBehavior({ task: 'Bash', role: 'qa', status: 'working', workflow: '/my-custom' })).toBe('magnifier')
+    })
   })
 })
 

@@ -248,6 +248,200 @@ export function classifyStatus(status) {
   }
 }
 
+// ═══ #A2.1: Role + Workflow context-aware behavior selection ═══════════════
+//
+// The prior version (`familyToBehavior(classifyTask(task).family)`) treated all
+// agents the same — a Bash call from `qa` produced the same animation as one
+// from `ops`. That ignored the project's role taxonomy.
+//
+// AgentCortex skill associations drive the role behavior overrides below:
+//   pm/arch      → writing-plans, dispatching-parallel-agents → gantt-chart bias
+//   qa           → TDD, red-team-adversarial, verification    → magnifier bias
+//   ops          → finishing-a-development-branch (shipping)   → deploy-button bias
+//   res          → doc-lookup, systematic-debugging            → research bias
+//   gate         → auth-security, red-team-adversarial         → shield-verify bias
+//   designer     → frontend-patterns                            → whiteboard bias
+//   (dev keeps no overrides — its the generalist default.)
+//
+// Workflow overrides have HIGHER priority than role because phase context is
+// more specific. A qa agent during `/ship` should still show deploy-button —
+// theyre the one shipping, not inspecting.
+
+// Role → family → animation override. `null`/`undefined` means "no override",
+// fall through to the default familyToBehavior mapping.
+const ROLE_BEHAVIOR_OVERRIDES = Object.freeze({
+  pm:       { [FAMILIES.CREATE]: 'gantt-chart', [FAMILIES.UPDATE]: 'gantt-chart' },
+  arch:     { [FAMILIES.CREATE]: 'gantt-chart', [FAMILIES.UPDATE]: 'gantt-chart' },
+  qa:       { [FAMILIES.EXECUTE]: 'magnifier',  [FAMILIES.READ]:   'magnifier',   [FAMILIES.SEARCH]: 'magnifier' },
+  ops:      { [FAMILIES.EXECUTE]: 'deploy-button' },
+  res:      { [FAMILIES.SEARCH]: 'research', [FAMILIES.READ]: 'research' },
+  gate:     { [FAMILIES.EXECUTE]: 'shield-verify', [FAMILIES.READ]: 'magnifier', [FAMILIES.SEARCH]: 'magnifier' },
+  designer: { [FAMILIES.CREATE]: 'whiteboard', [FAMILIES.UPDATE]: 'whiteboard' },
+  // Lightweight-mode roster mirrors agentcortex
+  planner:  { [FAMILIES.CREATE]: 'gantt-chart', [FAMILIES.UPDATE]: 'gantt-chart' },
+  worker:   {},  // generalist like dev
+  checker:  { [FAMILIES.EXECUTE]: 'magnifier',  [FAMILIES.READ]:   'magnifier',   [FAMILIES.SEARCH]: 'magnifier' },
+  dev:      {},  // generalist baseline
+})
+
+// Workflow → family → animation. Keys here may include or omit the leading `/`
+// because callers stamp `s.activeWorkflow` from different sources; classifyWorkflow
+// normalizes for us. Override values match AgentCharacter animation cases.
+const WORKFLOW_BEHAVIOR_OVERRIDES = Object.freeze({
+  ship:     { [FAMILIES.EXECUTE]: 'deploy-button' },
+  test:     { [FAMILIES.EXECUTE]: 'magnifier', [FAMILIES.READ]: 'magnifier' },
+  research: { [FAMILIES.READ]: 'research', [FAMILIES.SEARCH]: 'research' },
+  plan:     { [FAMILIES.CREATE]: 'gantt-chart', [FAMILIES.UPDATE]: 'gantt-chart' },
+  review:   { [FAMILIES.READ]: 'magnifier', [FAMILIES.SEARCH]: 'magnifier' },
+  audit:    { [FAMILIES.READ]: 'magnifier', [FAMILIES.SEARCH]: 'magnifier' },
+})
+
+// Static metadata for classifyRole's `family` field — purely informational
+// (consumers can group/filter agents by role family).
+const ROLE_FAMILIES = Object.freeze({
+  pm:       'orchestrator',
+  arch:     'orchestrator',
+  dev:      'builder',
+  qa:       'verifier',
+  ops:      'deployer',
+  res:      'investigator',
+  gate:     'verifier',
+  designer: 'builder',
+  planner:  'orchestrator',
+  worker:   'builder',
+  checker:  'verifier',
+})
+
+// Extract the BASE role from a possibly-composite agentId like `slug~role`.
+// Mirrors the pattern used in store.js / behaviorEngine.js for desk-item growth.
+function extractBaseRole(agentId) {
+  if (typeof agentId !== 'string' || agentId.length === 0) return null
+  // Split on the LAST ~ — slugs may themselves contain ~ (per movementSystem
+  // R76 fix), so the base role is the segment after the last separator.
+  const idx = agentId.lastIndexOf('~')
+  return idx >= 0 ? agentId.slice(idx + 1) : agentId
+}
+
+// Public: classify a role id (or a composite `slug~role`).
+export function classifyRole(roleOrAgentId) {
+  const role = extractBaseRole(roleOrAgentId)
+  if (!role) {
+    return {
+      tier: 5,
+      family: FAMILIES.UNKNOWN,
+      severity: 'low',
+      visualLabel: '?',
+      a11yLabel: 'Unknown role',
+      raw: typeof roleOrAgentId === 'string' ? roleOrAgentId : String(roleOrAgentId),
+    }
+  }
+  const family = ROLE_FAMILIES[role]
+  const hasOverrides = ROLE_BEHAVIOR_OVERRIDES[role]
+  if (family) {
+    return {
+      tier: 0,
+      family,
+      severity: 'low',
+      visualLabel: role,
+      a11yLabel: `Role: ${role}`,
+      raw: typeof roleOrAgentId === 'string' ? roleOrAgentId : String(roleOrAgentId),
+      hasOverrides: !!hasOverrides && Object.keys(hasOverrides).length > 0,
+    }
+  }
+  return {
+    tier: 5,
+    family: FAMILIES.UNKNOWN,
+    severity: 'low',
+    visualLabel: role,
+    a11yLabel: `Unrecognized role: ${role}`,
+    raw: typeof roleOrAgentId === 'string' ? roleOrAgentId : String(roleOrAgentId),
+    hasOverrides: false,
+  }
+}
+
+// Normalize a workflow string (`/ship`, `ship`, `Ship`) to a canonical lookup key.
+function normalizeWorkflow(workflow) {
+  if (typeof workflow !== 'string' || workflow.length === 0) return null
+  return workflow.replace(/^\/+/, '').toLowerCase()
+}
+
+// Public: classify a workflow phase name.
+export function classifyWorkflow(workflow) {
+  const key = normalizeWorkflow(workflow)
+  if (!key) {
+    return {
+      tier: 5,
+      family: FAMILIES.UNKNOWN,
+      severity: 'low',
+      visualLabel: '?',
+      a11yLabel: 'No active workflow',
+      raw: typeof workflow === 'string' ? workflow : String(workflow ?? ''),
+    }
+  }
+  const hasOverrides = WORKFLOW_BEHAVIOR_OVERRIDES[key]
+  // The phase taxonomy mirrors AgentCortex's lifecycle (bootstrap/plan/implement/
+  // review/test/ship/handoff + research/audit/hotfix etc.). Each known workflow
+  // is `tier: 0`; unknowns fall to `tier: 5` with raw preserved.
+  const KNOWN_PHASES = new Set([
+    'bootstrap', 'plan', 'implement', 'review', 'test', 'ship', 'handoff',
+    'spec', 'spec-intake', 'app-init', 'adr',
+    'hotfix', 'research', 'brainstorm', 'audit',
+    'decide', 'retro', 'sync-docs', 'govern-docs',
+    'test-classify', 'test-skeleton', 'worktree-first', 'help',
+    'small-fix', 'medium-feature', 'new-feature',
+  ])
+  if (KNOWN_PHASES.has(key)) {
+    return {
+      tier: 0,
+      family: 'workflow-phase',
+      severity: 'low',
+      visualLabel: `/${key}`,
+      a11yLabel: `Workflow phase: ${key}`,
+      raw: workflow,
+      hasOverrides: !!hasOverrides && Object.keys(hasOverrides).length > 0,
+    }
+  }
+  return {
+    tier: 5,
+    family: FAMILIES.UNKNOWN,
+    severity: 'low',
+    visualLabel: `/${key}`,
+    a11yLabel: `Unrecognized workflow: ${key}`,
+    raw: workflow,
+    hasOverrides: false,
+  }
+}
+
+// Central resolver — combines task + role + status + workflow into a single
+// behavior pick. Priority: Status > Workflow > Role > Default-family.
+//
+// Status overrides win because they reflect immediate reality (a blocked
+// agent should look confused regardless of what tool they were running).
+// Workflow wins over role because phase context is more specific.
+export function decideBehavior({ task, role, status, workflow } = {}) {
+  // 1. Status override (hard wins, mirrors STATUS_BEHAVIOR_MAP semantics)
+  if (status === 'blocked') return 'scratch-head'
+  if (status === 'done')    return 'thumbs-up'
+
+  // 2. Resolve task family (the substrate for the override tables)
+  const family = classifyTask(task).family
+
+  // 3. Workflow override (highest specificity for non-status behavior)
+  const wfKey = normalizeWorkflow(workflow)
+  if (wfKey && WORKFLOW_BEHAVIOR_OVERRIDES[wfKey]?.[family]) {
+    return WORKFLOW_BEHAVIOR_OVERRIDES[wfKey][family]
+  }
+
+  // 4. Role override
+  const baseRole = extractBaseRole(role)
+  if (baseRole && ROLE_BEHAVIOR_OVERRIDES[baseRole]?.[family]) {
+    return ROLE_BEHAVIOR_OVERRIDES[baseRole][family]
+  }
+
+  // 5. Default family→behavior
+  return familyToBehavior(family)
+}
+
 // ─── classifyMood ───────────────────────────────────────────────────────────
 // Mirrors moodToWeather (kept in TopDownFurniture.jsx for #14), wrapped in the
 // classifier shape. Downstream #A2 will replace direct moodToWeather imports
