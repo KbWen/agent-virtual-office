@@ -251,17 +251,18 @@ function WeatherOverlay({ x, y, w, h, weather, reducedMotion }) {
 
   // Clip-path keeps raindrops / clouds inside the window pane regardless of
   // how the parent scales. Each instance gets a unique id so multiple
-  // windows on the same page don't share clip masks.
+  // windows on the same page don't share clip masks. Note: <clipPath> is
+  // itself a defining element in SVG — wrapping it in <defs> adds a DOM
+  // node per WeatherOverlay (12 total when all windows have weather) with
+  // no behavioral difference, so we drop the <defs> wrapper.
   const clipId = `weather-clip-${x}-${y}`
 
   if (weather === 'cloudy') {
     return (
       <g clipPath={`url(#${clipId})`} pointerEvents="none">
-        <defs>
-          <clipPath id={clipId}>
-            <rect x={x} y={y} width={w} height={h} rx={2} />
-          </clipPath>
-        </defs>
+        <clipPath id={clipId}>
+          <rect x={x} y={y} width={w} height={h} rx={2} />
+        </clipPath>
         <ellipse
           cx={x + w / 2} cy={y + h * 0.35}
           rx={w * 0.45} ry={h * 0.18}
@@ -305,11 +306,9 @@ function WeatherOverlay({ x, y, w, h, weather, reducedMotion }) {
 
   return (
     <g clipPath={`url(#${clipId})`} pointerEvents="none">
-      <defs>
-        <clipPath id={clipId}>
-          <rect x={x} y={y} width={w} height={h} rx={2} />
-        </clipPath>
-      </defs>
+      <clipPath id={clipId}>
+        <rect x={x} y={y} width={w} height={h} rx={2} />
+      </clipPath>
       {drops}
       {weather === 'thunderstorm' && (
         <rect

@@ -445,13 +445,19 @@ This watches for file changes and automatically updates the office.
 | Feature | Detail |
 |---------|--------|
 | **Pure SVG pixel art** | 16×20 hand-drawn characters, 7 hairstyles + 7 expressions + 2 genders |
-| **25 behavior animations** | Each behavior has a matching icon (keyboard, coffee cup, magnifier...) |
-| **RAF movement** | requestAnimationFrame-driven smooth walking at 80px/s |
-| **Corridor routing** | Characters walk through doorways and corridors, no clipping |
-| **Behavior engine** | Weighted random: work 65% / daily 12% / social 13% / away 10% |
-| **Status-aware speech** | "Let's go!" when working, "Help..." when blocked |
-| **Real-time clock** | Nap at noon, only Dev stays late with one lamp on |
+| **Standards-aligned classifier** | W3C Activity Streams 2.0 verbs + MCP namespace + role/workflow priority resolver (`src/systems/classify.js`) |
+| **Role-aware animations** | `qa+Bash`→magnifier, `ops+Bash`→deploy-button, `gate+Bash`→shield-verify, `designer+Edit`→whiteboard — same tool, different role, different visual |
+| **Mood-driven weather** | `frustrated`→rain, `stuck`→thunderstorm, `rushing`→cloudy through 12 wall windows; CSP-safe bundled keyframes |
+| **Idle-gap inference** | `working+45s`→`thinking`, `blocked+90s`→`awaiting-approval` (closes Pixel Agents' admitted heuristic gap) |
+| **Desktop notifications** | Browser Notification when blocked ≥30s + tab hidden + permission granted; per-episode dedupe |
+| **Self-improving classifier** | `unknownLog` aggregates Tier 5 fallbacks (LangSmith pattern); zero-cost in production via `import.meta.env.PROD` gate |
+| **Today done/blocked chip** | `✓N / ✗M` bottom-bar metric with i18n + sr-only mirror; atomic day rollover |
+| **RAF movement + corridor routing** | requestAnimationFrame-driven walking at 80px/s, characters walk through doorways and corridors without clipping |
+| **Behavior engine** | Weighted random: work 65% / daily 12% / social 13% / away 10% — modulated by role, mood, time of day |
+| **Status-aware speech** | "Let's go!" when working, "Help..." when blocked, mood-tinted bubbles |
+| **Real-time clock + day-night cycle** | Nap at noon, weather/lighting shift through the day, only Dev stays late with one lamp on |
 | **Never-stuck guarantee** | try/catch + watchdog timer, behavior chain never breaks |
+| **Reduced-motion + a11y** | Honors `prefers-reduced-motion`, sr-only labels on every visual indicator, dark mode |
 
 ---
 
@@ -460,34 +466,54 @@ This watches for file changes and automatically updates the office.
 ```
 .
 ├── bin/
-│   └── cli.js                  # npx entry point
+│   └── cli.js                       # npx entry point
 ├── src/
 │   ├── components/
-│   │   ├── AgentCharacter.jsx  # Character sprite + behavior scheduler + RAF movement
-│   │   ├── PixelOffice.jsx     # Main scene (SVG office + furniture)
-│   │   ├── BehaviorBubble.jsx  # Speech bubbles
-│   │   ├── TopDownFurniture.jsx # Desk & furniture SVG components
-│   │   └── ControlPanel.jsx    # Bottom status panel + language toggle
+│   │   ├── AgentCharacter.jsx       # Character sprite + behavior scheduler + RAF movement
+│   │   ├── PixelOffice.jsx          # Main scene (SVG office + furniture + weather overlay)
+│   │   ├── AgentInspector.jsx       # Per-agent detail panel (clickable agent → details)
+│   │   ├── BehaviorBubble.jsx       # Speech bubbles
+│   │   ├── TopDownFurniture.jsx     # Desk/furniture SVG + WallWindow + WeatherOverlay
+│   │   └── ControlPanel.jsx         # Bottom status panel + ✓N/✗M chip + 🔔 notifications
 │   ├── systems/
-│   │   ├── behaviorEngine.js   # Weighted random behavior engine
-│   │   ├── movementSystem.js   # Floor areas + obstacles + pathfinding
-│   │   ├── officeLife.js       # Group event system (8+ events)
-│   │   └── store.js            # Zustand state management
+│   │   ├── classify.js              # 4-tier classifier (built-in / W3C verb / MCP / role+workflow)
+│   │   ├── unknownLog.js            # Dev-mode Tier 5 aggregator (LangSmith pattern, prod no-op)
+│   │   ├── behaviorEngine.js        # Weighted random behavior engine
+│   │   ├── moodEngine.js            # Sliding-window mood (rushing/frustrated/stuck/...)
+│   │   ├── movementSystem.js        # Floor areas + obstacles + pathfinding
+│   │   ├── officeLife.js            # Group event system (eureka/meeting/deploy-success/...)
+│   │   ├── contextBubble.js         # Status × mood × role-aware speech generation
+│   │   ├── constants.js             # Shared enums (VALID_STATUSES / VALID_MOODS / STATUS_COLORS)
+│   │   └── store.js                 # Zustand state + dailyDoneLedger + dailyBlockedLedger
 │   ├── inference/
-│   │   ├── inferStatus.js      # External status integration
-│   │   └── agentRouter.js      # Agent routing logic
-│   ├── i18n.js                 # Lightweight i18n (~90 lines)
+│   │   ├── inferStatus.js           # External status integration (hook events + SSE/poll)
+│   │   ├── desktopNotifier.js       # Browser Notification when blocked ≥30s + tab hidden
+│   │   ├── idleGapInfer.js          # Infer 'thinking' (45s gap) / 'awaiting-approval' (90s gap)
+│   │   ├── agentRouter.js           # Agent routing logic
+│   │   ├── normalizePost.js         # POST /api/status payload sanitization
+│   │   └── platformDetect.js        # Browser / CLI / desktop platform detection
+│   ├── server/
+│   │   └── scanSessions.mjs         # Multi-worktree session scanner
+│   ├── i18n.js                      # Lightweight i18n (~90 lines)
 │   ├── locales/
-│   │   ├── en.json             # English strings
-│   │   └── zh-TW.json          # Traditional Chinese strings
+│   │   ├── en.json                  # English strings (incl. notify.* + ui.todayMetrics*)
+│   │   └── zh-TW.json               # Traditional Chinese strings
+│   ├── index.css                    # Bundled keyframes (CSP-safe) + Tailwind import
+│   ├── main.jsx                     # React root + error boundaries
 │   └── config/
-│       ├── characters.json     # Character definitions
-│       └── officeEvents.json   # Event pool + message library
+│       ├── characters.json          # Character definitions (8 roles + 3 lightweight)
+│       └── officeEvents.json        # Event pool + message library
 ├── public/
-│   ├── bridge.html             # Status bridge for iframe embedding
-│   └── hooks/                  # Example hook configs
-├── docs/                       # Design specs & architecture docs
-├── vite.config.js              # Vite + status API middleware
+│   ├── bridge.html                  # Status bridge for iframe embedding
+│   └── hooks/                       # Example hook configs (PreToolUse/PostToolUse/Stop/...)
+├── server.mjs                       # Production standalone server (Node built-ins only)
+├── docs/                            # Specs, ADRs, architecture docs
+│   ├── specs/                       # Feature specs + product backlog + shipped log
+│   ├── adr/                         # Architecture decision records
+│   ├── architecture/                # Domain decision logs (per area)
+│   └── deployment/                  # Docker / nginx / pm2 / systemd configs
+├── tests/                           # vitest — 925 tests covering classifier, inference, store, ledgers
+├── vite.config.js                   # Vite + status API middleware (/api/status, /api/event, /api/lang)
 └── package.json
 ```
 
