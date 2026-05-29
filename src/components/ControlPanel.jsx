@@ -18,6 +18,28 @@ export function taskChipLabel(task) {
   return classifyTask(task).visualLabel
 }
 
+// AVO-110 (lightweight): for a blocked agent the human `label` carries the
+// failure reason the hook detected ("❌ npm test failed"), which is far more
+// useful at a glance than the bare tool name (`Bash`). Surface it — truncated
+// for the compact status bar — so the persistent status line answers "why is
+// this agent stuck?" without needing to open the inspector. Returns null for
+// any non-blocked / label-less agent so callers fall back to the tool chip.
+const BLOCKED_REASON_CAP = 28
+export function blockedReasonLabel(ext) {
+  if (!ext || ext.status !== 'blocked' || !ext.label) return null
+  const l = ext.label
+  return l.length > BLOCKED_REASON_CAP ? l.slice(0, BLOCKED_REASON_CAP - 1) + '…' : l
+}
+
+// The single label a ControlPanel agent row shows: blocked reason wins, then the
+// collapsed tool chip, then the localized status word. `t` is the i18n lookup.
+export function agentLineLabel(ext, t) {
+  if (!ext) return null
+  return blockedReasonLabel(ext)
+    || taskChipLabel(ext.task)
+    || t(`statusLabels.${ext.status}`, ext.status)
+}
+
 export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   // Return full agent objects so useShallow can compare by reference. Mapping to
   // new projected objects {id,color,behavior,status} on every call means the inner
@@ -101,7 +123,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             {agentList.map((agent) => {
               const ext = externalStatus[agent.id]
               return (
-                <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${charName(agent.id)}: ${ext ? (taskChipLabel(ext.task) || ext.status) : agent.behavior}`}>
+                <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${charName(agent.id)}: ${ext ? (blockedReasonLabel(ext) || taskChipLabel(ext.task) || ext.status) : agent.behavior}`}>
                   <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: agent.color }} />
                   <span className="inline-block w-1 h-1 rounded-full" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} aria-hidden="true" />
                 </div>
@@ -171,11 +193,9 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
           {agentList.map((agent) => {
             const ext = externalStatus[agent.id]
             const name = charName(agent.id)
-            const label = ext
-              ? (ext.task ? taskChipLabel(ext.task) : t(`statusLabels.${ext.status}`, ext.status))
-              : behaviorLabel(agent.behavior)
+            const label = ext ? agentLineLabel(ext, t) : behaviorLabel(agent.behavior)
             return (
-              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${name}: ${ext ? (taskChipLabel(ext.task) || ext.status) : agent.behavior}`}>
+              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${name}: ${ext ? (blockedReasonLabel(ext) || taskChipLabel(ext.task) || ext.status) : agent.behavior}`}>
                 <span className="inline-block w-2.5 h-2.5 rounded-full border border-white/50" style={{ backgroundColor: agent.color }} />
                 <span className="text-gray-700 dark:text-gray-200 font-medium">{name}</span>
                 <span className="text-gray-400 dark:text-gray-500">·</span>

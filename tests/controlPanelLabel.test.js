@@ -10,7 +10,11 @@
  * render needed — the helper is a thin pure wrapper, mirroring taskLabel.test.js).
  */
 import { describe, it, expect } from 'vitest'
-import { taskChipLabel } from '../src/components/ControlPanel.jsx'
+import { taskChipLabel, blockedReasonLabel, agentLineLabel } from '../src/components/ControlPanel.jsx'
+
+// Minimal i18n stub: returns the fallback (2nd arg) the real t() would for an
+// unknown key, so agentLineLabel's status-word branch is exercised deterministically.
+const tStub = (_key, fallback) => fallback
 
 describe('ControlPanel — taskChipLabel routing', () => {
   it.each([
@@ -43,5 +47,60 @@ describe('ControlPanel — taskChipLabel routing', () => {
 
   it('a plain unknown short token passes through unchanged (e.g. UserPromptSubmit "thinking")', () => {
     expect(taskChipLabel('thinking')).toBe('thinking')
+  })
+})
+
+describe('ControlPanel — blockedReasonLabel (AVO-110 lightweight)', () => {
+  it('surfaces the failure reason for a blocked agent', () => {
+    expect(blockedReasonLabel({ status: 'blocked', task: 'Bash', label: '❌ npm test failed' }))
+      .toBe('❌ npm test failed')
+  })
+
+  it('returns null for non-blocked statuses (so the tool chip wins)', () => {
+    expect(blockedReasonLabel({ status: 'working', task: 'Bash', label: '⚡ npm test' })).toBeNull()
+    expect(blockedReasonLabel({ status: 'done', task: 'Bash', label: '✅ done' })).toBeNull()
+  })
+
+  it('returns null for a blocked agent with no label', () => {
+    expect(blockedReasonLabel({ status: 'blocked', task: 'Bash', label: null })).toBeNull()
+    expect(blockedReasonLabel({ status: 'blocked', task: 'Bash' })).toBeNull()
+  })
+
+  it('truncates an overly long reason with an ellipsis (compact status bar)', () => {
+    const long = '❌ a really long failure message that would overflow the bar'
+    const out = blockedReasonLabel({ status: 'blocked', label: long })
+    expect(out.length).toBeLessThanOrEqual(28)
+    expect(out.endsWith('…')).toBe(true)
+  })
+
+  it('keeps a reason exactly at the cap intact (no spurious ellipsis)', () => {
+    const exact = 'x'.repeat(28)
+    expect(blockedReasonLabel({ status: 'blocked', label: exact })).toBe(exact)
+  })
+
+  it('is defensive against null/garbage input', () => {
+    expect(blockedReasonLabel(null)).toBeNull()
+    expect(blockedReasonLabel(undefined)).toBeNull()
+    expect(blockedReasonLabel({})).toBeNull()
+  })
+})
+
+describe('ControlPanel — agentLineLabel fallback chain', () => {
+  it('blocked reason wins over the tool chip', () => {
+    expect(agentLineLabel({ status: 'blocked', task: 'Bash', label: '❌ build broke' }, tStub))
+      .toBe('❌ build broke')
+  })
+
+  it('falls back to the collapsed tool chip when not blocked', () => {
+    expect(agentLineLabel({ status: 'working', task: 'mcp__notion__create_page', label: '📝' }, tStub))
+      .toMatch(/^notion::/)
+  })
+
+  it('falls back to the localized status word when there is no task', () => {
+    expect(agentLineLabel({ status: 'working', task: null, label: null }, tStub)).toBe('working')
+  })
+
+  it('returns null when there is no external status (caller uses behaviorLabel)', () => {
+    expect(agentLineLabel(null, tStub)).toBeNull()
   })
 })
