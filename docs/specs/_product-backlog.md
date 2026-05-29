@@ -22,7 +22,7 @@
 |---|---------|----------|--------|-------|
 | 4 | **Sprint 進度看板** — 辦公室牆上小 Kanban，格子隨 `done` 事件填滿 | P2 | Done | shipped via PR #19; `PixelOffice.jsx:18–60` SVG kanban on north wall，動態顯示 `totalDoneToday`，最多 6 格 + overflow indicator |
 | 5 | **Inspector 資訊加強** — 顯示今日完成數、當前 mood 指示、`activeWorkflow` 名稱 | P1 | Done | shipped with durable same-day count + Codex parity follow-up; specs: `docs/specs/agent-inspector-info-enhancement.md`, `docs/specs/codex-status-parity-and-done-count.md` |
-| 6 | **底部效能指標** — status bar 顯示今日 done / blocked 比率 | P3 | Pending | 需在 store 中累積 session 統計 |
+| 6 | **底部效能指標** — status bar 顯示今日 done / blocked 比率 | P3 | Done | shipped 2026-05-29; `store.js` 新增 `dailyBlockedLedger` (transition counter，與 `dailyDoneLedger` 平行)；`ControlPanel.jsx` Full + Panel 模式各加 `✓N / ✗M` chip，i18n + sr-only + tooltip 齊備 |
 
 ---
 
