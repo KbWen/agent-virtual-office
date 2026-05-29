@@ -1,4 +1,5 @@
 import React from 'react'
+import { classifyMood } from '../systems/classify.js'
 
 // All furniture below is wrapped in React.memo. PixelOffice re-renders on every minute/
 // hour clock tick, every activeEvent/activeWorkflow change, and every agentOrderSignature
@@ -229,15 +230,16 @@ export const GateBooth = React.memo(function GateBooth({ x, y }) {
   )
 })
 
-// ─── Mood → Weather mapping (pure) ───────────────────────────────────────
-// Exposed for unit testing and for PixelOffice's single mood subscription.
-// Defaults to 'clear' for any unrecognized / undefined mood so backward-compat
-// with WallWindow calls that don't pass weather is automatic.
+// ─── Mood → Weather mapping ─────────────────────────────────────────────
+// #A2 delegation: the source of truth now lives in `src/systems/classify.js`
+// where mood mapping joins task/status under one standards-aligned classifier
+// (W3C Activity Streams + MCP + OT GenAI direction). This export stays so
+// PixelOffice's single import doesnt churn — and weatherSystem.test.js verifies
+// `classifyMood(mood).family` is byte-identical to the original switch for all
+// 7 documented moods. Unknown moods conservatively default to 'clear' (no
+// false-positive scary weather), matching the pre-delegation behavior.
 export function moodToWeather(mood) {
-  if (mood === 'stuck') return 'thunderstorm'
-  if (mood === 'frustrated') return 'rain'
-  if (mood === 'rushing') return 'cloudy'
-  return 'clear'
+  return classifyMood(mood).family
 }
 
 // ─── Weather Overlay (drawn inside WallWindow before the cross) ──────────

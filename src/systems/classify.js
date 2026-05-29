@@ -263,6 +263,47 @@ const MOOD_TABLE = Object.freeze({
   stuck:      { family: FAMILIES.THUNDERSTORM, severity: 'high',   visualLabel: 'Thunderstorm', a11yLabel: 'Stuck on loop — thunderstorm' },
 })
 
+// ─── familyToBehavior — #A2 wiring helper ──────────────────────────────────
+// Maps the abstract `family` field to a concrete animation name that
+// `AgentCharacter.jsx` already implements. This is the bridge between the
+// standards-aligned classifier (W3C/MCP-shaped) and the existing animation
+// library (whose `case` statements were authored for specific Claude Code
+// tools, not abstract families). The returned strings MUST match an existing
+// `case` in AgentCharacter.jsx — adding a new family here without adding the
+// matching animation would silently render nothing.
+//
+// Backward-compat by construction: for every Tier 0 built-in task the result
+// matches the legacy STATUS_BEHAVIOR_MAP entry exactly:
+//   Bash  (execute) → 'typing'         ✓ matches store.js:239
+//   Read  (read)    → 'reading-screen' ✓ matches store.js:239
+//   Grep  (search)  → 'research'       ✓ matches store.js:239
+//   Glob  (search)  → 'research'       ✓ matches store.js:239
+// So #A2 replaces the static fallback `|| 'typing'` with a smarter fallback
+// that gives MCP / verb-classified tools meaningful animations, while
+// known tools keep their exact prior behavior.
+export function familyToBehavior(family) {
+  switch (family) {
+    case FAMILIES.READ:        return 'reading-screen'
+    case FAMILIES.SEARCH:      return 'research'
+    case FAMILIES.CREATE:      return 'writing-notes'
+    case FAMILIES.UPDATE:      return 'writing-notes'
+    case FAMILIES.DELETE:      return 'typing'
+    case FAMILIES.EXECUTE:     return 'typing'
+    case FAMILIES.AUTH:        return 'shield-verify'
+    case FAMILIES.COMMUNICATE: return 'chat'
+    case FAMILIES.NAVIGATE:    return 'typing'
+    case FAMILIES.DISPATCH:    return 'gantt-chart'
+    case FAMILIES.PLAN:        return 'gantt-chart'
+    case FAMILIES.MEMORY:      return 'writing-notes'
+    case FAMILIES.SYSTEM:      return 'writing-notes'
+    case FAMILIES.COGNITION:   return 'reading-screen'
+    case FAMILIES.EXTERNAL:    return 'typing'
+    // Status families don't map to behaviors (they map to expressions —
+    // STATUS_BEHAVIOR_MAP handles those). Fall through to default.
+    default:                   return 'typing'
+  }
+}
+
 export function classifyMood(mood) {
   if (typeof mood !== 'string' || mood.length === 0) {
     return {
