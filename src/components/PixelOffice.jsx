@@ -15,36 +15,11 @@ import {
   moodToWeather,
 } from './TopDownFurniture'
 
-// Weather animation keyframes — emitted once via a module-scope <style> tag (see
-// WeatherKeyframes component below). All six WallWindow instances share these
-// animations. Kept out of index.css to avoid polluting global selectors with
-// names that only the office uses; rendered inside the SVG so cleanup follows
-// component lifecycle. The `lightning-flash` keyframe caps opacity at 0.35 and
-// fires twice per 5-second cycle to stay well clear of photosensitive seizure
-// thresholds (which start around 3 Hz at high luminance).
-function WeatherKeyframes() {
-  return (
-    <style>{`
-      @keyframes weather-raindrop-fall {
-        0%   { transform: translateY(-100%); opacity: 0; }
-        15%  { opacity: 0.7; }
-        85%  { opacity: 0.7; }
-        100% { transform: translateY(100%); opacity: 0; }
-      }
-      @keyframes weather-cloud-drift {
-        0%   { transform: translateX(-30%); }
-        100% { transform: translateX(30%); }
-      }
-      @keyframes weather-lightning-flash {
-        0%, 88%, 100% { opacity: 0; }
-        90%           { opacity: 0.35; }
-        92%           { opacity: 0; }
-        94%           { opacity: 0.20; }
-        96%           { opacity: 0; }
-      }
-    `}</style>
-  )
-}
+// Weather animation keyframes (#14) live in src/index.css and get bundled by
+// Vite into the regular <link rel="stylesheet"> chain — moved out of the
+// previous inline <style> tag so strict-CSP environments (corporate intranets
+// with `style-src 'self'` and no `'unsafe-inline'`) can serve the office
+// without dropping the animations on the floor (#27).
 
 // ─── Sprint Kanban Board ─────────────────────────────────────────────────
 // React.memo: PixelOffice re-renders on every minute/hour tick and every
@@ -821,7 +796,6 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       style={isPanel ? {} : { maxHeight: 'calc(100vh - 44px)', minWidth: '480px' }}
       preserveAspectRatio="xMidYMid meet"
     >
-      <WeatherKeyframes />
       <defs>
         <filter id="bubble-shadow" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000" floodOpacity="0.12" />

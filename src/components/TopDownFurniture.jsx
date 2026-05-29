@@ -243,9 +243,9 @@ export function moodToWeather(mood) {
 }
 
 // ─── Weather Overlay (drawn inside WallWindow before the cross) ──────────
-// CSS keyframes are emitted once globally at module scope via a <style> tag
-// injected by PixelOffice — six WallWindow instances reuse the same animations.
-// reducedMotion drops all animations to static decoration only.
+// CSS keyframes live in src/index.css (#27 CSP fix) and are bundled by Vite
+// into the regular stylesheet — six WallWindow instances reuse the same
+// animations. reducedMotion drops all animations to static decoration only.
 function WeatherOverlay({ x, y, w, h, weather, reducedMotion }) {
   if (weather === 'clear') return null
 

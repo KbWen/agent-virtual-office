@@ -397,6 +397,23 @@ Requires Node.js 22 or higher:
 node --version  # must be >= 22
 ```
 
+### Strict Content Security Policy (CSP) — animations missing or layout broken
+The office uses CSS animations for the weather overlay, agent movement, and dynamic UI states. Under strict CSP these can be blocked:
+
+- **CSS keyframes** (raindrops, clouds, lightning flash) live in `src/index.css` and are bundled into the regular `assets/index-*.css` file. They work under `style-src 'self'` with no extra config.
+- **React inline `style={{ ... }}` attributes** (Tailwind utility computation, dynamic positioning, weather opacity, dark-mode switches) are applied as DOM `style` properties. Modern browsers treat these as DOM-level property writes rather than CSP-relevant inline styles, but the strictest interpretations may still flag them.
+
+**Recommended CSP for the office:**
+```
+style-src 'self' 'unsafe-inline';
+```
+The `'unsafe-inline'` exception applies to `style=` attributes only — the bundled stylesheet still benefits from CSP enforcement. If your environment forbids `'unsafe-inline'` entirely, consider:
+
+1. Using nonces: build a custom React renderer that injects a `nonce` attribute on every inline-style-emitting component (out of scope for this project — file an issue if you need help).
+2. Replacing the static-build embed with the live `npx agent-virtual-office serve` route, which doesn't require strict CSP since the SPA loads from the same origin.
+
+The animations themselves are visual decoration; in an environment that blocks all inline styles, the office still functions (status colors, agent positions, behavior animations all use the bundled CSS path).
+
 </details>
 
 ### Gemini CLI Integration
