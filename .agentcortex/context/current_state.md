@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-29
-- **Update Sequence**: 11
+- **Update Sequence**: 12
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -37,6 +37,7 @@
     - **#A1 classifier foundation** — pure module `src/systems/classify.js` (Tier 0 builtin + Tier 3 W3C verb + Tier 4 MCP namespace + Tier 5 unknown) with 90 unit tests; standards-aligned (W3C Activity Streams 2.0 / OpenTelemetry GenAI / MCP spec per panel discussion). Foundation only — downstream wiring is #A2.
     - **#A2 classifier wiring** — `store.applyExternalStatus` now falls back to `familyToBehavior(classifyTask(task).family)` for non-built-in tasks; `moodToWeather` delegates to `classifyMood(mood).family`. Bash/Read/Grep/Glob keep byte-identical behavior (regression-tested); MCP / verb-classified / unknown tasks now get family-appropriate animations (`writeFile`→writing-notes, `authenticate`→shield-verify, `dispatchJob`→gantt-chart, etc.). Bundle +6 KB raw / +2.4 KB gzip.
     - **#A2.1 role-aware classifier** — added `classifyRole`, `classifyWorkflow`, `decideBehavior` 4-priority resolver (status > workflow > role > family-default). Drove `store.applyExternalStatus` to use it. Same tool now produces different animations based on role + active workflow phase: `qa+Bash`→magnifier, `ops+Bash`→deploy-button, `gate+Bash`→shield-verify, `designer+Edit`→whiteboard, `pm+Write`→gantt-chart, `dev+Bash` during `/test`→magnifier, `dev+Bash` during `/ship`→deploy-button. dev role keeps zero overrides → all prior tests stay green. Driven by feedback "don't classify too casually" (saved as memory).
+    - **#A3 unknownLog (self-improving classifier)** — `src/systems/unknownLog.js` aggregates Tier 5 unknown task/status/mood/role/workflow raws into dev-mode buckets (capped 200/kind). Exposes `window.__office_unknownLog` + `window.__office_logUnknowns()` for DevTools inspection. Production: zero-cost via `import.meta.env.PROD` gate. LangSmith-style — high-frequency unknowns reveal what needs Tier 0 promotion.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
@@ -91,6 +92,14 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### main-2026-05-29 (unknownLog #A3)
+
+- Shipped: `src/systems/unknownLog.js` — dev-mode in-memory aggregator. Five buckets (task/status/mood/role/workflow) each capped at 200 entries; oldest-evict on overflow. Exposes `recordUnknown(kind, raw)` / `getUnknownReport()` / `clearUnknownLog()` / `isDevMode()`. Globals `window.__office_unknownLog` (Maps) + `window.__office_logUnknowns()` (sorted console reporter) for DevTools.
+- Wired all 5 classify* Tier 5 branches to call recordUnknown. Known classifications (Tier 0–4) never record, so the log only surfaces genuine gaps.
+- Production safety: `isDevMode()` reads `import.meta.env.PROD === true` and short-circuits; override hook `globalThis.__OFFICE_FORCE_UNKNOWN_LOG__` for explicit control.
+- Tests: 875/875 vitest passed (was 851, +24 unknownLog tests covering: basic recording, kind isolation, sorting, cap+eviction, defensive inputs, dev-mode gate, integration with all 5 classify*).
+- Build: vite 946ms clean, 380.17 KB raw / 118.90 KB gzip (+1 KB raw / +0.45 KB gzip).
 
 ### main-2026-05-29 (role-aware classifier #A2.1)
 
