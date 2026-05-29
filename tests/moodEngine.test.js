@@ -194,11 +194,14 @@ describe('moodEngine', () => {
       expect(getMood()).not.toBe('rushing')
     })
 
-    it('expires after duration (pushEventBatch also triggers recompute)', () => {
+    it('expires after duration (overrideTimer fires recompute)', () => {
+      // Post-fix: pushEventBatch([]) is a strict no-op (defense in depth against
+      // accidental mood→idle flips). The override still expires via overrideTimer
+      // which fires updateStoreMood at clampedMs + 50. Advance past that for the
+      // natural expiry path.
       setMoodOverride('rushing', 1000)
       expect(getMood()).toBe('rushing')
-      vi.advanceTimersByTime(1001)
-      pushEventBatch([])
+      vi.advanceTimersByTime(1100) // > 1000ms override + 50ms timer buffer
       expect(getMood()).not.toBe('rushing')
     })
 
@@ -233,8 +236,11 @@ describe('moodEngine', () => {
       }
       expect(getMood()).toBe('smooth')
       resetMood()
-      pushEventBatch([])
-      expect(getMood()).toBe('idle')
+      // Post-fix: pushEventBatch([]) is a strict no-op. Push ONE real event after
+      // resetMood — the internal events buffer was cleared by resetMood so a single
+      // event puts us at the 'normal' default (1 event, doesnt match any rule).
+      pushEventBatch([{ role: 'dev', status: 'working', task: 'Bash' }])
+      expect(getMood()).toBe('normal')
     })
   })
 })

@@ -163,22 +163,34 @@ describe('Weather — failure-mode hunting (real AI usage patterns)', () => {
       expect(weatherOf()).toBe('rain')
     })
 
-    it('🔴 BUG-PIN: pushEventBatch([]) with empty array flips mood→idle (callers MUST guard)', () => {
-      // moodEngine.pushEventBatch calls updateStoreMood() unconditionally — even with
-      // zero new events. computeMood() with events.length===0 returns 'idle'. Result:
-      // an empty batch flips mood to idle, and weather to clear (luckily idle→clear).
-      //
-      // Real-world impact: ZERO. inferStatus gates with `if (updates.length > 0)` and
-      // `if (msg.activeCount > 0)` before calling pushEventBatch, so empty batches
-      // never reach moodEngine in the production flow.
-      //
-      // This test pins the fragile contract: if a future caller forgets the gate,
-      // mood will silently flip. A safer fix would be `if (added > 0) updateStoreMood()`
-      // in moodEngine.pushEventBatch — out of #14 scope but flagged here for follow-up.
+    it('pushEventBatch([]) preserves current mood (fixed — guarded with `if (added > 0)`)', () => {
+      // Previously a known bug-pin: empty pushEventBatch unconditionally called
+      // updateStoreMood() which saw events.length===0 and flipped mood→idle.
+      // Fixed in moodEngine.js: the recompute is now guarded behind `if (added > 0)`
+      // so empty batches are a true no-op. Future callers can no longer accidentally
+      // flip mood by passing an empty array.
       expect(moodOf()).toBe('normal')
       pushEventBatch([])
-      expect(moodOf()).toBe('idle') // ← unexpected if you didnt read this comment
-      expect(weatherOf()).toBe('clear') // still clear, so user impact is none
+      expect(moodOf()).toBe('normal') // mood UNCHANGED — was idle before fix
+      expect(weatherOf()).toBe('clear')
+    })
+
+    it('pushEventBatch([]) preserves a non-default mood (regression guard)', () => {
+      // Set up a non-default mood via setMoodOverride, then verify an empty batch
+      // does NOT clear it.
+      setMoodOverride('frustrated', 60000)
+      expect(moodOf()).toBe('frustrated')
+      pushEventBatch([])
+      expect(moodOf()).toBe('frustrated') // still frustrated — empty batch is a no-op
+    })
+
+    it('pushEventBatch with all-skipped entries (e.g. nulls) preserves mood', () => {
+      // Entries that fail the `if (!e || typeof e !== 'object') continue` guard
+      // don't increment `added`, so the guard skips updateStoreMood too.
+      setMoodOverride('rushing', 60000)
+      expect(moodOf()).toBe('rushing')
+      pushEventBatch([null, undefined, 'string', 42, false])
+      expect(moodOf()).toBe('rushing')
     })
 
     it('pushEventBatch(null|undefined|nonArray) is silently ignored (early return on !isArray)', () => {
