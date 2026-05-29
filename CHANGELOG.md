@@ -5,7 +5,7 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
-## 2026-05-29 — Classifier + observability wave
+## v1.1.0 — 2026-05-29 — Classifier + observability wave
 
 The biggest single-session push since v0.10. Eight new features + two
 follow-up fixes shipped, taking the project from a status visualizer to a
