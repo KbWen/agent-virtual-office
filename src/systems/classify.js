@@ -1,3 +1,5 @@
+import { recordUnknown } from './unknownLog.js'
+
 /**
  * #A1 — Pure classifier for AI agent signals (task / status / mood).
  *
@@ -190,6 +192,7 @@ export function classifyTask(task) {
   }
 
   // Tier 5: Unknown — preserve raw, mark family=unknown
+  recordUnknown('task', task)
   return {
     tier: 5,
     family: FAMILIES.UNKNOWN,
@@ -238,6 +241,7 @@ export function classifyStatus(status) {
   if (STATUS_TABLE[status]) {
     return { tier: 0, ...STATUS_TABLE[status], raw: status }
   }
+  recordUnknown('status', status)
   return {
     tier: 5,
     family: FAMILIES.UNKNOWN,
@@ -348,6 +352,7 @@ export function classifyRole(roleOrAgentId) {
       hasOverrides: !!hasOverrides && Object.keys(hasOverrides).length > 0,
     }
   }
+  recordUnknown('role', role)
   return {
     tier: 5,
     family: FAMILIES.UNKNOWN,
@@ -401,6 +406,7 @@ export function classifyWorkflow(workflow) {
       hasOverrides: !!hasOverrides && Object.keys(hasOverrides).length > 0,
     }
   }
+  recordUnknown('workflow', key)
   return {
     tier: 5,
     family: FAMILIES.UNKNOWN,
@@ -512,6 +518,7 @@ export function classifyMood(mood) {
   if (MOOD_TABLE[mood]) {
     return { tier: 0, ...MOOD_TABLE[mood], raw: mood }
   }
+  recordUnknown('mood', mood)
   return {
     tier: 5,
     family: FAMILIES.CLEAR, // Conservative default — no false-positive weather
