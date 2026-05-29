@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-29
-- **Update Sequence**: 8
+- **Update Sequence**: 9
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -34,6 +34,7 @@
     - #6 底部效能指標 — `dailyBlockedLedger` transition counter parallel to `dailyDoneLedger`; ControlPanel Full + Panel chip `✓N / ✗M` with i18n + sr-only + tooltip
     - #14 天氣系統 — `moodToWeather()` pure mapping + `WeatherOverlay` SVG (rain/cloudy/thunderstorm); WallWindow weather prop wired to `store.mood`; reducedMotion drops animations; lightning capped 0.35/5s for photosensitivity safety
     - #15 白板手寫動畫 — confirmed pre-existing (`PixelOffice.jsx:146` `WhiteboardAnimation`); closure-documented at #14 ship time (similar to #7 pattern)
+    - **#A1 classifier foundation** — pure module `src/systems/classify.js` (Tier 0 builtin + Tier 3 W3C verb + Tier 4 MCP namespace + Tier 5 unknown) with 90 unit tests; standards-aligned (W3C Activity Streams 2.0 / OpenTelemetry GenAI / MCP spec per panel discussion). Foundation only — downstream wiring is #A2.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
@@ -88,6 +89,13 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### main-2026-05-29 (classifier foundation #A1)
+
+- Foundation shipped: `src/systems/classify.js` pure module exporting `classifyTask` / `classifyStatus` / `classifyMood` + `FAMILIES` vocabulary. Standards-aligned per panel discussion: W3C Activity Streams 2.0 verb taxonomy, OpenTelemetry GenAI attribute naming (forward), MCP `mcp__<server>__<tool>` namespace parser.
+- 4-tier waterfall: Tier 0 built-in (11 Claude Code canonical tools + TodoRead/TodoWrite), Tier 3 verb heuristic (10 verb families with word-boundary regex), Tier 4 MCP namespace, Tier 5 unknown (preserves raw + truncates label to 16 chars).
+- Tests: 90 new (704/704 total vitest passed), build clean, no UI change (foundation only; downstream wiring is #A2).
+- Files: `src/systems/classify.js` (new, +270 lines), `tests/classify.test.js` (new, +250 lines).
 
 ### main-2026-05-29 (weather + #15 closure)
 
