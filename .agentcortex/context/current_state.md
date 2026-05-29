@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-29
-- **Update Sequence**: 14
+- **Update Sequence**: 15
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -41,6 +41,8 @@
     - **#8 桌面通知** — `src/inference/desktopNotifier.js` 5s-poll loop; fires browser Notification when an agent stays blocked ≥30s + tab hidden + permission granted. Per-episode dedupe via `office-blocked-<id>` tag; transition out of blocked resets dedupe. ControlPanel 🔔 button requests permission on user gesture. Full i18n in en + zh-TW.
     - **#C idle-gap inference** — `src/inference/idleGapInfer.js` closes Pixel Agents' admitted heuristic gap. Conservative thresholds (working+45s gap → thinking; blocked+90s gap → awaiting-approval) injected back through `applyExternalStatus(source: 'idle-gap-infer')` so they pass through `decideBehavior` + `classifyStatus`. Inferred statuses already pre-registered in classify.js STATUS_TABLE since #A1. lastUpdatedAt stamped via zustand subscription on status/task signature changes only (not position ticks).
     - **2 follow-up fixes from spawned chips** — (a) moodEngine `pushEventBatch([])` now strict no-op (`if (added > 0)` gate) so empty batches can't accidentally flip mood→idle; (b) classifyTask Tier 4 (MCP namespace) now bubbles the inner verb's family up — `mcp__notion__create_page` → CREATE → writing-notes, `mcp__notion__delete_page` → DELETE (high severity), `mcp__atlassian__search_*` → SEARCH → research. EXTERNAL fallback retained for MCP tools with no inner verb match.
+    - **#27 CSP compatibility** — weather `@keyframes` moved from inline `<style>` (CSP violation under strict `style-src 'self'`) to bundled `src/index.css`. Production JS now has 0 `@keyframes`. README troubleshooting expanded with CSP guidance.
+    - **Session wrap-up** — backlog rotated (73 shipped items moved to `docs/specs/_shipped-log.md`); fresh backlog with 15 new AVO-101..AVO-115 items (Plan-mode viz, handoff arrows, token meter, MCP tool inventory, OT GenAI export, etc.); `CHANGELOG.md` summarising the whole session; README architecture tree + tech highlights refreshed with new modules (classifier, desktopNotifier, idleGapInfer, weather overlay); WeatherOverlay clipPath `<defs>` wrappers removed (12→1 DOM nodes saved during active weather).
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
@@ -95,6 +97,15 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### main-2026-05-29 (session wrap-up: backlog + docs + perf)
+
+- Docs: `docs/specs/_product-backlog.md` rotated — 73 shipped items moved to new `docs/specs/_shipped-log.md`; lean fresh backlog with 15 AVO-101..AVO-115 next-wave items + #20 deferred carryover. Themes: Real AI Behavior Coverage (plan-mode viz, extended-thinking aura, tool inventory, skill badge), Multi-Agent Collaboration (handoff arrows, pair huddle, review queue), Information Density (token meter, recent-files heatmap, blocked-reason tags), Game Feel (time-of-day lighting, eureka cascade), Performance/Observability (OT GenAI export, replay scrubber), Brand/USP (shareable daily card).
+- Docs: new root `CHANGELOG.md` summarising the entire session (8 features + 2 follow-ups + CSP + wrap-up).
+- Docs: README — refreshed Tech Highlights (replaced 8 old rows with 14 rows covering classifier, role-aware animations, mood-driven weather, idle-gap inference, desktop notifications, self-improving classifier, today metrics chip, reduced-motion/a11y); refreshed Architecture tree with all new modules (`classify.js`, `unknownLog.js`, `moodEngine.js`, `contextBubble.js`, `desktopNotifier.js`, `idleGapInfer.js`, `server.mjs`, etc.).
+- Perf: WeatherOverlay clipPath optimisation — SVG `<clipPath>` doesn't actually need a `<defs>` wrapper; removed it. Live preview confirmed `defsCount: 1` (was 12 during active weather) — 11 DOM nodes saved with zero behavior change. Rain (60), lightning (12), clipPaths (12) all still render correctly.
+- Tests: 925/925 vitest (no test changes; pure docs + structural simplification).
+- Build: vite 838ms clean, 384.57 KB / 120.32 KB gzip.
 
 ### main-2026-05-29 (2 follow-up fixes from spawned chips)
 
