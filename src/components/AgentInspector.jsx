@@ -2,7 +2,7 @@ import React, { useEffect, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { charName, behaviorLabel, t, useLocale } from '../i18n'
 import { formatTimeAgo } from '../utils/formatTime'
-import { buildAgentInspectorMeta } from './agentInspectorModel'
+import { buildAgentInspectorMeta, inspectorTaskLabel } from './agentInspectorModel'
 
 const statusEmoji = {
   idle: '💤',
@@ -56,7 +56,7 @@ export default function AgentInspector() {
   const status = agent.status || 'idle'
   const statusLabel = t(`statusLabels.${status}`, status)
   const currentBehavior = behaviorLabel(agent.behavior)
-  const task = ext?.label || ext?.task || null
+  const task = inspectorTaskLabel(ext)
   const color = agent.color || '#888'
   const detailRows = [
     {

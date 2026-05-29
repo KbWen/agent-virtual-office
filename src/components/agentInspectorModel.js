@@ -1,3 +1,18 @@
+import { classifyTask } from '../systems/classify.js'
+
+// The single line of "what is this agent doing" the inspector shows. The hook's
+// human `label` ("✏️ 改 App.jsx", "❌ npm test failed") is richest, so it wins.
+// When a channel supplies only a raw task with no label (e.g. the URL-hash
+// bridge: `#dev=mcp__notion__create_page`), collapse it through the classifier
+// so the inspector never shows the ugly `mcp__Server__tool` wire form — matching
+// the character TaskLabel (AVO-103) and the control-panel chip (Round 2).
+export function inspectorTaskLabel(ext) {
+  if (!ext) return null
+  if (ext.label) return ext.label
+  if (ext.task) return classifyTask(ext.task).visualLabel
+  return null
+}
+
 export function countAgentDoneToday(activityLog, agentId, now = Date.now()) {
   if (!agentId) return 0
 
