@@ -277,6 +277,11 @@ function WeatherOverlay({ x, y, w, h, weather, reducedMotion }) {
   }
 
   // rain + thunderstorm share raindrops; thunderstorm adds lightning flash overlay.
+  // Stroke / opacity tuned for daytime visibility (sky #87CEEB) — the prior light slate
+  // #A4BCD6 at 0.7 opacity was nearly invisible against the day sky (~1.1:1 contrast)
+  // while looking fine against the night sky. The mid-slate #5478A0 + 0.85 opacity
+  // hits ~2.6:1 in day and ~6:1 at night — still subtle enough to read as "drizzle"
+  // rather than "downpour" and to not fight with the foreground office activity.
   const drops = []
   const dropCount = 5
   for (let i = 0; i < dropCount; i++) {
@@ -286,7 +291,7 @@ function WeatherOverlay({ x, y, w, h, weather, reducedMotion }) {
       <line
         key={i}
         x1={dx} y1={y} x2={dx - 2} y2={y + h}
-        stroke="#A4BCD6" strokeWidth="0.6" strokeLinecap="round" opacity="0.7"
+        stroke="#5478A0" strokeWidth="0.7" strokeLinecap="round" opacity="0.85"
         style={reducedMotion ? undefined : {
           animation: `weather-raindrop-fall 0.9s linear infinite`,
           animationDelay: `${delay}s`,
