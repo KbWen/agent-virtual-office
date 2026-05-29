@@ -11,8 +11,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-05-29
-- **Update Sequence**: 19
+- **Last Updated**: 2026-05-30
+- **Update Sequence**: 20
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -111,6 +111,16 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### main-2026-05-30 (overnight optimization: label consistency + blocked-reason visibility)
+
+- Autonomous overnight session (Claude Opus 4.8). Goal: verify features trigger correctly + find/execute optimizations. 3 quick-wins shipped locally (NOT pushed — left for human review; repo remains ahead of origin pending the prior push too).
+- **Trigger verification (no code)**: live preview confirmed the full hook→status-file→vite `/api/status`→store→render pipeline works with REAL Claude Code hook events (dev character rendered the live MCP tool in use, PM=thinking from UserPromptSubmit, today-done counter live). Additionally verified via direct store-module import: weather (mood:'stuck'→thunderstorm, 12 clip-paths/60 rain/12 lightning), done→idle lifecycle (designer done→10s expiry→cleared→idle), idle-gap inference (blocked+90s→awaiting-approval), reduced-motion a11y (weather renders, 0 animated elements), i18n parity (260=260 keys, no leaks), zero console errors.
+- **Ship 1 — `fix(ControlPanel)` 7475760**: collapse raw MCP tool names. Added exported pure `taskChipLabel(task)`→`classifyTask().visualLabel`; the control-panel status line no longer shows `mcp__Server__tool` (now `Server::tool`), matching the AVO-103 character TaskLabel. +10 tests.
+- **Ship 2 — `feat(ControlPanel)` a757af4**: surface blocked failure reason (AVO-110 lite). Added `blockedReasonLabel(ext)` + `agentLineLabel(ext,t)`; a blocked agent's status line now shows the hook's reason (`❌ npm test failed`) instead of the bare tool. Text-reason core of AVO-110; the classified reason-enum + colored sub-icon deferred for user aesthetic review. +10 tests.
+- **Ship 3 — `fix(AgentInspector)` fedb37c**: collapse label-less raw MCP task. Added `inspectorTaskLabel(ext)` to agentInspectorModel.js. Completes the "no raw `mcp__` in ANY surface" invariant (AgentCharacter ✓ / ControlPanel ✓ / AgentInspector ✓ / ActivityFeed uses human label). +4 tests.
+- Tests: 960→984 vitest (+24, all green). Build clean throughout (386.31 KB / 120.92 KB gzip, +0.26 KB total).
+- **KEY FINDING for next session**: backlog P0 items AVO-101 (plan-mode viz) and AVO-108 (token/cost meter) both require hook-payload data (thinking-budget / token usage) the current `public/hooks/office-status-hook.js` does NOT capture. They need a hook-payload extension + a decision on the data source before they're buildable — flagged for human direction, not built unilaterally overnight. Remaining backlog visual features (AVO-104/106/107/111/112/115) carry aesthetic-design choices best reviewed by a human; deferred rather than risk "過分花俏" while unattended.
 
 ### main-2026-05-29 (AVO-103 tool inventory label)
 
