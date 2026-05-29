@@ -71,7 +71,7 @@
 | 24 | **HTTPS 混合內容阻擋** — 偵測 file:///HTTPS 環境時跳過 polling | P2 | Done | ✅ `inferStatus.js` `startFilePolling` 加 protocol guard |
 | 25 | **`--host` 預設開啟的防火牆問題** — 加網路暴露警告和 Windows 防火牆提示 | P2 | Done | ✅ `cli.js` 啟動時印出 LAN 模式警告 + Windows Firewall 提示 |
 | 26 | **企業 Proxy 環境 npm install 失敗無文件** — README Troubleshooting 含 proxy 設定 | P2 | Done | ✅ README Troubleshooting 段落含 npm proxy config 範例 |
-| 27 | **CSP 相容性** — 嵌入嚴格 CSP 的企業內網時，inline styles 可能被擋導致排版崩壞 | P3 | Pending | 大部分 React inline style 用 style attribute（多數 CSP 允許），但超嚴格環境需 nonce |
+| 27 | **CSP 相容性** — 嵌入嚴格 CSP 的企業內網時，inline styles 可能被擋導致排版崩壞 | P3 | Done | shipped 2026-05-29; weather keyframes 從 inline `<style>` 移到 `src/index.css` 由 Vite bundle 進去；production JS 內已無 `@keyframes`；README Troubleshooting 加上 CSP 章節說明推薦 `style-src 'self' 'unsafe-inline'` 並列出進階 nonce 方案 |
 | 28 | **`_cwd` 路徑洩漏** — 從 API 回應中移除 `_cwd` | P2 | Done | ✅ 單 session 路徑 shallow copy + delete `_cwd` |
 | 29 | **Hook 自動更新** — `setup` 每次比對內容，自動覆蓋舊版 hook | P1 | Done | ✅ hook 加 `HOOK_VERSION`，cli.js setup 比對後覆蓋，顯示 installed/updated/up-to-date |
 | 30 | **prefers-reduced-motion 支援** — 偵測用戶偏好，停止動畫 | P1 | Done | ✅ store 加 `reducedMotion`，AgentCharacter 跳過 interval，FlyingDocuments return null |
