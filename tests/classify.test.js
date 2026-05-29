@@ -61,24 +61,49 @@ describe('classifyTask — Tier 0 built-in registry', () => {
   })
 })
 
-describe('classifyTask — Tier 4 MCP namespace', () => {
-  it('parses `mcp__notion__create_page` → external/notion', () => {
+describe('classifyTask — Tier 4 MCP namespace (inner verb bubbles up)', () => {
+  it('mcp__notion__create_page → tier 4, family=CREATE (inner verb bubbles up)', () => {
     const r = classifyTask('mcp__notion__create_page')
     expectValidShape(r)
     expect(r.tier).toBe(4)
-    expect(r.family).toBe(FAMILIES.EXTERNAL)
-    expect(r.subFamily).toBe('notion')
+    expect(r.family).toBe(FAMILIES.CREATE)   // bubbled — NOT external
+    expect(r.subFamily).toBe('notion')        // server preserved
     expect(r.raw).toBe('mcp__notion__create_page')
-    // Inner verb 'create' should bubble through
     expect(r.visualLabel).toContain('notion')
   })
 
-  it('parses `mcp__atlassian__search_issues` and sub-classifies as search', () => {
+  it('mcp__atlassian__search_issues → tier 4, family=SEARCH', () => {
     const r = classifyTask('mcp__atlassian__search_issues')
     expect(r.tier).toBe(4)
+    expect(r.family).toBe(FAMILIES.SEARCH)   // bubbled
     expect(r.subFamily).toBe('atlassian')
     expect(r.visualLabel).toContain('atlassian')
-    expect(r.severity).toBe('low') // search → low
+    expect(r.severity).toBe('low')            // search → low
+  })
+
+  it('mcp__notion__delete_page → tier 4, family=DELETE (high severity preserved)', () => {
+    const r = classifyTask('mcp__notion__delete_page')
+    expect(r.tier).toBe(4)
+    expect(r.family).toBe(FAMILIES.DELETE)
+    expect(r.subFamily).toBe('notion')
+    expect(r.severity).toBe('high')
+  })
+
+  it('mcp__notion__read_database → tier 4, family=READ', () => {
+    const r = classifyTask('mcp__notion__read_database')
+    expect(r.tier).toBe(4)
+    expect(r.family).toBe(FAMILIES.READ)
+    expect(r.subFamily).toBe('notion')
+  })
+
+  it('mcp__notion__weirdtool (no verb match) → tier 4, family=EXTERNAL (fallback)', () => {
+    // When the MCP tool name doesnt match any verb pattern, we fall back to
+    // EXTERNAL so the tool still has a category.
+    const r = classifyTask('mcp__notion__weirdtool')
+    expect(r.tier).toBe(4)
+    expect(r.family).toBe(FAMILIES.EXTERNAL)
+    expect(r.subFamily).toBe('notion')
+    expect(r.severity).toBe('medium')
   })
 
   it('handles MCP server names with dashes (`mcp__notion-eu__create`)', () => {
@@ -363,18 +388,35 @@ describe('familyToBehavior — #A2 wiring helper', () => {
     expect(familyToBehavior(classifyTask('Glob').family)).toBe('research')
   })
 
-  it('NEW capability: MCP-namespaced create_page → writing-notes (was generic typing)', () => {
+  it('MCP-namespaced create_page → writing-notes (inner verb bubbles up post-fix)', () => {
+    // Post-fix: Tier 4 returns the inner verbs family when matched, not a flat
+    // EXTERNAL. So `mcp__notion__create_page` → family=CREATE → behavior=writing-notes,
+    // matching the semantic intent (this MCP call CREATES content).
     const t = classifyTask('mcp__notion__create_page')
-    // The MCP tier 4 family is 'external', but the inner verb routes the
-    // tool-name-only path: classifyTask returns family='external' for the
-    // OUTER classification. We test the OUTER family→behavior here.
-    // For more granular MCP routing the consumer can also classify the inner
-    // tool name separately — out of scope for #A2.
+    expect(t.family).toBe(FAMILIES.CREATE)
+    expect(familyToBehavior(t.family)).toBe('writing-notes')
+  })
+
+  it('MCP-namespaced search → research animation (inner verb routing)', () => {
+    const t = classifyTask('mcp__atlassian__search_issues')
+    expect(t.family).toBe(FAMILIES.SEARCH)
+    expect(familyToBehavior(t.family)).toBe('research')
+  })
+
+  it('MCP-namespaced delete → typing (DELETE family + no specific delete anim yet)', () => {
+    // DELETE family currently maps to 'typing' in familyToBehavior — no specific
+    // delete animation exists. The important contract: family is DELETE (high severity),
+    // so future animation additions (if any) can target this case precisely.
+    const t = classifyTask('mcp__notion__delete_page')
+    expect(t.family).toBe(FAMILIES.DELETE)
+    expect(t.severity).toBe('high')
+    expect(familyToBehavior(t.family)).toBe('typing')
+  })
+
+  it('MCP tool with no verb match falls back to EXTERNAL → typing', () => {
+    const t = classifyTask('mcp__notion__weirdtool')
     expect(t.family).toBe(FAMILIES.EXTERNAL)
     expect(familyToBehavior(t.family)).toBe('typing')
-    // ^ NOTE: a future iteration could route MCP by inner verb. For #A2 we
-    // conservatively keep 'typing' as the external default — already better
-    // than nothing for a categorical signal, and identical to pre-#A2.
   })
 
   it('verb-classified read tools → reading-screen', () => {

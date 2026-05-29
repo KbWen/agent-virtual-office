@@ -164,15 +164,30 @@ export function classifyTask(task) {
   const mcp = parseMcp(task)
   if (mcp) {
     // Sub-classify the tool name within the MCP namespace using the same verb
-    // heuristics. This gives MCP tools meaningful severity / labels rather than
-    // a flat 'external'.
+    // heuristics. When a verb matches (the common case — MCP tools tend to be
+    // named `create_X`, `delete_Y`, `search_Z`), we bubble the inner verb's
+    // family up so decideBehavior can pick the right animation. The MCP server
+    // is preserved in subFamily for hover / debug. When no verb matches (e.g.,
+    // `mcp__notion__weirdtool`), we fall back to family='external' so the
+    // tool still has a category to display.
     const inner = classifyVerb(mcp.tool)
+    if (inner) {
+      return {
+        tier: 4,
+        family: inner.family,            // bubbled-up — DELETE / CREATE / SEARCH etc.
+        subFamily: mcp.server,
+        severity: inner.severity,
+        visualLabel: `${mcp.server}::${inner.visualLabel.toLowerCase()}`,
+        a11yLabel: `External ${mcp.server} ${inner.visualLabel} operation: ${mcp.tool}`,
+        raw: task,
+      }
+    }
     return {
       tier: 4,
       family: FAMILIES.EXTERNAL,
       subFamily: mcp.server,
-      severity: inner?.severity ?? 'medium',
-      visualLabel: `${mcp.server}::${inner?.visualLabel?.toLowerCase() ?? mcp.tool}`,
+      severity: 'medium',
+      visualLabel: `${mcp.server}::${mcp.tool}`,
       a11yLabel: `External ${mcp.server} tool: ${mcp.tool}`,
       raw: task,
     }
