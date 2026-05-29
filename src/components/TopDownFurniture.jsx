@@ -229,8 +229,94 @@ export const GateBooth = React.memo(function GateBooth({ x, y }) {
   )
 })
 
+// ─── Mood → Weather mapping (pure) ───────────────────────────────────────
+// Exposed for unit testing and for PixelOffice's single mood subscription.
+// Defaults to 'clear' for any unrecognized / undefined mood so backward-compat
+// with WallWindow calls that don't pass weather is automatic.
+export function moodToWeather(mood) {
+  if (mood === 'stuck') return 'thunderstorm'
+  if (mood === 'frustrated') return 'rain'
+  if (mood === 'rushing') return 'cloudy'
+  return 'clear'
+}
+
+// ─── Weather Overlay (drawn inside WallWindow before the cross) ──────────
+// CSS keyframes are emitted once globally at module scope via a <style> tag
+// injected by PixelOffice — six WallWindow instances reuse the same animations.
+// reducedMotion drops all animations to static decoration only.
+function WeatherOverlay({ x, y, w, h, weather, reducedMotion }) {
+  if (weather === 'clear') return null
+
+  // Clip-path keeps raindrops / clouds inside the window pane regardless of
+  // how the parent scales. Each instance gets a unique id so multiple
+  // windows on the same page don't share clip masks.
+  const clipId = `weather-clip-${x}-${y}`
+
+  if (weather === 'cloudy') {
+    return (
+      <g clipPath={`url(#${clipId})`} pointerEvents="none">
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={x} y={y} width={w} height={h} rx={2} />
+          </clipPath>
+        </defs>
+        <ellipse
+          cx={x + w / 2} cy={y + h * 0.35}
+          rx={w * 0.45} ry={h * 0.18}
+          fill="#D8DCE3" opacity="0.55"
+          style={reducedMotion ? undefined : { animation: 'weather-cloud-drift 30s linear infinite' }}
+        />
+        <ellipse
+          cx={x + w * 0.7} cy={y + h * 0.5}
+          rx={w * 0.3} ry={h * 0.14}
+          fill="#C5CAD2" opacity="0.4"
+          style={reducedMotion ? undefined : { animation: 'weather-cloud-drift 45s linear infinite reverse' }}
+        />
+      </g>
+    )
+  }
+
+  // rain + thunderstorm share raindrops; thunderstorm adds lightning flash overlay.
+  const drops = []
+  const dropCount = 5
+  for (let i = 0; i < dropCount; i++) {
+    const dx = x + (w * (i + 0.5)) / dropCount
+    const delay = (i * 0.18).toFixed(2)
+    drops.push(
+      <line
+        key={i}
+        x1={dx} y1={y} x2={dx - 2} y2={y + h}
+        stroke="#A4BCD6" strokeWidth="0.6" strokeLinecap="round" opacity="0.7"
+        style={reducedMotion ? undefined : {
+          animation: `weather-raindrop-fall 0.9s linear infinite`,
+          animationDelay: `${delay}s`,
+          transformOrigin: `${dx}px ${y + h / 2}px`,
+        }}
+      />
+    )
+  }
+
+  return (
+    <g clipPath={`url(#${clipId})`} pointerEvents="none">
+      <defs>
+        <clipPath id={clipId}>
+          <rect x={x} y={y} width={w} height={h} rx={2} />
+        </clipPath>
+      </defs>
+      {drops}
+      {weather === 'thunderstorm' && (
+        <rect
+          x={x} y={y} width={w} height={h}
+          fill="#F8F4DC" opacity="0"
+          style={reducedMotion ? undefined : { animation: 'weather-lightning-flash 5s ease-in-out infinite' }}
+        />
+      )}
+    </g>
+  )
+}
+
 // ─── Wall Window ─────────────────────────────────────────────────────────
-export const WallWindow = React.memo(function WallWindow({ x, y, w = 42, h = 26, hour = 12 }) {
+export const WallWindow = React.memo(function WallWindow({ x, y, w = 42, h = 26, hour = 12, weather = 'clear', reducedMotion = false }) {
   const isNight = hour >= 19 || hour < 6
   const sky = hour >= 20 ? '#0a0a2a' : hour >= 19 ? '#0f1535' : hour >= 17 ? '#FF8844' : hour >= 7 ? '#87CEEB' : '#0a0a2a'
   return (
@@ -258,6 +344,9 @@ export const WallWindow = React.memo(function WallWindow({ x, y, w = 42, h = 26,
           )}
         </g>
       )}
+      {/* Weather overlay (rain/cloudy/thunderstorm) — drawn under the window cross
+          so the muntins remain visible. Static decoration when reducedMotion is on. */}
+      <WeatherOverlay x={x} y={y} w={w} h={h} weather={weather} reducedMotion={reducedMotion} />
       {/* Window cross */}
       <line x1={x + w / 2} y1={y} x2={x + w / 2} y2={y + h} stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
       <line x1={x} y1={y + h / 2} x2={x + w} y2={y + h / 2} stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
