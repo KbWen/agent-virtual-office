@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-29
-- **Update Sequence**: 18
+- **Update Sequence**: 19
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -53,6 +53,17 @@
   - [architecture] docs/specs/codex-status-parity-and-done-count.md [Shipped]
   - [feature] docs/specs/character-growth-system.md [Shipped]
   - [feature] docs/specs/clickable-office-objects.md [Shipped]
+  - [v1.1.0 classifier] docs/specs/classifier-foundation.md [Shipped]  *(#A1)*
+  - [v1.1.0 classifier] docs/specs/classifier-wiring.md [Shipped]  *(#A2 + #A2.1)*
+  - [v1.1.0 classifier] docs/specs/classifier-unknown-log.md [Shipped]  *(#A3)*
+  - [v1.1.0 classifier] docs/specs/mcp-inner-verb-fix.md [Shipped]  *(MCP follow-up)*
+  - [v1.1.0 visual] docs/specs/perf-metrics-chip.md [Shipped]  *(#6)*
+  - [v1.1.0 visual] docs/specs/weather-system.md [Shipped]  *(#14 + #15 closure)*
+  - [v1.1.0 visual] docs/specs/tool-inventory-label.md [Shipped]  *(AVO-103)*
+  - [v1.1.0 visual] docs/specs/workflow-handoff-arrows.md [Shipped]  *(AVO-105)*
+  - [v1.1.0 inference] docs/specs/desktop-notifications.md [Shipped]  *(#8)*
+  - [v1.1.0 inference] docs/specs/idle-gap-inference.md [Shipped]  *(#C)*
+  - [v1.1.0 compatibility] docs/specs/csp-compatibility.md [Shipped]  *(#27)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.

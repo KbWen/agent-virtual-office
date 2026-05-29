@@ -449,3 +449,141 @@ function getLighting(hour) {
 19.5s 全場冒出慶祝氣泡 🎉
 20.0s 所有人回座位，恢復日常
 ```
+
+---
+
+## v1.1.0 — Visual Additions (2026-05-29)
+
+This section catalogs the visual layer added in v1.1.0. The pre-v1.1
+sections above describe the original character / behavior / office
+layout — those visuals are unchanged. v1.1.0 introduces four new visual
+signals plus a CSP compatibility fix, all designed to obey the user
+brief **「畫面要清楚好懂、不過分花俏」** (clear and easy to read, never flashy).
+
+### Bottom-status `✓N / ✗M` metric chip (#6)
+
+A short label in the `ControlPanel` Full + Panel modes showing today's
+completed and blocked count, both pulled from the new `dailyDoneLedger`
+and `dailyBlockedLedger`.
+
+- Color: emerald `text-emerald-600 dark:text-emerald-400` for `✓N`,
+  red `text-red-600 dark:text-red-400` for `✗M`, separated by a muted
+  ` / ` divider.
+- Tooltip via `title=` carries the full i18n string
+  (`ui.todayMetricsTooltip`).
+- A11y: `<span className="sr-only">` mirror for screen readers,
+  `aria-hidden="true"` on the icon spans.
+- Atomic day rollover: both ledgers reset together via a shared
+  `dayChanged` gate that ORs each ledger's staleness — caught a latent
+  drift bug during deep review (see [[perf-metrics-chip]]).
+
+### Window weather (#14)
+
+Mood drives the weather visible through all 12 `WallWindow` instances:
+
+| `store.mood` | Weather | Visual |
+|---|---|---|
+| `frustrated` | rain | 5 raindrops × 12 windows, stroke `#5478A0` @ 0.85 opacity |
+| `stuck` | thunderstorm | rain + lightning `<rect>` flash at 0.35 opacity / 5s cycle |
+| `rushing` | cloudy | 2 drifting cloud `<ellipse>` per window |
+| `smooth` / `intense` / `normal` / `idle` / `<unknown>` | clear | overlay returns null |
+
+Design tuning:
+- **Raindrop contrast**: original `#A4BCD6` @ 0.7 opacity was nearly
+  invisible against the daytime sky `#87CEEB` (~1.1:1 contrast).
+  Mid-slate `#5478A0` @ 0.85 hits ~2.6:1 in day, ~6:1 at night —
+  still subtle enough to read as "drizzle" not "downpour".
+- **Photosensitivity safety**: lightning fires twice per 5-second
+  cycle, opacity capped at 0.35 — well below the 3 Hz seizure
+  threshold. Documented in the spec.
+- **reducedMotion**: drops every `animation` style prop, leaving
+  static decorative raindrops/clouds in place. No motion at all.
+- **CSP compatibility (#27)**: `@keyframes` rules live in
+  `src/index.css` and bundle to the regular stylesheet — strict
+  `style-src 'self'` environments work without `'unsafe-inline'`.
+
+The whiteboard handwriting animation (#15) was pre-existing at
+`PixelOffice.jsx:146` `WhiteboardAnimation` (subscribes `activeEvent`,
+triggers on `eureka`, animates 3 lines + circle + `!` over 3000ms via
+`stroke-dashoffset`). Closure-documented in the v1.1.0 wave; no new
+work needed.
+
+### Per-agent tool inventory label (AVO-103)
+
+A small monospace pill above each agent character showing the current
+tool the agent is running.
+
+- Position: `y=-29` in the inverse-scaled name-tag group (below the
+  name tag, above the head — visible but never blocking the face).
+- Style: 7px monospace text `fill="#E8E8E8"` on a `fill="#1a1a1a"`
+  rounded rect at `opacity="0.55"`. Low contrast, no animation, no
+  colour coding.
+- Source of label: `classifyTask(task).visualLabel` — built-ins show
+  concise names (`Bash`, `Read`, `Edit`, `Notebook`, `Plan`), MCP
+  tools collapse to `server::tool` (`mcp__notion__create_page` →
+  `notion::create`).
+- Returns null when `externalStatus[id]?.task` is absent → idle agents
+  stay clean.
+
+Why understated: in real Claude Code sessions the office shows 7+
+labels at once. Bright icons or animation would compete with the agent
+characters themselves; a quiet pill at consistent position reads at a
+glance and disappears into the background otherwise.
+
+### Workflow handoff arrows (AVO-105)
+
+When `activeWorkflow` flips between specific phase pairs (`/spec-intake
+→ /spec`, `/spec → /plan`, `/plan → /implement`, `/implement → /test`,
+`/implement → /review`, `/test → /review`, `/review → /ship`),
+`workflowHandoff` fires the existing `addHandoff` between the
+role pair that semantically owns that transition. Reuses the existing
+`FlyingDocument` paper-arc animation infrastructure.
+
+Visual variants (`subtle` prop on `FlyingDocument`):
+
+|   | Organic (officeLife pass-document) | Workflow (AVO-105) |
+|---|---|---|
+| Rotation | 360° | **60°** |
+| Scale pulse | 1 → 1.3 → 1 | **none** |
+| Sparkle trail | gold `circle` × 2, opacity fade | **none** |
+| Duration | 800ms | 800ms (same) |
+| Paper SVG | same white `rect` with line strokes | same |
+
+Two styles coexist in the same frame because workflow handoffs fire
+more frequently and would feel noisy if they sparkled. Organic
+handoffs (the rare PM → all "look what I made" moment) keep their
+celebratory animation.
+
+### Desktop notifications (#8) — non-visual signal
+
+For completeness: when an agent stays blocked ≥ 30 seconds with the
+tab hidden and Notification permission granted, the office fires a
+browser-level `Notification` (`tag: office-blocked-<agentId>` so the
+OS replaces older notifications for the same agent). The
+`ControlPanel` 🔔 button is the user-gesture handler for permission
+request (modern browsers reject auto-requests). i18n: `notify.*`
+keys in en + zh-TW with separate tooltip and aria state maps.
+
+### Status-bar metric pill, 🔔 button, and platform badge — composition
+
+The bottom `ControlPanel` is the canonical place new status pills land.
+Order, left to right:
+
+1. Clock
+2. Agent row (per-character bubble + status dot)
+3. activeEvent indicator
+4. Status source pill (`Live` / fallback / offline)
+5. **`✓N / ✗M` metric chip** (v1.1.0)
+6. Platform badge (`Browser` / `Claude CLI` / `Antigravity` / ...)
+7. **🔔 notification permission button** (v1.1.0)
+8. Language toggle
+9. Pause / Run / Test / Info buttons
+
+New pills go between platform badge and the action buttons so they're
+visible but don't disrupt the existing button cluster.
+
+### Per-feature specs
+
+Detailed acceptance criteria + rollback for each visual addition:
+- [[perf-metrics-chip]] · [[weather-system]] · [[csp-compatibility]]
+- [[tool-inventory-label]] · [[workflow-handoff-arrows]] · [[desktop-notifications]]

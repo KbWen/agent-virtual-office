@@ -534,3 +534,184 @@ server.tool('get_office_vibe', { project_root: 'string' }, async ({ project_root
 ```
 
 但這是以後的事。先把辦公室做活、做可愛。
+
+---
+
+## v1.1.0 — Classifier + Inference Layer (2026-05-29)
+
+This section appends the architectural additions shipped in the v1.1.0
+classifier + observability wave. The pre-v1.1 sections above describe
+the original status/behavior/movement runtime — that layer is unchanged.
+v1.1.0 adds **a classification pipeline above the existing store
+subscriptions and a polling-based inference layer alongside the existing
+SSE/poll integration**.
+
+```
+                                          ┌─────────────────────────┐
+                                          │   Hook events (status)  │
+                                          └────────────┬────────────┘
+                                                       │
+                                                       ▼
+                                          ┌─────────────────────────┐
+                                          │  inferStatus.applyMessage │
+                                          └────────────┬────────────┘
+                                                       │
+                          ┌────────────────────────────┼────────────────────────────┐
+                          ▼                            ▼                            ▼
+              ┌──────────────────────┐  ┌─────────────────────────┐  ┌──────────────────────────┐
+              │  applyExternalStatus │  │   pushEventBatch (mood)  │  │  startWorkflowHandoffs   │
+              │  (store mutation)    │  │   moodEngine sliding-win │  │  (subscription watcher)  │
+              └──────────┬───────────┘  └────────────┬─────────────┘  └────────────┬─────────────┘
+                         │                            │                            │
+                         │              ┌─────────────┴─────────────┐               │
+                         ▼              ▼                           ▼               ▼
+                  ┌─────────────┐ ┌──────────────┐         ┌──────────────┐ ┌──────────────────┐
+                  │decideBehavior│ │moodToWeather │         │  Weather     │ │  addHandoff      │
+                  │  resolver   │ │  delegator   │         │  Overlay     │ │  (subtle: true)  │
+                  └──────┬──────┘ └──────┬───────┘         └──────────────┘ └──────────────────┘
+                         │               │
+                         ▼               ▼
+                ┌──────────────┐ ┌──────────────┐
+                │ classifyTask │ │ classifyMood │
+                │  + Role +    │ │              │
+                │  Workflow    │ │              │
+                └──────────────┘ └──────────────┘
+
+Meanwhile, two polling watchers run on a separate cadence:
+
+  desktopNotifier (5s tick)     idleGapInfer (10s tick)
+  ──────────────────────         ──────────────────────
+  blocked ≥ 30s                  working+45s gap → 'thinking'
+  + tab.hidden                   blocked+90s gap → 'awaiting-approval'
+  + permission granted           Routes inferred status back through
+  → browser Notification         applyExternalStatus(meta.source='idle-gap-infer')
+```
+
+### Layer 1 — Standards-aligned classifier (`src/systems/classify.js`)
+
+**Four-tier waterfall.** Every raw signal (task name, status, mood,
+role, workflow) is classified into a `{ tier, family, severity, visualLabel, a11yLabel, raw }` shape:
+
+- **Tier 0** — Built-in registry: Claude Code's 11 canonical tools
+  (Bash / Read / Edit / Write / Grep / Glob / Task / WebFetch /
+  WebSearch / NotebookEdit / ExitPlanMode) + TodoRead / TodoWrite.
+  Hand-mapped to FAMILIES.
+- **Tier 3** — Verb heuristic: word-boundary regex on the tool name
+  using **[W3C Activity Streams 2.0](https://www.w3.org/TR/activitystreams-vocabulary/)
+  verb taxonomy** (Read / Create / Update / Delete / Search / Execute /
+  Auth / Communicate / Navigate / Dispatch / Memory). Word-boundary
+  matters: `redo` must not match `read*`, `delegate` must not match
+  `delete*`. Tested explicitly.
+- **Tier 4** — MCP namespace: `mcp__server__tool` is parsed into
+  `(server, tool)`; the inner tool name is then re-classified via
+  Tier 3 verbs so the *family* bubbles up (`mcp__notion__create_page`
+  → `family: CREATE, subFamily: notion`). Was Tier 4 → flat EXTERNAL
+  in initial #A2; promoted to inner-verb routing in the follow-up fix.
+- **Tier 5** — Unknown: preserves the raw string, truncates the
+  visualLabel to 16 chars, marks `family: 'unknown'`. Also notifies
+  `unknownLog` (see Layer 4 below).
+
+**The 4-priority resolver** (`decideBehavior({task, role, status, workflow})`)
+combines four classifier outputs in a strict precedence order:
+
+```
+status > workflow > role > family-default
+```
+
+Rationale: a `blocked` agent must look confused regardless of role
+or workflow (status is immediate reality); a `/ship` phase overrides
+QA's default magnifier with a deploy-button (phase context is more
+specific than role); a `qa` role overrides the default typing
+animation with `magnifier` (role describes how this agent works).
+
+**Role profiles** are derived from **AgentCortex skill associations**
+(`.agent/skills/`):
+- `pm`, `arch` own writing-plans, dispatching-parallel-agents → CREATE/UPDATE
+  bias toward `gantt-chart`
+- `qa`, `checker` own test-driven-development, red-team-adversarial,
+  verification-before-completion → EXECUTE/READ/SEARCH bias toward `magnifier`
+- `ops` owns finishing-a-development-branch → EXECUTE bias toward
+  `deploy-button`
+- `gate` owns auth-security, red-team-adversarial → EXECUTE bias toward
+  `shield-verify`; READ/SEARCH toward `magnifier`
+- `designer` owns frontend-patterns → CREATE/UPDATE bias toward `whiteboard`
+- `dev`/`worker` are generalists with zero overrides (byte-identical to pre-#A2.1)
+
+### Layer 2 — Mood-driven weather (`src/components/TopDownFurniture.jsx`)
+
+`moodToWeather(mood)` delegates to `classifyMood(mood).family` so the
+mapping lives in one place:
+
+| mood | weather family | visual |
+|---|---|---|
+| `frustrated` | rain | 5 raindrop `<line>` per window with CSS `weather-raindrop-fall` |
+| `stuck` | thunderstorm | rain + lightning `<rect>` flash, opacity capped 0.35 |
+| `rushing` | cloudy | 2 drifting `<ellipse>` per window |
+| `smooth`/`intense`/`normal`/`idle`/`unknown` | clear | null overlay |
+
+12 `WallWindow` instances each receive `weather` and `reducedMotion`
+props. Photosensitivity safety: lightning fires twice per 5-second
+cycle and caps opacity at 0.35 — well below the 3 Hz seizure threshold.
+
+CSP compatibility (#27): `@keyframes` definitions live in
+`src/index.css` (bundled by Vite into the regular stylesheet) instead
+of an inline `<style>` tag inside the SVG, so strict `style-src 'self'`
+environments serve the animations without `'unsafe-inline'`.
+
+### Layer 3 — Inference modules (`src/inference/`)
+
+Two polling watchers extend the existing SSE/poll status integration
+without modifying it:
+
+- **`desktopNotifier.js`** — 5-second tick. Per-agent tracks
+  `blockedSince[id]` timestamp and `notifiedFor[id]` dedupe marker.
+  When an agent stays `status === 'blocked'` ≥ 30 seconds AND
+  `document.hidden === true` AND `Notification.permission === 'granted'`,
+  fires `new Notification()` with `tag: office-blocked-<agentId>` so
+  the OS replaces older notifications for the same agent. Transition
+  out of blocked clears both maps so the next episode is independent.
+  jsdom-safe: every browser-API access is `typeof`-checked.
+- **`idleGapInfer.js`** — 10-second tick. Subscribes to the store with
+  a `(status, task)` signature so the watcher re-stamps `lastUpdatedAt`
+  only on meaningful changes (not on 60 Hz movement ticks). When
+  `now - lastUpdatedAt[id] ≥ 45s` AND status is `working`, injects
+  `status: 'thinking'` through `applyExternalStatus(meta.source =
+  'idle-gap-infer')`. Same for blocked ≥ 90s → `awaiting-approval`.
+  Reversibility by construction: real hook events flow through the
+  same `applyExternalStatus` and overwrite the inferred state, no
+  cleanup needed. Closes [Pixel Agents'](https://github.com/pablodelucca/pixel-agents)
+  publicly admitted heuristic gap with deliberately conservative
+  thresholds (the 30-60s typical `npm test` doesn't misfire).
+- **`workflowHandoff.js`** — subscription watcher (not polling).
+  Maps 7 specific `activeWorkflow` phase transitions to
+  `(fromRole, toRole)` pairs and fires `addHandoff(from, to, {subtle: true})`.
+  `subtle` flag tells `FlyingDocument` to render the calm variant
+  (no sparkle, 60° rotation, no scale pulse) so workflow handoffs
+  coexist with organic officeLife pass-document handoffs without
+  visual clash.
+
+### Layer 4 — Self-improving classifier (`src/systems/unknownLog.js`)
+
+Dev-mode aggregator following the **LangSmith auto-clustering pattern**:
+every Tier 5 fallback from any `classify*` function records the raw
+input into a per-kind bucket (task / status / mood / role / workflow,
+capped at 200 entries per kind, oldest-evict). Exposes
+`window.__office_unknownLog` (raw Maps) and `window.__office_logUnknowns()`
+(sorted console reporter) for DevTools introspection. Production
+zero-cost: `isDevMode()` returns false when `import.meta.env.PROD ===
+true` and `recordUnknown` becomes a no-op.
+
+Operational pattern: over time, high-frequency entries in the log are
+candidates for promotion to Tier 0 in `classify.js`. The
+`feedback_classification_rigor` memory note also reminds future
+classifier work to check `.agent/skills/` + `.agent/workflows/` before
+defaulting to generic W3C verbs.
+
+### Per-feature specs
+
+Detailed rationale + acceptance criteria + rollback for each shipped
+piece live in `docs/specs/`:
+- [[classifier-foundation]] · [[classifier-wiring]] · [[classifier-unknown-log]] · [[mcp-inner-verb-fix]]
+- [[weather-system]] · [[csp-compatibility]]
+- [[desktop-notifications]] · [[idle-gap-inference]] · [[workflow-handoff-arrows]]
+- [[tool-inventory-label]] · [[perf-metrics-chip]]
