@@ -25,7 +25,7 @@
 
 | # | Feature | Priority | Status | Notes |
 |---|---------|----------|--------|-------|
-| AVO-105 | **Handoff arrows** — PM→Arch→Dev→QA workflow is the core narrative but invisible. Animated dashed arrow with artifact icon between desks on handoff events; persists 4s. | P0 | Pending | Use `addHandoff` infrastructure already in store (the `FlyingDocuments` system); extend with workflow-stage edge cases. |
+| AVO-105 | **Handoff arrows** — PM→Arch→Dev→QA workflow is the core narrative but invisible. Animated paper-document arc between desks on workflow phase transitions. | P0 | Done | shipped 2026-05-29; `src/inference/workflowHandoff.js` watches `activeWorkflow`, fires `addHandoff(from, to, {subtle: true})` on 7 mapped transitions (`/spec-intake→/spec`, `/spec→/plan`, `/plan→/implement`, `/implement→/test`, `/implement→/review`, `/test→/review`, `/review→/ship`). `FlyingDocument` gained `subtle` prop: no sparkle, 60° rotation (vs 360°), no scale pulse — organic officeLife handoffs keep flashier version. Bug-pinned: prevWorkflow update must come BEFORE addHandoff (zustand sync listener re-entry). |
 | AVO-106 | **Pair-programming huddle** — When two agents work on the same file/PR, render a temporary "huddle" — both walk to a shared whiteboard. | P1 | Pending | Detect shared-artifact correlation from hook events; reuse meeting group-behavior pattern. |
 | AVO-107 | **Review-gate queue** — `awaiting-approval` (#C) shows one agent; reviewer backlog is invisible. Gate role gets a literal queue of waiting tickets next to their desk. | P1 | Pending | Track pending approvals per gate role; small ticket SVG stack. |
 

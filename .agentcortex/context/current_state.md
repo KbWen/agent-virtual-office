@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-29
-- **Update Sequence**: 15
+- **Update Sequence**: 16
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -43,6 +43,7 @@
     - **2 follow-up fixes from spawned chips** — (a) moodEngine `pushEventBatch([])` now strict no-op (`if (added > 0)` gate) so empty batches can't accidentally flip mood→idle; (b) classifyTask Tier 4 (MCP namespace) now bubbles the inner verb's family up — `mcp__notion__create_page` → CREATE → writing-notes, `mcp__notion__delete_page` → DELETE (high severity), `mcp__atlassian__search_*` → SEARCH → research. EXTERNAL fallback retained for MCP tools with no inner verb match.
     - **#27 CSP compatibility** — weather `@keyframes` moved from inline `<style>` (CSP violation under strict `style-src 'self'`) to bundled `src/index.css`. Production JS now has 0 `@keyframes`. README troubleshooting expanded with CSP guidance.
     - **Session wrap-up** — backlog rotated (73 shipped items moved to `docs/specs/_shipped-log.md`); fresh backlog with 15 new AVO-101..AVO-115 items (Plan-mode viz, handoff arrows, token meter, MCP tool inventory, OT GenAI export, etc.); `CHANGELOG.md` summarising the whole session; README architecture tree + tech highlights refreshed with new modules (classifier, desktopNotifier, idleGapInfer, weather overlay); WeatherOverlay clipPath `<defs>` wrappers removed (12→1 DOM nodes saved during active weather).
+    - **AVO-105 handoff arrows** — `src/inference/workflowHandoff.js` watches `activeWorkflow`; on 7 mapped phase transitions (`/spec-intake→/spec`, `/spec→/plan`, `/plan→/implement`, `/implement→/test`, `/implement→/review`, `/test→/review`, `/review→/ship`) fires `addHandoff(from, to, {subtle: true})`. `FlyingDocument` gained `subtle` prop — workflow handoffs render the calm variant (no sparkle, 60° rotation, no scale pulse) per "畫面清楚好懂、不過分花俏" brief; organic officeLife handoffs (subtle: false) keep the original flashier 360° + sparkle. Re-entrant bug caught in live preview (zustand sync subscription) and pinned as test.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
@@ -97,6 +98,14 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### main-2026-05-29 (AVO-105 handoff arrows)
+
+- Shipped: `src/inference/workflowHandoff.js` subscribes to `activeWorkflow`; on 7 mapped phase transitions fires `addHandoff(from, to, {subtle: true})`. Mapping: `/spec-intake→/spec` pm→arch, `/spec→/plan` arch→pm, `/plan→/implement` arch→dev, `/implement→/test` dev→qa, `/implement→/review` dev→gate, `/test→/review` qa→gate, `/review→/ship` gate→ops. Unmapped transitions, null endpoints, missing roster roles, and identical workflow → no fire.
+- `addHandoff(from, to, opts)` signature extended with `opts.subtle: boolean`. `FlyingDocument` gained `subtle` prop — workflow handoffs render the calm variant (no gold sparkle trail, 60° rotation instead of 360°, no 1→1.3→1 scale pulse) per the brief "畫面要清楚好懂、不過分花俏". Existing organic officeLife handoffs continue to fire with `subtle: false` (default) and keep their original flashier animation — verified in live preview where a `res→gate` officeLife handoff coexisted with workflow `arch→dev`/`dev→qa` and only the workflow ones lacked sparkles.
+- Re-entrancy bug found and fixed at implementation: zustand fires subscribers synchronously on every setState, so `addHandoff` would re-enter the workflow watcher; without advancing `prevWorkflow` before the side effect the listener would see the SAME new workflow as a "transition" and recurse infinitely. Fixed by advancing the closure variable BEFORE calling addHandoff and pinned as `BUG-PIN` test.
+- Tests: 943/943 vitest passed (was 925, +18 new tests covering 7-row mapping, subtle propagation, null/boot safety, lightweight roster skip, unmapped transitions, lifecycle, re-entrant safety bug-pin, full /spec→/plan→/implement→/test→/review→/ship chain firing 5 handoffs in order).
+- Build: vite 1.07s clean, 385.49 KB raw / 120.67 KB gzip (+0.9 KB raw — module + small inline closure).
 
 ### main-2026-05-29 (session wrap-up: backlog + docs + perf)
 
