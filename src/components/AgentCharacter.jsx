@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
+import { classifyTask } from '../systems/classify'
 import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale } from '../i18n'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT } from '../systems/constants.js'
@@ -586,6 +587,39 @@ function estimateTextWidth(str) {
   return w
 }
 
+// ─── TaskLabel — small monospace pill showing the current tool (AVO-103) ──
+// Tiny, low-contrast, never animated. The brief was "clear and not flashy",
+// so this is intentionally unobtrusive — just a 7px monospace label in a
+// rounded rect, placed below the name tag. Shows the classifier's
+// `visualLabel` so MCP tools collapse to `notion::create` instead of
+// `mcp__notion__create_page` (Tier 4 inner-verb bubble-up from the recent
+// classifier fix carries this for us). Returns null when no task is set,
+// so idle agents stay clean.
+function TaskLabel({ task }) {
+  if (!task) return null
+  const c = classifyTask(task)
+  const label = c.visualLabel
+  // Conservative width estimate: ~5.4px per char at 7px monospace.
+  const charW = 5.4
+  const labelW = Math.min(72, Math.max(20, label.length * charW + 6))
+  const halfW = labelW / 2
+  return (
+    <g transform="translate(0, -29)" aria-hidden="true">
+      <rect
+        x={-halfW} y={-5} width={labelW} height={10} rx={5}
+        fill="#1a1a1a" opacity="0.55"
+      />
+      <text
+        x={0} y={1.5}
+        textAnchor="middle" dominantBaseline="middle"
+        fontSize="7" fontFamily="monospace" fill="#E8E8E8" opacity="0.95"
+      >
+        {label}
+      </text>
+    </g>
+  )
+}
+
 // ═══ AGENT CHARACTER WITH RAF-BASED MOVEMENT ═══
 
 function AgentCharacter({ agent }) {
@@ -594,6 +628,10 @@ function AgentCharacter({ agent }) {
   const name = charName(id)
   const agentState = useOfficeStore((s) => s.agents[id])
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
+  // AVO-103: per-agent task signal for the tool-inventory label. Subscribe to
+  // just the `task` string so we re-render only when the tool changes — not on
+  // every other externalStatus tick (label, expiresAt, etc.).
+  const currentTask = useOfficeStore((s) => s.externalStatus[id]?.task ?? null)
 
   const timerRef = useRef(null)
   const pathRef = useRef([])
@@ -1037,6 +1075,9 @@ function AgentCharacter({ agent }) {
         </g>
 
         <BehaviorBubble x={0} y={-68} message={state.bubble} />
+        {/* AVO-103: tool inventory label between the name tag and the head.
+            Only renders when externalStatus carries a task. */}
+        <TaskLabel task={currentTask} />
       </g>
     </g>
   )

@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-29
-- **Update Sequence**: 16
+- **Update Sequence**: 17
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -44,6 +44,7 @@
     - **#27 CSP compatibility** — weather `@keyframes` moved from inline `<style>` (CSP violation under strict `style-src 'self'`) to bundled `src/index.css`. Production JS now has 0 `@keyframes`. README troubleshooting expanded with CSP guidance.
     - **Session wrap-up** — backlog rotated (73 shipped items moved to `docs/specs/_shipped-log.md`); fresh backlog with 15 new AVO-101..AVO-115 items (Plan-mode viz, handoff arrows, token meter, MCP tool inventory, OT GenAI export, etc.); `CHANGELOG.md` summarising the whole session; README architecture tree + tech highlights refreshed with new modules (classifier, desktopNotifier, idleGapInfer, weather overlay); WeatherOverlay clipPath `<defs>` wrappers removed (12→1 DOM nodes saved during active weather).
     - **AVO-105 handoff arrows** — `src/inference/workflowHandoff.js` watches `activeWorkflow`; on 7 mapped phase transitions (`/spec-intake→/spec`, `/spec→/plan`, `/plan→/implement`, `/implement→/test`, `/implement→/review`, `/test→/review`, `/review→/ship`) fires `addHandoff(from, to, {subtle: true})`. `FlyingDocument` gained `subtle` prop — workflow handoffs render the calm variant (no sparkle, 60° rotation, no scale pulse) per "畫面清楚好懂、不過分花俏" brief; organic officeLife handoffs (subtle: false) keep the original flashier 360° + sparkle. Re-entrant bug caught in live preview (zustand sync subscription) and pinned as test.
+    - **AVO-103 tool inventory label** — `AgentCharacter.jsx` `TaskLabel` SVG component subscribes per-agent to `externalStatus[id]?.task` and renders `classifyTask(task).visualLabel` in a 7px monospace pill at y=-29 (below name tag, above head). Built-ins show concise names (`Bash`, `Read`, `Edit`, `Notebook`, `Plan`); MCP tools collapse via inner-verb bubble-up (`mcp__notion__create_page` → `notion::create`). Live-verified during implementation against real Claude Code hook events: dev showed `Claude_Preview::preview_eval` for an MCP tool call, ops showed `Bash` for shell commands, qa/designer showed `Edit` for file edits.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
@@ -98,6 +99,14 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 
 ## Ship History
+
+### main-2026-05-29 (AVO-103 tool inventory label)
+
+- Shipped: `TaskLabel` SVG component inside `src/components/AgentCharacter.jsx`. Per-agent subscription to `s.externalStatus[id]?.task` re-renders only on tool change (not on every label/expiresAt tick). Renders `classifyTask(task).visualLabel` in a 7px monospace pill at y=-29 in the inverse-scaled name-tag group, just below the name tag and above the character head. Fill `#E8E8E8` on `#1a1a1a` opacity 0.55 background — low contrast, no animation, no flashy colour. Returns null when no task is set → idle agents stay clean.
+- Built-in tools display concise names (`Bash`, `Read`, `Edit`, `Write`, `Grep`, `Glob`, `Task`, `WebFetch`, `WebSearch`, `Notebook`, `Plan`). MCP-namespaced tools collapse via the inner-verb bubble-up shipped earlier — `mcp__notion__create_page` shows as `notion::create`, `mcp__atlassian__search_issues` as `atlassian::search`.
+- Live verified during implementation against real Claude Code hook events: dev character showed `Claude_Preview::preview_eval` for an MCP tool call, ops showed `Bash` from npm test runs, qa/designer showed `Edit` from source edits, gate showed `AskUserQuestion` from interactive prompts. All seven agents had their labels update within ~1s of the hook firing.
+- Tests: 960/960 vitest passed (was 943, +17 new in tests/taskLabel.test.js — 11 built-in tools, MCP server::tool routing, MCP no-verb fallback, verb-classified routing, long-name truncation, defensive null/undefined/empty).
+- Build: vite 887ms clean, 386.05 KB raw / 120.80 KB gzip (+0.6 KB raw — minimal component).
 
 ### main-2026-05-29 (AVO-105 handoff arrows)
 
