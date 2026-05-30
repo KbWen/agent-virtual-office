@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-30
-- **Update Sequence**: 25
+- **Update Sequence**: 26
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -135,6 +135,7 @@
 - **Ship 10 — `feat(AVO-108)` 11c73f8**: token meter. Hook tail-reads the transcript (`transcript_path`, 64 KB from end, <1ms) for `usage` → emits `tokens:{ctx,out,model}`; ControlPanel 🪙 chip shows context size (compact) + counts/model in tooltip. Presence-semantics store field. VERIFIED WITH REAL DATA (repo hook wrote my live ~652k context; chip matched). Deferred: rolling-1h / $ cost / sparkline. +18 tests.
 - **Ship 11 — `feat(AVO-102)` a62cd14**: extended-thinking aura. Hook emits `effort.level` (low|medium|high|xhigh|max); active agents render a subtle violet aura scaled by level (high+ only). VERIFIED WITH REAL DATA (my live 'high' effort → 2 auras at r=28). Aura aesthetics conservative, worth a preview look. +8 tests.
 - Session totals: **960→1024 vitest (+64), 17 commits on PR #22**, build clean throughout. AVO-101 + AVO-108 + AVO-102 all shipped (the 3 hook-data features #7 unblocked).
+- **REVIEW + TEST + SHIP (PR #22)**: independent adversarial pre-merge review of the full net diff (22 files, ~760 insertions) → **MERGE-READY, 0 blockers**; correctness, presence-semantics integration, hook safety, validation, server hardening, and test quality all verified. One NIT fixed pre-merge (`scanSessions` multi-session merge now carries `tokens`/`effort` like `mood`, +1 test). Test gate: 1025/1025 vitest, clean Vite build, `git diff --check` clean. Squash-merged to `main`.
 - **Remaining for human**: review+merge PR #22; optional `npm publish` (free, your account); AVO-108 token meter (transcript-tailing path) / AVO-102 thinking aura (effort.level) — feasible, not yet built; visual backlog (AVO-104/106/107/111/112/115, aesthetic) incl. AVO-101's deferred scrolling-outline polish.
 
 ### main-2026-05-29 (AVO-103 tool inventory label)
