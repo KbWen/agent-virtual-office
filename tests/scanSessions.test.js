@@ -206,6 +206,18 @@ describe('multi-session merge', () => {
     }
   })
 
+  it('carries token usage + effort from the most-recent active session (AVO-108/AVO-102)', () => {
+    const base = Date.now()
+    writeSlugged('older', base + 100, [{ role: 'qa', status: 'working', task: 'Read', label: null }],
+      { tokens: { ctx: 100, out: 1, model: 'a' }, effort: 'low' })
+    writeSlugged('newer', base + 500, [{ role: 'dev', status: 'working', task: 'Edit', label: null }],
+      { tokens: { ctx: 650000, out: 1453, model: 'claude-opus-4-8' }, effort: 'high' })
+    const r = scanAndMerge(dir, dir)
+    expect(r.source).toBe('multi-session')
+    expect(r.tokens).toEqual({ ctx: 650000, out: 1453, model: 'claude-opus-4-8' })  // newer wins
+    expect(r.effort).toBe('high')
+  })
+
   // C2: numeric max _seq
   it('C2: _seq changes when a session update advances the max', () => {
     const base = Date.now()
