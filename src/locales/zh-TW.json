@@ -249,6 +249,8 @@
     "testHint": "設定 agent 狀態以改變行為權重 — 工作中：更多打字，卡住：焦躁，完成：慶祝",
     "todayMetricsTooltip": "今日完成 {0} 次，阻塞 {1} 次",
     "todayMetricsA11y": "今日完成 {0} 次，阻塞 {1} 次",
+    "tokensTooltip": "上下文：{0} tokens · 最近輸出 {1}{2}",
+    "tokensA11y": "{0} 上下文 tokens，{1} 輸出 tokens",
     "platforms": {
       "browser": "瀏覽器",
       "claude-cli": "Claude CLI",

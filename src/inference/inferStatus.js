@@ -70,6 +70,19 @@ function sanitizeAgent(a) {
   return { role, status: a.status, task: capStr(a.task), label: capStr(a.label), hint: capStr(a.hint), session }
 }
 
+// AVO-108: validate a token-usage object from any channel. Returns {ctx,out,model} with
+// non-negative integer counts and a capped model string, or undefined for anything malformed.
+export function sanitizeTokens(t) {
+  if (!t || typeof t !== 'object') return undefined
+  const ctx = Number(t.ctx), out = Number(t.out)
+  if (!Number.isFinite(ctx) || !Number.isFinite(out)) return undefined
+  return {
+    ctx: Math.max(0, Math.floor(ctx)),
+    out: Math.max(0, Math.floor(out)),
+    model: typeof t.model === 'string' ? t.model.slice(0, 40) : null,
+  }
+}
+
 /**
  * Normalize any incoming message to the unified office-status format
  */
@@ -102,9 +115,13 @@ export function normalizeStatusMessage(raw) {
       // when `source` is absent so withStatusEnvelope still applies its fallbackSource.
       source: capStr(raw.source) || undefined,
       mood: VALID_MOODS.includes(raw.mood) ? raw.mood : undefined,
+      // AVO-108: validate the token-usage object — untrusted channels reach this branch, so
+      // a crafted `tokens` must not inject unbounded strings / non-numbers into the store.
+      tokens: sanitizeTokens(raw.tokens),
     }
     if (validated.source === undefined) delete validated.source
     if (validated.mood === undefined) delete validated.mood
+    if (validated.tokens === undefined) delete validated.tokens
     return withStatusEnvelope(validated)
   }
 
@@ -628,6 +645,10 @@ export function startStatusIntegration(store) {
     if (msg.mood) {
       setMoodOverride(msg.mood, msg.moodDuration || 60000)
     }
+
+    // AVO-108: token usage is session-level (independent of agent routing). Apply it directly
+    // — presence semantics in setTokens preserve the last value when a message carries none.
+    if (msg.tokens) s.setTokens(msg.tokens)
 
     // Route agents
     const updates = routeExternalAgents(msg.agents || [])

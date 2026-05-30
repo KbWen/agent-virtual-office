@@ -420,6 +420,35 @@ function statusForPreToolUse(permissionMode) {
   return permissionMode === 'plan' ? 'planning' : 'working'
 }
 
+// AVO-108: token usage isn't in the hook payload, but `transcript_path` points to a JSONL
+// whose last assistant message carries `usage`. Read ONLY the file tail (64 KB) so cost is
+// O(tail), not O(transcript) — a 3.6 MB transcript reads in <1 ms. Returns the current
+// context size (input + cache_creation + cache_read) and the last response's output tokens,
+// or null on any failure (never throws — the hook must stay fast and crash-proof).
+function readLatestTokenUsage(transcriptPath, tailBytes = 65536) {
+  if (!transcriptPath || typeof transcriptPath !== 'string') return null
+  try {
+    const size = fs.statSync(transcriptPath).size
+    const start = Math.max(0, size - tailBytes)
+    const fd = fs.openSync(transcriptPath, 'r')
+    let buf
+    try {
+      buf = Buffer.alloc(size - start)
+      fs.readSync(fd, buf, 0, buf.length, start)
+    } finally { fs.closeSync(fd) }
+    let usage = null, model = null
+    for (const line of buf.toString('utf-8').split('\n')) {
+      if (!line.trim()) continue
+      let o; try { o = JSON.parse(line) } catch { continue }
+      const m = o && o.message
+      if (m && m.usage && typeof m.usage === 'object') { usage = m.usage; model = m.model || model }
+    }
+    if (!usage) return null
+    const ctx = (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0)
+    return { ctx, out: usage.output_tokens || 0, model: model || null }
+  } catch { return null }
+}
+
 // ─── Main ───
 
 function processEvent(event) {
@@ -428,6 +457,9 @@ function processEvent(event) {
   const agentType = event.agent_type || ''
   const toolInput = event.tool_input || null
   const agentId = event.agent_id || null
+  // AVO-108: cheap tail-read of the transcript for token usage. null when unavailable; the
+  // store keeps its last value on null (presence semantics) so the chip never flickers.
+  const tokens = readLatestTokenUsage(event.transcript_path)
 
   let role, task, status, label, hint = null
   let clearWorkflow = false
@@ -769,6 +801,9 @@ function processEvent(event) {
     _workflowAgentId: outWorkflowAgentId,
     _workflowPromptId: outWorkflowPromptId,
     source: 'claude-cli',
+    // AVO-108: session token usage (context size + last output). Omitted when null so the
+    // store keeps its last value (presence semantics) — Stop and failed reads don't blank it.
+    ...(tokens ? { tokens } : {}),
     // Carry _stopped/_stoppedAt forward when they are set: a non-UPS event has no
     // authority to clear Stop's idle signal. Without this, a PostToolUse that wins a
     // last-writer-wins race with Stop erases _stopped=true, re-opening the straggler
@@ -841,5 +876,6 @@ if (typeof module !== 'undefined') {
   module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
     shortFile, shortCommand, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
-    shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse }
+    shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse,
+    readLatestTokenUsage }
 }

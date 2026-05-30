@@ -1,7 +1,48 @@
 import { describe, it, expect } from 'vitest'
 
 // Import CommonJS hook helpers
-const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse } = await import('../public/hooks/office-status-hook.js')
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse, readLatestTokenUsage } = await import('../public/hooks/office-status-hook.js')
+
+describe('readLatestTokenUsage — AVO-108 transcript tail-read', () => {
+  function tmpTranscript(lines) {
+    const p = path.join(os.tmpdir(), `transcript-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`)
+    fs.writeFileSync(p, lines.map(l => JSON.stringify(l)).join('\n'))
+    return p
+  }
+  it('extracts ctx (input+cache) + output + model from the last usage-bearing line', () => {
+    const p = tmpTranscript([
+      { type: 'user', message: { role: 'user' } },
+      { type: 'assistant', message: { model: 'claude-opus-4-8', usage: { input_tokens: 2, cache_creation_input_tokens: 4452, cache_read_input_tokens: 596779, output_tokens: 2348 } } },
+    ])
+    expect(readLatestTokenUsage(p)).toEqual({ ctx: 2 + 4452 + 596779, out: 2348, model: 'claude-opus-4-8' })
+    fs.unlinkSync(p)
+  })
+  it('uses the LAST usage line when several are present', () => {
+    const p = tmpTranscript([
+      { type: 'assistant', message: { model: 'a', usage: { input_tokens: 1, output_tokens: 10 } } },
+      { type: 'assistant', message: { model: 'b', usage: { input_tokens: 5, output_tokens: 99 } } },
+    ])
+    expect(readLatestTokenUsage(p)).toEqual({ ctx: 5, out: 99, model: 'b' })
+    fs.unlinkSync(p)
+  })
+  it('returns null safely for missing path, missing file, or no usage', () => {
+    expect(readLatestTokenUsage(null)).toBeNull()
+    expect(readLatestTokenUsage('')).toBeNull()
+    expect(readLatestTokenUsage('/no/such/file.jsonl')).toBeNull()
+    const p = tmpTranscript([{ type: 'user', message: { role: 'user' } }])
+    expect(readLatestTokenUsage(p)).toBeNull()
+    fs.unlinkSync(p)
+  })
+  it('survives malformed JSON lines (skips them, never throws)', () => {
+    const p = path.join(os.tmpdir(), `t-${Date.now()}.jsonl`)
+    fs.writeFileSync(p, 'not json\n{bad\n' + JSON.stringify({ message: { usage: { input_tokens: 7, output_tokens: 3 } } }))
+    expect(readLatestTokenUsage(p)).toEqual({ ctx: 7, out: 3, model: null })
+    fs.unlinkSync(p)
+  })
+})
 
 describe('statusForPreToolUse — plan-mode detection (AVO-101)', () => {
   it('maps plan mode to the distinct planning status', () => {

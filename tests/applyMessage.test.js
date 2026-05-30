@@ -5,9 +5,36 @@ import {
   shouldSkipHintDismiss,
   isNumericSeq,
   stalenessSweepAction,
+  sanitizeTokens,
   normalizeStatusMessage,
   buildHashStatusMessage,
 } from '../src/inference/inferStatus.js'
+
+describe('sanitizeTokens — AVO-108 token-usage validation', () => {
+  it('passes a well-formed usage object with floored non-negative counts', () => {
+    expect(sanitizeTokens({ ctx: 604937, out: 5302, model: 'claude-opus-4-8' }))
+      .toEqual({ ctx: 604937, out: 5302, model: 'claude-opus-4-8' })
+    expect(sanitizeTokens({ ctx: 10.9, out: 2.1 })).toEqual({ ctx: 10, out: 2, model: null })
+  })
+  it('rejects malformed input (non-object, NaN, missing counts)', () => {
+    expect(sanitizeTokens(null)).toBeUndefined()
+    expect(sanitizeTokens('600k')).toBeUndefined()
+    expect(sanitizeTokens({ ctx: 'lots', out: 1 })).toBeUndefined()
+    expect(sanitizeTokens({})).toBeUndefined()
+  })
+  it('clamps negatives and caps an over-long model string', () => {
+    const r = sanitizeTokens({ ctx: -5, out: -1, model: 'x'.repeat(100) })
+    expect(r.ctx).toBe(0)
+    expect(r.out).toBe(0)
+    expect(r.model.length).toBeLessThanOrEqual(40)
+  })
+  it('passes through normalizeStatusMessage on a real office-status message', () => {
+    const msg = normalizeStatusMessage({ type: 'office-status', agents: [], tokens: { ctx: 1000, out: 50, model: 'm' } })
+    expect(msg.tokens).toEqual({ ctx: 1000, out: 50, model: 'm' })
+    const bad = normalizeStatusMessage({ type: 'office-status', agents: [], tokens: 'oops' })
+    expect(bad.tokens).toBeUndefined()
+  })
+})
 
 describe('isAuthoritativeSnapshotSource — multi-session exit-reconcile stale-drop exemption', () => {
   it('is true only for multi-session (its merged _seq is max-child, not a monotonic clock)', () => {

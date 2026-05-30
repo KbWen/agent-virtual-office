@@ -478,6 +478,7 @@ export const useOfficeStore = create((set) => ({
   statusSource: 'organic',     // 'organic' | 'external' | 'fallback'
   integrationSource: null,     // e.g. claude-cli | codex-cli | codex-app | webhook
   activeWorkflow: null,        // workflow name for banner display
+  tokens: null,                // AVO-108: { ctx, out, model } latest token usage, or null
   integrationHealth: {
     state: 'idle',             // idle | online | degraded | offline
     lastSuccessAt: null,
@@ -856,6 +857,16 @@ export const useOfficeStore = create((set) => ({
     set((s) => {
       const next = name ?? null
       return s.activeWorkflow === next ? {} : { activeWorkflow: next }
+    }),
+  // AVO-108: presence-update — callers only pass a non-null token object, so a turn with no
+  // fresh read (Stop, external channels) leaves the last value intact. No-op on equal values
+  // to avoid waking subscribers when ctx/out/model are unchanged.
+  setTokens: (t) =>
+    set((s) => {
+      if (!t) return {}
+      const cur = s.tokens
+      if (cur && cur.ctx === t.ctx && cur.out === t.out && cur.model === t.model) return {}
+      return { tokens: t }
     }),
   markIntegrationProbe: ({ ok }) =>
     set((s) => {

@@ -31,6 +31,14 @@ export function blockedReasonLabel(ext) {
   return l.length > BLOCKED_REASON_CAP ? l.slice(0, BLOCKED_REASON_CAP - 1) + '…' : l
 }
 
+// AVO-108: compact token formatter — 604937 → "605k", 1240000 → "1.2M", 842 → "842".
+export function formatTokens(n) {
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return '0'
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
+  if (n >= 1_000) return Math.round(n / 1_000) + 'k'
+  return String(Math.round(n))
+}
+
 // The single label a ControlPanel agent row shows: blocked reason wins, then the
 // collapsed tool chip, then the localized status word. `t` is the i18n lookup.
 export function agentLineLabel(ext, t) {
@@ -54,6 +62,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const minute = useOfficeStore((s) => s.minute)
   const externalStatus = useOfficeStore(useShallow((s) => s.externalStatus))
   const statusSource = useOfficeStore((s) => s.statusSource)
+  const tokens = useOfficeStore(useShallow((s) => s.tokens))  // AVO-108
   const integrationHealth = useOfficeStore(useShallow((s) => s.integrationHealth))
   // Subscribe to ledger objects (clone-on-write — identity only changes on actual
   // increment or day rollover). Sum in useMemo so the reduction doesn't re-run on
@@ -257,6 +266,23 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             {t('ui.todayMetricsA11y', '{0} completed, {1} blocked today').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
           </span>
         </div>
+
+        {/* AVO-108: token meter — context size headline, full counts + model in tooltip */}
+        {tokens && (
+          <div
+            className="text-[10px] text-indigo-600 dark:text-indigo-300 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded shrink-0 font-mono"
+            title={t('ui.tokensTooltip', 'Context: {0} tokens · last output {1}{2}')
+              .replace('{0}', tokens.ctx.toLocaleString())
+              .replace('{1}', tokens.out.toLocaleString())
+              .replace('{2}', tokens.model ? ' · ' + tokens.model : '')}
+          >
+            <span aria-hidden="true">🪙 {formatTokens(tokens.ctx)}</span>
+            <span className="sr-only">
+              {t('ui.tokensA11y', '{0} context tokens, {1} output tokens')
+                .replace('{0}', String(tokens.ctx)).replace('{1}', String(tokens.out))}
+            </span>
+          </div>
+        )}
 
         <div className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded shrink-0">
           {t('ui.platforms.' + platform, platform)}

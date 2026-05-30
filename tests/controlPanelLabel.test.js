@@ -10,7 +10,25 @@
  * render needed — the helper is a thin pure wrapper, mirroring taskLabel.test.js).
  */
 import { describe, it, expect } from 'vitest'
-import { taskChipLabel, blockedReasonLabel, agentLineLabel } from '../src/components/ControlPanel.jsx'
+import { taskChipLabel, blockedReasonLabel, agentLineLabel, formatTokens } from '../src/components/ControlPanel.jsx'
+
+describe('ControlPanel — formatTokens (AVO-108 compact token formatter)', () => {
+  it.each([
+    [842, '842'],
+    [1000, '1k'],
+    [604937, '605k'],
+    [1_240_000, '1.2M'],
+    [2_000_000, '2M'],
+  ])('%d → "%s"', (n, expected) => {
+    expect(formatTokens(n)).toBe(expected)
+  })
+  it('is defensive against junk input', () => {
+    expect(formatTokens(-5)).toBe('0')
+    expect(formatTokens(NaN)).toBe('0')
+    expect(formatTokens(undefined)).toBe('0')
+    expect(formatTokens('123')).toBe('0')
+  })
+})
 
 // Minimal i18n stub: returns the fallback (2nd arg) the real t() would for an
 // unknown key, so agentLineLabel's status-word branch is exercised deterministically.
