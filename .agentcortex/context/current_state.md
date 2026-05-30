@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-30
-- **Update Sequence**: 23
+- **Update Sequence**: 24
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -129,7 +129,10 @@
 - Tests: 960→1002 vitest (+42, all green). 11 commits on `main`, NONE pushed.
 - **HOOK-DATA INVESTIGATION (resolved the P0 blocker)**: fetched the official Claude Code hooks spec. Payload fields: `session_id, transcript_path, cwd, permission_mode, effort{level}, hook_event_name, tool_name, tool_input, agent_id, agent_type`. → **AVO-101 (plan-mode) IS FEASIBLE** via `permission_mode === 'plan'` on tool events (no dedicated plan event, but the mode is in every payload). → **AVO-108 (token meter)**: no token/cost in the hook payload, BUT `transcript_path` points to a JSONL with per-message usage → feasible via a transcript-tailing data path (medium effort). → **AVO-102 (thinking aura)**: the new `effort.level` field is a usable signal. AVO-101 build needs: add `'planning'` to `VALID_STATUSES` (constants.js), `STATUS_TABLE` (classify.js), `STATUS_BEHAVIOR_MAP` (store.js), i18n, + hook emits status='planning' when permission_mode==='plan'.
 - **Validator FAILs are NOT real defects** (diagnosed): README.md "mojibake" = framework validator checking its own `'Why AgentCortex?'` sentinel against a downstream PRODUCT readme (false positive — do NOT add the string). README.zh-TW.md "mixed-eol" = local autocrlf working-tree artifact; the COMMITTED blob is already clean uniform LF (`git show HEAD` = 0 CRLF / 230 LF). clickable-office-objects.md = `primary_domain: none` doc-governance quirk. None require a repo change.
-- **Remaining for human**: `npm publish` (the real install blocker — free, needs your npm account); AVO-101/108/102 build (now spec'd & ready); visual backlog (AVO-104/106/107/111/112/115, aesthetic).
+- **Ship 9 — `feat(AVO-101)` 92198e5**: plan mode is now visualized. Hook emits `status:'planning'` (via tested `statusForPreToolUse`) when `permission_mode==='plan'`; wired through VALID_STATUSES + classify STATUS_TABLE (FAMILIES.PLAN) + decideBehavior override (→ gantt-chart) + STATUS_BEHAVIOR_MAP + i18n (Planning/規劃中). Verified end-to-end by driving the real pipeline (routeExternalAgents → applyExternalStatus → gantt-chart + focused). Fancy "scrolling plan outline" visual deferred (aesthetic). +9 tests.
+- **DISTRIBUTION (resolved)**: `main` is a PROTECTED branch (no direct push). All session work is on branch `claude/overnight-trigger-fixes` → **PR #22** (https://github.com/KbWen/agent-virtual-office/pull/22), 14 commits, awaiting human review/merge. Install does NOT need npm publish: repo is PUBLIC, so `npx github:KbWen/agent-virtual-office` (verified working) + `git clone` work once the PR merges. npm publish is optional polish.
+- Tests: 960→1006 vitest (+46, all green) across the session.
+- **Remaining for human**: review+merge PR #22; optional `npm publish` (free, your account); AVO-108 token meter (transcript-tailing path) / AVO-102 thinking aura (effort.level) — feasible, not yet built; visual backlog (AVO-104/106/107/111/112/115, aesthetic) incl. AVO-101's deferred scrolling-outline polish.
 
 ### main-2026-05-29 (AVO-103 tool inventory label)
 
