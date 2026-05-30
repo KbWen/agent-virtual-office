@@ -184,6 +184,28 @@ describe('multi-session merge', () => {
     expect(sessions.indexOf('aaa')).toBeLessThan(sessions.indexOf('zzz'))
   })
 
+  // Defense (server review): a corrupt / old-hook-version / foreign-tool session file with
+  // a truthy NON-ARRAY `agents` value must not throw. It used to crash the server process at
+  // the two unguarded scanAndMerge callers (SSE-connect + file-watch debounce timer) and
+  // blank the whole office at the GET path, because the merge did `(data.agents || []).filter`.
+  it('does not throw when another session file has a non-array agents value (string)', () => {
+    const base = Date.now()
+    writeSlugged('good', base + 100, [{ role: 'dev', status: 'working', task: 'Bash', label: 'x' }])
+    writeSlugged('bad', base + 200, 'oops')  // corrupt: agents is a string, not an array
+    let result
+    expect(() => { result = scanAndMerge(dir, dir) }).not.toThrow()
+    expect(result.source).toBe('multi-session')
+    expect(result.agents.some(a => a.role === 'good~dev')).toBe(true)  // valid session survives
+  })
+
+  it('tolerates non-array agents of various shapes (number, object, boolean)', () => {
+    for (const bad of [42, { not: 'an array' }, true]) {
+      writeSlugged('ok', Date.now() + 100, [{ role: 'qa', status: 'working', task: 'x', label: 'y' }])
+      writeSlugged('corrupt', Date.now() + 200, bad)
+      expect(() => scanAndMerge(dir, dir)).not.toThrow()
+    }
+  })
+
   // C2: numeric max _seq
   it('C2: _seq changes when a session update advances the max', () => {
     const base = Date.now()

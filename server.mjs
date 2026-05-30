@@ -534,7 +534,10 @@ const server = http.createServer((req, res) => {
     req.on('close', () => sseClients.delete(res))
     req.on('error', () => sseClients.delete(res))
     res.on('error', () => sseClients.delete(res))
-    const snapshot = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
+    // try/catch: an uncaught scanAndMerge throw in this request handler would crash the
+    // server (req/res 'error' listeners don't catch synchronous handler-body throws).
+    let snapshot = null
+    try { snapshot = scanAndMerge(path.dirname(STATUS_PATH), process.cwd()) } catch {}
     if (snapshot) {
       try { res.write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`) }
       catch { sseClients.delete(res) }
@@ -621,8 +624,13 @@ let _watchDebounce = null
       if (sseClients.size === 0) return
       clearTimeout(_watchDebounce)
       _watchDebounce = setTimeout(() => {
-        const merged = scanAndMerge(watchDir, process.cwd())
-        if (merged) broadcastSSE(merged)
+        // try/catch: this runs in a timer callback with NO outer guard, so an uncaught throw
+        // (e.g. a malformed session file reaching scanAndMerge) would crash the whole server
+        // process. Mirrors the POST-broadcast caller's guard above.
+        try {
+          const merged = scanAndMerge(watchDir, process.cwd())
+          if (merged) broadcastSSE(merged)
+        } catch {}
       }, 80)  // debounce: atomic rename fires two events on some platforms
     })
   } catch {}

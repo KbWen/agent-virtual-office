@@ -174,7 +174,12 @@ export function scanAndMerge(dir, projectRoot) {
     for (const { slug, data } of sessions) {
       // Pick the single most urgent agent from this session.
       // Role is the tiebreaker so the sort is stable across calls (C1).
-      const pick = (data.agents || [])
+      // `agents` is only validated to be JSON-parseable upstream, never schema-checked, so a
+      // corrupt / old-hook-version / foreign-tool file can carry a truthy NON-ARRAY value
+      // (string/number/object). `(data.agents || [])` let that through to `.filter` and threw
+      // a TypeError that crashed the server at the unguarded SSE-connect + watch-debounce
+      // callers. Array.isArray is the precise guard — a non-array session contributes no agent.
+      const pick = (Array.isArray(data.agents) ? data.agents : [])
         .filter(a => a && typeof a === 'object' && (a.status === 'working' || a.status === 'blocked'))
         .sort((a, b) => {
           const pd = (PRI[a.status] ?? 9) - (PRI[b.status] ?? 9)
