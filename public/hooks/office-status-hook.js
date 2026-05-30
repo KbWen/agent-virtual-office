@@ -383,6 +383,21 @@ function clearSkillContext(agentId) {
   try { fs.unlinkSync(skillContextPath(agentId)) } catch {}
 }
 
+// SubagentStop: should the workflow banner this stop pairs with be cleared?
+// - Known owner (existingWorkflowAgentId set): clear ONLY on an exact agent_id match, so a
+//   straggler stop for a finished subagent can't clobber a new same-type subagent's banner.
+// - Orphaned banner (existingWorkflowAgentId null — a SubagentStart set the workflow without
+//   an agent_id, so _workflowAgentId never got populated): an id match is impossible, so
+//   clear when the stopping subagent's type matches the workflow string OR when no type is
+//   supplied. An orphaned banner is already un-ownable; clearing it beats leaking it. (The
+//   Stop handler is the hard backstop — `workflow: null` — but clearing here avoids a
+//   mid-turn stuck banner.)
+function shouldClearWorkflowOnSubagentStop(existingWorkflowAgentId, agentId, existingWorkflow, agentType) {
+  if (existingWorkflowAgentId) return existingWorkflowAgentId === agentId
+  const type = (agentType || '').slice(0, 200)
+  return type === '' || existingWorkflow === type
+}
+
 // ─── Main ───
 
 function processEvent(event) {
@@ -519,9 +534,14 @@ function processEvent(event) {
           type: 'office-status',
           agents: doneAgents,
           activeCount: 0,
-          // Clear workflow if a subagent set it (_workflowAgentId present) — the session
-          // is ending so the subagent's workflow should not persist past Stop.
-          workflow: data._workflowAgentId ? null : (data.workflow || null),
+          // A workflow banner is ONLY ever set by SubagentStart, so any workflow still
+          // present when the turn ends must be cleared — it can never legitimately outlive a
+          // Stop. The previous `_workflowAgentId ? null : workflow` guard leaked a banner
+          // FOREVER when a SubagentStart set a workflow without an agent_id (_workflowAgentId
+          // stays null), then a SubagentStop with a different/absent agent_type failed to
+          // match it (see shouldClearWorkflowOnSubagentStop). Unconditional null is the
+          // correct terminal state; nothing downstream needs a workflow to survive Stop.
+          workflow: null,
           // Preserve R45/R46 identity fields so a SubagentStop arriving after Stop still
           // uses the precise _workflowAgentId match rather than falling back to type-string.
           _workflowAgentId: typeof data._workflowAgentId === 'string' ? data._workflowAgentId : null,
@@ -698,7 +718,7 @@ function processEvent(event) {
   // precise identity matching so same-type subagent overlap can't clobber each other.
   const effectiveClearWorkflow = workflowTurnMismatch || (
     (hookEvent === 'SubagentStop' && clearWorkflow)
-      ? (existingWorkflowAgentId ? existingWorkflowAgentId === agentId : existingWorkflow === (agentType || '').slice(0, 200))
+      ? shouldClearWorkflowOnSubagentStop(existingWorkflowAgentId, agentId, existingWorkflow, agentType)
       : clearWorkflow
   )
 
@@ -798,5 +818,6 @@ function processEvent(event) {
 if (typeof module !== 'undefined') {
   module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
     shortFile, shortCommand, extractContext, sanitizeId,
-    skillContextPath, saveSkillContext, readSkillContext, clearSkillContext }
+    skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
+    shouldClearWorkflowOnSubagentStop }
 }

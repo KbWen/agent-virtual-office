@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 // Import CommonJS hook helpers
-const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext } = await import('../public/hooks/office-status-hook.js')
+const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext, shouldClearWorkflowOnSubagentStop } = await import('../public/hooks/office-status-hook.js')
 
 describe('toolToRole', () => {
   it('maps Edit/Write/NotebookEdit to dev', () => {
@@ -317,5 +317,39 @@ describe('skill context', () => {
 
   it('returns null for null agent_id', () => {
     expect(readSkillContext(null)).toBeNull()
+  })
+})
+
+describe('shouldClearWorkflowOnSubagentStop — orphaned-workflow leak fix', () => {
+  // Known-owner path (the normal, R45/R46-hardened case): clear only on exact id match.
+  it('clears when the stopping agent_id matches the workflow owner', () => {
+    expect(shouldClearWorkflowOnSubagentStop('agent-1', 'agent-1', 'review', 'review')).toBe(true)
+  })
+
+  it('does NOT clear when a straggler stop has a different agent_id (same type running)', () => {
+    // a finished /review's straggler stop must not clobber a new /review's banner
+    expect(shouldClearWorkflowOnSubagentStop('agent-1', 'agent-2', 'review', 'review')).toBe(false)
+  })
+
+  it('does NOT clear a known-owner banner when the straggler stop has no agent_id', () => {
+    expect(shouldClearWorkflowOnSubagentStop('agent-1', null, 'review', 'review')).toBe(false)
+  })
+
+  // Orphaned path (existingWorkflowAgentId null — SubagentStart set a workflow with no
+  // agent_id). The OLD code only cleared on an exact type-string match, so a stop with a
+  // missing/different agent_type leaked the banner forever (the HIGH finding).
+  it('clears an orphaned banner when the stopping type matches the workflow string', () => {
+    expect(shouldClearWorkflowOnSubagentStop(null, null, 'review', 'review')).toBe(true)
+  })
+
+  it('clears an orphaned banner when the stop supplies NO agent_type (was the forever-leak)', () => {
+    expect(shouldClearWorkflowOnSubagentStop(null, null, 'review', '')).toBe(true)
+    expect(shouldClearWorkflowOnSubagentStop(null, null, 'review', undefined)).toBe(true)
+  })
+
+  it('does NOT clear an orphaned banner when a DIFFERENT-typed subagent stops (Stop backstop catches it)', () => {
+    // A stop for a different subagent type shouldn't clear an orphaned banner that may still
+    // be active; the unconditional `workflow: null` at Stop is the guaranteed terminal clear.
+    expect(shouldClearWorkflowOnSubagentStop(null, null, 'review', 'implement')).toBe(false)
   })
 })
