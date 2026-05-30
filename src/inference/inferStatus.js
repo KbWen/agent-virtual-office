@@ -173,6 +173,21 @@ export function isNumericSeq(seq) {
   return typeof seq === 'string' && /^\d+$/.test(seq)
 }
 
+// What the staleness sweep should do after STALENESS_TIMEOUT of no updates.
+// - 'clear-external': an external source is showing → clear external status (which also
+//   resets activeWorkflow + statusSource back to organic).
+// - 'clear-workflow': statusSource is already organic but an activeWorkflow lingers. This
+//   happens when a workflow-only message (e.g. a `#workflow=Build+Feature` hash with no role
+//   keys) calls setActiveWorkflow WITHOUT any external agents — statusSource never left
+//   'organic', so the external-clear path is skipped and the green banner would otherwise
+//   stay pinned over an idle office forever. Clear just the orphaned workflow.
+// - 'noop': nothing stale to clear.
+export function stalenessSweepAction(statusSource, activeWorkflow) {
+  if (statusSource !== 'organic') return 'clear-external'
+  if (activeWorkflow != null) return 'clear-workflow'
+  return 'noop'
+}
+
 // ─── URL params (one-time on load) ─────────────────────────────────────
 
 export function inferFromParams() {
@@ -741,8 +756,13 @@ export function startStatusIntegration(store) {
     if (stalenessTimer) clearTimeout(stalenessTimer)
     stalenessTimer = setTimeout(() => {
       const s = store.getState()
-      if (s.statusSource !== 'organic') {
+      const action = stalenessSweepAction(s.statusSource, s.activeWorkflow)
+      if (action === 'clear-external') {
         s.clearExternalStatus()
+      } else if (action === 'clear-workflow') {
+        // Orphaned workflow-only banner (e.g. a `#workflow=X` hash) — statusSource stayed
+        // 'organic' so clearExternalStatus never ran; clear the lingering banner directly.
+        s.setActiveWorkflow(null)
       }
     }, STALENESS_TIMEOUT)
   }

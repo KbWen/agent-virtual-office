@@ -3,9 +3,28 @@ import {
   isHookOrigin,
   shouldSkipHintDismiss,
   isNumericSeq,
+  stalenessSweepAction,
   normalizeStatusMessage,
   buildHashStatusMessage,
 } from '../src/inference/inferStatus.js'
+
+describe('stalenessSweepAction — orphaned workflow-only banner fix', () => {
+  it('clears external status when an external source is showing', () => {
+    expect(stalenessSweepAction('external', 'Build Feature')).toBe('clear-external')
+    expect(stalenessSweepAction('fallback', null)).toBe('clear-external')
+  })
+
+  it('clears a lingering workflow when statusSource is organic (the #workflow=X hash leak)', () => {
+    // A workflow-only hash set activeWorkflow without agents → statusSource stayed organic →
+    // the external-clear path is skipped → banner would persist forever without this branch.
+    expect(stalenessSweepAction('organic', 'Build Feature')).toBe('clear-workflow')
+  })
+
+  it('does nothing when organic with no workflow (normal idle office)', () => {
+    expect(stalenessSweepAction('organic', null)).toBe('noop')
+    expect(stalenessSweepAction('organic', undefined)).toBe('noop')
+  })
+})
 
 // Fix D (R76): startStatusIntegration's applyMessage / handleIncoming require DOM
 // globals (window, EventSource, BroadcastChannel) and so resisted direct coverage.
