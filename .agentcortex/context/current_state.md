@@ -12,7 +12,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-05-30
-- **Update Sequence**: 20
+- **Update Sequence**: 21
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -119,7 +119,10 @@
 - **Ship 1 — `fix(ControlPanel)` 7475760**: collapse raw MCP tool names. Added exported pure `taskChipLabel(task)`→`classifyTask().visualLabel`; the control-panel status line no longer shows `mcp__Server__tool` (now `Server::tool`), matching the AVO-103 character TaskLabel. +10 tests.
 - **Ship 2 — `feat(ControlPanel)` a757af4**: surface blocked failure reason (AVO-110 lite). Added `blockedReasonLabel(ext)` + `agentLineLabel(ext,t)`; a blocked agent's status line now shows the hook's reason (`❌ npm test failed`) instead of the bare tool. Text-reason core of AVO-110; the classified reason-enum + colored sub-icon deferred for user aesthetic review. +10 tests.
 - **Ship 3 — `fix(AgentInspector)` fedb37c**: collapse label-less raw MCP task. Added `inspectorTaskLabel(ext)` to agentInspectorModel.js. Completes the "no raw `mcp__` in ANY surface" invariant (AgentCharacter ✓ / ControlPanel ✓ / AgentInspector ✓ / ActivityFeed uses human label). +4 tests.
-- Tests: 960→984 vitest (+24, all green). Build clean throughout (386.31 KB / 120.92 KB gzip, +0.26 KB total).
+- **Ship 4 — `fix(hook)` dfdf855** (adversarial-review HIGH): a `SubagentStart` without `agent_id` set the `workflow` banner but left `_workflowAgentId` null; a later `SubagentStop` with mismatched/absent `agent_type` failed to clear it and `Stop` PRESERVED it → phantom workflow banner stuck FOREVER until the next prompt. Fix: `workflow: null` unconditionally at Stop (a banner can never outlive a turn) + extracted/tested `shouldClearWorkflowOnSubagentStop()` clearing orphaned banners. Not reachable where subagent dispatch fires as `PreToolUse{Agent}` (this setup), latent elsewhere. +6 tests.
+- **Ship 5 — `fix(inferStatus)` 196ede6** (adversarial-review MED): a workflow-only message (`#workflow=X` hash, no role keys) set `activeWorkflow` without external agents → `statusSource` stayed `'organic'` → the staleness sweep never fired → green banner pinned over an idle office forever. Fix: extracted/tested `stalenessSweepAction()`; sweep now clears an orphaned organic workflow. +3 tests.
+- Two-reviewer adversarial sweep of the trigger pipeline produced these: store (`applyExternalStatus`/ledgers/reconciliation) = clean; hook turn-boundary = the HIGH above + 1 reported MED (straggler PreToolUse >30s post-Stop → contradictory `_stopped`+working, narrow edge, deferred); client `inferStatus` = the MED above + 1 reported MED (multi-session exit-reconcile stale-dropped because merged `_seq`=max-child-seq can drop on session exit → exited worktree agent lingers ≤5min; fix needs server+client seq-semantics change, deferred).
+- Tests: 960→993 vitest (+33, all green). Build clean throughout (386.48 KB / 120.96 KB gzip, +0.43 KB total). 6 commits on `main`, none pushed.
 - **KEY FINDING for next session**: backlog P0 items AVO-101 (plan-mode viz) and AVO-108 (token/cost meter) both require hook-payload data (thinking-budget / token usage) the current `public/hooks/office-status-hook.js` does NOT capture. They need a hook-payload extension + a decision on the data source before they're buildable — flagged for human direction, not built unilaterally overnight. Remaining backlog visual features (AVO-104/106/107/111/112/115) carry aesthetic-design choices best reviewed by a human; deferred rather than risk "過分花俏" while unattended.
 
 ### main-2026-05-29 (AVO-103 tool inventory label)
