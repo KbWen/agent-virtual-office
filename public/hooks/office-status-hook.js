@@ -398,6 +398,20 @@ function shouldClearWorkflowOnSubagentStop(existingWorkflowAgentId, agentId, exi
   return type === '' || existingWorkflow === type
 }
 
+// Should this event's output carry the Stop idle signal (_stopped:true) forward?
+// The carry-forward protects Stop's idle state from being erased by a PostToolUse that wins a
+// last-writer race with Stop. But `_stopped:true` (turn over / office idle) is mutually
+// exclusive with `activeCount >= 1` (an agent is actively working/blocked): emitting both is a
+// self-contradictory state. A straggler PreToolUse that slips past the 30s entry guard asserts
+// a working agent (activeCount 1) while recheckStopped is still true — the old unconditional
+// carry produced `{_stopped:true, activeCount:1, working}`. Gating on activeCount===0 keeps the
+// race protection for winding-down `done` events (which leave 0 active) yet clears the idle
+// signal whenever the event genuinely asserts activity. UserPromptSubmit never carries it (it
+// is the event that legitimately ends the stopped state).
+function shouldCarryStoppedSignal(recheckStopped, hookEvent, activeCount) {
+  return Boolean(recheckStopped) && hookEvent !== 'UserPromptSubmit' && activeCount === 0
+}
+
 // ─── Main ───
 
 function processEvent(event) {
@@ -756,7 +770,7 @@ function processEvent(event) {
     // merge read) so a UPS that fires between the two reads is reflected here. Fall back to
     // Date.now() when _stoppedAt is absent: a missing timestamp causes _seq to be used as a
     // proxy, and a newly-written _seq ≈ now restarts the 30s window on every write.
-    ...(recheckStopped && hookEvent !== 'UserPromptSubmit'
+    ...(shouldCarryStoppedSignal(recheckStopped, hookEvent, activeCount)
       ? { _stopped: true, _stoppedAt: recheckStoppedAt ?? Date.now() }
       : {}),
     // Turn-boundary fields for straggler detection:
@@ -819,5 +833,5 @@ if (typeof module !== 'undefined') {
   module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
     shortFile, shortCommand, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
-    shouldClearWorkflowOnSubagentStop }
+    shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal }
 }

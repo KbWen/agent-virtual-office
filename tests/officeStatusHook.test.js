@@ -1,7 +1,27 @@
 import { describe, it, expect } from 'vitest'
 
 // Import CommonJS hook helpers
-const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext, shouldClearWorkflowOnSubagentStop } = await import('../public/hooks/office-status-hook.js')
+const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal } = await import('../public/hooks/office-status-hook.js')
+
+describe('shouldCarryStoppedSignal — no contradictory _stopped+active output', () => {
+  it('does NOT carry _stopped when an agent is active (the >30s straggler PreToolUse bug)', () => {
+    // straggler PreToolUse: recheckStopped still true, but it asserts a working agent → activeCount 1.
+    // Old code emitted {_stopped:true, activeCount:1, working}; now we drop _stopped (office IS active).
+    expect(shouldCarryStoppedSignal(true, 'PreToolUse', 1)).toBe(false)
+    expect(shouldCarryStoppedSignal(true, 'PostToolUse', 2)).toBe(false)
+  })
+
+  it('DOES carry _stopped for a winding-down event with no active agents (race protection kept)', () => {
+    // a PostToolUse 'done' that leaves 0 active must still protect Stop's idle signal.
+    expect(shouldCarryStoppedSignal(true, 'PostToolUse', 0)).toBe(true)
+    expect(shouldCarryStoppedSignal(true, 'SubagentStop', 0)).toBe(true)
+  })
+
+  it('never carries when not stopped, or for UserPromptSubmit (which ends the stopped state)', () => {
+    expect(shouldCarryStoppedSignal(false, 'PostToolUse', 0)).toBe(false)
+    expect(shouldCarryStoppedSignal(true, 'UserPromptSubmit', 0)).toBe(false)
+  })
+})
 
 describe('toolToRole', () => {
   it('maps Edit/Write/NotebookEdit to dev', () => {
