@@ -1,10 +1,52 @@
 import React, { useState, useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
+import { classifyTask } from '../systems/classify'
 import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName } from '../i18n'
 import { requestNotificationPermission, getNotificationState } from '../inference/desktopNotifier'
 
 const statusOptions = ['idle', 'working', 'blocked', 'done']
+
+// Collapse a raw tool/task name into the same short chip the character's
+// TaskLabel (AVO-103) shows, so the control panel never displays the ugly
+// `mcp__Server__tool` wire form while the SVG label above the head shows the
+// collapsed `Server::tool`. Built-ins stay short (`Bash`), MCP tools collapse
+// to `server::tool`, unknowns are truncated. Returns null for an empty task so
+// callers can fall back to the localized status label.
+export function taskChipLabel(task) {
+  if (!task) return null
+  return classifyTask(task).visualLabel
+}
+
+// AVO-110 (lightweight): for a blocked agent the human `label` carries the
+// failure reason the hook detected ("❌ npm test failed"), which is far more
+// useful at a glance than the bare tool name (`Bash`). Surface it — truncated
+// for the compact status bar — so the persistent status line answers "why is
+// this agent stuck?" without needing to open the inspector. Returns null for
+// any non-blocked / label-less agent so callers fall back to the tool chip.
+const BLOCKED_REASON_CAP = 28
+export function blockedReasonLabel(ext) {
+  if (!ext || ext.status !== 'blocked' || !ext.label) return null
+  const l = ext.label
+  return l.length > BLOCKED_REASON_CAP ? l.slice(0, BLOCKED_REASON_CAP - 1) + '…' : l
+}
+
+// AVO-108: compact token formatter — 604937 → "605k", 1240000 → "1.2M", 842 → "842".
+export function formatTokens(n) {
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return '0'
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
+  if (n >= 1_000) return Math.round(n / 1_000) + 'k'
+  return String(Math.round(n))
+}
+
+// The single label a ControlPanel agent row shows: blocked reason wins, then the
+// collapsed tool chip, then the localized status word. `t` is the i18n lookup.
+export function agentLineLabel(ext, t) {
+  if (!ext) return null
+  return blockedReasonLabel(ext)
+    || taskChipLabel(ext.task)
+    || t(`statusLabels.${ext.status}`, ext.status)
+}
 
 export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   // Return full agent objects so useShallow can compare by reference. Mapping to
@@ -20,6 +62,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const minute = useOfficeStore((s) => s.minute)
   const externalStatus = useOfficeStore(useShallow((s) => s.externalStatus))
   const statusSource = useOfficeStore((s) => s.statusSource)
+  const tokens = useOfficeStore(useShallow((s) => s.tokens))  // AVO-108
   const integrationHealth = useOfficeStore(useShallow((s) => s.integrationHealth))
   // Subscribe to ledger objects (clone-on-write — identity only changes on actual
   // increment or day rollover). Sum in useMemo so the reduction doesn't re-run on
@@ -89,7 +132,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             {agentList.map((agent) => {
               const ext = externalStatus[agent.id]
               return (
-                <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${charName(agent.id)}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
+                <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${charName(agent.id)}: ${ext ? (blockedReasonLabel(ext) || taskChipLabel(ext.task) || ext.status) : agent.behavior}`}>
                   <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: agent.color }} />
                   <span className="inline-block w-1 h-1 rounded-full" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} aria-hidden="true" />
                 </div>
@@ -159,11 +202,9 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
           {agentList.map((agent) => {
             const ext = externalStatus[agent.id]
             const name = charName(agent.id)
-            const label = ext
-              ? (ext.task ? ext.task.replace(/^\//, '') : t(`statusLabels.${ext.status}`, ext.status))
-              : behaviorLabel(agent.behavior)
+            const label = ext ? agentLineLabel(ext, t) : behaviorLabel(agent.behavior)
             return (
-              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${name}: ${ext ? (ext.task || ext.status) : agent.behavior}`}>
+              <div key={agent.id} className="flex items-center gap-1 shrink-0" title={`${name}: ${ext ? (blockedReasonLabel(ext) || taskChipLabel(ext.task) || ext.status) : agent.behavior}`}>
                 <span className="inline-block w-2.5 h-2.5 rounded-full border border-white/50" style={{ backgroundColor: agent.color }} />
                 <span className="text-gray-700 dark:text-gray-200 font-medium">{name}</span>
                 <span className="text-gray-400 dark:text-gray-500">·</span>
@@ -225,6 +266,23 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             {t('ui.todayMetricsA11y', '{0} completed, {1} blocked today').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
           </span>
         </div>
+
+        {/* AVO-108: token meter — context size headline, full counts + model in tooltip */}
+        {tokens && (
+          <div
+            className="text-[10px] text-indigo-600 dark:text-indigo-300 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded shrink-0 font-mono"
+            title={t('ui.tokensTooltip', 'Context: {0} tokens · last output {1}{2}')
+              .replace('{0}', tokens.ctx.toLocaleString())
+              .replace('{1}', tokens.out.toLocaleString())
+              .replace('{2}', tokens.model ? ' · ' + tokens.model : '')}
+          >
+            <span aria-hidden="true">🪙 {formatTokens(tokens.ctx)}</span>
+            <span className="sr-only">
+              {t('ui.tokensA11y', '{0} context tokens, {1} output tokens')
+                .replace('{0}', String(tokens.ctx)).replace('{1}', String(tokens.out))}
+            </span>
+          </div>
+        )}
 
         <div className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded shrink-0">
           {t('ui.platforms.' + platform, platform)}

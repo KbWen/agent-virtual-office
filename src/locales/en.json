@@ -127,7 +127,8 @@
     "working": "Working",
     "blocked": "Blocked",
     "done": "Done",
-    "idle": "Idle"
+    "idle": "Idle",
+    "planning": "Planning"
   },
   "contextBubbles": {
     "dev-edit": ["tweaking {ctx}...", "hmm {ctx} needs work", "{ctx} again, let's go", "refactoring {ctx}~", "one sec, fixing {ctx}", "{ctx} could be cleaner..."],
@@ -248,6 +249,8 @@
     "testHint": "Set agent status to change behavior weights — working: more typing, blocked: frustrated, done: celebratory",
     "todayMetricsTooltip": "Today: {0} done, {1} blocked",
     "todayMetricsA11y": "{0} completed, {1} blocked today",
+    "tokensTooltip": "Context: {0} tokens · last output {1}{2}",
+    "tokensA11y": "{0} context tokens, {1} output tokens",
     "platforms": {
       "browser": "Browser",
       "claude-cli": "Claude CLI",

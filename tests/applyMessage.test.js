@@ -1,11 +1,97 @@
 import { describe, it, expect } from 'vitest'
 import {
   isHookOrigin,
+  isAuthoritativeSnapshotSource,
   shouldSkipHintDismiss,
   isNumericSeq,
+  stalenessSweepAction,
+  sanitizeTokens,
   normalizeStatusMessage,
   buildHashStatusMessage,
 } from '../src/inference/inferStatus.js'
+
+describe('sanitizeTokens — AVO-108 token-usage validation', () => {
+  it('passes a well-formed usage object with floored non-negative counts', () => {
+    expect(sanitizeTokens({ ctx: 604937, out: 5302, model: 'claude-opus-4-8' }))
+      .toEqual({ ctx: 604937, out: 5302, model: 'claude-opus-4-8' })
+    expect(sanitizeTokens({ ctx: 10.9, out: 2.1 })).toEqual({ ctx: 10, out: 2, model: null })
+  })
+  it('rejects malformed input (non-object, NaN, missing counts)', () => {
+    expect(sanitizeTokens(null)).toBeUndefined()
+    expect(sanitizeTokens('600k')).toBeUndefined()
+    expect(sanitizeTokens({ ctx: 'lots', out: 1 })).toBeUndefined()
+    expect(sanitizeTokens({})).toBeUndefined()
+  })
+  it('clamps negatives and caps an over-long model string', () => {
+    const r = sanitizeTokens({ ctx: -5, out: -1, model: 'x'.repeat(100) })
+    expect(r.ctx).toBe(0)
+    expect(r.out).toBe(0)
+    expect(r.model.length).toBeLessThanOrEqual(40)
+  })
+  it('passes through normalizeStatusMessage on a real office-status message', () => {
+    const msg = normalizeStatusMessage({ type: 'office-status', agents: [], tokens: { ctx: 1000, out: 50, model: 'm' } })
+    expect(msg.tokens).toEqual({ ctx: 1000, out: 50, model: 'm' })
+    const bad = normalizeStatusMessage({ type: 'office-status', agents: [], tokens: 'oops' })
+    expect(bad.tokens).toBeUndefined()
+  })
+})
+
+describe('effort validation in normalizeStatusMessage (AVO-102)', () => {
+  it('passes the 5 known effort levels through', () => {
+    for (const lvl of ['low', 'medium', 'high', 'xhigh', 'max']) {
+      const msg = normalizeStatusMessage({ type: 'office-status', agents: [], effort: lvl })
+      expect(msg.effort).toBe(lvl)
+    }
+  })
+  it('drops unknown / malformed effort', () => {
+    expect(normalizeStatusMessage({ type: 'office-status', agents: [], effort: 'turbo' }).effort).toBeUndefined()
+    expect(normalizeStatusMessage({ type: 'office-status', agents: [], effort: 5 }).effort).toBeUndefined()
+    expect('effort' in normalizeStatusMessage({ type: 'office-status', agents: [] })).toBe(false)
+  })
+})
+
+describe('isAuthoritativeSnapshotSource — multi-session exit-reconcile stale-drop exemption', () => {
+  it('is true only for multi-session (its merged _seq is max-child, not a monotonic clock)', () => {
+    expect(isAuthoritativeSnapshotSource('multi-session')).toBe(true)
+  })
+
+  it('is false for single-source hook origins (their seqs ARE monotonic → keep stale-drop)', () => {
+    expect(isAuthoritativeSnapshotSource('claude-cli')).toBe(false)
+    expect(isAuthoritativeSnapshotSource('codex-cli')).toBe(false)
+    expect(isAuthoritativeSnapshotSource('file-watcher')).toBe(false)
+  })
+
+  it('is false for external / unknown sources', () => {
+    expect(isAuthoritativeSnapshotSource('hash-bridge')).toBe(false)
+    expect(isAuthoritativeSnapshotSource('external')).toBe(false)
+    expect(isAuthoritativeSnapshotSource(undefined)).toBe(false)
+  })
+
+  it('stays hook-origin (so the non-hook-origin eviction guard still treats it as authoritative)', () => {
+    // multi-session must remain isHookOrigin=true: the `!hookOriginMsg` guard must NOT drop it,
+    // while the seq-drop guards (which AND in !isAuthoritativeSnapshotSource) DO exempt it.
+    expect(isHookOrigin('multi-session')).toBe(true)
+    expect(isAuthoritativeSnapshotSource('multi-session')).toBe(true)
+  })
+})
+
+describe('stalenessSweepAction — orphaned workflow-only banner fix', () => {
+  it('clears external status when an external source is showing', () => {
+    expect(stalenessSweepAction('external', 'Build Feature')).toBe('clear-external')
+    expect(stalenessSweepAction('fallback', null)).toBe('clear-external')
+  })
+
+  it('clears a lingering workflow when statusSource is organic (the #workflow=X hash leak)', () => {
+    // A workflow-only hash set activeWorkflow without agents → statusSource stayed organic →
+    // the external-clear path is skipped → banner would persist forever without this branch.
+    expect(stalenessSweepAction('organic', 'Build Feature')).toBe('clear-workflow')
+  })
+
+  it('does nothing when organic with no workflow (normal idle office)', () => {
+    expect(stalenessSweepAction('organic', null)).toBe('noop')
+    expect(stalenessSweepAction('organic', undefined)).toBe('noop')
+  })
+})
 
 // Fix D (R76): startStatusIntegration's applyMessage / handleIncoming require DOM
 // globals (window, EventSource, BroadcastChannel) and so resisted direct coverage.

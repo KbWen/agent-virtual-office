@@ -383,6 +383,80 @@ function clearSkillContext(agentId) {
   try { fs.unlinkSync(skillContextPath(agentId)) } catch {}
 }
 
+// SubagentStop: should the workflow banner this stop pairs with be cleared?
+// - Known owner (existingWorkflowAgentId set): clear ONLY on an exact agent_id match, so a
+//   straggler stop for a finished subagent can't clobber a new same-type subagent's banner.
+// - Orphaned banner (existingWorkflowAgentId null — a SubagentStart set the workflow without
+//   an agent_id, so _workflowAgentId never got populated): an id match is impossible, so
+//   clear when the stopping subagent's type matches the workflow string OR when no type is
+//   supplied. An orphaned banner is already un-ownable; clearing it beats leaking it. (The
+//   Stop handler is the hard backstop — `workflow: null` — but clearing here avoids a
+//   mid-turn stuck banner.)
+function shouldClearWorkflowOnSubagentStop(existingWorkflowAgentId, agentId, existingWorkflow, agentType) {
+  if (existingWorkflowAgentId) return existingWorkflowAgentId === agentId
+  const type = (agentType || '').slice(0, 200)
+  return type === '' || existingWorkflow === type
+}
+
+// Should this event's output carry the Stop idle signal (_stopped:true) forward?
+// The carry-forward protects Stop's idle state from being erased by a PostToolUse that wins a
+// last-writer race with Stop. But `_stopped:true` (turn over / office idle) is mutually
+// exclusive with `activeCount >= 1` (an agent is actively working/blocked): emitting both is a
+// self-contradictory state. A straggler PreToolUse that slips past the 30s entry guard asserts
+// a working agent (activeCount 1) while recheckStopped is still true — the old unconditional
+// carry produced `{_stopped:true, activeCount:1, working}`. Gating on activeCount===0 keeps the
+// race protection for winding-down `done` events (which leave 0 active) yet clears the idle
+// signal whenever the event genuinely asserts activity. UserPromptSubmit never carries it (it
+// is the event that legitimately ends the stopped state).
+function shouldCarryStoppedSignal(recheckStopped, hookEvent, activeCount) {
+  return Boolean(recheckStopped) && hookEvent !== 'UserPromptSubmit' && activeCount === 0
+}
+
+// AVO-101: Claude Code carries `permission_mode` on every tool event. In plan mode it is
+// 'plan' — the agent is architecting an approach with read-only tools before touching code.
+// Surface that as a distinct 'planning' status (→ gantt-chart animation) instead of the
+// generic 'working', so plan mode is visible in the office. Any other mode stays 'working'.
+function statusForPreToolUse(permissionMode) {
+  return permissionMode === 'plan' ? 'planning' : 'working'
+}
+
+// AVO-108: token usage isn't in the hook payload, but `transcript_path` points to a JSONL
+// whose last assistant message carries `usage`. Read ONLY the file tail (64 KB) so cost is
+// O(tail), not O(transcript) — a 3.6 MB transcript reads in <1 ms. Returns the current
+// context size (input + cache_creation + cache_read) and the last response's output tokens,
+// or null on any failure (never throws — the hook must stay fast and crash-proof).
+function readLatestTokenUsage(transcriptPath, tailBytes = 65536) {
+  if (!transcriptPath || typeof transcriptPath !== 'string') return null
+  try {
+    const size = fs.statSync(transcriptPath).size
+    const start = Math.max(0, size - tailBytes)
+    const fd = fs.openSync(transcriptPath, 'r')
+    let buf
+    try {
+      buf = Buffer.alloc(size - start)
+      fs.readSync(fd, buf, 0, buf.length, start)
+    } finally { fs.closeSync(fd) }
+    let usage = null, model = null
+    for (const line of buf.toString('utf-8').split('\n')) {
+      if (!line.trim()) continue
+      let o; try { o = JSON.parse(line) } catch { continue }
+      const m = o && o.message
+      if (m && m.usage && typeof m.usage === 'object') { usage = m.usage; model = m.model || model }
+    }
+    if (!usage) return null
+    const ctx = (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0)
+    return { ctx, out: usage.output_tokens || 0, model: model || null }
+  } catch { return null }
+}
+
+// AVO-102: the model's effort level for this turn (low|medium|high|xhigh|max), carried on
+// tool-context events. Returns the level string, or null when absent/unrecognized.
+const HOOK_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max']
+function effortLevel(event) {
+  const lvl = event && event.effort && event.effort.level
+  return HOOK_EFFORT_LEVELS.includes(lvl) ? lvl : null
+}
+
 // ─── Main ───
 
 function processEvent(event) {
@@ -391,6 +465,11 @@ function processEvent(event) {
   const agentType = event.agent_type || ''
   const toolInput = event.tool_input || null
   const agentId = event.agent_id || null
+  // AVO-108: cheap tail-read of the transcript for token usage. null when unavailable; the
+  // store keeps its last value on null (presence semantics) so the chip never flickers.
+  const tokens = readLatestTokenUsage(event.transcript_path)
+  // AVO-102: effort level for this turn (drives the thinking aura). null when absent.
+  const effort = effortLevel(event)
 
   let role, task, status, label, hint = null
   let clearWorkflow = false
@@ -437,7 +516,7 @@ function processEvent(event) {
       const skillCtx = readSkillContext(agentId)
       role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
       task = tool
-      status = 'working'
+      status = statusForPreToolUse(event.permission_mode)  // AVO-101: plan mode → 'planning'
       const ctx = extractContext(tool, toolInput)
       label = toolLabel(tool, ctx, false)
       break
@@ -519,9 +598,14 @@ function processEvent(event) {
           type: 'office-status',
           agents: doneAgents,
           activeCount: 0,
-          // Clear workflow if a subagent set it (_workflowAgentId present) — the session
-          // is ending so the subagent's workflow should not persist past Stop.
-          workflow: data._workflowAgentId ? null : (data.workflow || null),
+          // A workflow banner is ONLY ever set by SubagentStart, so any workflow still
+          // present when the turn ends must be cleared — it can never legitimately outlive a
+          // Stop. The previous `_workflowAgentId ? null : workflow` guard leaked a banner
+          // FOREVER when a SubagentStart set a workflow without an agent_id (_workflowAgentId
+          // stays null), then a SubagentStop with a different/absent agent_type failed to
+          // match it (see shouldClearWorkflowOnSubagentStop). Unconditional null is the
+          // correct terminal state; nothing downstream needs a workflow to survive Stop.
+          workflow: null,
           // Preserve R45/R46 identity fields so a SubagentStop arriving after Stop still
           // uses the precise _workflowAgentId match rather than falling back to type-string.
           _workflowAgentId: typeof data._workflowAgentId === 'string' ? data._workflowAgentId : null,
@@ -698,7 +782,7 @@ function processEvent(event) {
   // precise identity matching so same-type subagent overlap can't clobber each other.
   const effectiveClearWorkflow = workflowTurnMismatch || (
     (hookEvent === 'SubagentStop' && clearWorkflow)
-      ? (existingWorkflowAgentId ? existingWorkflowAgentId === agentId : existingWorkflow === (agentType || '').slice(0, 200))
+      ? shouldClearWorkflowOnSubagentStop(existingWorkflowAgentId, agentId, existingWorkflow, agentType)
       : clearWorkflow
   )
 
@@ -727,6 +811,11 @@ function processEvent(event) {
     _workflowAgentId: outWorkflowAgentId,
     _workflowPromptId: outWorkflowPromptId,
     source: 'claude-cli',
+    // AVO-108: session token usage (context size + last output). Omitted when null so the
+    // store keeps its last value (presence semantics) — Stop and failed reads don't blank it.
+    ...(tokens ? { tokens } : {}),
+    // AVO-102: effort level for the thinking aura. Presence semantics like tokens.
+    ...(effort ? { effort } : {}),
     // Carry _stopped/_stoppedAt forward when they are set: a non-UPS event has no
     // authority to clear Stop's idle signal. Without this, a PostToolUse that wins a
     // last-writer-wins race with Stop erases _stopped=true, re-opening the straggler
@@ -736,7 +825,7 @@ function processEvent(event) {
     // merge read) so a UPS that fires between the two reads is reflected here. Fall back to
     // Date.now() when _stoppedAt is absent: a missing timestamp causes _seq to be used as a
     // proxy, and a newly-written _seq ≈ now restarts the 30s window on every write.
-    ...(recheckStopped && hookEvent !== 'UserPromptSubmit'
+    ...(shouldCarryStoppedSignal(recheckStopped, hookEvent, activeCount)
       ? { _stopped: true, _stoppedAt: recheckStoppedAt ?? Date.now() }
       : {}),
     // Turn-boundary fields for straggler detection:
@@ -798,5 +887,7 @@ function processEvent(event) {
 if (typeof module !== 'undefined') {
   module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
     shortFile, shortCommand, extractContext, sanitizeId,
-    skillContextPath, saveSkillContext, readSkillContext, clearSkillContext }
+    skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
+    shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse,
+    readLatestTokenUsage, effortLevel }
 }

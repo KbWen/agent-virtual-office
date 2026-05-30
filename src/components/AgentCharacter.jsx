@@ -587,6 +587,22 @@ function estimateTextWidth(str) {
   return w
 }
 
+// ─── ThinkingAura — AVO-102 extended-thinking halo ──────────────────────
+// A subtle violet ring whose radius + opacity scale with the model's effort level. Only
+// elevated effort (high / xhigh / max) shows it, so normal work stays uncluttered — per the
+// "畫面清楚好懂、不過分花俏" brief. Renders behind the character; reducedMotion drops the pulse.
+const EFFORT_AURA = { high: { r: 28, op: 0.16 }, xhigh: { r: 31, op: 0.22 }, max: { r: 34, op: 0.30 } }
+function ThinkingAura({ effort, reducedMotion }) {
+  const a = EFFORT_AURA[effort]
+  if (!a) return null
+  return (
+    <circle cx={0} cy={-18} r={a.r} fill="none" stroke="#8B7FD6" strokeWidth="2" opacity={a.op}>
+      {!reducedMotion && <animate attributeName="opacity" values={`${a.op * 0.5};${a.op};${a.op * 0.5}`} dur="2.4s" repeatCount="indefinite" />}
+      {!reducedMotion && <animate attributeName="r" values={`${a.r - 2};${a.r + 2};${a.r - 2}`} dur="2.4s" repeatCount="indefinite" />}
+    </circle>
+  )
+}
+
 // ─── TaskLabel — small monospace pill showing the current tool (AVO-103) ──
 // Tiny, low-contrast, never animated. The brief was "clear and not flashy",
 // so this is intentionally unobtrusive — just a 7px monospace label in a
@@ -632,6 +648,8 @@ function AgentCharacter({ agent }) {
   // just the `task` string so we re-render only when the tool changes — not on
   // every other externalStatus tick (label, expiresAt, etc.).
   const currentTask = useOfficeStore((s) => s.externalStatus[id]?.task ?? null)
+  // AVO-102: session effort level drives a subtle thinking aura on active agents.
+  const effort = useOfficeStore((s) => s.effort)
 
   const timerRef = useRef(null)
   const pathRef = useRef([])
@@ -1022,6 +1040,10 @@ function AgentCharacter({ agent }) {
       style={{ cursor: 'pointer' }} onClick={handleClick}
       role="button" aria-label={name} tabIndex={0}
       onKeyDown={handleKeyDown}>
+      {/* AVO-102: thinking aura — only on active agents at elevated effort, behind the glow */}
+      {(state.status === 'working' || state.status === 'planning') && (
+        <ThinkingAura effort={effort} reducedMotion={reducedMotion} />
+      )}
       {/* Working glow ring */}
       {state.status === 'working' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.5">

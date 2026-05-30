@@ -1,8 +1,32 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { countAgentDoneToday } = await import('../src/components/agentInspectorModel.js')
+const { countAgentDoneToday, inspectorTaskLabel } = await import('../src/components/agentInspectorModel.js')
 const { useOfficeStore } = await import('../src/systems/store.js')
+
+describe('inspectorTaskLabel — task line for the inspector', () => {
+  it('prefers the rich human label when present', () => {
+    expect(inspectorTaskLabel({ label: '✏️ 改 App.jsx', task: 'Edit' })).toBe('✏️ 改 App.jsx')
+    expect(inspectorTaskLabel({ label: '❌ npm test failed', task: 'Bash' })).toBe('❌ npm test failed')
+  })
+
+  it('collapses a label-less raw MCP task (hash-bridge channel) instead of echoing the wire form', () => {
+    expect(inspectorTaskLabel({ task: 'mcp__notion__create_page' })).toMatch(/^notion::/)
+    expect(inspectorTaskLabel({ task: 'mcp__Claude_Preview__preview_eval' }))
+      .toBe('Claude_Preview::preview_eval')
+  })
+
+  it('collapses a label-less built-in task to its short name', () => {
+    expect(inspectorTaskLabel({ task: 'NotebookEdit' })).toBe('Notebook')
+  })
+
+  it('returns null when there is no external status or neither label nor task', () => {
+    expect(inspectorTaskLabel(null)).toBeNull()
+    expect(inspectorTaskLabel(undefined)).toBeNull()
+    expect(inspectorTaskLabel({})).toBeNull()
+    expect(inspectorTaskLabel({ status: 'working' })).toBeNull()
+  })
+})
 
 async function renderInspectorWithMocks(overrides = {}) {
   vi.resetModules()

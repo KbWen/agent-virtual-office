@@ -174,7 +174,12 @@ export function scanAndMerge(dir, projectRoot) {
     for (const { slug, data } of sessions) {
       // Pick the single most urgent agent from this session.
       // Role is the tiebreaker so the sort is stable across calls (C1).
-      const pick = (data.agents || [])
+      // `agents` is only validated to be JSON-parseable upstream, never schema-checked, so a
+      // corrupt / old-hook-version / foreign-tool file can carry a truthy NON-ARRAY value
+      // (string/number/object). `(data.agents || [])` let that through to `.filter` and threw
+      // a TypeError that crashed the server at the unguarded SSE-connect + watch-debounce
+      // callers. Array.isArray is the precise guard — a non-array session contributes no agent.
+      const pick = (Array.isArray(data.agents) ? data.agents : [])
         .filter(a => a && typeof a === 'object' && (a.status === 'working' || a.status === 'blocked'))
         .sort((a, b) => {
           const pd = (PRI[a.status] ?? 9) - (PRI[b.status] ?? 9)
@@ -226,6 +231,16 @@ export function scanAndMerge(dir, projectRoot) {
       merged.mood = moodSession.data.mood
       if (moodSession.data.moodDuration != null) merged.moodDuration = moodSession.data.moodDuration
     }
+    // AVO-108 / AVO-102: carry token usage + effort from the most-recent active session too,
+    // mirroring mood — otherwise the token meter / thinking aura freeze at a stale value across
+    // multiple concurrent worktrees (the single-session path passes them through via the spread).
+    const recentActive = [...sessions]
+      .filter(s => activeSlugs.has(s.slug))
+      .sort((a, b) => (parseInt(b.data._seq, 10) || 0) - (parseInt(a.data._seq, 10) || 0))
+    const tokSession = recentActive.find(s => s.data.tokens)
+    if (tokSession) merged.tokens = tokSession.data.tokens
+    const effSession = recentActive.find(s => s.data.effort)
+    if (effSession) merged.effort = effSession.data.effort
   }
 
   // Zero-config signal: all data comes from file-watcher, meaning hooks aren't installed yet.

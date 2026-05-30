@@ -13,7 +13,7 @@
 
 import { routeExternalAgents, distributeFallbackCount, routeTaskToAgent } from './agentRouter.js'
 import { pushEventBatch, setMoodOverride, resetMood } from '../systems/moodEngine.js'
-import { VALID_ROLES, VALID_STATUSES, VALID_MOODS, STATUS_POLL_INTERVAL } from '../systems/constants.js'
+import { VALID_ROLES, VALID_STATUSES, VALID_MOODS, EFFORT_LEVELS, STATUS_POLL_INTERVAL } from '../systems/constants.js'
 
 // ─── Message normalization ─────────────────────────────────────────────
 
@@ -70,6 +70,19 @@ function sanitizeAgent(a) {
   return { role, status: a.status, task: capStr(a.task), label: capStr(a.label), hint: capStr(a.hint), session }
 }
 
+// AVO-108: validate a token-usage object from any channel. Returns {ctx,out,model} with
+// non-negative integer counts and a capped model string, or undefined for anything malformed.
+export function sanitizeTokens(t) {
+  if (!t || typeof t !== 'object') return undefined
+  const ctx = Number(t.ctx), out = Number(t.out)
+  if (!Number.isFinite(ctx) || !Number.isFinite(out)) return undefined
+  return {
+    ctx: Math.max(0, Math.floor(ctx)),
+    out: Math.max(0, Math.floor(out)),
+    model: typeof t.model === 'string' ? t.model.slice(0, 40) : null,
+  }
+}
+
 /**
  * Normalize any incoming message to the unified office-status format
  */
@@ -102,9 +115,16 @@ export function normalizeStatusMessage(raw) {
       // when `source` is absent so withStatusEnvelope still applies its fallbackSource.
       source: capStr(raw.source) || undefined,
       mood: VALID_MOODS.includes(raw.mood) ? raw.mood : undefined,
+      // AVO-108: validate the token-usage object — untrusted channels reach this branch, so
+      // a crafted `tokens` must not inject unbounded strings / non-numbers into the store.
+      tokens: sanitizeTokens(raw.tokens),
+      // AVO-102: effort level — only the 5 known ordinal values pass.
+      effort: EFFORT_LEVELS.includes(raw.effort) ? raw.effort : undefined,
     }
     if (validated.source === undefined) delete validated.source
     if (validated.mood === undefined) delete validated.mood
+    if (validated.tokens === undefined) delete validated.tokens
+    if (validated.effort === undefined) delete validated.effort
     return withStatusEnvelope(validated)
   }
 
@@ -151,6 +171,18 @@ export function isHookOrigin(source) {
   return HOOK_ORIGIN.has(source)
 }
 
+// A 'multi-session' payload is an AUTHORITATIVE full snapshot produced by scanAndMerge from
+// ALL active worktree sessions. Its `_seq` is the MAX of the contributing sessions' seqs —
+// NOT a monotonic clock. When the session holding the highest seq exits, the merged `_seq`
+// legitimately DROPS, so the normal hook-origin seq stale-drop would wrongly discard that
+// exit-reconcile and leave the departed worktree's agent on screen until its 5-min expiry.
+// These payloads are deduped by content (SSE wire-bytes / poll ETag+body) at the transport
+// layer, so exempting them from the seq stale-drop is safe — they always apply, but identical
+// content still can't spam. (It stays hook-origin for the non-hook-origin eviction guard.)
+export function isAuthoritativeSnapshotSource(source) {
+  return source === 'multi-session'
+}
+
 /**
  * "Hooks not installed" signal — when true, applyExternalStatus must NOT dismiss the
  * setup prompt (hasEverReceivedStatus stays false).
@@ -171,6 +203,21 @@ export function shouldSkipHintDismiss(msg) {
 // never compared against hook-origin seqs for stale-drop.
 export function isNumericSeq(seq) {
   return typeof seq === 'string' && /^\d+$/.test(seq)
+}
+
+// What the staleness sweep should do after STALENESS_TIMEOUT of no updates.
+// - 'clear-external': an external source is showing → clear external status (which also
+//   resets activeWorkflow + statusSource back to organic).
+// - 'clear-workflow': statusSource is already organic but an activeWorkflow lingers. This
+//   happens when a workflow-only message (e.g. a `#workflow=Build+Feature` hash with no role
+//   keys) calls setActiveWorkflow WITHOUT any external agents — statusSource never left
+//   'organic', so the external-clear path is skipped and the green banner would otherwise
+//   stay pinned over an idle office forever. Clear just the orphaned workflow.
+// - 'noop': nothing stale to clear.
+export function stalenessSweepAction(statusSource, activeWorkflow) {
+  if (statusSource !== 'organic') return 'clear-external'
+  if (activeWorkflow != null) return 'clear-workflow'
+  return 'noop'
 }
 
 // ─── URL params (one-time on load) ─────────────────────────────────────
@@ -594,13 +641,19 @@ export function startStatusIntegration(store) {
     // Only track numeric _seq from hook-origin sources as the high-water mark.
     // External sources (window global, hash-bridge, postMessage) have independent clocks
     // and would poison the guard if their _seq were treated as comparable to hook seqs.
-    if (msg._seq && /^\d+$/.test(String(msg._seq)) && isHookOrigin(msg.source)) lastAppliedSeq = msg._seq
+    if (msg._seq && /^\d+$/.test(String(msg._seq)) && isHookOrigin(msg.source) && !isAuthoritativeSnapshotSource(msg.source)) lastAppliedSeq = msg._seq
     const s = store.getState()
 
     // Set mood override BEFORE feeding events so pushEventBatch's updateStoreMood sees it
     if (msg.mood) {
       setMoodOverride(msg.mood, msg.moodDuration || 60000)
     }
+
+    // AVO-108: token usage is session-level (independent of agent routing). Apply it directly
+    // — presence semantics in setTokens preserve the last value when a message carries none.
+    if (msg.tokens) s.setTokens(msg.tokens)
+    // AVO-102: effort level (also session-level) drives the thinking aura.
+    if (msg.effort) s.setEffort(msg.effort)
 
     // Route agents
     const updates = routeExternalAgents(msg.agents || [])
@@ -710,13 +763,15 @@ export function startStatusIntegration(store) {
           lastAppliedSeq = null
           pendingMsg = null
           if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null }
-        } else if (gap > 0) {
+        } else if (gap > 0 && !isAuthoritativeSnapshotSource(msg.source)) {
           return  // genuine stale drop within tolerance window
+          // (multi-session snapshots are exempt — their merged _seq drops legitimately on
+          //  session exit; see isAuthoritativeSnapshotSource. Content-dedup prevents spam.)
         }
       }
       // Only compare against a hook-origin pendingMsg: a non-hook-origin pending (e.g.
       // window global with an independent clock) must not evict a legitimate hook message.
-      if (pendingMsg && isHookOrigin(pendingMsg.source) && isNumericSeq(pendingMsg._seq) && Number(msg._seq) < Number(pendingMsg._seq)) return
+      if (pendingMsg && isHookOrigin(pendingMsg.source) && isNumericSeq(pendingMsg._seq) && Number(msg._seq) < Number(pendingMsg._seq) && !isAuthoritativeSnapshotSource(msg.source)) return
     }
     // Passive/non-hook-origin messages must not evict a queued hook-origin message from the
     // debounce slot: a hash-change or title-change within the 150ms window would otherwise
@@ -741,8 +796,13 @@ export function startStatusIntegration(store) {
     if (stalenessTimer) clearTimeout(stalenessTimer)
     stalenessTimer = setTimeout(() => {
       const s = store.getState()
-      if (s.statusSource !== 'organic') {
+      const action = stalenessSweepAction(s.statusSource, s.activeWorkflow)
+      if (action === 'clear-external') {
         s.clearExternalStatus()
+      } else if (action === 'clear-workflow') {
+        // Orphaned workflow-only banner (e.g. a `#workflow=X` hash) — statusSource stayed
+        // 'organic' so clearExternalStatus never ran; clear the lingering banner directly.
+        s.setActiveWorkflow(null)
       }
     }, STALENESS_TIMEOUT)
   }

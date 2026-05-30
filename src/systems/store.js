@@ -237,9 +237,10 @@ const LOGGABLE_BEHAVIORS = new Set([
 // a work status to its visual behavior/expression; roleItems maps a base role to
 // the desk item its growth accumulates. Both are pure constants.
 const STATUS_BEHAVIOR_MAP = {
-  working: { behavior: { Bash: 'typing', Read: 'reading-screen', Grep: 'research', Glob: 'research' }, expression: 'focused' },
-  blocked: { behavior: 'scratch-head', expression: 'confused' },
-  done:    { behavior: 'thumbs-up', expression: 'happy' },
+  working:  { behavior: { Bash: 'typing', Read: 'reading-screen', Grep: 'research', Glob: 'research' }, expression: 'focused' },
+  blocked:  { behavior: 'scratch-head', expression: 'confused' },
+  done:     { behavior: 'thumbs-up', expression: 'happy' },
+  planning: { behavior: 'gantt-chart', expression: 'focused' },  // AVO-101: plan mode
 }
 const ROLE_GROWTH_ITEMS = {
   pm: 'sticky', arch: 'books', dev: 'coffee',
@@ -477,6 +478,8 @@ export const useOfficeStore = create((set) => ({
   statusSource: 'organic',     // 'organic' | 'external' | 'fallback'
   integrationSource: null,     // e.g. claude-cli | codex-cli | codex-app | webhook
   activeWorkflow: null,        // workflow name for banner display
+  tokens: null,                // AVO-108: { ctx, out, model } latest token usage, or null
+  effort: null,                // AVO-102: model effort level (low|medium|high|xhigh|max), or null
   integrationHealth: {
     state: 'idle',             // idle | online | degraded | offline
     lastSuccessAt: null,
@@ -856,6 +859,19 @@ export const useOfficeStore = create((set) => ({
       const next = name ?? null
       return s.activeWorkflow === next ? {} : { activeWorkflow: next }
     }),
+  // AVO-108: presence-update — callers only pass a non-null token object, so a turn with no
+  // fresh read (Stop, external channels) leaves the last value intact. No-op on equal values
+  // to avoid waking subscribers when ctx/out/model are unchanged.
+  setTokens: (t) =>
+    set((s) => {
+      if (!t) return {}
+      const cur = s.tokens
+      if (cur && cur.ctx === t.ctx && cur.out === t.out && cur.model === t.model) return {}
+      return { tokens: t }
+    }),
+  // AVO-102: presence-update effort level (no-op on unchanged value to avoid waking subscribers).
+  setEffort: (level) =>
+    set((s) => (!level || s.effort === level ? {} : { effort: level })),
   markIntegrationProbe: ({ ok }) =>
     set((s) => {
       const h = s.integrationHealth

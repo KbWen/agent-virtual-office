@@ -1,7 +1,97 @@
 import { describe, it, expect } from 'vitest'
 
 // Import CommonJS hook helpers
-const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext } = await import('../public/hooks/office-status-hook.js')
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse, readLatestTokenUsage, effortLevel } = await import('../public/hooks/office-status-hook.js')
+
+describe('effortLevel — AVO-102 effort extraction', () => {
+  it('returns the level for each known ordinal value', () => {
+    for (const lvl of ['low', 'medium', 'high', 'xhigh', 'max']) {
+      expect(effortLevel({ effort: { level: lvl } })).toBe(lvl)
+    }
+  })
+  it('returns null for absent / malformed / unknown effort', () => {
+    expect(effortLevel({})).toBeNull()
+    expect(effortLevel({ effort: null })).toBeNull()
+    expect(effortLevel({ effort: {} })).toBeNull()
+    expect(effortLevel({ effort: { level: 'turbo' } })).toBeNull()
+    expect(effortLevel(null)).toBeNull()
+  })
+})
+
+describe('readLatestTokenUsage — AVO-108 transcript tail-read', () => {
+  function tmpTranscript(lines) {
+    const p = path.join(os.tmpdir(), `transcript-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`)
+    fs.writeFileSync(p, lines.map(l => JSON.stringify(l)).join('\n'))
+    return p
+  }
+  it('extracts ctx (input+cache) + output + model from the last usage-bearing line', () => {
+    const p = tmpTranscript([
+      { type: 'user', message: { role: 'user' } },
+      { type: 'assistant', message: { model: 'claude-opus-4-8', usage: { input_tokens: 2, cache_creation_input_tokens: 4452, cache_read_input_tokens: 596779, output_tokens: 2348 } } },
+    ])
+    expect(readLatestTokenUsage(p)).toEqual({ ctx: 2 + 4452 + 596779, out: 2348, model: 'claude-opus-4-8' })
+    fs.unlinkSync(p)
+  })
+  it('uses the LAST usage line when several are present', () => {
+    const p = tmpTranscript([
+      { type: 'assistant', message: { model: 'a', usage: { input_tokens: 1, output_tokens: 10 } } },
+      { type: 'assistant', message: { model: 'b', usage: { input_tokens: 5, output_tokens: 99 } } },
+    ])
+    expect(readLatestTokenUsage(p)).toEqual({ ctx: 5, out: 99, model: 'b' })
+    fs.unlinkSync(p)
+  })
+  it('returns null safely for missing path, missing file, or no usage', () => {
+    expect(readLatestTokenUsage(null)).toBeNull()
+    expect(readLatestTokenUsage('')).toBeNull()
+    expect(readLatestTokenUsage('/no/such/file.jsonl')).toBeNull()
+    const p = tmpTranscript([{ type: 'user', message: { role: 'user' } }])
+    expect(readLatestTokenUsage(p)).toBeNull()
+    fs.unlinkSync(p)
+  })
+  it('survives malformed JSON lines (skips them, never throws)', () => {
+    const p = path.join(os.tmpdir(), `t-${Date.now()}.jsonl`)
+    fs.writeFileSync(p, 'not json\n{bad\n' + JSON.stringify({ message: { usage: { input_tokens: 7, output_tokens: 3 } } }))
+    expect(readLatestTokenUsage(p)).toEqual({ ctx: 7, out: 3, model: null })
+    fs.unlinkSync(p)
+  })
+})
+
+describe('statusForPreToolUse — plan-mode detection (AVO-101)', () => {
+  it('maps plan mode to the distinct planning status', () => {
+    expect(statusForPreToolUse('plan')).toBe('planning')
+  })
+
+  it('keeps every other permission mode as working', () => {
+    expect(statusForPreToolUse('default')).toBe('working')
+    expect(statusForPreToolUse('acceptEdits')).toBe('working')
+    expect(statusForPreToolUse('bypassPermissions')).toBe('working')
+    expect(statusForPreToolUse(undefined)).toBe('working')
+    expect(statusForPreToolUse(null)).toBe('working')
+  })
+})
+
+describe('shouldCarryStoppedSignal — no contradictory _stopped+active output', () => {
+  it('does NOT carry _stopped when an agent is active (the >30s straggler PreToolUse bug)', () => {
+    // straggler PreToolUse: recheckStopped still true, but it asserts a working agent → activeCount 1.
+    // Old code emitted {_stopped:true, activeCount:1, working}; now we drop _stopped (office IS active).
+    expect(shouldCarryStoppedSignal(true, 'PreToolUse', 1)).toBe(false)
+    expect(shouldCarryStoppedSignal(true, 'PostToolUse', 2)).toBe(false)
+  })
+
+  it('DOES carry _stopped for a winding-down event with no active agents (race protection kept)', () => {
+    // a PostToolUse 'done' that leaves 0 active must still protect Stop's idle signal.
+    expect(shouldCarryStoppedSignal(true, 'PostToolUse', 0)).toBe(true)
+    expect(shouldCarryStoppedSignal(true, 'SubagentStop', 0)).toBe(true)
+  })
+
+  it('never carries when not stopped, or for UserPromptSubmit (which ends the stopped state)', () => {
+    expect(shouldCarryStoppedSignal(false, 'PostToolUse', 0)).toBe(false)
+    expect(shouldCarryStoppedSignal(true, 'UserPromptSubmit', 0)).toBe(false)
+  })
+})
 
 describe('toolToRole', () => {
   it('maps Edit/Write/NotebookEdit to dev', () => {
@@ -317,5 +407,39 @@ describe('skill context', () => {
 
   it('returns null for null agent_id', () => {
     expect(readSkillContext(null)).toBeNull()
+  })
+})
+
+describe('shouldClearWorkflowOnSubagentStop — orphaned-workflow leak fix', () => {
+  // Known-owner path (the normal, R45/R46-hardened case): clear only on exact id match.
+  it('clears when the stopping agent_id matches the workflow owner', () => {
+    expect(shouldClearWorkflowOnSubagentStop('agent-1', 'agent-1', 'review', 'review')).toBe(true)
+  })
+
+  it('does NOT clear when a straggler stop has a different agent_id (same type running)', () => {
+    // a finished /review's straggler stop must not clobber a new /review's banner
+    expect(shouldClearWorkflowOnSubagentStop('agent-1', 'agent-2', 'review', 'review')).toBe(false)
+  })
+
+  it('does NOT clear a known-owner banner when the straggler stop has no agent_id', () => {
+    expect(shouldClearWorkflowOnSubagentStop('agent-1', null, 'review', 'review')).toBe(false)
+  })
+
+  // Orphaned path (existingWorkflowAgentId null — SubagentStart set a workflow with no
+  // agent_id). The OLD code only cleared on an exact type-string match, so a stop with a
+  // missing/different agent_type leaked the banner forever (the HIGH finding).
+  it('clears an orphaned banner when the stopping type matches the workflow string', () => {
+    expect(shouldClearWorkflowOnSubagentStop(null, null, 'review', 'review')).toBe(true)
+  })
+
+  it('clears an orphaned banner when the stop supplies NO agent_type (was the forever-leak)', () => {
+    expect(shouldClearWorkflowOnSubagentStop(null, null, 'review', '')).toBe(true)
+    expect(shouldClearWorkflowOnSubagentStop(null, null, 'review', undefined)).toBe(true)
+  })
+
+  it('does NOT clear an orphaned banner when a DIFFERENT-typed subagent stops (Stop backstop catches it)', () => {
+    // A stop for a different subagent type shouldn't clear an orphaned banner that may still
+    // be active; the unconditional `workflow: null` at Stop is the guaranteed terminal clear.
+    expect(shouldClearWorkflowOnSubagentStop(null, null, 'review', 'implement')).toBe(false)
   })
 })

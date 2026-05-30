@@ -60,6 +60,10 @@ Rare events include: someone brings a dog, AC breaks and everyone fans themselve
 ### Option 1: npx (recommended)
 
 ```bash
+# Straight from the public GitHub repo — no clone, no npm publish required:
+npx github:KbWen/agent-virtual-office
+
+# Once the package is published to npm, the short form also works:
 npx agent-virtual-office
 ```
 
@@ -225,19 +229,26 @@ Set `OFFICE_URL` (e.g. `http://office.internal:5174`) as a repository variable a
 
 ### Claude Code Hook Install
 
-The recommended way is the one-click setup command:
+The one-click setup command copies the hook to `~/.claude/office-status-hook.js` and registers it in `~/.claude/settings.json` for all 6 events automatically (idempotent — safe to re-run):
 
 ```bash
+# If you cloned the repo:
+node bin/cli.js setup
+
+# Run straight from the public GitHub repo (no clone, no npm publish needed):
+npx github:KbWen/agent-virtual-office setup
+
+# Once the package is published to npm:
 npx agent-virtual-office setup
 ```
-
-This copies the hook to `~/.claude/office-status-hook.js` and registers it in `~/.claude/settings.json` for all 6 events automatically.
 
 **Manual install** (if you prefer):
 
 ```bash
-cp node_modules/agent-virtual-office/public/hooks/office-status-hook.js \
-   ~/.claude/office-status-hook.js
+# from a clone:
+cp public/hooks/office-status-hook.js ~/.claude/office-status-hook.js
+# or, if installed from npm:
+cp node_modules/agent-virtual-office/public/hooks/office-status-hook.js ~/.claude/office-status-hook.js
 ```
 
 Register it in `~/.claude/settings.json` (the hook reads events from stdin, no arguments needed):
