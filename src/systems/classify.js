@@ -236,6 +236,9 @@ const STATUS_TABLE = Object.freeze({
   working:             { family: FAMILIES.WORK,      severity: 'medium', visualLabel: 'Working',  a11yLabel: 'Working' },
   blocked:             { family: FAMILIES.BLOCKED,   severity: 'high',   visualLabel: 'Blocked',  a11yLabel: 'Blocked' },
   done:                { family: FAMILIES.SUCCESS,   severity: 'low',    visualLabel: 'Done',     a11yLabel: 'Completed' },
+  // AVO-101: emitted by the hook when permission_mode === 'plan' (plan mode). The agent is
+  // architecting an approach before touching code — distinct from generic 'working'.
+  planning:            { family: FAMILIES.PLAN,      severity: 'low',    visualLabel: 'Planning', a11yLabel: 'In plan mode' },
   // Forward-looking (Pixel Agents' admitted gap — we anticipate these)
   thinking:            { family: FAMILIES.COGNITION, severity: 'low',    visualLabel: 'Thinking', a11yLabel: 'Extended thinking' },
   compacting:          { family: FAMILIES.MEMORY,    severity: 'low',    visualLabel: 'Compact',  a11yLabel: 'Compacting context' },
@@ -441,8 +444,9 @@ export function classifyWorkflow(workflow) {
 // Workflow wins over role because phase context is more specific.
 export function decideBehavior({ task, role, status, workflow } = {}) {
   // 1. Status override (hard wins, mirrors STATUS_BEHAVIOR_MAP semantics)
-  if (status === 'blocked') return 'scratch-head'
-  if (status === 'done')    return 'thumbs-up'
+  if (status === 'blocked')  return 'scratch-head'
+  if (status === 'done')     return 'thumbs-up'
+  if (status === 'planning') return 'gantt-chart'  // AVO-101: plan mode → architecting
 
   // 2. Resolve task family (the substrate for the override tables)
   const family = classifyTask(task).family

@@ -412,6 +412,14 @@ function shouldCarryStoppedSignal(recheckStopped, hookEvent, activeCount) {
   return Boolean(recheckStopped) && hookEvent !== 'UserPromptSubmit' && activeCount === 0
 }
 
+// AVO-101: Claude Code carries `permission_mode` on every tool event. In plan mode it is
+// 'plan' — the agent is architecting an approach with read-only tools before touching code.
+// Surface that as a distinct 'planning' status (→ gantt-chart animation) instead of the
+// generic 'working', so plan mode is visible in the office. Any other mode stays 'working'.
+function statusForPreToolUse(permissionMode) {
+  return permissionMode === 'plan' ? 'planning' : 'working'
+}
+
 // ─── Main ───
 
 function processEvent(event) {
@@ -466,7 +474,7 @@ function processEvent(event) {
       const skillCtx = readSkillContext(agentId)
       role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
       task = tool
-      status = 'working'
+      status = statusForPreToolUse(event.permission_mode)  // AVO-101: plan mode → 'planning'
       const ctx = extractContext(tool, toolInput)
       label = toolLabel(tool, ctx, false)
       break
@@ -833,5 +841,5 @@ if (typeof module !== 'undefined') {
   module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
     shortFile, shortCommand, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
-    shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal }
+    shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse }
 }

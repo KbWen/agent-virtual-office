@@ -1,7 +1,21 @@
 import { describe, it, expect } from 'vitest'
 
 // Import CommonJS hook helpers
-const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal } = await import('../public/hooks/office-status-hook.js')
+const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse } = await import('../public/hooks/office-status-hook.js')
+
+describe('statusForPreToolUse — plan-mode detection (AVO-101)', () => {
+  it('maps plan mode to the distinct planning status', () => {
+    expect(statusForPreToolUse('plan')).toBe('planning')
+  })
+
+  it('keeps every other permission mode as working', () => {
+    expect(statusForPreToolUse('default')).toBe('working')
+    expect(statusForPreToolUse('acceptEdits')).toBe('working')
+    expect(statusForPreToolUse('bypassPermissions')).toBe('working')
+    expect(statusForPreToolUse(undefined)).toBe('working')
+    expect(statusForPreToolUse(null)).toBe('working')
+  })
+})
 
 describe('shouldCarryStoppedSignal — no contradictory _stopped+active output', () => {
   it('does NOT carry _stopped when an agent is active (the >30s straggler PreToolUse bug)', () => {

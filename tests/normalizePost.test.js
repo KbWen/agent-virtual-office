@@ -257,8 +257,9 @@ describe('constants', () => {
     expect(VALID_ROLES).toHaveLength(8)
   })
 
-  it('VALID_STATUSES has 4 entries', () => {
-    expect(VALID_STATUSES).toHaveLength(4)
+  it('VALID_STATUSES has 5 entries incl. planning (AVO-101)', () => {
+    expect(VALID_STATUSES).toHaveLength(5)
+    expect(VALID_STATUSES).toContain('planning')
   })
 
   it('VALID_MOODS has 7 entries', () => {

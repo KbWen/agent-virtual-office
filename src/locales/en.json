@@ -127,7 +127,8 @@
     "working": "Working",
     "blocked": "Blocked",
     "done": "Done",
-    "idle": "Idle"
+    "idle": "Idle",
+    "planning": "Planning"
   },
   "contextBubbles": {
     "dev-edit": ["tweaking {ctx}...", "hmm {ctx} needs work", "{ctx} again, let's go", "refactoring {ctx}~", "one sec, fixing {ctx}", "{ctx} could be cleaner..."],

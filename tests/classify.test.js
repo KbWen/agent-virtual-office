@@ -680,3 +680,17 @@ describe('Output shape contract', () => {
     }
   })
 })
+
+describe('planning status — AVO-101 plan mode', () => {
+  it('classifyStatus maps planning to the PLAN family', () => {
+    const r = classifyStatus('planning')
+    expect(r.family).toBe('plan')
+    expect(r.visualLabel).toBe('Planning')
+    expect(r.tier).toBe(0)
+  })
+  it('decideBehavior gives planning a distinct architecting animation (gantt-chart)', () => {
+    expect(decideBehavior({ status: 'planning', role: 'dev', task: 'Read' })).toBe('gantt-chart')
+    // status override wins over role/task/workflow
+    expect(decideBehavior({ status: 'planning', role: 'ops', task: 'Bash', workflow: '/ship' })).toBe('gantt-chart')
+  })
+})

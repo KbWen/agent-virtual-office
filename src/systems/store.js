@@ -237,9 +237,10 @@ const LOGGABLE_BEHAVIORS = new Set([
 // a work status to its visual behavior/expression; roleItems maps a base role to
 // the desk item its growth accumulates. Both are pure constants.
 const STATUS_BEHAVIOR_MAP = {
-  working: { behavior: { Bash: 'typing', Read: 'reading-screen', Grep: 'research', Glob: 'research' }, expression: 'focused' },
-  blocked: { behavior: 'scratch-head', expression: 'confused' },
-  done:    { behavior: 'thumbs-up', expression: 'happy' },
+  working:  { behavior: { Bash: 'typing', Read: 'reading-screen', Grep: 'research', Glob: 'research' }, expression: 'focused' },
+  blocked:  { behavior: 'scratch-head', expression: 'confused' },
+  done:     { behavior: 'thumbs-up', expression: 'happy' },
+  planning: { behavior: 'gantt-chart', expression: 'focused' },  // AVO-101: plan mode
 }
 const ROLE_GROWTH_ITEMS = {
   pm: 'sticky', arch: 'books', dev: 'coffee',
