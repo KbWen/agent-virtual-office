@@ -151,6 +151,18 @@ export function isHookOrigin(source) {
   return HOOK_ORIGIN.has(source)
 }
 
+// A 'multi-session' payload is an AUTHORITATIVE full snapshot produced by scanAndMerge from
+// ALL active worktree sessions. Its `_seq` is the MAX of the contributing sessions' seqs —
+// NOT a monotonic clock. When the session holding the highest seq exits, the merged `_seq`
+// legitimately DROPS, so the normal hook-origin seq stale-drop would wrongly discard that
+// exit-reconcile and leave the departed worktree's agent on screen until its 5-min expiry.
+// These payloads are deduped by content (SSE wire-bytes / poll ETag+body) at the transport
+// layer, so exempting them from the seq stale-drop is safe — they always apply, but identical
+// content still can't spam. (It stays hook-origin for the non-hook-origin eviction guard.)
+export function isAuthoritativeSnapshotSource(source) {
+  return source === 'multi-session'
+}
+
 /**
  * "Hooks not installed" signal — when true, applyExternalStatus must NOT dismiss the
  * setup prompt (hasEverReceivedStatus stays false).
@@ -609,7 +621,7 @@ export function startStatusIntegration(store) {
     // Only track numeric _seq from hook-origin sources as the high-water mark.
     // External sources (window global, hash-bridge, postMessage) have independent clocks
     // and would poison the guard if their _seq were treated as comparable to hook seqs.
-    if (msg._seq && /^\d+$/.test(String(msg._seq)) && isHookOrigin(msg.source)) lastAppliedSeq = msg._seq
+    if (msg._seq && /^\d+$/.test(String(msg._seq)) && isHookOrigin(msg.source) && !isAuthoritativeSnapshotSource(msg.source)) lastAppliedSeq = msg._seq
     const s = store.getState()
 
     // Set mood override BEFORE feeding events so pushEventBatch's updateStoreMood sees it
@@ -725,13 +737,15 @@ export function startStatusIntegration(store) {
           lastAppliedSeq = null
           pendingMsg = null
           if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null }
-        } else if (gap > 0) {
+        } else if (gap > 0 && !isAuthoritativeSnapshotSource(msg.source)) {
           return  // genuine stale drop within tolerance window
+          // (multi-session snapshots are exempt — their merged _seq drops legitimately on
+          //  session exit; see isAuthoritativeSnapshotSource. Content-dedup prevents spam.)
         }
       }
       // Only compare against a hook-origin pendingMsg: a non-hook-origin pending (e.g.
       // window global with an independent clock) must not evict a legitimate hook message.
-      if (pendingMsg && isHookOrigin(pendingMsg.source) && isNumericSeq(pendingMsg._seq) && Number(msg._seq) < Number(pendingMsg._seq)) return
+      if (pendingMsg && isHookOrigin(pendingMsg.source) && isNumericSeq(pendingMsg._seq) && Number(msg._seq) < Number(pendingMsg._seq) && !isAuthoritativeSnapshotSource(msg.source)) return
     }
     // Passive/non-hook-origin messages must not evict a queued hook-origin message from the
     // debounce slot: a hash-change or title-change within the 150ms window would otherwise

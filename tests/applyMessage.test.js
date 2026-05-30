@@ -1,12 +1,38 @@
 import { describe, it, expect } from 'vitest'
 import {
   isHookOrigin,
+  isAuthoritativeSnapshotSource,
   shouldSkipHintDismiss,
   isNumericSeq,
   stalenessSweepAction,
   normalizeStatusMessage,
   buildHashStatusMessage,
 } from '../src/inference/inferStatus.js'
+
+describe('isAuthoritativeSnapshotSource — multi-session exit-reconcile stale-drop exemption', () => {
+  it('is true only for multi-session (its merged _seq is max-child, not a monotonic clock)', () => {
+    expect(isAuthoritativeSnapshotSource('multi-session')).toBe(true)
+  })
+
+  it('is false for single-source hook origins (their seqs ARE monotonic → keep stale-drop)', () => {
+    expect(isAuthoritativeSnapshotSource('claude-cli')).toBe(false)
+    expect(isAuthoritativeSnapshotSource('codex-cli')).toBe(false)
+    expect(isAuthoritativeSnapshotSource('file-watcher')).toBe(false)
+  })
+
+  it('is false for external / unknown sources', () => {
+    expect(isAuthoritativeSnapshotSource('hash-bridge')).toBe(false)
+    expect(isAuthoritativeSnapshotSource('external')).toBe(false)
+    expect(isAuthoritativeSnapshotSource(undefined)).toBe(false)
+  })
+
+  it('stays hook-origin (so the non-hook-origin eviction guard still treats it as authoritative)', () => {
+    // multi-session must remain isHookOrigin=true: the `!hookOriginMsg` guard must NOT drop it,
+    // while the seq-drop guards (which AND in !isAuthoritativeSnapshotSource) DO exempt it.
+    expect(isHookOrigin('multi-session')).toBe(true)
+    expect(isAuthoritativeSnapshotSource('multi-session')).toBe(true)
+  })
+})
 
 describe('stalenessSweepAction — orphaned workflow-only banner fix', () => {
   it('clears external status when an external source is showing', () => {
