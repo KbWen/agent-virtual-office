@@ -13,7 +13,7 @@
 
 import { routeExternalAgents, distributeFallbackCount, routeTaskToAgent } from './agentRouter.js'
 import { pushEventBatch, setMoodOverride, resetMood } from '../systems/moodEngine.js'
-import { VALID_ROLES, VALID_STATUSES, VALID_MOODS, STATUS_POLL_INTERVAL } from '../systems/constants.js'
+import { VALID_ROLES, VALID_STATUSES, VALID_MOODS, EFFORT_LEVELS, STATUS_POLL_INTERVAL } from '../systems/constants.js'
 
 // ─── Message normalization ─────────────────────────────────────────────
 
@@ -118,10 +118,13 @@ export function normalizeStatusMessage(raw) {
       // AVO-108: validate the token-usage object — untrusted channels reach this branch, so
       // a crafted `tokens` must not inject unbounded strings / non-numbers into the store.
       tokens: sanitizeTokens(raw.tokens),
+      // AVO-102: effort level — only the 5 known ordinal values pass.
+      effort: EFFORT_LEVELS.includes(raw.effort) ? raw.effort : undefined,
     }
     if (validated.source === undefined) delete validated.source
     if (validated.mood === undefined) delete validated.mood
     if (validated.tokens === undefined) delete validated.tokens
+    if (validated.effort === undefined) delete validated.effort
     return withStatusEnvelope(validated)
   }
 
@@ -649,6 +652,8 @@ export function startStatusIntegration(store) {
     // AVO-108: token usage is session-level (independent of agent routing). Apply it directly
     // — presence semantics in setTokens preserve the last value when a message carries none.
     if (msg.tokens) s.setTokens(msg.tokens)
+    // AVO-102: effort level (also session-level) drives the thinking aura.
+    if (msg.effort) s.setEffort(msg.effort)
 
     // Route agents
     const updates = routeExternalAgents(msg.agents || [])

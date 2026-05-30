@@ -479,6 +479,7 @@ export const useOfficeStore = create((set) => ({
   integrationSource: null,     // e.g. claude-cli | codex-cli | codex-app | webhook
   activeWorkflow: null,        // workflow name for banner display
   tokens: null,                // AVO-108: { ctx, out, model } latest token usage, or null
+  effort: null,                // AVO-102: model effort level (low|medium|high|xhigh|max), or null
   integrationHealth: {
     state: 'idle',             // idle | online | degraded | offline
     lastSuccessAt: null,
@@ -868,6 +869,9 @@ export const useOfficeStore = create((set) => ({
       if (cur && cur.ctx === t.ctx && cur.out === t.out && cur.model === t.model) return {}
       return { tokens: t }
     }),
+  // AVO-102: presence-update effort level (no-op on unchanged value to avoid waking subscribers).
+  setEffort: (level) =>
+    set((s) => (!level || s.effort === level ? {} : { effort: level })),
   markIntegrationProbe: ({ ok }) =>
     set((s) => {
       const h = s.integrationHealth

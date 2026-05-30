@@ -449,6 +449,14 @@ function readLatestTokenUsage(transcriptPath, tailBytes = 65536) {
   } catch { return null }
 }
 
+// AVO-102: the model's effort level for this turn (low|medium|high|xhigh|max), carried on
+// tool-context events. Returns the level string, or null when absent/unrecognized.
+const HOOK_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max']
+function effortLevel(event) {
+  const lvl = event && event.effort && event.effort.level
+  return HOOK_EFFORT_LEVELS.includes(lvl) ? lvl : null
+}
+
 // ─── Main ───
 
 function processEvent(event) {
@@ -460,6 +468,8 @@ function processEvent(event) {
   // AVO-108: cheap tail-read of the transcript for token usage. null when unavailable; the
   // store keeps its last value on null (presence semantics) so the chip never flickers.
   const tokens = readLatestTokenUsage(event.transcript_path)
+  // AVO-102: effort level for this turn (drives the thinking aura). null when absent.
+  const effort = effortLevel(event)
 
   let role, task, status, label, hint = null
   let clearWorkflow = false
@@ -804,6 +814,8 @@ function processEvent(event) {
     // AVO-108: session token usage (context size + last output). Omitted when null so the
     // store keeps its last value (presence semantics) — Stop and failed reads don't blank it.
     ...(tokens ? { tokens } : {}),
+    // AVO-102: effort level for the thinking aura. Presence semantics like tokens.
+    ...(effort ? { effort } : {}),
     // Carry _stopped/_stoppedAt forward when they are set: a non-UPS event has no
     // authority to clear Stop's idle signal. Without this, a PostToolUse that wins a
     // last-writer-wins race with Stop erases _stopped=true, re-opening the straggler
@@ -877,5 +889,5 @@ if (typeof module !== 'undefined') {
     shortFile, shortCommand, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
     shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse,
-    readLatestTokenUsage }
+    readLatestTokenUsage, effortLevel }
 }

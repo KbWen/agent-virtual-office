@@ -31,6 +31,8 @@ export const STATUS_POLL_INTERVAL = 1000   // ms — matches startFilePolling de
 export const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
 export const VALID_STATUSES = ['idle', 'working', 'blocked', 'done', 'planning']  // 'planning' = AVO-101 plan mode
 export const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
+// AVO-102: Claude Code effort levels (ordinal). The thinking aura intensity scales with this.
+export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max']
 export const MAX_MOOD_DURATION = 3_600_000  // 1 hour in ms
 
 export const STATUS_COLORS = {

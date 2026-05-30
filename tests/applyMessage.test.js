@@ -36,6 +36,20 @@ describe('sanitizeTokens — AVO-108 token-usage validation', () => {
   })
 })
 
+describe('effort validation in normalizeStatusMessage (AVO-102)', () => {
+  it('passes the 5 known effort levels through', () => {
+    for (const lvl of ['low', 'medium', 'high', 'xhigh', 'max']) {
+      const msg = normalizeStatusMessage({ type: 'office-status', agents: [], effort: lvl })
+      expect(msg.effort).toBe(lvl)
+    }
+  })
+  it('drops unknown / malformed effort', () => {
+    expect(normalizeStatusMessage({ type: 'office-status', agents: [], effort: 'turbo' }).effort).toBeUndefined()
+    expect(normalizeStatusMessage({ type: 'office-status', agents: [], effort: 5 }).effort).toBeUndefined()
+    expect('effort' in normalizeStatusMessage({ type: 'office-status', agents: [] })).toBe(false)
+  })
+})
+
 describe('isAuthoritativeSnapshotSource — multi-session exit-reconcile stale-drop exemption', () => {
   it('is true only for multi-session (its merged _seq is max-child, not a monotonic clock)', () => {
     expect(isAuthoritativeSnapshotSource('multi-session')).toBe(true)

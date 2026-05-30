@@ -4,7 +4,22 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse, readLatestTokenUsage } = await import('../public/hooks/office-status-hook.js')
+const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse, readLatestTokenUsage, effortLevel } = await import('../public/hooks/office-status-hook.js')
+
+describe('effortLevel — AVO-102 effort extraction', () => {
+  it('returns the level for each known ordinal value', () => {
+    for (const lvl of ['low', 'medium', 'high', 'xhigh', 'max']) {
+      expect(effortLevel({ effort: { level: lvl } })).toBe(lvl)
+    }
+  })
+  it('returns null for absent / malformed / unknown effort', () => {
+    expect(effortLevel({})).toBeNull()
+    expect(effortLevel({ effort: null })).toBeNull()
+    expect(effortLevel({ effort: {} })).toBeNull()
+    expect(effortLevel({ effort: { level: 'turbo' } })).toBeNull()
+    expect(effortLevel(null)).toBeNull()
+  })
+})
 
 describe('readLatestTokenUsage — AVO-108 transcript tail-read', () => {
   function tmpTranscript(lines) {
