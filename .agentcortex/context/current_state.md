@@ -11,8 +11,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-05-30
-- **Update Sequence**: 26
+- **Last Updated**: 2026-05-31
+- **Update Sequence**: 27
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -109,8 +109,18 @@
 - [Category: path-separation][Severity: HIGH][Trigger: framework-path-migration] Downstream-facing artifacts such as specs and ADRs must stay in project-visible `docs/` paths, not hidden framework directories.
 - [Category: review-process][Severity: LOW][Trigger: multi-role-review] Different reviewer personas catch different failure classes; multi-role review is useful for high-risk template changes.
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
+- [Category: packaging][Severity: MEDIUM][Trigger: dependency-presence-check] An installed package's CLI launcher must detect its own runtime deps via `require.resolve(dep, {paths:[root]})` (honors npm hoisting to a parent node_modules), not `fs.existsSync(root/node_modules/<dep>)` — the latter always misses hoisted deps and re-runs `npm install` on every launch.
 
 ## Ship History
+
+### main-2026-05-31 (install docs parity + cli.js hoist-safe launch)
+
+- PR #23 squash-merged to `main` (37c039b). Fixes user-reported install/usage friction. Local + remote CI (Node 20 & 22) green; 1025/1025 vitest; build clean.
+- **bin/cli.js — hoist-safe Vite launch**: replaced `fs.existsSync(root/node_modules/vite)` with `require.resolve('vite/package.json', {paths:[root]})`, and spawn Vite's bin JS via `process.execPath` (dropped the `.bin` shim + Windows shell-quoting). When installed as a dep/global, npm hoists vite to a PARENT node_modules — the old check always failed and re-ran `npm install` on every launch. Verified live in a fresh hoisted tarball install (Vite 575ms, no reinstall).
+- **README.zh-TW.md — full parity rewrite**: was far behind EN and pointed at the unpublished `npx agent-virtual-office` (404) + declared Node>=18 (actual >=22). Now: Node badge >=22, working `npx github:` form, Designer character + `designer` role, fixed invalid `qa:"testing"` example, and added serve / Docker / Webhook / GitHub-Actions / hook-install / multi-worktree / troubleshooting / tech-stack / architecture sections. zh-TW now structurally 1:1 with EN (section headers at identical line numbers).
+- **README.md**: test count 925->1025; architecture-tree path fixes (normalizePost.js->src/utils, platformDetect.js->src/systems, +workflowHandoff.js / utils/ / App.jsx).
+- **Multi-pass review**: 2 independent reviewers + direct checks -> cli.js SAFE (vite exports map `./package.json`; setup/uninstall/serve untouched; signal handlers byte-identical), READMEs ACCURATE (16 webhook events match server.mjs 1:1, 8 roles / 4 statuses correct, all referenced paths exist, no EN<->zh-TW contradictions).
+- **Known minor (not fixed)**: CI matrix tests Node 20 but engines/badges declare >=22 (Node 20 proven working by CI). Left for human: relax engines->>=20 OR drop Node 20 from CI. Also `npm publish` deferred (owner has no npm account); both READMEs lead with the working `npx github:` form.
 
 ### main-2026-05-30 (overnight optimization: label consistency + blocked-reason visibility)
 
