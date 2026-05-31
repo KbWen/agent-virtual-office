@@ -495,14 +495,17 @@ This watches for file changes and automatically updates the office.
 │   │   ├── officeLife.js            # Group event system (eureka/meeting/deploy-success/...)
 │   │   ├── contextBubble.js         # Status × mood × role-aware speech generation
 │   │   ├── constants.js             # Shared enums (VALID_STATUSES / VALID_MOODS / STATUS_COLORS)
-│   │   └── store.js                 # Zustand state + dailyDoneLedger + dailyBlockedLedger
+│   │   ├── store.js                 # Zustand state + dailyDoneLedger + dailyBlockedLedger
+│   │   └── platformDetect.js        # Browser / CLI / desktop platform detection
 │   ├── inference/
 │   │   ├── inferStatus.js           # External status integration (hook events + SSE/poll)
 │   │   ├── desktopNotifier.js       # Browser Notification when blocked ≥30s + tab hidden
 │   │   ├── idleGapInfer.js          # Infer 'thinking' (45s gap) / 'awaiting-approval' (90s gap)
 │   │   ├── agentRouter.js           # Agent routing logic
+│   │   └── workflowHandoff.js       # Workflow phase-transition handoff arrows
+│   ├── utils/
 │   │   ├── normalizePost.js         # POST /api/status payload sanitization
-│   │   └── platformDetect.js        # Browser / CLI / desktop platform detection
+│   │   └── formatTime.js            # Time/date formatting helpers
 │   ├── server/
 │   │   └── scanSessions.mjs         # Multi-worktree session scanner
 │   ├── i18n.js                      # Lightweight i18n (~90 lines)
@@ -510,6 +513,7 @@ This watches for file changes and automatically updates the office.
 │   │   ├── en.json                  # English strings (incl. notify.* + ui.todayMetrics*)
 │   │   └── zh-TW.json               # Traditional Chinese strings
 │   ├── index.css                    # Bundled keyframes (CSP-safe) + Tailwind import
+│   ├── App.jsx                      # Root component (office scene + control panel)
 │   ├── main.jsx                     # React root + error boundaries
 │   └── config/
 │       ├── characters.json          # Character definitions (8 roles + 3 lightweight)
@@ -523,7 +527,7 @@ This watches for file changes and automatically updates the office.
 │   ├── adr/                         # Architecture decision records
 │   ├── architecture/                # Domain decision logs (per area)
 │   └── deployment/                  # Docker / nginx / pm2 / systemd configs
-├── tests/                           # vitest — 925 tests covering classifier, inference, store, ledgers
+├── tests/                           # vitest — 1025 tests covering classifier, inference, store, ledgers
 ├── vite.config.js                   # Vite + status API middleware (/api/status, /api/event, /api/lang)
 └── package.json
 ```
