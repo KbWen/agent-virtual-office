@@ -269,10 +269,28 @@ if (help) {
   process.exit(0)
 }
 
-// Check if node_modules exists, install if not
-const nodeModules = path.join(root, 'node_modules')
-const viteExists = fs.existsSync(path.join(nodeModules, 'vite'))
-if (!fs.existsSync(nodeModules) || !viteExists) {
+// Resolve Vite's CLI entry via Node module resolution. This honors npm's
+// dependency hoisting — when this package is installed as a dependency (or
+// globally), Vite lands in a PARENT node_modules, not `<pkg>/node_modules`.
+// A plain `fs.existsSync(root/node_modules/vite)` check would miss it and
+// trigger a redundant `npm install` on every launch. require.resolve walks
+// the parent chain the same way `require('vite')` would.
+function resolveViteBin() {
+  try {
+    const pkgPath = require.resolve('vite/package.json', { paths: [root] })
+    const pkg = require(pkgPath)
+    const binRel = typeof pkg.bin === 'string' ? pkg.bin : (pkg.bin && pkg.bin.vite)
+    if (!binRel) return null
+    const binAbs = path.join(path.dirname(pkgPath), binRel)
+    return fs.existsSync(binAbs) ? binAbs : null
+  } catch {
+    return null
+  }
+}
+
+// Install deps only if Vite genuinely can't be resolved from here.
+let viteBinJs = resolveViteBin()
+if (!viteBinJs) {
   console.log('Installing dependencies...')
   try {
     execSync('npm install --prefer-offline --no-audit --no-fund', { cwd: root, stdio: 'inherit' })
@@ -281,6 +299,12 @@ if (!fs.existsSync(nodeModules) || !viteExists) {
     console.error(`    cd "${root}" && npm install`)
     process.exit(1)
   }
+  viteBinJs = resolveViteBin()
+}
+if (!viteBinJs) {
+  console.error('  Could not locate Vite even after install.')
+  console.error(`  Try running manually: cd "${root}" && npm install`)
+  process.exit(1)
 }
 
 // Build URL
@@ -305,16 +329,15 @@ if (host) {
   console.log()
 }
 
-const viteBin = path.join(root, 'node_modules', '.bin', 'vite')
+// Run Vite's CLI entry directly with this Node binary. Avoids depending on
+// the `.bin/vite` shim (which also moves under hoisting) and the per-platform
+// shell-quoting dance — `process.execPath` + the resolved JS path is portable.
 const viteFlags = ['--port', port]
 if (host) viteFlags.push('--host')
-const isWin = process.platform === 'win32'
-const viteCmd = isWin ? `"${viteBin}" ${viteFlags.join(' ')}` : viteBin
-const viteArgs = isWin ? [] : viteFlags
-const vite = spawn(viteCmd, viteArgs, {
+const vite = spawn(process.execPath, [viteBinJs, ...viteFlags], {
   cwd: root,
   stdio: 'inherit',
-  shell: isWin,
+  shell: false,
 })
 vite.on('error', (err) => {
   console.error(`\n  Failed to start Vite: ${err.message}`)
