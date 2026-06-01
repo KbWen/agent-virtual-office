@@ -50,8 +50,10 @@ const OBSTACLE_RECTS = [
   { x1: 15,  y1: 438, x2: 70,  y2: 465 },
 ]
 
-// Also use desk rects for path line-crossing checks
-const DESK_RECTS = OBSTACLE_RECTS.slice(0, 7) // 7 desks (PM, Arch, QA, Res, Dev, Ops, Designer)
+// Main-office obstacles for path line-crossing checks.
+const MAIN_OFFICE_OBSTACLES = OBSTACLE_RECTS.slice(0, 9) // 7 desks + meeting-side whiteboard
+const LOUNGE_OBSTACLES = OBSTACLE_RECTS.slice(9, 12) // WC, bookshelves, coffee machine
+const MEETING_TABLE = OBSTACLE_RECTS[7]
 
 // ─── Walkability functions ──────────────────────────────────────────
 
@@ -172,7 +174,7 @@ export const HOME_POSITIONS = {
 
 // ─── Zones (for pathfinding — which room is a point in?) ────────────
 const ZONES = [
-  { id: 'entrance',    x1: 0,   y1: 0,   x2: 210, y2: 148 },
+  { id: 'entrance',    x1: 0,   y1: 0,   x2: 598, y2: 148 },
   { id: 'meetingRoom', x1: 598, y1: 0,   x2: 800, y2: 420 },
   { id: 'mainOffice',  x1: 0,   y1: 148, x2: 598, y2: 418 },
   { id: 'lounge',      x1: 0,   y1: 418, x2: 460, y2: 560 },
@@ -210,6 +212,14 @@ const CORRIDORS = [
   { x: 300, y: 385 },  // bottom aisle (below dev/ops desks)
 ]
 
+const MAIN_ROUTE_NODES = [
+  ...CORRIDORS,
+  { x: 80,  y: 180 },
+  { x: 550, y: 180 },
+  { x: 80,  y: 385 },
+  { x: 550, y: 385 },
+]
+
 // ─── Path calculation ───────────────────────────────────────────────
 
 function lineHitsRect(ax, ay, bx, by, r) {
@@ -235,7 +245,11 @@ function lineHitsRect(ax, ay, bx, by, r) {
 }
 
 function lineHitsAnyDesk(ax, ay, bx, by) {
-  return DESK_RECTS.some(r => lineHitsRect(ax, ay, bx, by, r))
+  return MAIN_OFFICE_OBSTACLES.some(r => lineHitsRect(ax, ay, bx, by, r))
+}
+
+function lineHitsAnyRect(ax, ay, bx, by, rects) {
+  return rects.some(r => lineHitsRect(ax, ay, bx, by, r))
 }
 
 function findBestCorridor(from, to) {
@@ -261,69 +275,154 @@ function nearestCorridor(pos) {
   return { x: best.x + (Math.random() - 0.5) * 20, y: best.y + (Math.random() - 0.5) * 10 }
 }
 
+function findSafePolyline(from, to, nodes, obstacles) {
+  const pts = [from, to, ...nodes]
+  const n = pts.length
+  const dist = Array(n).fill(Infinity)
+  const prev = Array(n).fill(-1)
+  const visited = Array(n).fill(false)
+  dist[0] = 0
+
+  for (let iter = 0; iter < n; iter++) {
+    let u = -1, best = Infinity
+    for (let i = 0; i < n; i++) {
+      if (!visited[i] && dist[i] < best) { u = i; best = dist[i] }
+    }
+    if (u === -1 || u === 1) break
+    visited[u] = true
+
+    for (let v = 1; v < n; v++) {
+      if (visited[v] || v === u) continue
+      if (lineHitsAnyRect(pts[u].x, pts[u].y, pts[v].x, pts[v].y, obstacles)) continue
+      const edge = Math.hypot(pts[u].x - pts[v].x, pts[u].y - pts[v].y)
+      if (dist[u] + edge < dist[v]) {
+        dist[v] = dist[u] + edge
+        prev[v] = u
+      }
+    }
+  }
+
+  if (!Number.isFinite(dist[1])) return null
+  const route = []
+  for (let cur = 1; cur !== 0 && cur !== -1; cur = prev[cur]) route.push(pts[cur])
+  route.reverse()
+  return route
+}
+
+const DOOR_SIDES = {
+  entranceToMain: {
+    entrance:   { x: 115, y: 125 },
+    mainOffice: { x: 115, y: 176 },
+  },
+  mainToMeeting: {
+    mainOffice:  { x: 585, y: 210 },
+    meetingRoom: { x: 636, y: 210 },
+  },
+  mainToLounge: {
+    mainOffice: { x: 240, y: 386 },
+    lounge:     { x: 240, y: 432 },
+  },
+  mainToResearch: {
+    mainOffice: { x: 535, y: 386 },
+    research:   { x: 535, y: 432 },
+  },
+}
+
+function pushPoint(path, pt) {
+  const last = path[path.length - 1]
+  if (!last || Math.hypot(last.x - pt.x, last.y - pt.y) > 2) path.push(pt)
+}
+
+function routeWithinMeetingRoom(from, to) {
+  if (!lineHitsRect(from.x, from.y, to.x, to.y, MEETING_TABLE)) return [to]
+
+  const candidates = [
+    [{ x: 640, y: from.y }, { x: 640, y: to.y }],
+    [{ x: 770, y: from.y }, { x: 770, y: to.y }],
+    [{ x: from.x, y: 120 }, { x: to.x, y: 120 }],
+    [{ x: from.x, y: 205 }, { x: to.x, y: 205 }],
+  ]
+  let best = null, bestDist = Infinity
+  for (const candidate of candidates) {
+    const pts = [...candidate, to]
+    let cursor = from, ok = true, dist = 0
+    for (const pt of pts) {
+      if (lineHitsRect(cursor.x, cursor.y, pt.x, pt.y, MEETING_TABLE)) { ok = false; break }
+      dist += Math.hypot(cursor.x - pt.x, cursor.y - pt.y)
+      cursor = pt
+    }
+    if (ok && dist < bestDist) { best = pts; bestDist = dist }
+  }
+  return best || [{ x: 640, y: from.y }, { x: 640, y: to.y }, to]
+}
+
+function routeWithinLounge(from, to) {
+  if (!lineHitsAnyRect(from.x, from.y, to.x, to.y, LOUNGE_OBSTACLES)) return [to]
+  const y = 520
+  const pts = [
+    clampToFloor({ x: from.x, y }),
+    clampToFloor({ x: to.x, y }),
+    to,
+  ]
+  return pts
+}
+
+function routeWithinMainOffice(from, to) {
+  if (!lineHitsAnyDesk(from.x, from.y, to.x, to.y)) return [to]
+  const graphPath = findSafePolyline(from, to, MAIN_ROUTE_NODES, MAIN_OFFICE_OBSTACLES)
+  if (graphPath) return graphPath
+  const corridor = findBestCorridor(from, to)
+  if (corridor) return [corridor, to]
+  const mid = CORRIDORS[2]
+  return [mid, to]
+}
+
+function routeWithinZone(from, to, zone) {
+  if (zone === 'mainOffice') return routeWithinMainOffice(from, to)
+  if (zone === 'meetingRoom') return routeWithinMeetingRoom(from, to)
+  if (zone === 'lounge') return routeWithinLounge(from, to)
+  return [to]
+}
+
+function appendZoneRoute(path, from, to, zone) {
+  for (const pt of routeWithinZone(from, to, zone)) pushPoint(path, pt)
+}
+
 export function calculatePath(from, to) {
   const fromZone = getZone(from.x, from.y)
   const toZone = getZone(to.x, to.y)
 
   if (fromZone === toZone) {
-    if (fromZone === 'mainOffice' && lineHitsAnyDesk(from.x, from.y, to.x, to.y)) {
-      const corridor = findBestCorridor(from, to)
-      if (corridor) return [corridor, to]
-      const mid = CORRIDORS[2]
-      return [mid, to]
-    }
-    return [to]
+    return routeWithinZone(from, to, fromZone)
   }
 
   const path = []
   const exitDoor = ROUTE[fromZone]?.[toZone]
 
   if (exitDoor) {
-    const d = DOORS[exitDoor]
-    const doorPt = { x: d.x + (Math.random() - 0.5) * DOOR_JITTER, y: d.y + (Math.random() - 0.5) * 8 }
-
-    // If leaving from mainOffice and far from door, add corridor waypoint first
-    // This prevents visual straight-line crossing through desks/walls
-    if (fromZone === 'mainOffice') {
-      const distToDoor = Math.hypot(from.x - d.x, from.y - d.y)
-      if (distToDoor > 120) {
-        // Route through corridor first to avoid crossing desks
-        if (lineHitsAnyDesk(from.x, from.y, doorPt.x, doorPt.y)) {
-          const corridor = findBestCorridor(from, doorPt)
-          if (corridor) path.push(corridor)
-        }
-      }
-    }
-
-    path.push(doorPt)
-
-    // If entering mainOffice and destination is far from door, add corridor after door
-    if (toZone === 'mainOffice') {
-      const distFromDoor = Math.hypot(to.x - d.x, to.y - d.y)
-      if (distFromDoor > 120 && lineHitsAnyDesk(doorPt.x, doorPt.y, to.x, to.y)) {
-        const corridor = findBestCorridor(doorPt, to)
-        if (corridor) path.push(corridor)
-      }
-    }
+    const sides = DOOR_SIDES[exitDoor]
+    const fromSide = sides?.[fromZone] || DOORS[exitDoor]
+    const exitToZone = toZone === 'mainOffice' || fromZone === 'mainOffice' ? toZone : 'mainOffice'
+    const toSide = sides?.[exitToZone] || DOORS[exitDoor]
+    appendZoneRoute(path, from, fromSide, fromZone)
+    pushPoint(path, toSide)
   }
 
   // Multi-room transit (e.g., lounge → research goes through mainOffice)
   if (fromZone !== 'mainOffice' && toZone !== 'mainOffice') {
     const entryDoor = ROUTE.mainOffice?.[toZone]
     if (entryDoor && entryDoor !== exitDoor) {
-      const d = DOORS[entryDoor]
-      const doorPt = { x: d.x + (Math.random() - 0.5) * DOOR_JITTER, y: d.y + (Math.random() - 0.5) * 8 }
-      // Add corridor between the two doors if they're far apart
+      const sides = DOOR_SIDES[entryDoor]
+      const mainSide = sides?.mainOffice || DOORS[entryDoor]
+      const toSide = sides?.[toZone] || DOORS[entryDoor]
       const prevPt = path[path.length - 1] || from
-      if (lineHitsAnyDesk(prevPt.x, prevPt.y, doorPt.x, doorPt.y)) {
-        const corridor = findBestCorridor(prevPt, doorPt)
-        if (corridor) path.push(corridor)
-      }
-      path.push(doorPt)
+      appendZoneRoute(path, prevPt, mainSide, 'mainOffice')
+      pushPoint(path, toSide)
     }
   }
 
-  path.push(to)
+  const last = path[path.length - 1] || from
+  appendZoneRoute(path, last, to, toZone)
   return path
 }
 

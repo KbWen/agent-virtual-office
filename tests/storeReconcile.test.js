@@ -284,6 +284,24 @@ describe('clearExternalStatus — behavior/group-event reset contract (R68)', ()
     expect(dev.behavior).toBe('idle')
     expect(dev.expression).toBe('normal')
     expect(dev.bubble).toBeNull()
+    expect(dev.returnHomeOnIdle).toBe(true)
+  })
+
+  it('clearReturnHomeIntent consumes the return-home flag without changing idle state', () => {
+    const { applyExternalStatus, clearExternalStatus, clearReturnHomeIntent } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'dev', status: 'working', task: 'Bash', label: null }],
+      { source: 'claude-cli' },
+    )
+
+    clearExternalStatus('dev')
+    expect(useOfficeStore.getState().agents.dev.returnHomeOnIdle).toBe(true)
+
+    clearReturnHomeIntent('dev')
+    const dev = useOfficeStore.getState().agents.dev
+    expect(dev.returnHomeOnIdle).toBe(false)
+    expect(dev.status).toBe('idle')
+    expect(dev.behavior).toBe('idle')
   })
 
   it('does NOT clobber an in-progress group event when external status expires', () => {
@@ -304,6 +322,7 @@ describe('clearExternalStatus — behavior/group-event reset contract (R68)', ()
     expect(dev.expression).toBe('happy')
     expect(dev.bubble).toBe('In a meeting')
     expect(dev.status).toBe('idle')
+    expect(dev.returnHomeOnIdle).toBe(true)
   })
 
   it('clear-all path also resets behavior and respects group events', () => {
@@ -324,6 +343,29 @@ describe('clearExternalStatus — behavior/group-event reset contract (R68)', ()
     // qa is mid group event — must keep its animation.
     expect(qa.behavior).toBe('meeting')
     expect(qa.bubble).toBe('Standup')
+  })
+
+  it('multi-task clear-all marks every static active role to return home', () => {
+    const { applyExternalStatus, clearExternalStatus } = useOfficeStore.getState()
+    const activeRoles = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
+    applyExternalStatus(
+      activeRoles.map((role, i) => ({
+        agentId: role,
+        status: i === 2 ? 'blocked' : 'working',
+        task: ['Write', 'Read', 'Bash', 'Bash', 'Bash', 'WebSearch', 'authenticate', 'Edit'][i],
+        label: `multi-task-${role}`,
+      })),
+      { source: 'simulation', statusSource: 'external', integrationSource: 'simulation' },
+    )
+
+    clearExternalStatus()
+
+    const agents = useOfficeStore.getState().agents
+    for (const role of activeRoles) {
+      expect(agents[role], `${role} still exists`).toBeTruthy()
+      expect(agents[role].status, `${role}.status`).toBe('idle')
+      expect(agents[role].returnHomeOnIdle, `${role}.returnHomeOnIdle`).toBe(true)
+    }
   })
 })
 

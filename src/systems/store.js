@@ -264,6 +264,7 @@ const initAgents = (mode) => {
       expression: saved?.expression || 'normal',
       bubble: null,
       status: 'idle',  // always start idle — external hooks drive status
+      returnHomeOnIdle: false,
       deskItemCount: saved?.deskItemCount || { coffee: 0, sticky: 0, books: 0 },
       position: saved?.position || { ...home },
       targetPosition: saved?.position || { ...home },
@@ -341,6 +342,15 @@ export const useOfficeStore = create((set) => ({
           ...s.agents,
           [id]: { ...s.agents[id], inGroupEvent: false, groupTarget: null },
         },
+      }
+    }),
+
+  clearReturnHomeIntent: (id) =>
+    set((s) => {
+      const current = s.agents[id]
+      if (!current?.returnHomeOnIdle) return s
+      return {
+        agents: { ...s.agents, [id]: { ...current, returnHomeOnIdle: false } },
       }
     }),
 
@@ -595,6 +605,7 @@ export const useOfficeStore = create((set) => ({
             targetPosition: { ...pos },
             isMoving: false,
             status: 'idle',
+            returnHomeOnIdle: false,
             bubble: null,
             inGroupEvent: false,
             // Fresh, OWN deskItemCount — `...baseAgent` would otherwise (a) seed the
@@ -782,8 +793,8 @@ export const useOfficeStore = create((set) => ({
       // behavior/expression/bubble during a group event, so an external status that
       // expires mid-event must NOT wipe the in-progress meeting animation.
       const resetStaticAgent = (a) => {
-        if (a.inGroupEvent) return { ...a, status: 'idle' }
-        return { ...a, status: 'idle', behavior: 'idle', expression: 'normal', bubble: null }
+        if (a.inGroupEvent) return { ...a, status: 'idle', returnHomeOnIdle: true }
+        return { ...a, status: 'idle', behavior: 'idle', expression: 'normal', bubble: null, returnHomeOnIdle: true }
       }
       // Authoritative dynamic/static discriminator — the SAME one applyExternalStatus uses.
       // A `.session` check alone is wrong: a fallback-count or hash message routes to a

@@ -114,7 +114,7 @@ describe('calculatePath — structural invariants', () => {
     for (let i = 0; i < 10; i++) {
       const path = calculatePath(from, to)
       assertPathInvariants(path, to)
-      expect(path).toHaveLength(2) // [corridor/fallback, to]
+      expect(path.length).toBeGreaterThanOrEqual(2) // one or more safe corridor detours, then to
     }
   })
 
@@ -247,21 +247,21 @@ describe('calculatePath — additional zone coverage', () => {
     expect(path).toHaveLength(1)
   })
 
-  it('same zone meetingRoom → meetingRoom → direct [to]', () => {
+  it('same zone meetingRoom crossing the table → detours around table', () => {
     const from = { x: 650, y: 100 }
     const to   = { x: 750, y: 380 }
     const path = calculatePath(from, to)
     assertPathInvariants(path, to)
-    expect(path).toHaveLength(1)
+    expect(path.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('same zone mainOffice corridor-to-corridor (no desk blocking) → direct [to]', () => {
-    // y=290 sits between the desk rows — horizontal line hits no desk
+  it('same zone mainOffice corridor-to-corridor crossing whiteboard → detours', () => {
+    // y=290 sits between desk rows but crosses the whiteboard obstacle on the right.
     const from = { x: 300, y: 290 }
     const to   = { x: 550, y: 290 }
     const path = calculatePath(from, to)
     assertPathInvariants(path, to)
-    expect(path).toHaveLength(1)
+    expect(path.length).toBeGreaterThanOrEqual(2)
   })
 
   it('same point (from === to) → [to]', () => {
