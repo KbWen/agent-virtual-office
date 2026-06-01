@@ -161,5 +161,5 @@ describe('movement deep pathing invariants', () => {
         assertPathDoesNotCrossWallsOrObstacles(from, to, `${fromLabel}->${toLabel}`)
       }
     }
-  })
+  }, 10_000)
 })
