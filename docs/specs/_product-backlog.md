@@ -1,3 +1,10 @@
+---
+status: living
+title: Agent Virtual Office — Product Backlog
+created: 2026-05-29
+last_updated: 2026-06-02
+---
+
 # Agent Virtual Office — Product Backlog
 
 > Living index of planned features. Bootstrap reads this to detect ongoing product work.
