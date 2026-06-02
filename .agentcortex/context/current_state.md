@@ -11,8 +11,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-05-31
-- **Update Sequence**: 27
+- **Last Updated**: 2026-06-02
+- **Update Sequence**: 28
 - **ADR Index**:
   - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
   - `docs/adr/ADR-003-status-source-parity-for-codex.md`
@@ -112,6 +112,21 @@
 - [Category: packaging][Severity: MEDIUM][Trigger: dependency-presence-check] An installed package's CLI launcher must detect its own runtime deps via `require.resolve(dep, {paths:[root]})` (honors npm hoisting to a parent node_modules), not `fs.existsSync(root/node_modules/<dep>)` — the latter always misses hoisted deps and re-runs `npm install` on every launch.
 
 ## Ship History
+
+### Ship-codex-virtual-office-movement-server-tests-2026-06-02 (movement pathing fix + regression hardening)
+
+- PR #25 (https://github.com/KbWen/agent-virtual-office/pull/25), branch `codex/virtual-office-movement-server-tests`. Classification quick-win. CI green (Node 20 & 22); 1042/1042 vitest; Vite build clean. SSoT + work-log archive committed to the SAME PR (per user instruction, not a separate closure PR like #24).
+- **Codex base work (040afc8, 3471808)**: zone-aware `calculatePath` rewrite — door-side approach points, per-zone routing (main office route graph / meeting-table detour / lounge corridor), entrance zone aligned to the visual floor; static agents flagged `returnHomeOnIdle` on external-status clear and `AgentCharacter` walks them home; DOM test hooks `data-agent-id|status|behavior`; non-walking visual-position sync; favicon; deep pathing + multi-task regression suites; deep-sim timeout stabilization.
+- **Hardening batch (77c89d3, 2b450e7)** — added this session:
+  - Latent bug fixed: right-aisle corridor node `{550,290}` sat INSIDE the whiteboard obstacle once the whiteboard joined the line-crossing set (`MAIN_OFFICE_OBSTACLES = slice(0,9)`), making it a dead, never-selectable pathfinding node. Moved to `{505,290}` (left of whiteboard x≥525). Strict non-regression.
+  - Exported `MAIN_ROUTE_NODES`, `DOOR_SIDES`, `getZone` (additive).
+  - `tests/movementLayoutInvariants.test.js` (4): route nodes / door anchors must be on-floor, off-furniture, in their claimed zone, door anchors joined by an on-floor segment — guards against hardcoded-layout drift (which is exactly how the dead node slipped in).
+  - `tests/returnHomeLifecycle.test.js` (3): `clearExternalStatus` flags every static role to return home; intent consumed exactly once (idempotent, idle-safe); every return route TERMINATES at home (≤2px) — the endpoint guarantee the deep test lacked.
+  - `tests/movementPathingFuzz.test.js` (1, 1000 seeded mulberry32 pairs): randomized room-to-room routes never cross a wall or furniture. Zero violations.
+  - Observability: RAF watchdog in `AgentCharacter.jsx` now calls `store.recordWatchdogRestart()` + DEV `console.warn` instead of restarting silently. New transient `watchdogRestarts` store field (excluded from persisted snapshot — verified) + 2 store tests.
+- **Decision**: favicon PNG/apple-touch-icon fallback intentionally NOT added — without a real binary asset it would 404, regressing the console-cleanliness the SVG favicon was added for. Out of proportion to value.
+- **Review**: 0 security findings (A01–A10); secret scan clean (only AVO-108 LLM-token references); no dependency changes; Red Team not auto-triggered for quick-win.
+- **Known (pre-existing, not from this work)**: validator reports README mojibake + document-governance + `plan->ship` gate-chain FAILs — all diagnosed earlier as framework false-positives / codex-log gate-naming, none touched by this PR.
 
 ### main-2026-05-31 (install docs parity + cli.js hoist-safe launch)
 
