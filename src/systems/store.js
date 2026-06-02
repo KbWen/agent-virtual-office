@@ -286,6 +286,11 @@ export const useOfficeStore = create((set) => ({
   isPaused: typeof window !== 'undefined' && (() => { try { return localStorage.getItem('office-paused') === 'true' } catch { return false } })(),
   reducedMotion: typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || false,
   showWorkflow: false,
+  // Diagnostic counter: how many times the AgentCharacter RAF watchdog had to restart a
+  // stalled walk loop. A silent restart hides the underlying stall; surfacing a count lets
+  // dev builds notice if frames are being dropped (tab throttling, HMR, etc.). Transient —
+  // never persisted.
+  watchdogRestarts: 0,
 
   setAgentBehavior: (id, behavior, expression, bubble) =>
     set((s) => {
@@ -353,6 +358,8 @@ export const useOfficeStore = create((set) => ({
         agents: { ...s.agents, [id]: { ...current, returnHomeOnIdle: false } },
       }
     }),
+
+  recordWatchdogRestart: () => set((s) => ({ watchdogRestarts: s.watchdogRestarts + 1 })),
 
   // Batch version: apply group events to multiple agents in one state update
   setMultipleAgentGroupEvents: (updates) =>

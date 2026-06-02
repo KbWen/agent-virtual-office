@@ -797,6 +797,10 @@ function AgentCharacter({ agent }) {
       if (Date.now() - lastFrameWallTimeRef.current < 1500) return
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
+      // Surface the stall instead of restarting silently — a rising count means frames
+      // are being dropped somewhere (tab throttling, HMR, an exception in animate()).
+      useOfficeStore.getState().recordWatchdogRestart()
+      if (import.meta.env?.DEV) console.warn(`[watchdog] restarted stalled walk loop for "${id}"`)
       startRaf()
     }, 1000)
     return () => clearInterval(watchdog)
