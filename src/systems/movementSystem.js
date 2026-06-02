@@ -181,7 +181,7 @@ const ZONES = [
   { id: 'research',    x1: 460, y1: 418, x2: 800, y2: 560 },
 ]
 
-function getZone(x, y) {
+export function getZone(x, y) {
   for (const z of ZONES) {
     if (x >= z.x1 && x < z.x2 && y >= z.y1 && y < z.y2) return z.id
   }
@@ -208,11 +208,11 @@ const CORRIDORS = [
   { x: 80,  y: 290 },  // left aisle
   { x: 300, y: 180 },  // top aisle center
   { x: 300, y: 290 },  // mid aisle center (between desk rows)
-  { x: 550, y: 290 },  // right aisle
+  { x: 505, y: 290 },  // right aisle — kept left of the whiteboard obstacle (x≥525)
   { x: 300, y: 385 },  // bottom aisle (below dev/ops desks)
 ]
 
-const MAIN_ROUTE_NODES = [
+export const MAIN_ROUTE_NODES = [
   ...CORRIDORS,
   { x: 80,  y: 180 },
   { x: 550, y: 180 },
@@ -309,7 +309,7 @@ function findSafePolyline(from, to, nodes, obstacles) {
   return route
 }
 
-const DOOR_SIDES = {
+export const DOOR_SIDES = {
   entranceToMain: {
     entrance:   { x: 115, y: 125 },
     mainOffice: { x: 115, y: 176 },
