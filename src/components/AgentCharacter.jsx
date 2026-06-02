@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
 import { classifyTask } from '../systems/classify'
-import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange } from '../systems/movementSystem'
+import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale } from '../i18n'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
@@ -677,9 +677,11 @@ function AgentCharacter({ agent }) {
   const targetPosRef = useRef(null)
   const rafRef = useRef(null)
   const lastTimeRef = useRef(null)
+  const lastFrameWallTimeRef = useRef(0)
   const isUnmountedRef = useRef(false)
   const [renderPos, setRenderPos] = useState(null)
   const [isWalking, setIsWalking] = useState(false)
+  const visualReady = renderPos !== null
   // Use refs for callbacks accessed inside RAF to avoid stale closures
   const onWaypointReachedRef = useRef(null)
 
@@ -703,6 +705,26 @@ function AgentCharacter({ agent }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentPresent])
 
+  // Keep the rendered position aligned with authoritative store corrections when
+  // the character is not actively walking. This makes external resets, deterministic
+  // simulations, and restored persisted positions visible immediately after mount.
+  useEffect(() => {
+    if (!agentState?.position || isWalking || agentState.isMoving) return
+    const next = agentState.position
+    const current = visualPosRef.current
+    if (current && Math.hypot(current.x - next.x, current.y - next.y) < 1) return
+    visualPosRef.current = { ...next }
+    targetPosRef.current = { ...(agentState.targetPosition || next) }
+    setRenderPos({ ...next })
+  }, [
+    agentState?.position?.x,
+    agentState?.position?.y,
+    agentState?.targetPosition?.x,
+    agentState?.targetPosition?.y,
+    agentState?.isMoving,
+    isWalking,
+  ])
+
   // Walk animation timer (leg alternation)
   useEffect(() => {
     if (!isWalking) return
@@ -716,12 +738,14 @@ function AgentCharacter({ agent }) {
   const startRaf = useCallback(() => {
     if (rafRef.current) return // already running
     lastTimeRef.current = null
+    lastFrameWallTimeRef.current = Date.now()
 
     const animate = (timestamp) => {
       if (isUnmountedRef.current || !visualPosRef.current || !targetPosRef.current) {
         rafRef.current = null
         return
       }
+      lastFrameWallTimeRef.current = Date.now()
 
       if (!lastTimeRef.current) lastTimeRef.current = timestamp
       const dt = Math.min((timestamp - lastTimeRef.current) / 1000, 0.1)
@@ -763,6 +787,24 @@ function AgentCharacter({ agent }) {
 
     rafRef.current = requestAnimationFrame(animate)
   }, [])
+
+  // Browser throttling, tab restores, or hot reload can occasionally leave a character
+  // marked as walking with a stale RAF handle. Restart the loop instead of letting the
+  // store stay stuck at isMoving:true forever.
+  useEffect(() => {
+    if (!isWalking) return
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastFrameWallTimeRef.current < 1500) return
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+      // Surface the stall instead of restarting silently — a rising count means frames
+      // are being dropped somewhere (tab throttling, HMR, an exception in animate()).
+      useOfficeStore.getState().recordWatchdogRestart()
+      if (import.meta.env?.DEV) console.warn(`[watchdog] restarted stalled walk loop for "${id}"`)
+      startRaf()
+    }, 1000)
+    return () => clearInterval(watchdog)
+  }, [isWalking, startRaf])
 
   // Cleanup RAF + deferred timers on unmount
   useEffect(() => {
@@ -836,6 +878,21 @@ function AgentCharacter({ agent }) {
     setIsWalking(true)
     startRaf()
   }, [id, startRaf])
+
+  useEffect(() => {
+    if (!agentState?.returnHomeOnIdle || agentState.status !== 'idle' || agentState.inGroupEvent || isWalking) return
+    const home = HOME_POSITIONS[id]
+    const current = visualPosRef.current
+    if (!home || !current) return
+    const store = useOfficeStore.getState()
+    store.clearReturnHomeIntent(id)
+    if (Math.hypot(current.x - home.x, current.y - home.y) < 5) return
+    const path = calculatePath(current, home)
+    if (path.length === 0) return
+    movingRef.current = true
+    pathRef.current = path.slice(1)
+    startWalkTo(path[0])
+  }, [agentState?.returnHomeOnIdle, agentState?.status, agentState?.inGroupEvent, id, isWalking, startWalkTo, visualReady])
 
   // Behavior scheduling — wrapped in try/catch to guarantee the chain never breaks
   const doSchedule = useCallback(() => {
@@ -962,7 +1019,7 @@ function AgentCharacter({ agent }) {
         startWalkTo(path[0])
       }
     }
-  }, [agentState?.groupTarget, startWalkTo])
+  }, [agentState?.groupTarget, startWalkTo, visualReady])
 
   // Start behavior loop — with watchdog to restart if chain dies
   useEffect(() => {
@@ -1038,6 +1095,9 @@ function AgentCharacter({ agent }) {
   return (
     <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}
       style={{ cursor: 'pointer' }} onClick={handleClick}
+      data-agent-id={id}
+      data-agent-status={state.status || 'idle'}
+      data-agent-behavior={state.behavior || 'idle'}
       role="button" aria-label={name} tabIndex={0}
       onKeyDown={handleKeyDown}>
       {/* AVO-102: thinking aura — only on active agents at elevated effort, behind the glow */}

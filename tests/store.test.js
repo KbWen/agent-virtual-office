@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useOfficeStore } from '../src/systems/store.js'
+import { useOfficeStore, createPersistedState } from '../src/systems/store.js'
 
 // ─── markIntegrationProbe — state machine ────────────────────────────
 describe('store — markIntegrationProbe state machine', () => {
@@ -185,5 +185,27 @@ describe('store — setActiveWorkflow same-value guard', () => {
     useOfficeStore.setState({ activeWorkflow: 'Build' })
     useOfficeStore.getState().setActiveWorkflow('Build')
     expect(useOfficeStore.getState().activeWorkflow).toBe('Build')
+  })
+})
+
+// ─── recordWatchdogRestart — diagnostic counter ──────────────────────
+describe('store — recordWatchdogRestart', () => {
+  beforeEach(() => {
+    useOfficeStore.setState({ watchdogRestarts: 0 })
+  })
+
+  it('starts at zero and increments monotonically per call', () => {
+    expect(useOfficeStore.getState().watchdogRestarts).toBe(0)
+    useOfficeStore.getState().recordWatchdogRestart()
+    useOfficeStore.getState().recordWatchdogRestart()
+    useOfficeStore.getState().recordWatchdogRestart()
+    expect(useOfficeStore.getState().watchdogRestarts).toBe(3)
+  })
+
+  it('is transient — excluded from the persisted snapshot, so it resets on reload', () => {
+    useOfficeStore.getState().recordWatchdogRestart()
+    expect(useOfficeStore.getState().watchdogRestarts).toBe(1) // live state holds it
+    const persisted = createPersistedState(useOfficeStore.getState())
+    expect(persisted.watchdogRestarts).toBeUndefined() // but it is never written to disk
   })
 })

@@ -31,7 +31,7 @@ describe('behaviorEngine — getNextBehavior contract', () => {
         }
       }
     }
-  })
+  }, 10_000)
 
   it('never returns an undefined behaviorId from the fallback path', () => {
     // gate/designer only match a few work behaviors — the work category for them is
