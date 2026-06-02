@@ -12,10 +12,12 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-06-02
-- **Update Sequence**: 28
+- **Update Sequence**: 29
 - **ADR Index**:
-  - `.agentcortex/adr/ADR-001-vnext-self-managed-architecture.md`
-  - `docs/adr/ADR-003-status-source-parity-for-codex.md`
+  - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
+  - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
+  - docs/adr/ADR-003-status-source-parity-for-codex.md — status-source parity for Codex
+  - .agentcortex/adr/ADR-001-vnext-self-managed-architecture.md — framework scaffold mirror of ADR-001
 - **Active Backlog**: `docs/specs/_product-backlog.md`
   - 15 features across 5 themes: 辦公室生命感、資訊密度、互動性、整合延伸、視覺升級
   - **Done (branch `fix/agent-inspector-hooks-crash`, 2026-04-02)**:
@@ -112,6 +114,14 @@
 - [Category: packaging][Severity: MEDIUM][Trigger: dependency-presence-check] An installed package's CLI launcher must detect its own runtime deps via `require.resolve(dep, {paths:[root]})` (honors npm hoisting to a parent node_modules), not `fs.existsSync(root/node_modules/<dep>)` — the latter always misses hoisted deps and re-runs `npm install` on every launch.
 
 ## Ship History
+
+### Ship-chore-migrate-agentic-os-v1.2.0-2026-06-02 (governance brain migration + SSoT reconciliation)
+
+- Migrated the governance brain from **AgentCortex v5.4.0** (source repo went private) to public **Agentic OS v1.2.0** (`source_commit 2354c5f`). Delivered on branch `chore/migrate-agentic-os-v1.2.0` / PR #32 (kept open for human review — NOT merged at this ship).
+- 136 framework files (65 new / 68 updated / 3 deprecated-removed). App `src/`/`tests/` untouched; `npm test` 1042 passed; build clean; CI Node 20/22 green.
+- **SSoT reconciliation (this ship's guarded write)**: corrected the ADR Index — added the previously-missing `docs/adr/ADR-002-multi-worktree-session-design.md` and switched to the plain-path format (no backticks) so the v1.2.0 validator's reverse-check no longer reports phantom entries. Clears the `SSoT ADR Index completeness` FAIL.
+- Also (separate commits on the same branch): added v1.2.0-required lifecycle frontmatter to `_product-backlog.md`.
+- **Remaining post-migration drift (NOT fixed here, by design)**: 13 Global Lessons not yet hash-chained (`[prev:]`), and 3 shipped specs (`agent-inspector-info-enhancement`, `character-growth-system`, `clickable-office-objects`) declare `primary_domain` without a `## Domain Decisions` section — both surfaced only because the v1.2.0 validator is stricter than v5's. Tracked for a deliberate follow-up.
 
 ### Ship-codex-virtual-office-movement-server-tests-2026-06-02 (movement pathing fix + regression hardening)
 
