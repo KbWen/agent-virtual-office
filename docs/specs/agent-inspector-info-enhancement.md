@@ -4,8 +4,6 @@ title: Agent Inspector Info Enhancement
 source: external
 source_doc: docs/specs/_product-backlog.md#5
 created: 2026-04-08
-primary_domain: none
-secondary_domains: []
 ---
 
 # Agent Inspector Info Enhancement

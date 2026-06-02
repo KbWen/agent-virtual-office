@@ -1,20 +1,21 @@
-# AgentCortex Runtime v5
+# Agentic OS Runtime — Anti-Drift Engine
 
 ## Antigravity Hard-Path Enforcement Overlay
 
-Version: v5.0
-Date: 2026-03-04
+Version: v1.2.0
+Date: 2026-04-17
 Scope: **Antigravity environments** (token-generation agents where shell exit codes don’t halt execution)
 
 ### Why v5 exists
 
-AgentCortex v3.5+ already enforces strong process gates via workflows:
+Agentic OS already enforces strong process gates via workflows:
 
 * `/bootstrap` reads SSoT + Work Log, locks classification, and only allows upward changes via rollback + re-entry
 * `/plan` is “NO CODING YET” and requires spec for feature/architecture-change
 * `/implement` has a hard gate `state >= IMPLEMENTABLE` and scope escalation checks
 * `/ship` requires state TESTED and handoff for non-tiny-fix, then updates SSoT via guarded writes. `/retro` is the only non-ship SSoT write exception, and only for structured Global Lessons.
 * AGENTS.md is injected every turn and already defines write isolation + evidence requirements
+* Handoff timing follows the cross-platform SSoT `AGENTS.md §Context Pruning` (context occupancy + phase boundary, NOT turn-count); per-platform caching/compaction detail in `.agentcortex/docs/guides/token-governance.md §6.1`. Antigravity/Gemini's large window (1M–2M) + implicit caching means fewer handoffs — reason in occupancy %, not absolute turns.
 
 **Remaining issue:** Antigravity sometimes “continues anyway” even when a workflow says STOP (because STOP is still text).
 Runtime v5 adds **hard generation-path checkpoints** that are short, deterministic, and token-cheap.
@@ -276,7 +277,7 @@ Docs:
 
 To avoid the model “choosing tiny-fix because it’s easiest,” add this deterministic boundary:
 
-* `< 5 lines` and **no logic change** → `tiny-fix`
+* `< 3 files` and **no semantic change** → `tiny-fix` (canonical threshold — see `AGENTS.md §Agentic OS Runtime v1` rule 2 / `engineering_guardrails.md §10.1, §10.3`)
 * **bug fix** isolated to one area/module → `hotfix`
 * **new behavior** / cross-file / new module → `feature`
 
@@ -286,7 +287,7 @@ If “tiny-fix” touches logic or multiple files, escalate to `hotfix`.
 
 ## 7) Evidence discipline remains canonical
 
-AgentCortex already enforces “NO EVIDENCE = NO COMPLETION” at the AGENTS.md level and in shipping.
+Agentic OS already enforces “NO EVIDENCE = NO COMPLETION” at the AGENTS.md level and in shipping.
 Runtime v5 clarifies the minimum:
 
 * At least **one** test command OR verification output must be recorded (Work Log Evidence section).
@@ -296,11 +297,9 @@ Runtime v5 clarifies the minimum:
 
 ## 8) Sentinel Check (Injection Diagnostic)
 
-**SENTINEL: ACX-READ-OK**
+**Canonical sentinel: `⚡ ACX`** (defined in `AGENTS.md §Agentic OS Runtime v1` rule 11).
 
-Add this to the first line of `AGENTS.md`.
-Every response MUST end with `[ACX-READ-OK]`.
-If this token is missing, it signifies the prompt injection is broken or truncated.
+Every response MUST end with `⚡ ACX`. If this marker is missing, the prompt injection is broken or truncated. `validate.sh`/`validate.ps1` accept the emoji form `⚡ ACX` or the plain `ACX` tag when auditing Work Log Phase Summaries.
 
 ---
 

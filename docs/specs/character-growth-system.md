@@ -4,8 +4,6 @@ title: Character Growth System
 source: external
 source_doc: docs/specs/_product-backlog.md#1
 created: 2026-05-16
-primary_domain: none
-secondary_domains: []
 ---
 
 # Character Growth System

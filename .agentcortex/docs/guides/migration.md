@@ -11,7 +11,7 @@ The core goal of upgrading to vNext: **"Transition from process-driven to state-
 ### Step 1: Code Update
 
 ```bash
-./deploy_brain.sh /path/to/project-a
+./installers/deploy_brain.sh /path/to/project-a
 ```
 
 > [!NOTE]
@@ -25,7 +25,7 @@ Instruct the AI to perform a migration scan:
 
 ```text
 Please run /bootstrap.
-We've just upgraded to vNext v3.5.2.
+We've just upgraded to Agentic OS v1.2.0.
 Please scan the project for existing documentation and perform the following:
 1. Identify scattered notes, specs, and ADRs; move them to correct directories and rename.
 2. Initialize .agentcortex/context/current_state.md.
@@ -60,7 +60,7 @@ Focus: **"Catch-up; the AI organizes, no manual preprocessing needed."**
 ### Step 1: Environment Deployment
 
 ```bash
-./deploy_brain.sh /path/to/project-b
+./installers/deploy_brain.sh /path/to/project-b
 ```
 
 ### Step 2: Raw Material Processing & Archiving

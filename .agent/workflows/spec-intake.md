@@ -1,5 +1,5 @@
 ---
-description: Workflow for importing external specs (from other LLMs, humans, or documents) into the AgentCortex governance system.
+description: Workflow for importing external specs (from other LLMs, humans, or documents) into the Agentic OS governance system.
 ---
 # /spec-intake
 
@@ -19,6 +19,13 @@ Accept spec from the user in ANY of these forms — do NOT ask the user to refor
 - **Mixed**: Partial spec + verbal description
 
 If the spec source is a file path, READ it immediately. Do NOT ask the user to paste it again.
+
+### Pre-flight: Research Artifacts
+
+Before processing any input, glob `docs/specs/_research-*.md`:
+- If files exist: list them to the user and ask: `"Found research files: <list>. Load which as background context for this intake? (all / specific / none)"`. Do NOT auto-prepend — stale files from abandoned sessions cause cross-contamination.
+- On the user's selection: read the chosen files and use their content as background context. Do NOT ask the user to re-explain findings already captured there.
+- **After** the Feature Inventory is written to `_product-backlog.md` (or a single feature spec is generated), delete each **consumed** `_research-*.md` file (only the ones the user selected). Files the user rejected as irrelevant should also be flagged: `"Delete stale research file <name>? (yes/no)"` — delete on confirmation. These files are transient by design.
 
 ---
 
@@ -51,7 +58,7 @@ If the spec source is a file path, READ it immediately. Do NOT ask the user to p
    - Step 2a (Decomposition): read relevant sections of `_raw-intake.md`
    - Step 3 (Feature Spec Generation): read ONLY the section of `_raw-intake.md` relevant to the selected feature
 
-4. **After decomposition is complete** (Feature Inventory saved to `_product-backlog.md` and at least one feature spec generated), `_raw-intake.md` MAY be deleted or archived. It has served its purpose — the structured specs are now the SSoT.
+4. **After decomposition is complete** (Feature Inventory saved to `_product-backlog.md` and at least one feature spec generated), `_raw-intake.md` MUST be deleted. It has served its purpose — the structured specs are now the SSoT. `/ship` MUST verify `_raw-intake.md` does not exist for the current intake; if it does, delete it before archival. Previously archived `_raw-intake-<date>.md` files MUST also be deleted by `/ship` once all features from that intake are Shipped or Cancelled.
 
 **Why this matters**:
 - Conversation context stays lean: only the Feature Inventory table (~200 tokens) needs to be in active conversation, not the full spec
@@ -67,36 +74,72 @@ After reading the input, classify it as one of:
 
 | Type | Signal | Path |
 |---|---|---|
-| **Single-feature spec** | One coherent goal, one set of ACs | → Step 3 (direct quality review) |
+| **Single-feature spec** | One coherent goal, one set of ACs | → Step 2b (label & cluster check), then Step 3 |
 | **Multi-feature / product spec** | Multiple distinct features, epics, or modules | → Step 2a (decompose first) |
 | **Vague / incomplete intent** | No clear goal or ACs | → Ask ONE targeted question, append answer to `_raw-intake.md`, then re-enter Step 2 |
+
+### 2b. Label & Cluster Check (for single-feature specs)
+
+Before generating the feature spec, do a quick backlog scan:
+
+1. **Assign Kind, Labels, and Priority**:
+   - **Kind**: `feature` (planned by user) · `review-finding` (surfaced by review/audit) · `quick-win` (small, no spec needed) · `hotfix-spawn` (systemic issue from a hotfix). Choose the one that best describes the origin.
+   - **Labels**: 1–2 domain words. **Label reuse rule**: if `_product-backlog.md` exists, read the existing label set first and reuse the closest match — do NOT invent a new label when an existing one fits. When ambiguous, show existing labels and ask the user to pick.
+   - **Priority**: Infer from context or ask: `P0` (blocking) · `P1` (high value) · `P2` (nice to have) · `—` (defer decision).
+
+2. **Scan existing backlog**: If `docs/specs/_product-backlog.md` exists, check for items sharing the same label.
+   - **Match found**: Surface it:
+     ```
+     📎 Related items found in backlog (label: '[label]'): #N <Feature>, #M <Feature>.
+     Treat this as part of that cluster, or as a standalone feature?
+     cluster    → adds this item to the backlog alongside the existing items (no new isolated entry)
+     standalone → treats this as an independent feature with its own backlog row
+     ```
+     If cluster → add this item to the backlog under that label instead of creating a new isolated spec entry. Check if 3+ same-label items now exist with no parent spec — if so, suggest creating one (same prompt as §2a step 2). **Suppression**: if the user replies "no, don't ask again" or equivalent, append `<!-- cluster-declined: <label> <YYYY-MM-DD> count:<N> -->` to the backlog's `## Source Summary` section (where `count` is the current same-label item count at decline time). Subsequent cluster checks MUST skip that label UNLESS the same-label item count has grown by ≥3 since decline, OR 90 days have passed — whichever comes first.
+   - **No match**: Proceed to Step 3 with the assigned label recorded.
 
 ### 2a. Decomposition (for multi-feature / product specs)
 
 When the spec is large, read from `docs/specs/_raw-intake.md` (NOT from conversation memory):
 
-1. Extract a **Feature Inventory** — one row per distinguishable feature/module:
+1. Extract a **Feature Inventory** — one row per distinguishable feature/module, assigning Kind, Labels, and rough Priority per item:
 
    ```
    ## Feature Inventory (extracted from spec)
-   | # | Feature | Rough Tier | Dependencies | Notes |
-   |---|---|---|---|---|
-   | 1 | User Auth | feature | — | OAuth + email |
-   | 2 | Dashboard | feature | #1 | real-time data |
-   | 3 | DB Schema | architecture-change | — | multi-tenant |
+   | # | Feature | Kind | Labels | Priority | Rough Tier | Dependencies |
+   |---|---|---|---|---|---|---|
+   | 1 | User Auth | feature | auth | P0 | feature | — |
+   | 2 | Dashboard | feature | ui, analytics | P1 | feature | #1 |
+   | 3 | DB Schema | feature | infra | P2 | architecture-change | — |
    ```
 
    Rough Tier uses classification from `engineering_guardrails.md §10.1`.
 
-2. Save full product context to `docs/specs/_product-backlog.md` (see §6 for format).
+   **Label reuse rule**: If `_product-backlog.md` already exists, extract the distinct label values currently in use (scan the `Labels` column). Match new items to existing labels first — only create a new label when none of the existing ones fit. This prevents vocabulary drift across sessions (`auth` vs `authentication` vs `login` are the same domain; pick whichever is already in the backlog). When unsure, show the existing label set and ask the user to pick.
 
-3. **Present inventory to user and STOP**:
+   **Kind assignment**: All items extracted from a user-provided spec default to `feature` or `quick-win` based on scope. Items surfaced by a `/review` or `/audit` session should be marked `review-finding`. Items that reveal a systemic issue during a hotfix are `hotfix-spawn`.
+
+   **Priority assignment**: Infer from spec signals (blocking dependencies → P0, core user-facing → P1, polish/optional → P2). When signals are ambiguous, default to `—` and ask the user after presenting the inventory.
+
+2. **Label cluster check**: Scan **the inventory just extracted** for internal clusters (3+ items in the same inventory sharing a label — these are candidates to unify before creating individual specs). Also read any existing `_product-backlog.md` `## Source Summary` for `<!-- cluster-declined: ... -->` markers and skip suppressed/unexpired labels. For each non-suppressed cluster found, surface it before saving:
+   ```
+   ⚠️ Label cluster detected: [N] items share label '[label]' with no parent spec.
+   Recommend creating a feature spec to unify them before proceeding?
+   yes → create unifying spec first, link items via Dependencies
+   no  → proceed with individual items as-is
+   never ask again → records suppression marker; re-prompts if +3 items OR 90 days
+   ```
+   **Why scan the inventory, not the backlog**: on first import the backlog does not exist yet. Scanning only the saved backlog would make this check a no-op for the most common "first PRD" scenario.
+
+3. Save full product context to `docs/specs/_product-backlog.md` (see §6 for format). **Merge guard**: if an existing backlog lacks any of the new columns (`Kind`, `Labels`, `Priority`), add those columns and backfill existing rows with `—` before appending new rows. Apply all three together — do not add columns piecemeal across multiple sessions.
+
+4. **Present inventory to user and STOP**:
    ```
    Spec decomposed into [N] features. Which feature should we start with?
    (Reply with number or name — I'll generate the feature spec and run bootstrap.)
    ```
 
-4. After user selects, proceed to Step 3 for **that feature only**.
+5. After user selects, proceed to Step 3 for **that feature only**.
 
 ---
 
@@ -108,10 +151,11 @@ Read ONLY the relevant section of `docs/specs/_raw-intake.md` for the selected f
 
 **Fallback (if `_raw-intake.md` was deleted)**: This happens during continuation (§8a) when the original raw spec was cleaned up after the first feature. In this case, generate the feature spec from: (1) `_product-backlog.md` Feature Inventory row + Source Summary, (2) any shipped feature specs as style reference, (3) dependency specs for API/contract alignment, (4) targeted questions if critical details are missing. Mark all non-obvious fields as `[INFERRED]`.
 
-**Template Selection**: Before generating, check if an APP feature spec template exists:
-1. Check `.agentcortex/templates/spec-app-feature-<project>.md` (project-customized template from /app-init)
-2. If not found, check `.agentcortex/templates/spec-app-feature.md` (generic APP template)
-3. If neither exists, use the default format below.
+**Template Selection**: Before generating, resolve the project-customized template:
+1. **Read `Project Name` from SSoT**: If `current_state.md` contains `- **Project Name**: <value>` and the value is not `(set by /app-init)` or empty, use that value as `<project>`. Check `.agentcortex/templates/spec-app-feature-<project>.md`.
+2. **Glob fallback** (if Project Name absent or template not found): glob `.agentcortex/templates/spec-app-feature-*.md`, exclude the base `spec-app-feature.md`. If exactly one match, use it. If multiple matches, surface the filenames and ask the user which to use.
+3. If no project-customized template found, check `.agentcortex/templates/spec-app-feature.md` (generic APP template).
+4. If neither exists, use the default format below.
 
 When an APP template is found, use it as the structure — include only the sections relevant to this feature (API, DB, Frontend, Auth). Remove sections that don't apply. Read the project ADR to determine which sections are applicable.
 
@@ -201,6 +245,28 @@ Quality Tier: READY | NEEDS-ADJUSTMENT | INCOMPLETE
 
 ---
 
+## 4.5 Clarification Pass (≤3 questions, optional)
+
+> Borrowed from spec-kit's Clarify gate, integrated as an in-step hook (not a new phase) to minimize governance friction.
+
+After Quality Assessment but **before** §5 Confirm & Freeze:
+
+1. Self-check: scan the generated spec for fields whose ambiguity would cause `/plan` to ask the user the same question later. Examples:
+   - Failure-mode policy that the spec leaves unspecified (e.g., "on validation error, retry / fail-fast / queue?")
+   - Boundary that affects API surface (e.g., "max payload size?")
+   - Cross-cutting policy (e.g., "logging required at boundary X?")
+2. If you find ≥1 such gap AND your `Confidence` for the spec is < 90%, batch up to **3** questions in a single message and STOP. Tag each question to the spec section it would resolve.
+3. If your `Confidence` for the spec is ≥ 90% (no critical ambiguity), SKIP this step entirely — do NOT ask theatrical questions. Proceed to §5.
+4. After user answers, write resolutions into a new spec section:
+   ```markdown
+   ## Clarifications Resolved
+   - <Q1 topic>: <answer applied to AC/Constraint/...>
+   - <Q2 topic>: ...
+   ```
+5. Hard cap: **one** Clarification Pass round per spec. If after answering, more questions surface, classify the spec as `INCOMPLETE` and route to existing §4 Q&A protocol (max 2 rounds, batched).
+
+**Anti-pattern**: do not use this pass to re-ask anything already answered in source material, dependency specs, or `current_state.md` Global Lessons. The pass exists to reduce `/plan` churn, not to perform interrogation.
+
 ## 5. Confirm & Freeze
 
 After user confirms (any affirmative response):
@@ -233,11 +299,16 @@ last_updated: <date>
 <1-3 sentence summary of the original product spec>
 
 ## Feature Inventory
-| # | Feature | Spec File | Tier | Status | Dependencies |
-|---|---|---|---|---|---|
-| 1 | User Auth | docs/specs/user-auth.md | feature | In Progress | — |
-| 2 | Dashboard | — | feature | Pending | #1 |
-| 3 | DB Schema | — | architecture-change | Pending | — |
+| # | Feature | Kind | Labels | Priority | Spec File | Tier | Status | Dependencies |
+|---|---|---|---|---|---|---|---|---|
+| 1 | User Auth | feature | auth | P0 | docs/specs/user-auth.md | feature | In Progress | — |
+| 2 | Dashboard | feature | ui, analytics | P1 | — | feature | Pending | #1 |
+| 3 | DB Schema | feature | infra | P2 | — | architecture-change | Pending | — |
+| 4 | Fix N+1 query in UserList | review-finding | api | P1 | — | quick-win | Pending | — |
+
+## Column Reference
+- **Kind**: `feature` (planned) · `quick-win` (small planned) · `review-finding` (surfaced by review/audit) · `hotfix-spawn` (systemic issue from hotfix)
+- **Priority**: `P0` (blocking, do now) · `P1` (high value, next batch) · `P2` (nice to have) · `—` (not yet prioritized)
 
 ## Status Key
 - Pending: not yet started
@@ -321,6 +392,7 @@ Amendment: docs/specs/user-auth-sso.md [Draft]
 | Action | Trigger | What AI does |
 |---|---|---|
 | **Reorder** | "先做 #5" | Update `_product-backlog.md` order. Check dependency conflicts. |
+| **Reprioritize** | "這個 P0", "升到優先", "#3 改成 P1" | **Before updating**: if upgrading to P0, count existing P0 pending items. If count ≥ 3, ask: `"You currently have N P0 items (#A, #B, #C). Confirm adding another P0, or tell me which to downgrade?"` — wait for user reply before writing. Then update `Priority` field for the named item(s). Append an audit line to backlog `## Source Summary`: `- <YYYY-MM-DD>: #N Priority <old>→<new>`. If multiple items conflict (two P0s with dependency), warn: `"⚠️ Both #N and #M are P0 but #M depends on #N — confirm ordering?"` |
 | **Defer** | "先不做 #3" | Set status → `Deferred` in backlog. If spec was already generated, leave it as `draft` (not frozen). |
 | **Un-defer** | "恢復 #3", "un-defer #3" | Set status → `Pending` in backlog. If spec exists as `draft`, it remains usable. |
 | **Cancel** | "不做 #3 了" | Set status → `Cancelled` in backlog. If spec exists, add `status: cancelled` to frontmatter. Remove from Spec Index. |
@@ -367,5 +439,5 @@ Feature #3: fewer [NEEDS-CONFIRMATION] tags because AI has learned the project's
 4. **Backlog is living**: `_product-backlog.md` is never frozen. It is updated throughout the product lifecycle.
 5. **Conflict check**: Before writing a new spec, check `current_state.md` Spec Index for existing specs that overlap. If overlap found, output: `⚠️ Existing spec [file] may overlap. Extend, replace, or keep independent?`
 6. **`living` status**: `_product-backlog.md` uses `status: living` in frontmatter. This is a distinct status from `draft`/`frozen` — it signals a persistent tracking document that MUST NOT be frozen or treated as a spec artifact by §4.2 Spec Freezing rules. AI MUST NOT attempt to freeze or review `living`-status documents for freeze compliance.
-7. **`raw` status**: `_raw-intake.md` uses `status: raw` in frontmatter. This is a temporary artifact — unprocessed input that exists only until decomposition is complete. It is NOT a spec and MUST NOT appear in the Spec Index. Delete or archive after all relevant feature specs are generated.
+7. **`raw` status**: `_raw-intake.md` uses `status: raw` in frontmatter. This is a temporary artifact — unprocessed input that exists only until decomposition is complete. It is NOT a spec and MUST NOT appear in the Spec Index. MUST be deleted (not archived) after all relevant feature specs are generated. Any lingering `_raw-intake*.md` files are dead data and `/ship` MUST clean them up.
 8. **`cancelled` status**: Set by §8c Cancel action. A cancelled spec is permanently inert — it MUST NOT appear in the Spec Index, MUST NOT be read during bootstrap Spec Scope, and MUST NOT be frozen or unfrozen. It exists only as historical record.

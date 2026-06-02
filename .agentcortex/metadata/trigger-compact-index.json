@@ -7,108 +7,104 @@
     "bootstrap-recommended-skills": {
       "load_policy": "always",
       "cost_risk": "medium",
-      "kind": "workflow"
+      "kind": "workflow",
+      "user_disableable": false
     },
     "phase-entry-skill-loading": {
       "load_policy": "always",
       "cost_risk": "medium",
-      "kind": "policy"
+      "kind": "policy",
+      "user_disableable": false
     },
     "test-driven-development": {
       "load_policy": "on-match",
       "cost_risk": "high",
-      "kind": "skill"
+      "kind": "skill",
+      "user_disableable": true
     },
     "verification-before-completion": {
       "load_policy": "phase-entry",
       "cost_risk": "medium",
-      "kind": "skill"
+      "kind": "skill",
+      "user_disableable": false
     },
     "systematic-debugging": {
       "load_policy": "on-failure",
       "cost_risk": "high",
-      "kind": "skill"
+      "kind": "skill",
+      "user_disableable": true
     },
     "red-team-adversarial": {
       "load_policy": "on-match",
       "cost_risk": "high",
-      "kind": "skill"
-    },
-    "writing-plans": {
-      "load_policy": "phase-entry",
-      "cost_risk": "low",
-      "kind": "skill"
-    },
-    "executing-plans": {
-      "load_policy": "phase-entry",
-      "cost_risk": "medium",
-      "kind": "skill"
-    },
-    "finishing-a-development-branch": {
-      "load_policy": "on-match",
-      "cost_risk": "medium",
-      "kind": "skill"
+      "kind": "skill",
+      "user_disableable": true
     },
     "api-design": {
       "load_policy": "on-match",
       "cost_risk": "medium",
-      "kind": "skill"
+      "kind": "skill",
+      "user_disableable": true
     },
     "database-design": {
       "load_policy": "on-match",
       "cost_risk": "high",
-      "kind": "skill"
+      "kind": "skill",
+      "user_disableable": true
     },
     "frontend-patterns": {
       "load_policy": "on-match",
       "cost_risk": "medium",
-      "kind": "skill"
+      "kind": "skill",
+      "user_disableable": true
     },
     "auth-security": {
       "load_policy": "on-match",
       "cost_risk": "high",
-      "kind": "skill"
+      "kind": "skill",
+      "user_disableable": false
     },
     "doc-lookup": {
       "load_policy": "on-match",
       "cost_risk": "low",
-      "kind": "skill"
+      "kind": "skill",
+      "user_disableable": true
     },
     "dispatching-parallel-agents": {
       "load_policy": "on-match",
       "cost_risk": "high",
-      "kind": "skill"
+      "kind": "skill",
+      "user_disableable": true
     },
     "subagent-driven-development": {
       "load_policy": "on-match",
       "cost_risk": "high",
-      "kind": "skill"
-    },
-    "requesting-code-review": {
-      "load_policy": "on-match",
-      "cost_risk": "low",
-      "kind": "skill"
-    },
-    "receiving-code-review": {
-      "load_policy": "on-match",
-      "cost_risk": "low",
-      "kind": "skill"
+      "kind": "skill",
+      "user_disableable": true
     },
     "using-git-worktrees": {
       "load_policy": "on-match",
       "cost_risk": "medium",
-      "kind": "skill"
+      "kind": "skill",
+      "user_disableable": true
+    },
+    "karpathy-principles": {
+      "load_policy": "phase-entry",
+      "cost_risk": "low",
+      "kind": "skill",
+      "user_disableable": true
+    },
+    "production-readiness": {
+      "load_policy": "phase-entry",
+      "cost_risk": "low",
+      "kind": "skill",
+      "user_disableable": true
     }
   },
   "entries": [
     {
       "id": "bootstrap-recommended-skills",
       "kind": "workflow",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "bootstrap"
       ],
@@ -122,9 +118,6 @@
         "scope_signals": [
           "task classification frozen",
           "recommended skills emitted"
-        ],
-        "phase_conditions": [
-          "enter-bootstrap"
         ]
       },
       "load_policy": "always"
@@ -132,11 +125,6 @@
     {
       "id": "phase-entry-skill-loading",
       "kind": "policy",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "plan",
         "implement",
@@ -154,22 +142,14 @@
         ],
         "scope_signals": [
           "recommended skills present in work log"
-        ],
-        "phase_conditions": [
-          "enter-phase"
         ]
       },
       "load_policy": "always",
-      "content_hash": "9c7d7357"
+      "content_hash": "d4576539"
     },
     {
       "id": "test-driven-development",
       "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "implement",
         "test"
@@ -179,19 +159,10 @@
           "feature",
           "architecture-change"
         ],
-        "intent_patterns": [
-          "用 TDD",
-          "test first",
-          "先寫測試",
-          "red green refactor"
-        ],
         "scope_signals": [
           "testable logic",
           "core logic",
           "regression protection"
-        ],
-        "phase_conditions": [
-          "approved-plan-exists"
         ]
       },
       "load_policy": "on-match",
@@ -200,11 +171,6 @@
     {
       "id": "verification-before-completion",
       "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "implement",
         "test",
@@ -216,9 +182,6 @@
           "feature",
           "architecture-change",
           "hotfix"
-        ],
-        "phase_conditions": [
-          "completion-claim"
         ]
       },
       "load_policy": "phase-entry",
@@ -227,11 +190,6 @@
     {
       "id": "systematic-debugging",
       "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "implement",
         "review",
@@ -244,11 +202,6 @@
           "feature",
           "architecture-change",
           "hotfix"
-        ],
-        "intent_patterns": [
-          "debug",
-          "除錯",
-          "找 bug"
         ],
         "scope_signals": [
           "unexpected behavior",
@@ -267,11 +220,6 @@
     {
       "id": "red-team-adversarial",
       "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "review",
         "test"
@@ -282,129 +230,19 @@
           "feature",
           "architecture-change"
         ],
-        "intent_patterns": [
-          "red team",
-          "adversarial test",
-          "攻擊面分析",
-          "紅隊測試"
-        ],
         "scope_signals": [
           "auth",
           "permission",
           "boundary",
           "dependency"
-        ],
-        "phase_conditions": [
-          "enter-review-or-test"
         ]
       },
       "load_policy": "on-match",
-      "content_hash": "a0256417"
-    },
-    {
-      "id": "writing-plans",
-      "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
-      "phase_scope": [
-        "plan"
-      ],
-      "detect_by": {
-        "classification": [
-          "quick-win",
-          "feature",
-          "architecture-change",
-          "hotfix"
-        ],
-        "intent_patterns": [
-          "幫我規劃",
-          "write plan",
-          "規劃怎麼做"
-        ],
-        "phase_conditions": [
-          "enter-plan"
-        ]
-      },
-      "load_policy": "phase-entry",
-      "content_hash": "cdcfe0ce"
-    },
-    {
-      "id": "executing-plans",
-      "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
-      "phase_scope": [
-        "implement"
-      ],
-      "detect_by": {
-        "classification": [
-          "quick-win",
-          "feature",
-          "architecture-change",
-          "hotfix"
-        ],
-        "intent_patterns": [
-          "執行計畫",
-          "execute the plan",
-          "follow the plan"
-        ],
-        "phase_conditions": [
-          "approved-plan-exists",
-          "enter-implement"
-        ]
-      },
-      "load_policy": "phase-entry",
-      "content_hash": "e4fe373a"
-    },
-    {
-      "id": "finishing-a-development-branch",
-      "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
-      "phase_scope": [
-        "ship",
-        "handoff"
-      ],
-      "detect_by": {
-        "classification": [
-          "quick-win",
-          "feature",
-          "architecture-change",
-          "hotfix"
-        ],
-        "intent_patterns": [
-          "finish branch",
-          "merge 準備",
-          "完成分支"
-        ],
-        "scope_signals": [
-          "branch work complete",
-          "ready for closure"
-        ],
-        "phase_conditions": [
-          "enter-handoff-or-ship"
-        ]
-      },
-      "load_policy": "on-match",
-      "content_hash": "7f5b5b98"
+      "content_hash": "22dddc01"
     },
     {
       "id": "api-design",
       "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "implement",
         "review",
@@ -416,11 +254,6 @@
           "architecture-change",
           "hotfix"
         ],
-        "intent_patterns": [
-          "API 設計",
-          "endpoint conventions",
-          "REST design"
-        ],
         "scope_signals": [
           "api endpoint",
           "route",
@@ -429,16 +262,11 @@
         ]
       },
       "load_policy": "on-match",
-      "content_hash": "32196039"
+      "content_hash": "e24f19bc"
     },
     {
       "id": "database-design",
       "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "plan",
         "implement",
@@ -451,11 +279,6 @@
           "architecture-change",
           "hotfix"
         ],
-        "intent_patterns": [
-          "資料庫設計",
-          "schema design",
-          "migration safety"
-        ],
         "scope_signals": [
           "migration",
           "schema",
@@ -464,16 +287,11 @@
         ]
       },
       "load_policy": "on-match",
-      "content_hash": "495f6b32"
+      "content_hash": "dec2bec8"
     },
     {
       "id": "frontend-patterns",
       "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "implement",
         "review",
@@ -484,11 +302,6 @@
           "feature",
           "architecture-change"
         ],
-        "intent_patterns": [
-          "前端模式",
-          "component patterns",
-          "UI conventions"
-        ],
         "scope_signals": [
           "ui component",
           "page",
@@ -497,16 +310,11 @@
         ]
       },
       "load_policy": "on-match",
-      "content_hash": "4ef23d41"
+      "content_hash": "308279c1"
     },
     {
       "id": "auth-security",
       "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "plan",
         "implement",
@@ -521,12 +329,6 @@
           "architecture-change",
           "hotfix"
         ],
-        "intent_patterns": [
-          "安全檢查",
-          "auth check",
-          "security review",
-          "權限檢查"
-        ],
         "scope_signals": [
           "login",
           "password",
@@ -537,16 +339,11 @@
         ]
       },
       "load_policy": "on-match",
-      "content_hash": "cb1b4ee1"
+      "content_hash": "9e4556e5"
     },
     {
       "id": "doc-lookup",
       "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "implement",
         "review"
@@ -558,32 +355,21 @@
           "architecture-change",
           "hotfix"
         ],
-        "intent_patterns": [
-          "查文件",
-          "check docs",
-          "查官方文檔",
-          "read the docs",
-          "看文件再做"
-        ],
         "scope_signals": [
           "framework API",
           "library usage",
           "config option",
           "CLI command",
-          "version-sensitive pattern"
+          "version-sensitive pattern",
+          "project ADR tech stack"
         ]
       },
       "load_policy": "on-match",
-      "content_hash": "1eaa7879"
+      "content_hash": "88229b32"
     },
     {
       "id": "dispatching-parallel-agents",
       "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "implement"
       ],
@@ -591,11 +377,6 @@
         "classification": [
           "feature",
           "architecture-change"
-        ],
-        "intent_patterns": [
-          "平行開發",
-          "parallel agents",
-          "dispatch subtasks"
         ],
         "scope_signals": [
           "3+ independent subtasks",
@@ -609,11 +390,6 @@
     {
       "id": "subagent-driven-development",
       "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "implement"
       ],
@@ -621,11 +397,6 @@
         "classification": [
           "feature",
           "architecture-change"
-        ],
-        "intent_patterns": [
-          "subagent",
-          "分派 agent",
-          "multi-agent"
         ],
         "scope_signals": [
           "4+ files",
@@ -637,84 +408,8 @@
       "content_hash": "96d1736e"
     },
     {
-      "id": "requesting-code-review",
-      "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
-      "phase_scope": [
-        "review",
-        "handoff"
-      ],
-      "detect_by": {
-        "classification": [
-          "quick-win",
-          "feature",
-          "architecture-change",
-          "hotfix"
-        ],
-        "intent_patterns": [
-          "請求 review",
-          "request code review",
-          "送 review",
-          "要 review"
-        ],
-        "scope_signals": [
-          "changes ready for review",
-          "handoff prepared"
-        ],
-        "phase_conditions": [
-          "enter-review-or-handoff"
-        ]
-      },
-      "load_policy": "on-match",
-      "content_hash": "6d9d0491"
-    },
-    {
-      "id": "receiving-code-review",
-      "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
-      "phase_scope": [
-        "review"
-      ],
-      "detect_by": {
-        "classification": [
-          "quick-win",
-          "feature",
-          "architecture-change",
-          "hotfix"
-        ],
-        "intent_patterns": [
-          "接收 review",
-          "review feedback",
-          "收到 review 意見"
-        ],
-        "scope_signals": [
-          "review comments",
-          "inline feedback",
-          "blocking feedback"
-        ],
-        "phase_conditions": [
-          "review-feedback-present"
-        ]
-      },
-      "load_policy": "on-match",
-      "content_hash": "92fac37d"
-    },
-    {
       "id": "using-git-worktrees",
       "kind": "skill",
-      "platforms": [
-        "claude",
-        "codex",
-        "antigravity"
-      ],
       "phase_scope": [
         "bootstrap",
         "implement"
@@ -724,11 +419,6 @@
           "feature",
           "architecture-change"
         ],
-        "intent_patterns": [
-          "用 worktree",
-          "git worktree",
-          "worktree 隔離"
-        ],
         "scope_signals": [
           "parallel branch isolation",
           "separate branch workspace",
@@ -737,6 +427,50 @@
       },
       "load_policy": "on-match",
       "content_hash": "ade1544e"
+    },
+    {
+      "id": "karpathy-principles",
+      "kind": "skill",
+      "phase_scope": [
+        "plan",
+        "implement",
+        "review"
+      ],
+      "detect_by": {
+        "classification": [
+          "quick-win",
+          "feature",
+          "architecture-change",
+          "hotfix"
+        ]
+      },
+      "load_policy": "phase-entry",
+      "content_hash": "d29dde6d"
+    },
+    {
+      "id": "production-readiness",
+      "kind": "skill",
+      "phase_scope": [
+        "review",
+        "ship"
+      ],
+      "detect_by": {
+        "classification": [
+          "feature",
+          "architecture-change"
+        ],
+        "scope_signals": [
+          "error handling",
+          "logging",
+          "crash reporting",
+          "observability",
+          "new API endpoint",
+          "new service class",
+          "new background job"
+        ]
+      },
+      "load_policy": "phase-entry",
+      "content_hash": "dd1f151b"
     }
   ]
 }

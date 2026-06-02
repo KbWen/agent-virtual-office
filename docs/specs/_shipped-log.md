@@ -1,3 +1,10 @@
+---
+status: living
+title: Agent Virtual Office — Shipped Log
+created: 2026-05-29
+last_updated: 2026-06-02
+---
+
 # Agent Virtual Office — Shipped Log
 
 > Historical archive of shipped backlog items. Rotated out of `_product-backlog.md`
