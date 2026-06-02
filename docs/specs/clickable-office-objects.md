@@ -4,8 +4,6 @@ title: Clickable Office Objects
 source: external
 source_doc: docs/specs/_product-backlog.md#7
 created: 2026-05-16
-primary_domain: none
-secondary_domains: []
 ---
 
 # Clickable Office Objects
