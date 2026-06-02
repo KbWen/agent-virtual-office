@@ -34,6 +34,16 @@ last_updated: 2026-06-02
 | AVO-113 | OpenTelemetry GenAI export | infra | observability | P1 | — | feature | Pending | — |
 | AVO-114 | Event-stream replay scrubber | product | observability | P2 | — | feature | Pending | — |
 | AVO-115 | Shareable daily card | product | brand | P1 | — | feature | Pending | — |
+| AVO-116 | Per-agent cost attribution & daily $ trend | product | info-density | P1 | — | feature | Pending | AVO-108 |
+| AVO-117 | Recurring failure-mode detection | product | observability | P1 | — | feature | Pending | AVO-110 |
+| AVO-118 | Workflow graph minimap (DAG view) | product | multi-agent | P2 | — | feature | Pending | AVO-105 |
+| AVO-119 | Language / file-type breakdown | product | info-density | P2 | — | feature | Pending | — |
+| AVO-120 | Daily MVP / productivity leaderboard | product | brand | P2 | — | feature | Pending | — |
+| AVO-121 | Office pet (ambient companion) | product | game-feel | P3 | — | feature | Pending | — |
+| AVO-122 | Ambient soundscape (toggle) | product | game-feel | P2 | — | feature | Pending | — |
+| AVO-123 | Office theme / skin selector | product | brand | P2 | — | feature | Pending | — |
+| AVO-124 | Agent appearance customization | product | brand | P3 | — | feature | Pending | — |
+| AVO-125 | Cozy micro-interactions | product | game-feel | P3 | — | feature | Pending | AVO-111 |
 | #20 | Hook read-modify-write atomic | chore | tech-debt | P3 | — | quick-win | Deferred | — |
 
 ## Status Key
@@ -77,6 +87,20 @@ last_updated: 2026-06-02
 
 ### 📣 Brand / USP
 - **AVO-115 Shareable daily card** — End-of-day "office card" generator: single pixel-art PNG summarizing today's done/blocked/eurekas/weather, branded, one-click share. Use OffscreenCanvas; pull from ledgers + activeEvent history.
+
+### 🔬 Competitive Research Wave (AVO-116+, added 2026-06-02)
+> Sourced from a scan of AI-agent observability tools (LangSmith / Langfuse / AgentOps), multi-agent UIs (LangGraph Studio / CrewAI Studio / Sim Studio), pixel-art virtual offices (Gather.town), and dev-activity visualizers (WakaTime). Each item maps a feature that exists in those tools onto AVO's pixel-office metaphor.
+
+- **AVO-116 Per-agent cost attribution & daily $ trend** — Observability tools (AgentOps, LangSmith) surface *agent-level cost attribution* + $ breakdowns, not just raw tokens. Extend AVO-108: per-role $ estimate (from `tokens.{ctx,out,model}` × model price table), a daily/weekly cost sparkline, and a "biggest burner" highlight on the office HUD.
+- **AVO-117 Recurring failure-mode detection** — LangSmith auto-clusters traces to flag recurring failure modes. When the same `blocked.reason` / error signature recurs ≥N times in a window, raise a "recurring issue" sign over the affected desk + optional desktop notification. Builds on AVO-110.
+- **AVO-118 Workflow graph minimap (DAG view)** — LangGraph Studio's node/edge graph is the canonical multi-agent view. Add a toggle minimap rendering the active workflow as a phase DAG (spec-intake→spec→plan→implement→test→review→ship) with the live node highlighted — complements the spatial office (AVO-105) with a structural view.
+- **AVO-119 Language / file-type breakdown** — WakaTime's per-language/file metrics. Donut/legend of the languages + file types agents touched today, aggregated from `Edit`/`Write` tool args (1h or daily window). Pairs with AVO-109's heatmap.
+- **AVO-120 Daily MVP / productivity leaderboard** — WakaTime's leaderboard adds gamification. End-of-day "MVP" ribbon + a small ranked list of agents by tasks-done / blocked-cleared, drawn from `dailyDoneLedger` / `dailyBlockedLedger`. Shareable alongside AVO-115.
+- **AVO-121 Office pet (ambient companion)** — Gather.town added follow-along pets purely for charm. A cute low-functional pet (cat / robot vacuum) that wanders the office, naps when idle, perks up during eurekas. Pure game-feel.
+- **AVO-122 Ambient soundscape (toggle)** — Gather.town's ambient object sounds. Optional, OFF-by-default soundscape: keyboard clatter scaled to active-agent count, coffee machine on tea-break, rain matching the weather system. Must respect a mute setting + `prefers-reduced-motion`-style audio opt-out.
+- **AVO-123 Office theme / skin selector** — Gather.town lets you reskin walls/floors. A theme switcher: default / dark-mode / seasonal / cyberpunk palette swaps over the existing SVG office. Visual-only; persists to store.
+- **AVO-124 Agent appearance customization** — Gather.town avatar customization (hair/clothing/accessories). Per-role cosmetic options (hat / color / accessory) so users can personalize their roster; persists to store like `deskItemCount`.
+- **AVO-125 Cozy micro-interactions** — Cozy-sim polish: desk plants that grow with `growthLevel`, coffee steam, monitor glow tint by status, desk-lamp halos at night. Small SVG/animation touches that deepen the "alive office" feel; complements AVO-111 lighting.
 
 ### 🔧 Carried-over from prior wave
 - **#20 Hook read-modify-write atomic** — PID isolation + rename fallback already mitigates risk; full file lock or append-only design would be ideal. *Deferred — current mitigation acceptable; revisit only if state-loss reports surface.*
