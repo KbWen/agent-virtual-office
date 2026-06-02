@@ -21,6 +21,25 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+_FALLBACK_SKIP_DIRS = frozenset({
+    'node_modules', '__pycache__', '.agentcortex-src',
+    'venv', '.venv', 'dist', 'build', '.tox',
+    '.mypy_cache', '.pytest_cache', '.ruff_cache',
+})
+
+
+def _fallback_candidate_files(root: pathlib.Path) -> list[pathlib.Path]:
+    """Find candidate files without git when git is unavailable."""
+    paths: list[pathlib.Path] = []
+    for ext in TEXT_SUFFIXES:
+        for p in root.rglob(f'*{ext}'):
+            parts = p.relative_to(root).parts
+            if any(part.startswith('.git') or part in _FALLBACK_SKIP_DIRS for part in parts):
+                continue
+            paths.append(p)
+    return sorted(set(paths))
+
+
 def candidate_files(root: pathlib.Path) -> list[pathlib.Path]:
     commands = (
         ['git', 'ls-files', '-z'],
@@ -29,7 +48,11 @@ def candidate_files(root: pathlib.Path) -> list[pathlib.Path]:
     seen: set[str] = set()
     paths: list[pathlib.Path] = []
     for command in commands:
-        output = subprocess.check_output(command, cwd=root)
+        try:
+            output = subprocess.check_output(command, cwd=root, stderr=subprocess.DEVNULL)
+        except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+            print(f"Warning: git command failed ({exc}), falling back to filesystem scan.", file=sys.stderr)
+            return _fallback_candidate_files(root)
         for item in output.split(b'\0'):
             if not item:
                 continue
@@ -69,7 +92,10 @@ def has_mixed_eol_bytes(data: bytes) -> bool:
 def inspect_file(path: pathlib.Path, root: pathlib.Path) -> list[str]:
     issues: list[str] = []
     data = path.read_bytes()
-    if data.startswith(UTF8_BOM):
+    # UTF-8 BOM is REQUIRED on .ps1 scripts that contain non-ASCII characters,
+    # otherwise Windows PowerShell 5.1 reads them as the system ANSI code page
+    # (e.g. CP950/Big5 on Taiwan locale) and the parser breaks on the mojibake.
+    if data.startswith(UTF8_BOM) and path.suffix.lower() != '.ps1':
         issues.append('utf8-bom')
     try:
         text = data.decode('utf-8')

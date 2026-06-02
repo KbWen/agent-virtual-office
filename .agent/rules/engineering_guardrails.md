@@ -6,9 +6,40 @@ Global (applies to all projects using template).
 
 ## Reading Mode
 
-- **Full Mode** (default for `feature`, `architecture-change`, `hotfix`): Read this entire document.
+- **Full Mode** (default for `feature`, `architecture-change`, `hotfix`): Read core sections first, then load conditional sections per the Heading-Scoped Read rules below.
 - **Quick Mode** (for `quick-win`): Do NOT read this file. Essential quick-win rules (Confidence Gate, Bug Fix Protocol, Doc Integrity) are embedded in `bootstrap.md` §7 quick-win classification. If the task escalates beyond quick-win, switch to Full Mode.
 - **Skip Mode** (for `tiny-fix` ONLY): Do NOT read this file. `AGENTS.md` §Core Directives provides sufficient governance for tiny-fix tasks (scope discipline, evidence requirement, fast-path rules). If the task escalates beyond tiny-fix, switch to Quick or Full Mode and read this file at that point.
+
+### Heading-Scoped Read (Full Mode Optimization)
+
+When in Full Mode, the following sections are **always required** (core):
+- §1 Core Philosophy
+- §2 Change Safety Principles
+- §4 Design Before Implementation (including §4.1 Confidence Gate, §4.2 Spec Freezing, §4.4 Design-First Rule)
+- §7 Scope Discipline
+- §8 Agent Operating Mode (§8.1 Bug Fix Protocol only)
+- §10 vNext Governance & Classification
+
+The following sections are **conditional** (load only when triggered):
+- §3 Data & Time Integrity → only when task involves temporal/numerical data processing
+- §5 Testing & Verification → load at `/implement` entry and `/test` entry (not at `/bootstrap` or `/plan`)
+- §6 Explainability & Traceability → only when task is `feature` or `architecture-change`
+- §8.2 External Tool Delegation → only when external tools are invoked
+- §9 Intent Safety Rules → already internalized by AI at session start; re-read only on ambiguity (per AGENTS.md Read-Once Discipline)
+- §11 Multi-Person Collaboration → only when Work Log lock conflict detected or multi-person scenario
+- §12 Data & Code Integrity Protection → load at `/implement` entry (not at `/bootstrap` or `/plan`)
+
+> **Token budget estimate** (1 line ≈ 15 tokens):
+> Core sections (§1, §2, §4, §7, §8.1, §10) ≈ 170 lines ≈ **2,550 tokens**
+> Conditional sections (§3, §5, §6, §8.2, §9, §11, §12) ≈ 156 lines ≈ **2,340 tokens**
+> Skipping all conditional sections saves up to **~2,340 tokens** per Full Mode session when none are triggered.
+
+### Loaded-Sections Receipt (Agent-Facing Signal)
+
+When `/bootstrap` reads this file in Full Mode, it MUST echo a one-line receipt in the Work Log `## Session Info` naming the sections actually loaded. Format:
+`Guardrails loaded: §1, §2, §4, §7, §8.1, §10 (core)` — plus any conditional sections triggered, e.g. `+ §5 (testing), §12 (implement).`
+
+This serves two purposes: (a) subsequent phases can trust that cited sections are in context without re-reading, and (b) the receipt is auditable — if a phase cites §6 but the receipt does not list it, either the receipt is stale (re-read per AGENTS.md Safety Valve + log to Drift Log) or the citation is fabricated.
 
 ## Role
 
@@ -64,7 +95,11 @@ Before executing any implementation step, AI MUST internally assess and state:
 - **80–90%**: State the assumption explicitly, then proceed with caution.
 - **> 90%**: Proceed normally.
 
-This check is silent when confidence is high — no extra output needed above 90%. Only surfaces when it matters.
+**Narrative vs structured receipt**: "Silent above 90%" means no free-text narrative or chat prose. It does NOT mean silent in structured phase outputs — `/plan`, `/implement`, and `/ship` compact blocks MUST always include a `Confidence:` field (e.g., `Confidence: 95% — high`) so the gate is auditable in the Work Log. This keeps chat output terse while making the gate traceable.
+
+### §4.5 Anti-Rationalization Rule
+
+Before emitting any verdict (phase pass/fail, classification, completion claim), the agent MUST form conclusions from evidence first — not construct evidence to support a pre-formed conclusion. Operationally: every PASS verdict requires a traceable evidence citation (`file:line`, test name, or tool output) **written to the Work Log before the verdict appears in the same response**. A narrative argument with no concrete citation is a rationalization, not evidence. If no citation can be written to the Work Log first, the verdict MUST be `UNPROVEN` until evidence is recorded.
 
 ### 4.2 Spec Freezing (SSoT Protection)
 
@@ -80,6 +115,29 @@ This check is silent when confidence is high — no extra output needed above 90
 
 `/plan` owns discovery: existing code patterns, doc lookup, and spec alignment are resolved during planning via Target Files, External References Gate, and AC Coverage. If discovery proves insufficient at implement time, redirect to `/research` — do not add ad-hoc checks.
 
+### 4.4 Design-First Rule (UI Changes)
+
+> **Principle**: All UI changes MUST follow the **Design → Export → 1:1 Translate → Verify** pipeline.
+
+**Scope**: Any task that modifies user-visible interface elements (screens, components, layouts, styling, animations, navigation flows). Backend-only, CLI, and infrastructure changes are EXEMPT.
+
+**Scope Exemption (Directory-Based)**: This rule applies **only** to production code directories (e.g., `src/`, `app/`, `lib/`, `packages/`). Files in `tools/`, `scripts/`, `scratch/`, `tests/`, `__tests__/`, `*.test.*`, `*.spec.*`, and `.agentcortex/` are **automatically exempt**.
+
+**Design Source of Truth (DSoT)**: The canonical visual specification for UI work. Default tool: **Stitch**. Alternative tools (Figma, Pencil, etc.) are equally valid — the requirement is a linkable, inspectable, exportable design artifact.
+
+**Pipeline**:
+1. **Design**: Create or update the visual specification in the DSoT tool. MUST produce a linkable artifact (URL or file path).
+2. **Export**: Extract implementation-ready specs (tokens, spacing, typography, component structure) from the DSoT.
+3. **1:1 Translate**: Implementation MUST faithfully reproduce the DSoT spec. Intentional deviations require explicit approval recorded in the Work Log with rationale.
+4. **Verify**: `/review` MUST compare implementation against DSoT. Visual mismatch = **HIGH** severity finding.
+
+**Enforcement**:
+- `/plan` → Design Gate: plan MUST include a DSoT link for UI tasks. No link = plan incomplete.
+- `/implement` → Design Approval Check: UI rendering code blocked until DSoT design is confirmed. No design = no UI code.
+- `/review` → Design Compliance Check: 1:1 fidelity audit against DSoT. Structural deviation = **HIGH** severity.
+
+**No DSoT = No UI Implementation**: If a UI task lacks a design artifact, it MUST NOT proceed past `/plan`. Agent MUST stop: "⚠️ This task modifies UI but has no design link. Create the design in [DSoT tool] first."
+
 ## 5. Testing & Verification
 
 - Logic Change -> Add Test.
@@ -91,7 +149,7 @@ This check is silent when confidence is high — no extra output needed above 90
   - Specs: `docs/specs/[feature-name].md`
   - Guides: `docs/guides/[topic].md`
   - Agent Work Logs: `.agentcortex/context/work/`
-- **Write Path Guard**: Agents MUST NOT write project specs to `.agentcortex/specs/` or project ADRs to `.agentcortex/adr/`. Those directories contain framework-owned template fixtures only. All project artifacts MUST go to `docs/specs/` and `docs/adr/`. If the SSoT Spec Index references `.agentcortex/specs/`, READ from it but WRITE new work to `docs/specs/`.
+- **Write Path Guard**: Agents MUST NOT write project specs to `.agentcortex/specs/` or project ADRs to `.agentcortex/adr/`. These paths are a reserved framework namespace (no content ships there today; the framework may populate them in future template updates). All project artifacts MUST go to `docs/specs/` and `docs/adr/`.
   - Private Context: `.agentcortex/context/private/` (local-only, gitignored)
     - USE FOR: personal dev environment configs, private remote URLs, internal credentials references, team-specific workflows not intended for public repos.
     - DO NOT USE FOR: project architecture docs, contribution guides, public development standards.
@@ -106,6 +164,27 @@ This check is silent when confidence is high — no extra output needed above 90
 
 - Service/Provider layer errors MUST `return null` or a sealed error type. Unhandled exceptions that escape a Service or Provider boundary = **Gate FAIL**.
 - Every `catch` block MUST include at minimum a log statement. Silent `catch {}` with no logging = **Review Gate FAIL**.
+
+### 5.2a Error Observability (Production-Safety Critical)
+
+Error logging MUST use a **production-observable sink** — a logger that survives release builds and reaches operators in production.
+
+- ✅ Acceptable: framework logger (`Logger.error()`, `log.error()`), crash reporter (`errorReporter.capture()`), structured logging to stdout consumed by production infrastructure.
+- ❌ Prohibited as sole error path: `debugPrint()`, `print()`, `console.log()` in debug-only mode, or any API that is stripped / tree-shaken / no-op'd in release builds.
+
+**Rationale**: If an error is caught but logged only via a debug-only API, the catch block is functionally silent in production. Users experience failures while the team remains blind. This is the #1 cause of "beta testing is completely blind" incidents.
+
+**Gate check**: Review MUST verify each `catch` block uses the project's production logger. If the project has no production logging strategy defined, flag at `/review`: *"No production-observable error sink identified — resolve before ship."*
+
+**Scope**: This rule applies to application/service code (e.g., `src/`, `app/`, `lib/`, `packages/`). **Files in `tools/`, `scripts/`, `scratch/`, and test directories are automatically exempt.**
+
+### 5.2b Evidence Truncation Rule
+
+To prevent Work Log bloat and premature context compaction, agents MUST NOT paste raw terminal output verbatim into Work Logs.
+
+- **Test pass**: Paste only the final summary line (max 3 lines).
+- **Test fail**: Paste only the failing test name, assertion error, and relevant source line (max 10 lines per failure). Strip all passing test output.
+- **Build/lint output**: Paste only error-level output. Strip warnings and informational messages unless they are the subject of the task.
 
 ### 5.3 Spec Drift Prevention & Test Quality
 
@@ -202,12 +281,12 @@ When locating code, files, or definitions:
 
 ### 9.4 Namespace Isolation (Downstream Safety)
 
-AgentCortex deploys workflows and skills into downstream projects. Those projects may have their own custom commands, skills, or automation — including inside `.agent/` directories. The Intent Router must respect boundaries:
+Agentic OS deploys workflows and skills into downstream projects. Those projects may have their own custom commands, skills, or automation — including inside `.agent/` directories. The Intent Router must respect boundaries:
 
-1. **Framework-managed vs user-owned**: The distinction is NOT by directory. Files listed in `.agentcortex-manifest` are framework-managed. Everything else — even files inside `.agent/workflows/` or `.agent/skills/` — belongs to the project owner. Users are free to add their own workflows and skills alongside AgentCortex's.
-2. **Collision resolution**: If a user-created command name collides with an AgentCortex workflow (e.g., both have a `/deploy`), the **user's command takes priority**. AgentCortex workflows are infrastructure; user commands are application-level.
-3. **Natural language routing**: When AI receives natural language that could map to either an AgentCortex phase or a user-defined command, AI MUST check: "Is the user talking about the AgentCortex governance process, or about their project-specific action?" If ambiguous, ask.
-4. **Governance still applies**: User-defined workflows and skills are not exempt from AgentCortex governance. Phase order, gates, and evidence requirements still apply — but the user's custom logic drives the implementation, not AgentCortex's.
+1. **Framework-managed vs user-owned**: The distinction is NOT by directory. Files listed in `.agentcortex-manifest` are framework-managed. Everything else — even files inside `.agent/workflows/` or `.agent/skills/` — belongs to the project owner. Users are free to add their own workflows and skills alongside Agentic OS's.
+2. **Collision resolution**: If a user-created command name collides with an Agentic OS workflow (e.g., both have a `/deploy`), the **user's command takes priority**. Agentic OS workflows are infrastructure; user commands are application-level.
+3. **Natural language routing**: When AI receives natural language that could map to either an Agentic OS phase or a user-defined command, AI MUST check: "Is the user talking about the Agentic OS governance process, or about their project-specific action?" If ambiguous, ask.
+4. **Governance still applies**: User-defined workflows and skills are not exempt from Agentic OS governance. Phase order, gates, and evidence requirements still apply — but the user's custom logic drives the implementation, not Agentic OS's.
 
 ### 9.5 Core Principle
 >
@@ -232,10 +311,10 @@ AgentCortex deploys workflows and skills into downstream projects. Those project
 | Category | Mandatory Gates | Min Evidence Required |
 | --- | --- | --- |
 | **tiny-fix** | classify → plan (inline) → execute | diff summary + 1-line verification |
-| **quick-win** | bootstrap → check Spec Index → plan → implement → evidence → ship | diff + before/after behavior statement |
+| **quick-win** | bootstrap → check Spec Index → plan → implement → evidence → ship (review and test are optional when evidence is inline) | diff + before/after behavior statement |
 | **feature** | bootstrap → spec → plan → implement → review → test → handoff → ship | test output + verifiable demo steps |
 | **architecture-change** | bootstrap → ADR → spec → plan → implement → review → test → handoff → ship | migration plan + rollback verification |
-| **hotfix** | bootstrap → research → plan → implement → review → test → ship | root cause + fix verification + retro |
+| **hotfix** | bootstrap → research (advisory, no gate receipt) → plan → implement → review → test → ship | root cause + fix verification + retro |
 
 AI self-enforces the phase order above. Users may invoke phases via slash commands (as shortcuts) or natural language.
 
@@ -260,6 +339,8 @@ If a section is not applicable, write `none` instead of omitting it. This keeps 
   - `docs/specs/_product-backlog.md` — route to `/spec-intake` instead of tiny-fix
   - Any file with `status: frozen` frontmatter — frozen files require unfreeze approval (§4.2)
   - `AGENTS.md`, `.agent/rules/*.md`, `.agent/config.yaml` — framework governance files affect all agents globally
+  - `.agentcortex/templates/*` — template changes propagate to all downstream projects via `deploy.sh`
+  - `.agentcortex/bin/validate.*` — validator changes are governance-critical (affect CI gate verdicts)
 
 ### 10.4 Quick-Win Fast-Path
 
@@ -268,7 +349,7 @@ If a section is not applicable, write `none` instead of omitting it. This keeps 
 - **Exclusion**: No formal Spec required. No `/handoff` required. Work Log MUST be created (lightweight — needed for skill loading and evidence tracking).
 - **Doc Integrity (MANDATORY)**: While No *new* Spec is required, if an **existing** Spec already covers the target area, the AI MUST update that Spec to prevent "Documentation Decay." If the change is too complex for a stealth update, use the "Spec Seed" mechanism in `/retro` to flag it for formalization.
 - **Examples**: Changing an API response format, adding a config flag, fixing a single-module bug with known root cause.
-- **Security Escalation**: If a quick-win task touches auth/security code (login, password, token, session, role, permission, access control), it MUST be escalated to at least `hotfix` classification to activate review and test phases. Auth-adjacent quick-wins are not safe to ship without review.
+- **Security Escalation**: If a quick-win task touches auth/security **logic** (password hashing, token generation/validation, session management, access control enforcement, role/permission checks), it MUST be escalated to at least `hotfix` classification to activate review and test phases. Auth-adjacent quick-wins are not safe to ship without review. **Scope clarification**: This applies to files that *implement* auth logic (e.g., `auth_service.ts`, `token_provider.dart`, `session_manager.rb`) — NOT to UI components that merely render auth-related screens (e.g., a login button in a React component that dispatches to an auth service). The trigger is auth credential/token handling in the implementation layer, not the presence of the word "login" in a UI file.
 - **Root-Cause Escalation**: If a quick-win task addresses a crash, data loss, or behavioral regression (not just a new feature), the Work Log MUST include a 1-line root-cause statement explaining why the bug occurred. Missing root-cause for regression-class bugs = review warning. Format: `Root Cause: <1-line explanation>` in Work Log `## Known Risk`.
 
 ### 10.5 Handoff/Ship Hard Gate
@@ -288,13 +369,15 @@ When AI detects a task is nearing completion (e.g., user says "done", "完成了
 
 **For `feature` / `architecture-change`**: If handoff or retro is missing, AI MUST remind: "📋 Before closing: handoff and retro haven't run yet. Want me to proceed with them now?"
 
+**For `hotfix`**: No formal handoff required (exempt per state_machine.md). AI SHOULD ask: "Hotfix done. Run a brief `/retro` to capture the root-cause lesson? (yes/skip)"
+
 **For `quick-win`**: AI SHOULD ask: "Quick task done. Run a brief retro to capture lessons? (yes/skip)"
 
 **For `tiny-fix`**: Skip entirely.
 
 ## 11. Multi-Person Collaboration Rules
 
-> Canonical rules are in `AGENTS.md` §Multi-Person Collaboration and §Multi-Session Concurrency. This section adds implementation details.
+> Canonical rules are in `AGENTS.md` §Multi-Person / Multi-Session Collaboration and §Context-Bound Confirmation. This section adds implementation details.
 
 - **Work Log Naming**: `.agentcortex/context/work/<worklog-key>.md` for single-person, `.agentcortex/context/work/<owner>-<worklog-key>.md` for multi-person.
 - Missing active Work Logs are recoverable during bootstrap/plan/handoff: resolve `<worklog-key>`, create or recover the active log.

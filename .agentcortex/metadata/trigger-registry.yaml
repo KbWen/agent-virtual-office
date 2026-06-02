@@ -11,6 +11,7 @@ entries:
     platforms: [claude, codex, antigravity]
     phase_scope: [bootstrap]
     trigger_priority: hard
+    user_disableable: false
     detect_by:
       classification: [quick-win, feature, architecture-change, hotfix]
       intent_patterns: []
@@ -32,10 +33,11 @@ entries:
   - id: phase-entry-skill-loading
     kind: policy
     canonical_ref: AGENTS.md
-    detail_ref: .agent/workflows/implement.md
+    detail_ref: AGENTS.md
     platforms: [claude, codex, antigravity]
     phase_scope: [plan, implement, review, test, handoff, ship]
     trigger_priority: hard
+    user_disableable: false
     detect_by:
       classification: [quick-win, feature, architecture-change, hotfix]
       intent_patterns: []
@@ -47,17 +49,24 @@ entries:
     cost_type: read
     cost_risk: medium
     runtime_anchor:
-      - "AGENTS.md#Skill Loading at Phase Entry"
+      - "AGENTS.md#Phase-Entry Skill Loading"
       - ".agent/workflows/plan.md#Skill-Aware Planning (Auto-Enforced)"
       - ".agent/workflows/implement.md#Pre-Execution Check"
       - ".agent/workflows/review.md#Skill-Aware Review (Pre-Check)"
       - ".agent/workflows/test.md#Step 3"
-      - ".agent/workflows/handoff.md#Skill-Aware Handoff (Auto-Enforced)"
+      - ".agent/workflows/handoff.md#3a"
       - ".agent/workflows/ship.md#Skill-Aware Ship Checks"
     block_if_missed: true
     fallback_behavior: >
       Use the stable phase-entry workflow checks, prefer Work Log Skill Notes
       when present, and fall back to full SKILL.md files only on cache miss.
+
+  # ── Heading-scope metadata ──
+  # Skills with detail_ref_headings support phase-entry scoped reads.
+  # On phase entry, the AI loads ONLY the listed headings from SKILL.md
+  # instead of the full file. Full read occurs on cache miss only.
+  # Skills without detail_ref_headings (<3KB) are loaded in full — the
+  # overhead is too small to justify scoping.
 
   - id: test-driven-development
     kind: skill
@@ -67,6 +76,7 @@ entries:
     platforms: [claude, codex, antigravity]
     phase_scope: [implement, test]
     trigger_priority: contextual
+    user_disableable: true
     detect_by:
       classification: [feature, architecture-change]
       intent_patterns: ["用 TDD", "test first", "先寫測試", "red green refactor"]
@@ -94,6 +104,7 @@ entries:
     platforms: [claude, codex, antigravity]
     phase_scope: [implement, test, ship]
     trigger_priority: hard
+    user_disableable: false
     detect_by:
       classification: [quick-win, feature, architecture-change, hotfix]
       intent_patterns: []
@@ -104,8 +115,8 @@ entries:
     cost_type: output
     cost_risk: medium
     runtime_anchor:
-      - "AGENTS.md#Skill Loading at Phase Entry"
-      - ".agent/workflows/implement.md#verification-before-completion"
+      - ".agent/workflows/shared-contracts.md#Verification Before Completion (5-Gate Sequence)"
+      - ".agent/workflows/implement.md#Skill Execution Overrides"
       - ".agent/workflows/test.md#Step 4b"
       - ".agent/workflows/ship.md#Skill-Aware Ship Checks"
     block_if_missed: true
@@ -121,6 +132,7 @@ entries:
     platforms: [claude, codex, antigravity]
     phase_scope: [implement, review, test, hotfix]
     trigger_priority: contextual
+    user_disableable: true
     detect_by:
       classification: [quick-win, feature, architecture-change, hotfix]
       intent_patterns: ["debug", "除錯", "找 bug"]
@@ -133,7 +145,7 @@ entries:
     runtime_anchor:
       - "AGENTS.md#Skill Activation Triggers"
       - ".agent/workflows/hotfix.md#1"
-      - ".agent/workflows/implement.md#systematic-debugging"
+      - ".agent/workflows/implement.md#Skill Execution Overrides"
       - ".agent/workflows/test.md#Step 3"
     block_if_missed: false
     fallback_behavior: >
@@ -145,9 +157,12 @@ entries:
     canonical_ref: .agent/skills/red-team-adversarial
     mirror_ref: .agents/skills/red-team-adversarial/agents/openai.yaml
     detail_ref: .agents/skills/red-team-adversarial/SKILL.md
+    detail_ref_headings:
+      default: ["## Ironclad Rules", "## When to Use (Auto-Trigger Matrix)", "## Modes"]
     platforms: [claude, codex, antigravity]
     phase_scope: [review, test]
     trigger_priority: contextual
+    user_disableable: true
     detect_by:
       classification: [hotfix, feature, architecture-change]
       intent_patterns: ["red team", "adversarial test", "攻擊面分析", "紅隊測試"]
@@ -165,88 +180,18 @@ entries:
       Use stable kernel review/test behavior and manual security review.
     evidence_contract_ref: .agent/workflows/review.md
 
-  - id: writing-plans
-    kind: skill
-    canonical_ref: .agent/skills/writing-plans
-    mirror_ref: .agents/skills/writing-plans/agents/openai.yaml
-    detail_ref: .agents/skills/writing-plans/SKILL.md
-    platforms: [claude, codex, antigravity]
-    phase_scope: [plan]
-    trigger_priority: advisory
-    detect_by:
-      classification: [quick-win, feature, architecture-change, hotfix]
-      intent_patterns: ["幫我規劃", "write plan", "規劃怎麼做"]
-      scope_signals: []
-      failure_signals: []
-      phase_conditions: [enter-plan]
-    load_policy: phase-entry
-    cost_type: output
-    cost_risk: low
-    runtime_anchor:
-      - "AGENTS.md#Skill Activation Triggers"
-      - ".agent/workflows/bootstrap.md#3.6"
-      - ".agent/workflows/plan.md"
-    block_if_missed: false
-    fallback_behavior: >
-      Use the stable /plan workflow format.
-
-  - id: executing-plans
-    kind: skill
-    canonical_ref: .agent/skills/executing-plans
-    mirror_ref: .agents/skills/executing-plans/agents/openai.yaml
-    detail_ref: .agents/skills/executing-plans/SKILL.md
-    platforms: [claude, codex, antigravity]
-    phase_scope: [implement]
-    trigger_priority: contextual
-    detect_by:
-      classification: [quick-win, feature, architecture-change, hotfix]
-      intent_patterns: ["執行計畫", "execute the plan", "follow the plan"]
-      scope_signals: []
-      failure_signals: []
-      phase_conditions: [approved-plan-exists, enter-implement]
-    load_policy: phase-entry
-    cost_type: execution
-    cost_risk: medium
-    runtime_anchor:
-      - "AGENTS.md#Skill Loading at Phase Entry"
-      - ".agent/workflows/implement.md#executing-plans"
-    block_if_missed: false
-    fallback_behavior: >
-      Use the stable /implement workflow and record deviations in the Work Log.
-
-  - id: finishing-a-development-branch
-    kind: skill
-    canonical_ref: .agent/skills/finishing-a-development-branch
-    mirror_ref: .agents/skills/finishing-a-development-branch/agents/openai.yaml
-    detail_ref: .agents/skills/finishing-a-development-branch/SKILL.md
-    platforms: [claude, codex, antigravity]
-    phase_scope: [ship, handoff]
-    trigger_priority: advisory
-    detect_by:
-      classification: [quick-win, feature, architecture-change, hotfix]
-      intent_patterns: ["finish branch", "merge 準備", "完成分支"]
-      scope_signals: [branch work complete, ready for closure]
-      failure_signals: []
-      phase_conditions: [enter-handoff-or-ship]
-    load_policy: on-match
-    cost_type: output
-    cost_risk: medium
-    runtime_anchor:
-      - "AGENTS.md#Skill Activation Triggers"
-      - ".agent/workflows/bootstrap.md#3.6"
-      - ".agent/workflows/ship.md#finishing-a-development-branch"
-    block_if_missed: false
-    fallback_behavior: >
-      Use the stable handoff/ship flow and choose a closure option explicitly.
-
   - id: api-design
     kind: skill
     canonical_ref: .agent/skills/api-design
     mirror_ref: .agents/skills/api-design/agents/openai.yaml
     detail_ref: .agents/skills/api-design/SKILL.md
+    detail_ref_headings:
+      default: ["## When to Apply", "## Checklist"]
+      implement: ["## When to Apply", "## Conventions", "## Checklist"]
     platforms: [claude, codex, antigravity]
     phase_scope: [implement, review, test]
     trigger_priority: contextual
+    user_disableable: true
     detect_by:
       classification: [feature, architecture-change, hotfix]
       intent_patterns: ["API 設計", "endpoint conventions", "REST design"]
@@ -271,9 +216,13 @@ entries:
     canonical_ref: .agent/skills/database-design
     mirror_ref: .agents/skills/database-design/agents/openai.yaml
     detail_ref: .agents/skills/database-design/SKILL.md
+    detail_ref_headings:
+      default: ["## When to Apply", "## Checklist"]
+      implement: ["## When to Apply", "## Conventions", "## Checklist"]
     platforms: [claude, codex, antigravity]
     phase_scope: [plan, implement, review, test]
     trigger_priority: contextual
+    user_disableable: true
     detect_by:
       classification: [feature, architecture-change, hotfix]
       intent_patterns: ["資料庫設計", "schema design", "migration safety"]
@@ -298,9 +247,13 @@ entries:
     canonical_ref: .agent/skills/frontend-patterns
     mirror_ref: .agents/skills/frontend-patterns/agents/openai.yaml
     detail_ref: .agents/skills/frontend-patterns/SKILL.md
+    detail_ref_headings:
+      default: ["## When to Apply", "## Checklist"]
+      implement: ["## When to Apply", "## Conventions", "## Checklist"]
     platforms: [claude, codex, antigravity]
     phase_scope: [implement, review, test]
     trigger_priority: contextual
+    user_disableable: true
     detect_by:
       classification: [feature, architecture-change]
       intent_patterns: ["前端模式", "component patterns", "UI conventions"]
@@ -325,9 +278,13 @@ entries:
     canonical_ref: .agent/skills/auth-security
     mirror_ref: .agents/skills/auth-security/agents/openai.yaml
     detail_ref: .agents/skills/auth-security/SKILL.md
+    detail_ref_headings:
+      default: ["## When to Apply", "## Relationship to Security Guardrails", "## Checklist"]
+      implement: ["## When to Apply", "## Conventions", "## Checklist"]
     platforms: [claude, codex, antigravity]
     phase_scope: [plan, implement, review, test]
     trigger_priority: hard
+    user_disableable: false
     detect_by:
       classification: [tiny-fix, quick-win, feature, architecture-change, hotfix]
       intent_patterns: ["安全檢查", "auth check", "security review", "權限檢查"]
@@ -352,15 +309,19 @@ entries:
     canonical_ref: .agent/skills/doc-lookup
     mirror_ref: .agents/skills/doc-lookup/agents/openai.yaml
     detail_ref: .agents/skills/doc-lookup/SKILL.md
+    detail_ref_headings:
+      default: ["## When to Apply", "## Fetch Protocol", "## Checklist"]
     platforms: [claude, codex, antigravity]
     phase_scope: [implement, review]
     trigger_priority: contextual
+    user_disableable: true
     detect_by:
       classification: [quick-win, feature, architecture-change, hotfix]
       intent_patterns: ["查文件", "check docs", "查官方文檔", "read the docs", "看文件再做"]
-      scope_signals: [framework API, library usage, config option, CLI command, version-sensitive pattern]
+      scope_signals: [framework API, library usage, config option, CLI command, version-sensitive pattern, project ADR tech stack]
       failure_signals: []
       phase_conditions: []
+    capability_condition: "docs/adr/ exists"  # zero cost when no ADR; auto-match when ADR present and task touches codebase files
     load_policy: on-match
     cost_type: mixed
     cost_risk: low
@@ -382,6 +343,7 @@ entries:
     platforms: [claude, codex, antigravity]
     phase_scope: [implement]
     trigger_priority: advisory
+    user_disableable: true
     detect_by:
       classification: [feature, architecture-change]
       intent_patterns: ["平行開發", "parallel agents", "dispatch subtasks"]
@@ -407,6 +369,7 @@ entries:
     platforms: [claude, codex, antigravity]
     phase_scope: [implement]
     trigger_priority: advisory
+    user_disableable: true
     detect_by:
       classification: [feature, architecture-change]
       intent_patterns: ["subagent", "分派 agent", "multi-agent"]
@@ -424,57 +387,6 @@ entries:
     fallback_behavior: >
       Use the stable /implement flow and avoid subagents unless contracts are clear.
 
-  - id: requesting-code-review
-    kind: skill
-    canonical_ref: .agent/skills/requesting-code-review
-    mirror_ref: .agents/skills/requesting-code-review/agents/openai.yaml
-    detail_ref: .agents/skills/requesting-code-review/SKILL.md
-    platforms: [claude, codex, antigravity]
-    phase_scope: [review, handoff]
-    trigger_priority: advisory
-    detect_by:
-      classification: [quick-win, feature, architecture-change, hotfix]
-      intent_patterns: ["請求 review", "request code review", "送 review", "要 review"]
-      scope_signals: [changes ready for review, handoff prepared]
-      failure_signals: []
-      phase_conditions: [enter-review-or-handoff]
-    load_policy: on-match
-    cost_type: output
-    cost_risk: low
-    runtime_anchor:
-      - "AGENTS.md#Skill Activation Triggers"
-      - ".agent/workflows/bootstrap.md#3.6"
-      - ".agent/workflows/review.md#Skill-Aware Review (Pre-Check)"
-      - ".agent/workflows/handoff.md"
-    block_if_missed: false
-    fallback_behavior: >
-      Use the stable review and handoff flow to prepare reviewer-facing context.
-
-  - id: receiving-code-review
-    kind: skill
-    canonical_ref: .agent/skills/receiving-code-review
-    mirror_ref: .agents/skills/receiving-code-review/agents/openai.yaml
-    detail_ref: .agents/skills/receiving-code-review/SKILL.md
-    platforms: [claude, codex, antigravity]
-    phase_scope: [review]
-    trigger_priority: contextual
-    detect_by:
-      classification: [quick-win, feature, architecture-change, hotfix]
-      intent_patterns: ["接收 review", "review feedback", "收到 review 意見"]
-      scope_signals: [review comments, inline feedback, blocking feedback]
-      failure_signals: []
-      phase_conditions: [review-feedback-present]
-    load_policy: on-match
-    cost_type: output
-    cost_risk: low
-    runtime_anchor:
-      - "AGENTS.md#Skill Activation Triggers"
-      - ".agent/workflows/bootstrap.md#3.6"
-      - ".agent/workflows/review.md#Skill-Aware Review (Pre-Check)"
-    block_if_missed: false
-    fallback_behavior: >
-      Use the stable review flow and process blocking comments before advisory suggestions.
-
   - id: using-git-worktrees
     kind: skill
     canonical_ref: .agent/skills/using-git-worktrees
@@ -483,6 +395,7 @@ entries:
     platforms: [claude, codex, antigravity]
     phase_scope: [bootstrap, implement]
     trigger_priority: contextual
+    user_disableable: true
     detect_by:
       classification: [feature, architecture-change]
       intent_patterns: ["用 worktree", "git worktree", "worktree 隔離"]
@@ -500,3 +413,61 @@ entries:
     block_if_missed: false
     fallback_behavior: >
       Use the stable bootstrap or worktree-first workflow before changing branches.
+
+  - id: karpathy-principles
+    kind: skill
+    canonical_ref: .agent/skills/karpathy-principles
+    mirror_ref: .agents/skills/karpathy-principles/agents/openai.yaml
+    detail_ref: .agents/skills/karpathy-principles/SKILL.md
+    detail_ref_headings:
+      default: ["## When to Apply", "## Checklist", "## Code Simplification Checklist"]
+    platforms: [claude, codex, antigravity]
+    phase_scope: [plan, implement, review]
+    trigger_priority: advisory
+    user_disableable: true
+    detect_by:
+      classification: [quick-win, feature, architecture-change, hotfix]
+      intent_patterns: ["Karpathy 原則", "karpathy principles", "coding discipline", "簡潔原則"]
+      scope_signals: []
+      failure_signals: []
+      phase_conditions: [enter-plan, enter-implement, enter-review]
+    load_policy: phase-entry
+    cost_type: read
+    cost_risk: low
+    runtime_anchor:
+      - "AGENTS.md#Skill Activation Triggers"
+      - ".agent/workflows/bootstrap.md#3.6"
+      - ".agent/workflows/plan.md#Skill-Aware Planning (Auto-Enforced)"
+      - ".agent/workflows/implement.md#Skill Execution Overrides"
+      - ".agent/workflows/review.md#Skill-Aware Review (Pre-Check)"
+    block_if_missed: false
+    fallback_behavior: >
+      Use stable kernel workflow rules and engineering guardrails for code quality.
+
+  - id: production-readiness
+    kind: skill
+    canonical_ref: .agent/skills/production-readiness
+    mirror_ref: .agents/skills/production-readiness/agents/openai.yaml
+    detail_ref: .agents/skills/production-readiness/SKILL.md
+    detail_ref_headings:
+      default: ["## When to Use", "## Observability Checklist"]
+    platforms: [claude, codex, antigravity]
+    phase_scope: [review, ship]
+    trigger_priority: contextual
+    user_disableable: true
+    detect_by:
+      classification: [feature, architecture-change]
+      intent_patterns: ["observability check", "production readiness", "觀測性檢查"]
+      scope_signals: [error handling, logging, crash reporting, observability, new API endpoint, new service class, new background job]
+      failure_signals: []
+      phase_conditions: [enter-review-or-ship]
+    load_policy: phase-entry
+    cost_type: output
+    cost_risk: low
+    runtime_anchor:
+      - "engineering_guardrails.md#5.2a"
+      - ".agent/workflows/review.md#Error Observability Compliance"
+      - ".agent/workflows/ship.md#Observability Readiness Check"
+    block_if_missed: false
+    fallback_behavior: >
+      Use stable kernel review/ship checks for error handling patterns.

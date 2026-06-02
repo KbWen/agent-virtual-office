@@ -47,11 +47,23 @@ Ask the user ONE batched question set (max 5 questions). Do NOT ask one at a tim
 
 ## 2. Generate Project ADR
 
-Create `docs/adr/ADR-002-project-architecture.md` using the template at `.agentcortex/templates/adr-tech-stack.md`.
+Create `docs/adr/ADR-001-project-architecture.md` using the template at `.agentcortex/templates/adr-tech-stack.md`.
 
-**Numbering**: If `ADR-002` already exists, increment to next available number.
+**Numbering**: If `ADR-001` already exists, increment to next available number.
 
 Fill in all sections from user answers. For `[TBD]` items, include a `## Open Decisions` section listing them.
+
+**SSoT Update (mandatory)**: After writing the ADR file, insert the new ADR into `current_state.md` under the `**ADR Index**` heading. Edit the file directly — find the `**ADR Index**` line and append the new entry immediately below it:
+
+```
+- docs/adr/ADR-00N-project-architecture.md: Project Architecture · applies_to: **
+```
+
+This is an `/app-init`-specific SSoT write exception (documented alongside the `/retro` exception). It is safe to write directly because `/app-init` runs at session start before any concurrent session is active on the branch.
+
+**Do NOT use `guard_context_write.py` for this write** — that tool supports whole-file replace or end-of-file append only; it has no section-targeting capability. A direct text edit under the heading is the correct and only approach.
+
+**Why mandatory**: `validate.sh` checks ADR disk presence vs. SSoT index. Without this update, every greenfield project fails validation immediately after `/app-init` with `[FAIL] SSoT ADR Index completeness` — before the user has had a chance to run `/ship`.
 
 ---
 
@@ -196,6 +208,16 @@ This allows `/spec-intake` to recommend relevant skills during feature decomposi
 
 ## 7. Output & Handoff
 
+**Write Project Name to SSoT (mandatory)**: Before outputting the summary, edit `current_state.md` directly to set the `**Project Name**` field to the project identifier derived in §4c (i.e., the same `<project>` value used in the spec template filename). Find the `- **Project Name**:` line and replace its value:
+
+```
+- **Project Name**: <project>
+```
+
+This is an `/app-init`-specific SSoT write exception (same scope as the ADR Index write in §2). It is safe to write directly because `/app-init` runs at session start before any concurrent session is active. Do NOT use `guard_context_write.py` — no section-targeting capability.
+
+**Why mandatory**: `/spec-intake §3` reads this field to resolve the project-customized spec template filename (`spec-app-feature-<project>.md`) without a full glob. If this field is absent, every subsequent `/spec-intake` run must fall back to glob search and may silently use the wrong template.
+
 Output a summary:
 
 ```
@@ -271,6 +293,55 @@ Then return control to `/bootstrap` §1 (Initialization & Required Reading) with
   - "新增 skill", "add [name] skill" → skill-only generation (§3 only)
 
 ---
+
+## 10. Onboard Mode (Existing Repo, Read-Only)
+
+**Trigger**:
+- `/app-init --mode=onboard`
+- Natural language: "onboard me to this repo", "幫我熟悉這個專案", "what's the state of this project"
+- Auto-suggested by `/bootstrap` when a NEW session opens against a repo that already has `current_state.md` AND the user asks "where am I" / "what's going on" without a clear task.
+
+**Hard guarantee**: This mode is **read-only**. It MUST NOT create, modify, or delete any file. Output goes to stdout only.
+
+**Inputs read** (in order, abort early if any is missing):
+1. `.agentcortex/context/current_state.md` — Project Intent, ADR Index, Spec Index, Active Backlog, last 3 Ship History entries, Active HIGH Global Lessons.
+2. `git log --oneline -10` — recent commit cadence.
+3. `.agentcortex/context/work/*.md` (filenames + Header `Current Phase` only — do NOT read full bodies) — open Work Logs.
+4. `docs/specs/_product-backlog.md` if present — Pending count by Tier.
+
+**Output template** (terse, ≤ 25 lines):
+
+```
+🧭 Repo Onboard — <repo-name>
+
+## Intent
+<1-line from current_state.md Project Intent>
+
+## Active Work
+- Open Work Logs: <count> (<list of branch names + Current Phase>)
+- Most recent ship: <Ship History entry 1, 1-line>
+
+## Backlog Snapshot
+- Pending features: <N>  · quick-wins: <N>  · architecture-changes: <N>
+- Top 3 by recency or priority: <names>
+
+## Recent Commits (10)
+<git log oneline>
+
+## Live Lessons (HIGH severity, capped at 5)
+<bullet list — read from current_state.md Global Lessons §HIGH>
+
+## Where to Start
+- For new contributor: read AGENTS.md (loaded every turn) → engineering_guardrails.md (when classification ≥ quick-win) → workflows under .agent/workflows/.
+- For continuation: pick a Pending row from Backlog Snapshot, run `/spec-intake` (multi-feature) or `/bootstrap` (single).
+- For a recap of an open session: `/recap` reads the active Work Log `## Phase Summary` (no extra cost).
+```
+
+**Token budget**: ≤ 1,500 tokens of input reads, ≤ 600 tokens of output. Strictly cheaper than re-running full `/bootstrap`.
+
+**Composition with `/recap`**: when the user asks for an open-session recap rather than a repo overview, point them at `/recap` (or do an inline 3-line summary from the active Work Log `## Phase Summary` — no new file).
+
+**No Doc Proliferation**: The summary MUST NOT be saved to `docs/guides/onboarding.md` or any other path. If the user wants a persisted onboarding artifact, escalate to `/govern-docs` — that workflow owns the permanence decision.
 
 ## Hard Rules
 

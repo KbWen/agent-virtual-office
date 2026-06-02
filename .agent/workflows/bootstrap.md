@@ -15,44 +15,80 @@ All classification gates, phase requirements, and evidence rules in this workflo
 
 ## 0. Pre-Classification Fast Check (Token Efficiency Gate)
 
-Before loading any context, check if this task qualifies as `tiny-fix` per `engineering_guardrails.md` §10.3 (< 3 files, no semantic change, unambiguous scope).
+Before loading any context, walk the decision table below top-to-bottom — **first match wins**. Ref: `engineering_guardrails.md` §10.3 — do NOT read that file for this check.
 
-**ADDITIONAL TINY-FIX EXCLUSIONS** (AC-22): Even if all other tiny-fix criteria are met, a task is NOT tiny-fix (minimum `quick-win`) if it:
+| IF the task... | THEN |
+|---|---|
+| modifies `docs/specs/_product-backlog.md` | route to `/spec-intake` (not bootstrap) |
+| modifies any file in `docs/specs/` or `docs/architecture/` | minimum `quick-win` — continue to Step 1 |
+| modifies `AGENTS.md`, `.agent/rules/*`, or `.agent/config.yaml` | minimum `quick-win` — continue to Step 1 |
+| modifies `.agentcortex/templates/*` or `.agentcortex/bin/validate.*` | minimum `quick-win` — continue to Step 1 |
+| modifies any file with `status: frozen` frontmatter | minimum `quick-win` — continue to Step 1 |
+| modifies <3 files (PR-scope, NOT per-logical-change) AND is non-semantic (typo, docs, non-functional config) AND scope is unambiguous AND target paths do NOT match any ADR's `applies_to:` glob | **tiny-fix** — skip Steps 1–6, inline plan + execute + evidence (Work Log skipped per §5). **Misclassification checkpoint**: if during the inline edit the change proves semantic, crosses a module boundary, or exceeds 3 files — STOP immediately, escalate to `quick-win`, create a Work Log, and re-enter from §1. |
+| scope is unclear or multi-module | continue to Step 1 for full context loading |
 
-- Modifies any file in `docs/specs/` (spec changes require design authority)
-- Modifies any file in `docs/architecture/` (domain doc changes require governance awareness)
-- Modifies `docs/specs/_product-backlog.md` (route to `/spec-intake` instead)
-- Modifies any file with `status: frozen` frontmatter
-- Modifies `AGENTS.md`, `.agent/rules/*`, or `.agent/config.yaml`
+**TOKEN LEAK BLOCK**: If the task is ultimately classified as `tiny-fix` or `quick-win`, reading `engineering_guardrails.md` at any point is a structural Token Leak violation. Rely purely on AGENTS.md §Core Directives and bypass full guardrails. Rationale: loading SSoT + specs + archives for a typo fix wastes ~2,500 tokens (P6).
 
-If yes → classify immediately, skip Steps 1–6, proceed directly to inline plan + execute + evidence (Work Log also skipped per §5).
+## 0b. Reading Mode Table (Token Efficiency Index)
 
-**TOKEN LEAK BLOCK**: If the task is ultimately classified as `tiny-fix` or `quick-win`, reading `engineering_guardrails.md` at any point is a structural Token Leak violation. You MUST rely purely on AGENTS.md §Core Directives and bypass full guardrails.
+> **Skip entirely if §0 classified as `tiny-fix`** — you already exited. This table only matters once you're continuing past §0.
 
-If no or uncertain → continue to Step 1 for full context loading. Do NOT guess — if scope is unclear, load context first.
+Each classification reads ONLY the rows marked REQUIRED. Skip rows marked SKIP — their content does not apply and reading them wastes tokens. The scope comments inline (`<!-- SCOPE: ... -->`) are the authoritative per-section gate; this table is the at-a-glance index.
 
-This exists because loading SSoT + specs + archives for a typo fix wastes ~2500 tokens (P6).
+| Section | tiny-fix | quick-win | feature/arch | hotfix |
+|---|---|---|---|---|
+| §0 Pre-Classification Fast Check | REQUIRED | REQUIRED | REQUIRED | REQUIRED |
+| §0a App Architecture Check | SKIP | conditional¹ | REQUIRED | conditional¹ |
+| §1 Initialization & Required Reading | SKIP | REQUIRED | REQUIRED | REQUIRED |
+| §1 Step 2a Spec Scope | SKIP | REQUIRED | REQUIRED | REQUIRED |
+| §1 Step 2b Domain Doc Context Loading | SKIP | SKIP | REQUIRED | SKIP |
+| §1 Steps 3–6 (private, migration, backlog, raw material) | SKIP | conditional | conditional | conditional |
+| §2 Work Log Header Setup | SKIP | REQUIRED | REQUIRED | REQUIRED |
+| §2a Advisory Work Log Lock | SKIP | REQUIRED | REQUIRED | REQUIRED |
+| §2b Phase Tracking Contract | SKIP | REQUIRED | REQUIRED | REQUIRED |
+| §3 Expected Output Format | inline only | REQUIRED | REQUIRED | REQUIRED |
+| §3.6 / §3.6a Recommended Skills | SKIP | REQUIRED | REQUIRED | REQUIRED |
+| §3.7 Work Log Content | SKIP | REQUIRED | REQUIRED | REQUIRED |
+| §4 Hard Checkpoints | REQUIRED | REQUIRED | REQUIRED | REQUIRED |
+| §5 Hard Gate | SKIP | REQUIRED | REQUIRED | REQUIRED |
+| §5b SSoT Sequence Pre-Ship Check | SKIP | REQUIRED | REQUIRED | REQUIRED |
+| §6 Antigravity Hard Stop | SKIP (auto-exit at §0) | REQUIRED | REQUIRED | REQUIRED |
+
+> ¹ `conditional` for quick-win/hotfix: run ONLY the `no_adr_at_all` (Exit 2) new-project check. Skip `no_covering_adr` and partial-ADR escalation — those are feature/arch-change only.
 
 ## 0a. App Architecture Check (Zero-Cost Gate)
 
-> **When**: ONLY for `feature` or `architecture-change` classifications (AFTER Step 0 pre-classification).
-> **Skip for**: `tiny-fix`, `quick-win`, `hotfix` — these NEVER trigger this check. Zero extra tokens.
+> **When (new-project check)**: ALL non-tiny-fix classifications run the `no_adr_at_all` check — including `quick-win` and `hotfix`. A brand-new project needs conventions regardless of classification.
+> **When (coverage check)**: ONLY `feature` or `architecture-change` run the `no_covering_adr` and partial-ADR checks.
+> **Skip for**: `tiny-fix` ONLY — these never trigger this check.
 
-If the task is classified as `feature` or `architecture-change`, check:
+Run the **ADR Coverage Check** via `.agentcortex/tools/check_adr_coverage.py --paths <task-target-files>`. The tool reads ADR frontmatter `applies_to:` glob lists; outputs cover/no-cover plus exit code.
 
-1. **No ADR exists**: `docs/adr/` contains no project-specific ADR.
+**Python-unavailable fallback** (per AGENTS.md doctrine): If `python --version` fails (no Python on this host), fall back to a filesystem check: if `docs/adr/` is empty or absent, output the new-project prompt below. Otherwise record `"ADR coverage check skipped: python unavailable"` in Work Log Drift Log. Do NOT fail the bootstrap.
+
+Tool exit codes:
+
+- **Exit 2 — `no_adr_at_all`** (`docs/adr/` is empty): **Applies to ALL non-tiny-fix classifications.**
    → Output: `"🏗️ New project detected — no architecture ADR found. Run /app-init to establish project conventions? (yes/skip)"`
    → If yes: run `/app-init` workflow, then return here.
    → If skip: record `"App-init skipped by user"` in Work Log. Detection will NOT trigger again this session.
 
-2. **Partial ADR exists**: An ADR exists but has `[TBD]` sections relevant to the current task (e.g., task touches DB but ADR has `[TBD]` for Database section).
-   → Output: `"⚠️ Your architecture ADR has [TBD] sections relevant to this task: [list]. Fill them now via /app-init --partial? (yes/skip)"`
+- **Exit 1 — `no_covering_adr`** (ADRs exist, but no ADR's `applies_to` glob matches the current task's target files): **`feature` / `architecture-change` ONLY** — skip for `quick-win` and `hotfix`.
+   → Output: `"📐 No existing ADR covers this task's target files: [list]. Available ADRs: [list]. Run /adr to record this architectural decision before /spec? (yes/skip)"`
+   → If yes: route to `/adr` workflow, then return here.
+   → If skip: record `"ADR coverage skipped by user — task: <summary>"` in Work Log Drift Log. Detection will NOT re-trigger this session.
+   → ⚠️ Auxiliary stderr lists ADRs missing `applies_to:` frontmatter — these should be retro-fitted (one-line PR) so they participate in coverage matching going forward.
+
+- **Exit 0 — covered**: Proceed to Step 1. The covering ADR(s) are written to `## External References` of the Work Log so `/plan` and `/implement` can cite them.
+
+> **Why coverage, not existence?** A naive "No ADR exists" check becomes permanently False once *any* ADR ships — every subsequent `architecture-change` task would silently skip the prompt. The `applies_to:` glob makes coverage a positive predicate scoped to the files actually being changed.
+
+**Cost**: This check reads only the ADR frontmatter (~30 tokens × N ADRs). It does NOT read full ADR content — that happens later during /implement when skills are loaded. ADRs without `applies_to:` are reported but not blocking.
+
+**Partial-ADR escalation (feature/architecture-change only)**: If a covering ADR has `[TBD]` sections relevant to the current task, surface them inline:
+   → Output: `"⚠️ Covering ADR [<name>] has [TBD] sections relevant to this task: [list]. Fill them now via /app-init --partial? (yes/skip)"`
    → If yes: run `/app-init` in partial mode (§8 of app-init.md — only ask questions for TBD sections).
    → If skip: proceed, but AI uses generic conventions (skill scaffold defaults).
-
-3. **ADR exists and covers this task**: No action needed. Proceed to Step 1.
-
-**Cost**: This check reads only the ADR frontmatter + section headers (~50 tokens). It does NOT read full ADR content — that happens later during /implement when skills are loaded.
 
 **User-initiated trigger**: If user says "設定架構", "init app", "define tech stack", or similar intent at ANY point (even mid-development), route to `/app-init` regardless of current phase or classification. This allows mid-project architecture decisions.
 
@@ -61,15 +97,29 @@ If the task is classified as `feature` or `architecture-change`, check:
 ## 1. Initialization & Required Reading
 
 1. READ `.agentcortex/context/current_state.md` (SSoT).
-   - **Legacy Detection**: If `.agentcortex/context/current_state.md` is missing but `docs/context.md` or an `agent/` directory exists, AI MUST notify the user: "⚠️ Legacy AgentCortex structure detected. Recommend running the Migration Path from `.agentcortex/docs/guides/migration.md`."
+   - **Legacy Detection**: If `.agentcortex/context/current_state.md` is missing but `docs/context.md` or an `agent/` directory exists, AI MUST notify the user: "⚠️ Legacy Agentic OS structure detected. Recommend running the Migration Path from `.agentcortex/docs/guides/migration.md`."
    - **Cross-Branch Awareness**: Check "Branch List" for recently closed branches.
    - If current task overlaps with a recently merged branch's module, check the archive index for lightweight retrieval: prefer `.agentcortex/context/archive/INDEX.jsonl` (structured, deterministic query) if it exists; fall back to `.agentcortex/context/archive/INDEX.md` otherwise. Only open a specific archived log if its module/pattern entry matches your current task's target files. Do NOT scan all archive files.
    - If bootstrap must repair or refresh SSoT metadata (for example, stale Spec Index recovery), the write MUST go through `.agentcortex/tools/guard_context_write.py`.
+   - **Staleness Check**: After reading SSoT, check `Last Verified` field. If today's date minus `Last Verified` > 14 days, output advisory: `"⚠️ SSoT last verified <N> days ago. Consider running /govern-docs to refresh."` Do NOT block — advisory only.
+   - **Last Verified Update**: After successfully reading SSoT, update the `Last Verified` field to today's ISO date via `guard_context_write.py` (or direct write if Python unavailable).
+   - **ADR Auto-Discovery** (capability-by-presence): If `docs/adr/` exists AND classification is `feature` or `architecture-change`, scan filenames only (no body reads). If any ADR files are found, output advisory: `"📋 Found [N] ADR(s) in docs/adr/. Review relevant ones before planning."` Advisory only — does not block.
 2. READ/CREATE `.agentcortex/context/work/<worklog-key>.md` (Work Log).
    - **Work Log Resolution**: Resolve a filesystem-safe `<worklog-key>` from the current branch before any path check. Store the raw git branch string in `Branch:`.
-   - **Recoverable Missing Log**: If the active Work Log is missing, create it. If only archived logs exist for this branch, create a new follow-up Work Log and report the recovery instead of failing `/bootstrap`.
+     **Normalization algorithm** (canonical — all agents/platforms MUST use this exact rule):
+     1. Replace every character outside `[a-zA-Z0-9._-]` with `-` (covers `/`, `:`, `?`, `*`, `<`, `>`, `|`, `"`, `\`, space, and any other non-ASCII).
+     2. Collapse consecutive `-` runs into a single `-`.
+     3. Strip leading and trailing `-` and `.`.
+     4. Lowercase the result (guards against case-insensitive filesystem collisions on Windows and macOS).
+     5. Truncate to 100 characters.
+     Examples: `feature/foo` → `feature-foo`; `release/v1.2:rc` → `release-v1.2-rc`; `Fix Bug` → `fix-bug`; `feat/add-auth` → `feat-add-auth`.
+   - **Recoverable Missing Log**: If the active Work Log is missing, first also look for multi-person variants `<owner>-<worklog-key>.md` in `.agentcortex/context/work/` (per `engineering_guardrails.md §11`) and resume one of those if it matches your session/owner — only create a new log if none exist. If only archived logs exist for this branch, create a new follow-up Work Log and report the recovery instead of failing `/bootstrap`. When recovering from an archived log, write this entry to the new Work Log's `## Drift Log`: `"Recovered: prior log archived under .agentcortex/context/archive/ (root; named <prior-key>-<YYYYMMDD>.md) — session: <date>"`. Note: `/ship` final-archives completed logs to the **root** of `archive/`; the `archive/work/` subdir holds only `/handoff §6` compaction overflow, so the recovery hint resolves the root, not the subdir. This ensures the next session knows prior work existed.
    - **Bootstrap Branch Check**: If the Work Log already exists:
      - Check metadata (`Owner`, `Branch`, `Session`). If it matches your current session → RESUME safely. (Read `## Resume` if present, output "Resuming").
+     - If `Current Phase: plan` or `implement` or `review`: output `Resuming at <phase>. Next: continue /<phase> or advance to /<legal-next-per-state-machine>`.
+     - If `Current Phase: test` AND classification is `feature` or `architecture-change`: output `Next: /handoff` — the formal handoff step is required before ship.
+     - If `Current Phase: handoff` (HANDEDOFF state — handoff completed, ship pending): output `Next: /ship` immediately. This is the only legal continuation; do NOT re-bootstrap from scratch.
+     - If `Current Phase: ship`: output `Next: /ship — previously started, check Work Log ## Gate Evidence for completion status`.
      - If metadata differs (another agent/user owns it) → **WARN the user AND require confirmation before proceeding** ("⚠️ Concurrent session detected. Proceed?").
      - If metadata is missing → warn "⚠️ Legacy Work Log detected, verify ownership".
    - If Work Log has `## Lessons` block (from prior retro): acknowledge relevant patterns in your bootstrap output.
@@ -97,7 +147,7 @@ If the task is classified as `feature` or `architecture-change`, check:
 <!-- SCOPE: Steps 3-6 are conditional — skip steps whose preconditions are not met -->
 3. IF `.agentcortex/context/private/` exists, SCAN for local-only instructions (e.g., private Git workflows, environment-specific configs). These files are gitignored and contain context that should NOT be committed.
 4. **Migration/Integration Scenario** *(skip if not a migration task)*:
-   - Follow `docs/guides/migration.md`. Actively scan and suggest file reorganization.
+   - Follow `.agentcortex/docs/guides/migration.md`. Actively scan and suggest file reorganization.
    - MUST output migration plan and await user `OK` before ANY move/rename.
 5. **Active Backlog Detection**:
    - Check if `docs/specs/_product-backlog.md` exists.
@@ -109,6 +159,16 @@ If the task is classified as `feature` or `architecture-change`, check:
      ```
 
    - If user intent matches a pending backlog feature, route to `/spec-intake` §8a (continuation) instead of fresh bootstrap.
+   - **Status advance**: If bootstrap is starting work on a backlog feature whose row is `Pending`, update that row's status to `In Progress`. This is the only valid `Pending → In Progress` transition; `Pending → Shipped` directly is invalid.
+   - **Kind & Priority assignment**: When adding or updating a backlog item from this bootstrap session, set:
+     - `Kind`: use the most specific origin — precedence: `review-finding` (surfaced by `/review` or `/audit`) > `hotfix-spawn` (systemic issue from hotfix) > `quick-win` (small, no spec needed, classification-derived) > `feature` (default). A quick-win that originated from a review finding MUST be marked `review-finding`, not `quick-win` — classification and origin are independent.
+     - `Priority`: ask if not already set — `P0` (blocking), `P1` (high value), `P2` (nice to have), `—` (not yet prioritized, default on silence — do NOT block bootstrap waiting for an answer).
+   - **Label cluster check (quick-win only)**: If the task classifies as `quick-win` AND the backlog has a `Labels` column, identify the label(s) for the current task using the **label reuse rule** (read existing label values from the backlog's `Labels` column and pick the closest match — only create a new label when none fit), then count same-label pending items (excluding Shipped/Cancelled). If 3+ items share a label with no existing feature spec covering them, surface:
+     ```
+     📎 Label cluster: [N] '[label]' items in backlog with no parent spec.
+     Consider creating a feature spec to unify them before this quick-win? (yes / no / never ask again for '[label]')
+     ```
+     This is advisory — user may decline and proceed directly. If user replies "never ask again" or equivalent, append `<!-- cluster-declined: <label> <YYYY-MM-DD> count:<N> -->` to the backlog's `## Source Summary` (where `count` is the current same-label item count). Skip this label in future checks UNLESS the count has grown by ≥3 since decline, OR 90 days have passed — whichever comes first.
    - If no backlog exists, skip this step.
 6. **Large Raw Material Processing** (Chats, Whitepapers, Specs):
    - If user provided a spec, document, or raw material BEFORE bootstrap, check whether `/spec-intake` was already run:
@@ -120,7 +180,7 @@ If the task is classified as `feature` or `architecture-change`, check:
 <!-- END conditional steps -->
 7. Classify task per `engineering_guardrails.md`.
 
-**Write Path Guard** (all classifications): Project specs → `docs/specs/`, project ADRs → `docs/adr/`. NEVER write to `.agentcortex/specs/` or `.agentcortex/adr/` — those are framework-owned template fixtures. If the Spec Index references `.agentcortex/specs/`, READ from it but WRITE new work to `docs/specs/`.
+**Write Path Guard** (all classifications): Project specs → `docs/specs/`, project ADRs → `docs/adr/`. NEVER write to `.agentcortex/specs/` or `.agentcortex/adr/` — these paths are a reserved framework namespace (no content ships there today; may be populated in future template updates).
 
 Classification Tiers:
 
@@ -156,6 +216,7 @@ Write `## Session Info` and `## Drift Log` blocks immediately after header:
 - Agent: [model name]
 - Session: [timestamp]
 - Platform: [Antigravity / Codex Web / Codex App]
+- Guardrails loaded: [§ list — e.g., "§1, §2, §4, §7, §8.1, §10 (core)" | "skipped (quick-win)" | "skipped (tiny-fix)"]
 
 ## Drift Log
 - Skip Attempt: NO
@@ -188,7 +249,7 @@ none
 - bootstrap: classified as <tier>, skills matched, context loaded.
 
 ## Gate Evidence
-- Gate: bootstrap | Verdict: pass | Classification: <tier> | At: <ISO-timestamp>
+- Gate: bootstrap | Verdict: PASS | Classification: <tier> | Timestamp: <ISO>
 
 ## Evidence
 - Pending: bootstrap only; no implementation evidence yet.
@@ -232,30 +293,48 @@ Every non-`tiny-fix` workflow MUST maintain two header fields in the active Work
 **Phase Verification (all gated workflows)**: Before proceeding past the Gate Engine, each workflow MUST:
 
 1. Read `Current Phase` from the active Work Log header.
-2. Verify the transition is legal per `state_machine.md` (e.g., `plan` → `implement` is legal; `bootstrap` → `ship` is not).
+2. Verify the transition is legal per `state_machine.md` (e.g., `plan` → `implement` is legal; `implement` → `ship` is not for `feature` tasks).
 3. If the transition is illegal, output: `"⚠️ Phase transition [from] → [to] is not legal. Current phase is [from]. Expected: [legal-next-list]."` and STOP.
 4. Update `Current Phase` to the new phase name.
 
+**Bootstrap exemption**: `/bootstrap` itself is exempt from step 2. It is a context-loading/resume entry point, not a forward state transition. Bootstrap reads `Current Phase` to route the resume (§1 Step 2 Branch Check) but never blocks on transition legality — any `Current Phase` value is a valid starting point for a bootstrap.
+
 This costs < 10 tokens per phase entry and eliminates phase-tracking hallucination.
+
+**Session Caching**: If the agent transitions between phases within the SAME conversation (not resuming from handoff), it MAY trust its in-memory phase state and skip re-reading the Work Log header. The file read is only mandatory when: (a) resuming a Work Log from a prior session, or (b) the agent is uncertain about the current phase. The `Current Phase` header MUST still be written on every phase entry regardless of caching.
 
 ## 3. Expected Output Format
 
-1. Classification (with justification)
-2. Goal
-3. Paths
-4. Constraints & AC
-5. Non-goals
-6. Recommended Skills: Use the deterministic rule table below to select skills. Write ALL matched skills (with one-line reason) to Work Log. **Skip for `tiny-fix`.** No file reads required at this stage — skill metadata is already in context. This embedded rule table is the canonical low-token trigger source during bootstrap; repos MAY layer registry / compact-index metadata on top later, but bootstrap does not depend on those files.
+> **Compact block, not a dashboard.** Apply `shared-contracts.md §Phase Output Compression → /bootstrap`. The chat response is a summary pointer; the full record lives in the Work Log file. Do NOT reprint `Constraints`, `AC`, `Non-goals`, `Known Risk`, or `Read Plan` detail in chat — write them to the Work Log and reference by section name.
+
+Chat response template (≤ 10 lines for quick-win, ≤ 15 for feature/architecture):
+
+```
+Classification: <tier> — <1-line why>
+Goal: <1-line>
+Paths: <comma list or "(see Work Log §Task Description)">
+Skills: <comma list> (Ref: Work Log §Recommended Skills)
+Read: SSoT(<date>) · WorkLog(<new|resumed>) · Guardrails(<Full|Quick|Lite>)
+Next: <slash-command>
+⚡ ACX
+```
+
+Everything below — Classification justification, Recommended Skills rule table, skill conflict pass, user preference merge, Context Read Receipt, Read Plan, Next Step options — is written to the Work Log sections. It is the AI's working notes, NOT the chat response. If the user needs detail, they will ask.
+
+### 3.6 Recommended Skills Rule Table
+
+Write the result to Work Log `## Recommended Skills` (provenance tags as per §3.6a). Chat response shows only the comma list per §3 template. Skip for `tiny-fix`. **No skill metadata file reads required at this stage** — trigger data is embedded in the table above, and bootstrap does not depend on `.agentcortex/metadata/trigger-registry.yaml` or `trigger-compact-index.json`. The embedded rule table is the canonical low-token trigger source during bootstrap; repos MAY layer registry/compact-index metadata on top later for richer cost_risk signals. **Exception**: The Conflict Pass (below) DOES read `.agent/rules/skill_conflict_matrix.md` once when ≥2 skills are recommended and the task is NOT `tiny-fix`. This is the only file read at this stage.
 
    **Mandatory Skills (always activate when condition met):**
 
    | Skill | Phases | Condition | Skip when |
    |---|---|---|---|
-   | `writing-plans` | plan | Classification ≠ tiny-fix AND entering /plan | tiny-fix |
-   | `executing-plans` | implement | Approved plan exists in Work Log | Never |
    | `verification-before-completion` | implement, test, ship | Any phase completion claim | tiny-fix |
    | `systematic-debugging` | implement, review, test | Bug, error, or unexpected behavior encountered | Never |
    | `red-team-adversarial` | review, test | /review: hotfix→Lite, feature→Full, arch→Full+Beast | tiny-fix, quick-win |
+   | `karpathy-principles` | plan, implement, review | All non-trivial coding tasks (behavioral baseline) | tiny-fix |
+
+   *Plan / implement execution discipline previously held in `writing-plans` / `executing-plans` skills is now inlined directly into `plan.md` and `implement.md` workflows (always-on, no skill load).*
 
    **Scope-Detected Skills (activate when task touches that domain):**
 
@@ -266,15 +345,10 @@ This costs < 10 tokens per phase entry and eliminates phase-tracking hallucinati
    | `database-design` | implement, review, test | Creates tables, modifies schema, or writes migrations | feature, architecture-change, hotfix |
    | `frontend-patterns` | implement, review, test | Creates or modifies UI components, pages, client-side state | feature, architecture-change |
    | `auth-security` | implement, review, test | Touches login, password, token, session, role, permission | ALL |
+   | `production-readiness` | review, ship | Adds or modifies error handling, catch blocks, or logging | feature, architecture-change |
    | `doc-lookup` | implement, review | Task uses any framework/library in the project ADR tech stack | feature, architecture-change, hotfix, quick-win |
 
-   **Phase-Triggered Skills (auto-activate at phase entry):**
-
-   | Skill | Phases | Condition |
-   |---|---|---|
-   | `finishing-a-development-branch` | ship, handoff | Branch work complete |
-   | `receiving-code-review` | review | PR review comments received |
-   | `requesting-code-review` | review, handoff | Changes ready for external review |
+   *Branch closure (4 closure options), code-review request template, and 5-axis review quality standard previously held in `finishing-a-development-branch` / `requesting-code-review` / `receiving-code-review` skills are now inlined directly into `ship.md` / `handoff.md` / `review.md` workflows (always-on, no skill load).*
 
    **Complexity-Conditional Skills (recommend when scale warrants):**
 
@@ -286,22 +360,45 @@ This costs < 10 tokens per phase entry and eliminates phase-tracking hallucinati
 
    **Rule**: Do NOT limit to "0-2 skills". Recommend ALL skills whose conditions are met. A typical `feature` task should activate 4-8 skills.
    **Conflict Pass**: After choosing `Recommended Skills`, read `.agent/rules/skill_conflict_matrix.md` ONCE. If any recommended pair is marked `partial-conflict` or `conflict`, write the chosen precedence or scoping strategy to `## Conflict Resolution` in the Work Log. Later phases reuse that note instead of re-reading the matrix.
-7. Context Read Receipt: MUST output:
-   - `current_state.md` → [last modified date or key field you read]
-   - Work Log → [status: existing|created|resumed]
-   - Spec Scope → [list of determined-relevant spec files, or "none"]
-8. Read Plan (per `.agentcortex/docs/guides/context-budget.md`):
-   - Classification: [tier]
-   - Guardrails Mode: [Full|Quick|Lite] — determines which sections of `engineering_guardrails.md` apply
-   - Files to read: [list with sections]
-   - Files explicitly skipped: [list with reason]
-   - Estimated governance reads: [N files]
-9. Next Step Recommendation (based on classification):
-   - `tiny-fix`: → Proceed directly with inline plan.
-   - `quick-win`: → `/plan`
-   - `feature`: → `/brainstorm` or `/spec` (spec required before `/plan`)
-   - `architecture-change`: → `/brainstorm` → `/spec` (ADR + spec required before `/plan`)
-   - `hotfix`: → `/research` (systematic debugging)
+
+### 3.6a. User Skill Preference Merge (Capability-by-Presence)
+
+> **Scope**: Non-`tiny-fix` only. Runs AFTER rule table + conflict pass, BEFORE writing `Recommended Skills` to Work Log.
+> **Config**: `.agent/config.yaml §user_preferences`
+
+1. Check if the file at `.agent/config.yaml §user_preferences.path` (default: `.agentcortex/context/private/user-preferences.yaml`) exists. If not, skip this subsection entirely. **Zero cost.**
+2. Parse the file as YAML. If malformed or empty: warn once (`"⚠️ User preferences file exists but is malformed. Skipping."`), skip. **NEVER block bootstrap.**
+3. **Validate skill IDs** against the bootstrap rule table (§3.6) or, when available, `.agentcortex/metadata/trigger-compact-index.json`. Warn on unknown IDs; ignore them.
+4. **For each `pinned` skill**:
+   a. If already in `auto_skills` → no-op (already recommended via auto-detection).
+   b. If its `Skip when` / classification column excludes the current classification AND entry does NOT have `force: true` → skip with note: `"Pinned skill [X] skipped: skip-when active for [classification]."`
+   c. If its `Skip when` excludes the current classification AND entry has `force: true` → add with provenance `(pin+forced)`. **Hard ceiling**: even with `force`, a skill CANNOT activate in a phase outside its `phase_scope` (from trigger-compact-index or rule table `Phases` column).
+   d. Otherwise → add with provenance `(pin)`.
+   e. For each newly added pinned skill, check `.agent/rules/skill_conflict_matrix.md` against all existing recommended skills. If `partial-conflict`: apply guidance and record in `## Conflict Resolution` with `[pinned by user preference]`. If `conflict`: warn user and ask which takes priority — do NOT silently resolve.
+5. **For each `disabled` skill**:
+   a. If skill has `trigger_priority: hard` AND `block_if_missed: true` in the trigger registry, OR is listed in `.agent/config.yaml §user_preferences.protected_skills` → ignore the disable, warn once: `"⚠️ Cannot disable protected skill [X]. Ignored."`
+   b. Otherwise → remove from recommended skills with provenance `(disabled by user-pref)`.
+6. **Token advisory**: If the final pinned set adds more than `high_cost_pin_advisory_threshold` skills with `cost_risk: high` (per compact index), emit: `"Note: [N] pinned high-cost skills may increase token usage."`
+7. Write the final merged set to `Recommended Skills` with provenance tags: `(auto)`, `(pin)`, `(pin+forced)`, `(disabled by user-pref)`, `(protected, disable ignored)`.
+
+**A skill in both `pinned` and `disabled`**: pin wins (explicit request > explicit removal). Warn: `"Skill [X] is both pinned and disabled. Pin takes precedence."`
+
+### 3.7 Work Log Content (written to the Work Log file, NOT emitted in chat)
+
+These items are the AI's working notes. They live in the Work Log sections listed in `AGENTS.md §Work Log Contract` and are NOT repeated in the chat response. Chat only shows the compact block in §3.
+
+- **Context Read Receipt** (→ Work Log `## Session Info` or `## Task Description`):
+  - `current_state.md` → [last modified date or key field read]
+  - Work Log → [status: existing|created|resumed]
+  - Spec Scope → [list of determined-relevant spec files, or "none"]
+- **Read Plan** (→ Work Log `## Task Description` or header): Classification, Guardrails Mode (Full|Quick|Lite), Files to read (with sections), Files explicitly skipped (with reason), Estimated governance reads.
+- **Next Step Recommendation** — the chat block's `Next:` field uses this map:
+  - `tiny-fix` → proceed directly with inline plan
+  - `quick-win` → `/plan` (then `/implement` → `/ship`)
+  - `feature` → if no frozen spec: **`/brainstorm` first** (skip = log in Drift Log), then `/spec` → `/plan`; if frozen spec exists: `/spec` or `/plan`. Record full phase chain in Work Log `## Task Description` for reference: `[/brainstorm →] /spec → /plan → /implement → /review → /test → /handoff → /ship` (brackets = conditional on no frozen spec). `Next:` shows only the single immediate next command.
+  - `architecture-change` → **`/brainstorm` first** (skip = log in Drift Log) → `/spec` (ADR required) → `/plan`. **Full chain**: same as `feature` above.
+  - `hotfix` → `/research` (recommended for systematic debugging, not a required gate) → `/plan` → `/implement` → `/review` → `/test` → `/ship` (handoff exempt; see `engineering_guardrails.md §10.2`)
+  - *(Any classification)* Design fork detected (two viable approaches, OR/Either in task description) → suggest `/decide` before committing to a direction
 
 ## 4. Hard Checkpoints
 
@@ -323,10 +420,10 @@ If the values differ: output advisory warning:
 
 This is advisory — it warns but does not hard-block. The user may proceed after acknowledging.
 
-## 6. Antigravity Hard Stop (Runtime v5)
+## 6. Antigravity Hard Stop (Runtime v1)
 
-- After outputting the bootstrap report, STOP IMMEDIATELY.
-- Do NOT proceed to `/plan`, `/implement`, or any code changes in the same turn.
-- Next step MUST be planning (or direct execution if `tiny-fix` via §0 fast-path).
-- Output: "Bootstrap complete. What would you like to do next? (e.g., proceed to plan)"
+- After outputting the bootstrap report, check whether the user explicitly requested a downstream phase in the same message.
+  - **Yes** (e.g., "bootstrap then plan", "start this and plan it"): proceed to that phase per AGENTS.md §6 — do NOT add an extra confirmation turn. The bootstrap report was already output, so the user has visibility into classification.
+  - **No** (user only said "start this task" or invoked `/bootstrap` alone): STOP. Output: "Bootstrap complete. What would you like to do next? (e.g., proceed to plan)"
 - **Tiny-fix fast-path**: If §0 pre-classified as tiny-fix, skip this stop entirely — proceed directly to inline plan + execute.
+- Regardless of flow-through, NO code changes are allowed inside bootstrap itself. Code belongs in `/implement`.

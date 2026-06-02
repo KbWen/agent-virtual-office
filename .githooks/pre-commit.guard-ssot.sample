@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# pre-commit.guard-ssot.sample
+# Advisory guard hook — warns when governance SSoT files are staged without a guard receipt.
+# INSTALL: cp .githooks/pre-commit.guard-ssot.sample .githooks/pre-commit && chmod +x .githooks/pre-commit
+#          git config core.hooksPath .githooks
+#
+# This hook is WARN-ONLY (exit 0 always). It does NOT block commits.
+# Purpose: make accidental direct edits to SSoT files visible before they land.
+
+GUARD_RECEIPT=".agentcortex/context/.guard_receipts"
+GUARDED_PATHS=(
+  ".agentcortex/context/current_state.md"
+  "AGENTS.md"
+  ".agent/config.yaml"
+)
+
+warn=0
+for path in "${GUARDED_PATHS[@]}"; do
+  if git diff --cached --name-only | grep -qF "$path"; then
+    # Check for a recent receipt (written in last 60 minutes)
+    if [[ ! -d "$GUARD_RECEIPT" ]] || ! find "$GUARD_RECEIPT" -name "*.json" -newer "$path" -mmin -60 | grep -q .; then
+      echo "⚠️  GUARD WARN: $path staged without a recent guard receipt."
+      echo "   Run guard_context_write.py or use the /ship workflow to update SSoT."
+      echo "   (Advisory only — commit not blocked)"
+      warn=1
+    fi
+  fi
+done
+
+exit 0

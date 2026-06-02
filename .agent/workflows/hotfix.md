@@ -2,11 +2,13 @@
 name: hotfix
 description: Emergency patch workflow. Root cause analysis followed by minimal fix.
 tasks:
+  - bootstrap
   - research
   - plan
   - implement
   - review
   - test
+  - ship
 ---
 
 # Hotfix Workflow
@@ -42,3 +44,19 @@ Run `/review` then `/test`. Testing must include:
 ## 5. Evidence
 
 Work Log must contain: root cause description, fix rationale, reproduction test output, regression test output.
+
+**Systemic issue flag**: If root cause analysis reveals a systemic issue beyond this specific bug (e.g., a missing validation pattern, a class of unsafe API calls, an architectural gap), log it in `docs/specs/_product-backlog.md`:
+- Set `Kind: hotfix-spawn`
+- Set `Labels` to the affected domain
+- Set `Priority: P1` (systemic issues warrant near-term attention but don't block the hotfix itself)
+
+## 6. Optional: Cloud PR Auto-Fix (Claude Code CLI only)
+
+When the hotfix is pushed to a PR and the user is running inside Claude Code CLI, the user MAY invoke `/autofix-pr` to enable Anthropic's cloud auto-fix loop on the PR. Claude Code on the web watches CI + review comments and pushes fixes until green.
+
+- Trigger: user types `/autofix-pr` from the PR's branch.
+- This is **opt-in and Claude-CLI-only** — agent MUST NOT auto-trigger; not part of the cross-platform `/hotfix` contract.
+- Receipts: paste the `/autofix-pr` confirmation into Work Log `## External References` as `External Fix Loop: autofix-pr enabled — <PR#>`.
+- The framework `/test` and `/review` gates STILL apply locally; cloud auto-fix is supplementary, not a substitute for the standard hotfix gate sequence.
+
+Reference: <https://code.claude.com/docs/en/claude-code-on-the-web#auto-fix-pull-requests>.

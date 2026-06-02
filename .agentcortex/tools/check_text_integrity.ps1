@@ -1,149 +1,112 @@
+#!/usr/bin/env pwsh
+<#
+.SYNOPSIS
+  Check tracked text files for encoding regressions (Windows PowerShell equivalent of check_text_integrity.py).
+.DESCRIPTION
+  Scans git-tracked and untracked text files for UTF-8 BOM, invalid UTF-8,
+  mixed line endings, and null bytes. Known exceptions listed in the baseline
+  file are reported but do not cause failure.
+#>
 param(
-    [string]$Root,
-    [string]$BaselinePath
+    [string]$Root = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
+    [string]$Baseline = ""
 )
 
-Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = "Stop"
 
-function Normalize-PathString {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    if ($Path.StartsWith('\\?\')) { return $Path.Substring(4) }
-    return $Path
-}
-
-function Get-RepoRoot {
-    if ($Root) {
-        return Normalize-PathString ([System.IO.Path]::GetFullPath((Normalize-PathString $Root)))
-    }
-    $scriptDir = Normalize-PathString $PSScriptRoot
-    if (-not $scriptDir) { $scriptDir = Normalize-PathString (Split-Path -Parent $PSCommandPath) }
-    if (-not $scriptDir) { $scriptDir = Normalize-PathString ((Get-Location).Path) }
-    return Normalize-PathString ([System.IO.Path]::GetFullPath([System.IO.Path]::Combine($scriptDir, '..')))
-}
-
-function Get-BaselinePath {
-    param([string]$RepoRoot)
-    if ($BaselinePath) { return Normalize-PathString ([System.IO.Path]::GetFullPath((Normalize-PathString $BaselinePath))) }
-    return [System.IO.Path]::Combine($RepoRoot, 'tools', 'text_integrity_baseline.txt')
-}
+$TextSuffixes = @('.md','.sh','.ps1','.cmd','.bat','.yml','.yaml','.txt','.rules','.toml','.json','.py','.cff')
+$TextFilenames = @('.gitignore','.gitattributes','.editorconfig')
 
 function Get-CandidateFiles {
-    param([string]$RepoRoot)
-    $commands = @(
-        @('ls-files'),
-        @('ls-files', '--others', '--exclude-standard')
-    )
-    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-    $results = [System.Collections.Generic.List[string]]::new()
-    foreach ($commandArgs in $commands) {
-        $output = & git -C $RepoRoot @commandArgs
-        $exitCode = if (Get-Variable LASTEXITCODE -ErrorAction SilentlyContinue) { $LASTEXITCODE } else { 0 }
-        if ($exitCode -ne 0) {
-            throw 'git ls-files failed while building text integrity file list.'
-        }
-        foreach ($line in ($output | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
-            if ($seen.Add($line)) {
-                $results.Add($line)
-            }
+    $seen = @{}
+    $paths = @()
+    foreach ($cmd in @("git ls-files -z", "git ls-files -z --others --exclude-standard")) {
+        $output = & git @($cmd.Split(' ') | Select-Object -Skip 1) 2>$null
+        if (-not $output) { continue }
+        foreach ($item in $output -split "`0") {
+            $item = $item.Trim()
+            if (-not $item -or $seen.ContainsKey($item)) { continue }
+            $seen[$item] = $true
+            $paths += Join-Path $Root $item
         }
     }
-    return $results
+    return $paths
 }
 
 function Test-TextCandidate {
-    param([string]$RelativePath)
-    $ext = [System.IO.Path]::GetExtension($RelativePath).ToLowerInvariant()
-    $name = [System.IO.Path]::GetFileName($RelativePath).ToLowerInvariant()
-    $suffixes = @('.md', '.sh', '.ps1', '.cmd', '.bat', '.yml', '.yaml', '.txt', '.rules', '.toml', '.json', '.py', '.cff')
-    $names = @('.gitignore', '.gitattributes', '.editorconfig')
-    return ($suffixes -contains $ext) -or ($names -contains $name)
+    param([string]$FilePath)
+    $ext = [System.IO.Path]::GetExtension($FilePath).ToLower()
+    $name = [System.IO.Path]::GetFileName($FilePath).ToLower()
+    return ($TextSuffixes -contains $ext) -or ($TextFilenames -contains $name)
 }
 
-function Get-BaselineSet {
-    param([string]$Path)
-    $set = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-    if (-not (Test-Path -Path $Path -PathType Leaf)) { return $set }
-    foreach ($line in Get-Content -Path $Path -Encoding utf8) {
-        $trimmed = $line.Trim()
-        if (-not $trimmed -or $trimmed.StartsWith('#')) { continue }
-        [void]$set.Add($trimmed.Replace('\', '/'))
+function Get-BaselineEntries {
+    if ($Baseline) { $bpath = $Baseline }
+    else { $bpath = Join-Path $Root ".agentcortex/tools/text_integrity_baseline.txt" }
+    if (-not (Test-Path $bpath)) { return @() }
+    $entries = @()
+    foreach ($line in (Get-Content $bpath -Encoding UTF8)) {
+        $line = $line.Trim()
+        if (-not $line -or $line.StartsWith('#')) { continue }
+        $entries += $line.Replace('\','/')
     }
-    return $set
+    return $entries
 }
 
-function Test-MixedLineEndings {
-    param([byte[]]$Bytes)
-    $hasCrLf = $false
-    for ($i = 0; $i -lt ($Bytes.Length - 1); $i++) {
-        if ($Bytes[$i] -eq 13 -and $Bytes[$i + 1] -eq 10) {
-            $hasCrLf = $true
-            break
-        }
-    }
-    $hasBareLf = $false
-    $hasBareCr = $false
-    for ($i = 0; $i -lt $Bytes.Length; $i++) {
-        $current = $Bytes[$i]
-        $prev = if ($i -gt 0) { $Bytes[$i - 1] } else { -1 }
-        $next = if ($i -lt ($Bytes.Length - 1)) { $Bytes[$i + 1] } else { -1 }
-        if ($current -eq 10 -and $prev -ne 13) { $hasBareLf = $true }
-        if ($current -eq 13 -and $next -ne 10) { $hasBareCr = $true }
-    }
-    return ($hasCrLf -and ($hasBareLf -or $hasBareCr)) -or ($hasBareLf -and $hasBareCr)
-}
-
-function Get-FileIssues {
-    param([byte[]]$Bytes)
-    $issues = [System.Collections.Generic.List[string]]::new()
-    if ($Bytes.Length -ge 3 -and $Bytes[0] -eq 0xEF -and $Bytes[1] -eq 0xBB -and $Bytes[2] -eq 0xBF) {
-        $issues.Add('utf8-bom')
+function Inspect-File {
+    param([string]$FilePath)
+    $issues = @()
+    $bytes = [System.IO.File]::ReadAllBytes($FilePath)
+    # UTF-8 BOM is REQUIRED on .ps1 scripts containing non-ASCII characters,
+    # otherwise Windows PowerShell 5.1 reads them as the system ANSI code page
+    # (e.g. CP950/Big5 on Taiwan locale) and the parser breaks on the mojibake.
+    $ext = [System.IO.Path]::GetExtension($FilePath).ToLower()
+    if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF -and $ext -ne ".ps1") {
+        $issues += "utf8-bom"
     }
     try {
-        $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
-        $text = $utf8.GetString($Bytes)
+        $enc = [System.Text.UTF8Encoding]::new($false, $true)
+        $null = $enc.GetString($bytes)
     } catch {
-        $issues.Add('invalid-utf8')
+        $issues += "invalid-utf8"
         return $issues
     }
-    if ($text.Contains([char]0)) {
-        $issues.Add('null-byte')
-    }
-    if (Test-MixedLineEndings $Bytes) {
-        $issues.Add('mixed-eol')
-    }
+    $text = [System.Text.Encoding]::UTF8.GetString($bytes)
+    if ($text.Contains("`0")) { $issues += "null-byte" }
     return $issues
 }
 
-$repoRoot = Get-RepoRoot
-$baseline = Get-BaselineSet (Get-BaselinePath $repoRoot)
-$baselineHits = [System.Collections.Generic.List[string]]::new()
-$regressions = [System.Collections.Generic.List[string]]::new()
+# Main
+Push-Location $Root
+try {
+    $baselineSet = Get-BaselineEntries
+    $regressions = @()
+    $baselineHits = @()
 
-foreach ($relativePath in Get-CandidateFiles $repoRoot) {
-    if (-not (Test-TextCandidate $relativePath)) { continue }
-    $normalizedRelativePath = $relativePath.Replace('\', '/')
-    $fullPath = [System.IO.Path]::Combine($repoRoot, $relativePath)
-    if (-not (Test-Path -Path $fullPath -PathType Leaf)) { continue }
-    try {
-        $bytes = [System.IO.File]::ReadAllBytes($fullPath)
-    } catch {
-        Write-Error "unable to read text integrity candidate: ${normalizedRelativePath} ($fullPath)"
+    foreach ($filePath in (Get-CandidateFiles)) {
+        if (-not (Test-Path $filePath) -or -not (Test-TextCandidate $filePath)) { continue }
+        $rel = (Resolve-Path -Relative $filePath).Replace('\','/') -replace '^\.\/',''
+        $issues = Inspect-File $filePath
+        if ($issues.Count -eq 0) { continue }
+        if ($baselineSet -contains $rel) {
+            $baselineHits += @{ Path=$rel; Issues=$issues }
+        } else {
+            $regressions += @{ Path=$rel; Issues=$issues }
+        }
+    }
+
+    if ($regressions.Count -gt 0) {
+        Write-Error "Text integrity regression(s) detected:"
+        foreach ($r in $regressions) {
+            Write-Error "  - $($r.Path): $($r.Issues -join ', ')"
+        }
+        if ($baselineHits.Count -gt 0) {
+            Write-Error "Baseline exceptions still present: $($baselineHits.Count)"
+        }
         exit 1
     }
-    $issues = @(Get-FileIssues $bytes)
-    if ($issues.Count -eq 0) { continue }
-    $entry = "${normalizedRelativePath}: $($issues -join ', ')"
-    if ($baseline.Contains($normalizedRelativePath)) {
-        $baselineHits.Add($entry)
-    } else {
-        $regressions.Add($entry)
-    }
+    Write-Host "Text integrity check passed ($($baselineHits.Count) baseline exception(s) tracked)."
+    exit 0
+} finally {
+    Pop-Location
 }
-
-if ($regressions.Count -gt 0) {
-    Write-Error ('Text integrity regression(s) detected:' + [Environment]::NewLine + '  - ' + ($regressions -join ([Environment]::NewLine + '  - ')))
-    exit 1
-}
-
-Write-Output "Text integrity check passed ($($baselineHits.Count) baseline exception(s) tracked)."

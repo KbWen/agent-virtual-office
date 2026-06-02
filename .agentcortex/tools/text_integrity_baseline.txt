@@ -1,4 +1,4 @@
-# Legacy text-integrity exceptions kept as baseline so validation only blocks regressions.
-# One relative path per line.
-.agentcortex/docs/CLAUDE_PLATFORM_GUIDE.md
-tests/template_import_cleanup_smoke.ps1
+# Text Integrity Baseline
+# Files listed here are known to have encoding issues that are accepted.
+# Format: relative/path/to/file.ext (one per line, forward slashes)
+# Empty lines and lines starting with # are ignored.

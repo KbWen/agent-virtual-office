@@ -1,6 +1,20 @@
-# AgentCortex Framework Configuration
+# Agentic OS Framework Configuration
 # Central source of truth for governance constants.
 # Workflows reference these values instead of hardcoding inline defaults.
+
+cluster:
+  # Minimum same-label items with no parent spec before a cluster prompt fires.
+  threshold: 3
+  # Maximum distinct label values in a backlog before validate.sh warns of vocabulary drift.
+  max_distinct_labels: 15
+  # P0 ratio threshold — WARN when more than this % of pending items are P0.
+  p0_warn_pct: 20
+  # Maximum cluster-declined suppression markers in backlog Source Summary.
+  max_declined_markers: 5
+  # Cluster prompt suppression expiry: re-prompt if same-label count grew by this many items.
+  declined_growth_threshold: 3
+  # Cluster prompt suppression expiry: re-prompt after this many days regardless of count.
+  declined_ttl_days: 90
 
 worklog:
   # Compaction triggers — when a Work Log exceeds either threshold,
@@ -13,7 +27,7 @@ worklog:
 
 # Skill Notes cache policy — single source of truth.
 # Phase workflows reference this section instead of restating rules inline.
-# See: docs/specs/governance-hardening-batch.md §Workstream 4.
+# Contract: AGENTS.md §Skill Safety & Precedence, §Shared Phase Contracts.
 skill_cache_policy:
   # A Skill Notes block for a given phase is considered VALID (cache hit)
   # when ALL of the following are true:
@@ -24,14 +38,12 @@ skill_cache_policy:
   require_constraint: true
   #   4. The note body (after stripping labels/whitespace) meets this minimum
   min_body_chars: 50
-  # When trigger-compact-index.json exists AND the skill block carries
-  # a Content Hash / cached_hash, compare hashes FIRST.
-  # If the compact index is absent or the hash field is absent,
-  # fall back to the structural validity checks above.
-  prefer_hash_when_available: true
+  # NOTE: prefer_hash_when_available was removed in 2026-04-25 cleanup.
+  # No validator computed cached_hash in practice; the structural check
+  # above (1-4) is the actual cache predicate. See AGENTS.md §Skill Safety #7.
 
 # Advisory Work Log locking — prevents accidental concurrent edits.
-# See: docs/specs/governance-hardening-batch.md §Workstream 6.
+# Contract: AGENTS.md §Multi-Person / Multi-Session Collaboration.
 worklog_lock:
   # Lock file: .agentcortex/context/work/<worklog-key>.lock.json
   # Schema: { "owner", "session", "branch", "phase", "updated_at", "stale_timeout_minutes" }
@@ -43,7 +55,7 @@ worklog_lock:
   enabled: true
 
 # Domain Doc governance — two-layer Architecture (Synthesis L1 + Decision Log L2).
-# Ref: docs/specs/doc-lifecycle-governance.md AC-6, AC-17, AC-19
+# Contract: AGENTS.md §Document Lifecycle Governance.
 domain_doc:
   # Maximum lines for a Domain Doc Layer 1 (Synthesis) file.
   # Exceeding this cap should trigger /govern-docs --restructure.
@@ -56,3 +68,81 @@ domain_doc:
   # Advisory lock timeout for Domain Doc L2 writes.
   # Same schema as worklog_lock: .agentcortex/context/domain/<domain>.lock.json
   lock_stale_timeout_minutes: 15
+
+# User Skill Preferences — per-user persistent skill pinning/disabling.
+# Capability-by-presence: if the preferences file does not exist, this
+# entire feature is inert. Zero cost.
+# See: AGENTS.md §Skill Safety & Precedence item 8.
+user_preferences:
+  # Path (relative to repo root) where the user's personal preferences
+  # file is read. This path MUST be gitignored.
+  path: .agentcortex/context/private/user-preferences.yaml
+
+  # Skills that CANNOT be disabled by user preferences.
+  # In addition to this explicit list, any skill with
+  # trigger_priority: hard AND block_if_missed: true in the
+  # trigger-registry is implicitly protected.
+  protected_skills:
+    - verification-before-completion
+    - auth-security
+
+  # When a user pins more than this many skills with cost_risk: high,
+  # bootstrap emits an advisory (not blocking) about token cost.
+  high_cost_pin_advisory_threshold: 2
+
+
+# Document lifecycle caps — prevents unbounded SSoT bloat.
+# See: docs/specs/tiered-doc-lifecycle.md
+document_lifecycle:
+  # Global Lessons in current_state.md: max entries before oldest LOW-severity
+  # lessons are archived to .agentcortex/context/archive/global-lessons-archive.md.
+  # HIGH-severity lessons are pinned until manually demoted.
+  global_lessons_max_entries: 20
+
+  # Spec Index in current_state.md: max entries before oldest shipped entries
+  # are collapsed into an archive section at bottom of the index.
+  spec_index_max_entries: 30
+
+  # _raw-intake*.md files: MUST be deleted (not archived) by /ship when
+  # all features from the intake are Shipped or Cancelled.
+  raw_intake_cleanup: must_delete
+
+# Governance Exemption Scope
+# Directories considered production code where Design-First and Error Observability rules apply.
+# All other directories (e.g., tools/, scripts/, scratch/, tests/) are exempt.
+# IMPORTANT: Downstream projects MUST override this list to match their tech stack
+# (e.g., adding `cmd/`, `pkg/` for Go, or `pages/` for Next.js).
+# Note: Currently uses prefix matching. Be aware that `src/scripts/` will be treated
+# as production unless future logic supports exclude arrays.
+production_paths:
+  - src/
+  - app/
+  - lib/
+  - packages/
+
+# Guard policy — paths that MUST be written via guard_context_write.py.
+# Enforced at lint time by .agentcortex/tools/lint_governed_writes.py (CI).
+# Direct file writes to protected_paths are rejected to keep SSoT and
+# governance documents consistent under concurrent edits.
+guard_policy:
+  # Glob list (POSIX style); matched via fnmatch against repo-relative POSIX paths.
+  protected_paths:
+    - ".agentcortex/context/**"
+    - "AGENTS.md"
+    - ".agent/rules/**"
+    - ".agent/workflows/**"
+    - ".agent/config.yaml"
+    - ".agent/skills/**"
+    - "docs/adr/**"
+    - "docs/architecture/*.log.md"
+    - "docs/specs/_product-backlog.md"
+  # Set true ONLY for explicit non-policy targets (CLI must also pass --allow-outside).
+  allow_outside_paths: false
+  # Lock TTL for stale-lock cleanup. Env var ACX_GUARD_STALE_SECONDS overrides per-call.
+  lock_stale_seconds: 900
+  # Per-target receipt directory; relative to repo root.
+  receipt_dir: ".agentcortex/context/.guard_receipts"
+  # When true, EVERY guarded write produces a per-target receipt.
+  per_target_receipts: true
+  # Phase 1 dual-write: also write to legacy .guard_receipt.json for one release.
+  legacy_receipt_mirror: true

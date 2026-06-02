@@ -46,6 +46,25 @@ Before `/ship`, you must have a `/handoff`. Minimum reference requirements:
 
 If unsatisfied, you must reject `/ship` and list the missing items.
 
+## Gate Receipt Persistence — Codex Web
+
+On Codex Web there is no file-write capability. Gate receipts MUST still be recorded for validator compliance. Protocol:
+
+1. At each phase completion, output the gate receipt as a fenced block in chat:
+   ```
+   ## Gate Evidence
+   - Gate: <phase> | Verdict: PASS | Classification: <tier> | Timestamp: <ISO>
+   ```
+2. Instruct the user: "Paste the block above into `.agentcortex/context/work/<worklog-key>.md` under `## Gate Evidence`."
+3. Do NOT proceed to the next phase until the user confirms the paste is done (or acknowledges they will do it before `/ship`).
+4. At `/ship`, the Gate Receipt Audit checks the Work Log — if receipts are missing because the user did not paste them, `/ship` MUST fail with `missing: [<phase> receipt]`.
+
+This ensures Codex Web-authored Work Logs remain validator-compliant even without direct file access.
+
+## Handoff Timing
+
+Handoff timing follows the cross-platform SSoT — `AGENTS.md §Context Pruning` (context occupancy + phase boundary, not turn-count). Codex nuance (`.agentcortex/docs/guides/token-governance.md §6.1`): automatic prompt caching is active (0.1×, prefix ≥1024 tok; 24 h extended on GPT-5.1), and auto-compaction fires late (~95% capacity) and can derail mid-task — so prefer handing off at a clean phase boundary before that.
+
 ## Web Edition Recommendations
 
 - Use one thread per requirement to avoid context pollution.

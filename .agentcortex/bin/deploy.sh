@@ -11,19 +11,33 @@ case "$_raw_cp_flag" in
 esac
 ACX_SOURCE="${ACX_SOURCE:-}"
 TARGET=""
+DRY_RUN=false
 
 # --- Argument parsing ---
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --source) ACX_SOURCE="$2"; shift 2 ;;
         --source=*) ACX_SOURCE="${1#--source=}"; shift ;;
+        --dry-run) DRY_RUN=true; shift ;;
         *) TARGET="$1"; shift ;;
     esac
 done
 TARGET="${TARGET:-.}"
+TARGET="${TARGET%/}"
 
 MANIFEST_FILE="$TARGET/.agentcortex-manifest"
-ACX_VERSION="5.4.0"
+ACX_VERSION="1.2.0"
+
+# --- Self-deploy guard ---
+TARGET_ABS="$(cd "$TARGET" 2>/dev/null && pwd || echo "$TARGET")"
+REPO_ABS="$(cd "$REPO_ROOT" 2>/dev/null && pwd)"
+if [ "$TARGET_ABS" = "$REPO_ABS" ]; then
+    echo "" >&2
+    echo "ERROR: Target is the Agentic OS source repo itself." >&2
+    echo "Deploy INTO your project, not into the framework source." >&2
+    echo "Usage: $0 /path/to/your-project" >&2
+    exit 1
+fi
 
 # --- Counters ---
 COUNT_UPDATED=0
@@ -38,9 +52,11 @@ compute_sha256() {
         sha256sum "$file" | cut -d' ' -f1
     elif command -v shasum >/dev/null 2>&1; then
         shasum -a 256 "$file" | cut -d' ' -f1
-    else
-        # fallback: use openssl if available
+    elif command -v openssl >/dev/null 2>&1; then
         openssl dgst -sha256 "$file" | awk '{print $NF}'
+    else
+        echo "ERROR: No SHA-256 tool found (need sha256sum, shasum, or openssl)." >&2
+        exit 1
     fi
 }
 
@@ -59,11 +75,20 @@ get_tier() {
     local rel_path="$1"
     case "$rel_path" in
         # wrapper — user may customize these delegation scripts
-        deploy_brain.sh|deploy_brain.ps1|deploy_brain.cmd) echo "wrapper" ;;
+        installers/deploy_brain.sh|installers/deploy_brain.ps1|installers/deploy_brain.cmd) echo "wrapper" ;;
 
-        # scaffold — created once, user expected to modify
+        # scaffold — created once, user expected to modify (or merge framework + project content)
+        AGENTS.md|CLAUDE.md) echo "scaffold" ;;
+        .gitattributes) echo "scaffold" ;;
         .agentcortex/context/current_state.md) echo "scaffold" ;;
         .agentcortex/adr/*) echo "scaffold" ;;
+        .agentcortex/templates/*) echo "scaffold" ;;
+        .claude/settings.json) echo "scaffold" ;;
+        .github/ISSUE_TEMPLATE/*) echo "scaffold" ;;
+        .github/PULL_REQUEST_TEMPLATE.md) echo "scaffold" ;;
+
+        # scaffold — user may customize advisory hook samples before activating
+        .githooks/*) echo "scaffold" ;;
 
         # core — everything else is framework, always overwrite
         *) echo "core" ;;
@@ -129,10 +154,23 @@ deploy_file() {
         else
             # Scaffold/wrapper: check if user modified
             if [ -z "$old_manifest_hash" ]; then
-                # File exists in target but not in old manifest — treat as new
-                cp ${CP_FLAG:+"$CP_FLAG"} "$src" "$dst"
-                [ -n "$do_chmod" ] && chmod +x "$dst"
-                COUNT_NEW=$((COUNT_NEW + 1))
+                # File exists in target but not in old manifest. The file
+                # likely carries user content (legacy migration, pre-manifest
+                # era, or content brought in out-of-band). Preserve it via
+                # sidecar when content differs from the framework version —
+                # never silently overwrite scaffold-tier user content.
+                local dst_hash
+                dst_hash="$(compute_sha256 "$dst")"
+                if [ "$src_hash" != "$dst_hash" ]; then
+                    cp ${CP_FLAG:+"$CP_FLAG"} "$src" "$dst.acx-incoming"
+                    echo "  [SKIP] $rel (pre-existing/migrated; new version at $rel.acx-incoming — merge manually or ask AI agent to merge)"
+                    COUNT_SKIPPED=$((COUNT_SKIPPED + 1))
+                    # Record the user's current hash so future updates still detect modification.
+                    record_deployed "$tier" "$rel" "$dst_hash"
+                    return 0
+                fi
+                # Same content — no-op; record the matching hash for future runs.
+                COUNT_UPDATED=$((COUNT_UPDATED + 1))
             else
                 local dst_hash
                 dst_hash="$(compute_sha256 "$dst")"
@@ -158,9 +196,24 @@ deploy_file() {
             fi
         fi
     elif [ -f "$dst" ] && ! $is_update; then
-        # Fresh install but file already exists (pre-manifest era)
-        cp ${CP_FLAG:+"$CP_FLAG"} "$src" "$dst"
-        [ -n "$do_chmod" ] && chmod +x "$dst"
+        # Fresh install but file already exists (pre-manifest era, or first deploy into existing project).
+        # For scaffold/wrapper tiers, preserve the user's file and write a sidecar so nothing is clobbered.
+        if [ "$tier" != "core" ]; then
+            local dst_hash
+            dst_hash="$(compute_sha256 "$dst")"
+            if [ "$src_hash" != "$dst_hash" ]; then
+                cp ${CP_FLAG:+"$CP_FLAG"} "$src" "$dst.acx-incoming"
+                echo "  [SKIP] $rel (pre-existing; new version at $rel.acx-incoming — merge manually or ask AI agent to merge)"
+                COUNT_SKIPPED=$((COUNT_SKIPPED + 1))
+                # Record the USER's current hash so future updates still detect modification.
+                record_deployed "$tier" "$rel" "$dst_hash"
+                return 0
+            fi
+            # Same content — safe to let it be (no cp needed since identical)
+        else
+            cp ${CP_FLAG:+"$CP_FLAG"} "$src" "$dst"
+            [ -n "$do_chmod" ] && chmod +x "$dst"
+        fi
     else
         # File doesn't exist in target — always deploy
         cp ${CP_FLAG:+"$CP_FLAG"} "$src" "$dst"
@@ -185,10 +238,10 @@ IS_UPDATE=false
 
 if [ -f "$MANIFEST_FILE" ]; then
     IS_UPDATE=true
-    echo "Updating AgentCortex v${ACX_VERSION} (${SOURCE_COMMIT}) in $TARGET..."
+    echo "Updating Agentic OS v${ACX_VERSION} (${SOURCE_COMMIT}) in $TARGET..."
     clean_acx_incoming
 else
-    echo "Installing AgentCortex v${ACX_VERSION} (${SOURCE_COMMIT}) to $TARGET..."
+    echo "Installing Agentic OS v${ACX_VERSION} (${SOURCE_COMMIT}) to $TARGET..."
 fi
 
 # --- Migrate from legacy paths (v5.3 → v6) ---
@@ -207,11 +260,11 @@ migrate_if_exists() {
     fi
 }
 
-# Migration safety: only trigger if we find AgentCortex-specific markers.
+# Migration safety: only trigger if we find Agentic OS-specific markers.
 # A bare agentcortex/ dir is unambiguously ours. But docs/adr/ or docs/specs/
 # could belong to the downstream project. We only migrate docs/ subdirs if
 # there is ALSO an old agentcortex/ dir or a prior .agentcortex-manifest
-# (proving this repo had a previous AgentCortex install).
+# (proving this repo had a previous Agentic OS install).
 _acx_legacy_confirmed=false
 if [ -d "$TARGET/agentcortex" ] || [ -f "$TARGET/.agentcortex-manifest" ]; then
     _acx_legacy_confirmed=true
@@ -268,11 +321,18 @@ if $_acx_legacy_confirmed || [ -f "$TARGET/tools/validate.sh" ] || \
             fi
         done
 
+        # Framework ADRs that historically lived under .agentcortex/adr/ — match
+        # by filename so a downstream project's own ADR-001 is never mistaken
+        # for the framework's. Keep in sync with .agentcortex/adr/ contents.
+        _framework_adrs="ADR-001-vnext-self-managed-architecture.md"
         for adr_file in "$TARGET/.agentcortex/adr"/*.md; do
             [ -f "$adr_file" ] || continue
             bname="$(basename "$adr_file")"
-            # ADR-001-* is the framework ADR; everything else is project-owned
-            case "$bname" in ADR-001-*) continue ;; esac
+            _is_framework=false
+            for fw in $_framework_adrs; do
+                [ "$bname" = "$fw" ] && _is_framework=true && break
+            done
+            $_is_framework && continue
             mkdir -p "$TARGET/docs/adr"
             if [ -e "$TARGET/docs/adr/$bname" ]; then
                 echo "  [SKIP] docs/adr/$bname already exists — orphaned copy left in .agentcortex/adr/$bname (resolve manually)"
@@ -297,6 +357,107 @@ if $_acx_legacy_confirmed || [ -f "$TARGET/tools/validate.sh" ] || \
     echo ""
 fi
 
+# --- Pre-deploy write permission check ---
+if [ ! -d "$TARGET" ]; then
+    mkdir -p "$TARGET" 2>/dev/null || true
+fi
+if [ -e "$TARGET" ] && [ ! -d "$TARGET" ]; then
+    echo "" >&2
+    echo "ERROR: Target path exists but is not a directory: $TARGET" >&2
+    echo "Fix: provide a directory path, not a file." >&2
+    exit 1
+fi
+if [ ! -w "$TARGET" ]; then
+    echo "" >&2
+    echo "ERROR: Target directory is not writable: $TARGET" >&2
+    echo "Fix: check permissions or run with appropriate privileges." >&2
+    exit 1
+fi
+
+# --- Dry-run mode: preview only ---
+if $DRY_RUN; then
+    echo ""
+    echo "[DRY RUN] Would deploy Agentic OS v${ACX_VERSION} (${SOURCE_COMMIT}) to $TARGET"
+    echo ""
+    echo "Directories that would be created:"
+    for d in \
+        ".agent/rules" ".agent/workflows" ".agent/skills" \
+        ".antigravity" ".agents/skills" ".claude/commands" ".claude/agents" \
+        ".codex" "codex/rules" ".github/ISSUE_TEMPLATE" \
+        ".agentcortex/bin" ".agentcortex/metadata" ".agentcortex/tools" \
+        ".agentcortex/docs/guides" ".agentcortex/context/work" \
+        ".agentcortex/context/archive" \
+        ".agentcortex/templates" ".agentcortex/adr" ".agentcortex/specs" \
+        "docs/specs" "docs/adr"; do
+        [ -d "$TARGET/$d" ] || echo "  [NEW DIR] $d"
+    done
+    echo ""
+    echo "Files that would be deployed (core tier = always overwrite, scaffold = skip if modified):"
+    _dry_count=0
+    # Enumerate only the files that are actually deployed (mirrors real deploy logic).
+    # Runtime Python tools are a whitelist — NOT all *.py in tools/.
+    _runtime_tools="guard_context_write.py _yaml_loader.py check_command_sync.py check_text_integrity.py check_text_integrity.ps1 text_integrity_baseline.txt sync_skills.sh lint_governed_writes.py check_lifecycle_frontmatter.py check_lesson_chain.py check_adr_coverage.py append_chain_entry.py append_lesson.py"
+    for f in "$REPO_ROOT"/AGENTS.md "$REPO_ROOT"/CLAUDE.md \
+             "$REPO_ROOT"/.gitattributes \
+             "$REPO_ROOT"/installers/deploy_brain.sh "$REPO_ROOT"/installers/deploy_brain.ps1 "$REPO_ROOT"/installers/deploy_brain.cmd \
+             "$REPO_ROOT"/.antigravity/rules.md "$REPO_ROOT"/codex/rules/default.rules \
+             "$REPO_ROOT"/.agent/rules/*.md "$REPO_ROOT"/.agent/config.yaml \
+             "$REPO_ROOT"/.agent/workflows/*.md \
+             "$REPO_ROOT"/.agentcortex/bin/deploy.sh "$REPO_ROOT"/.agentcortex/bin/deploy.ps1 \
+             "$REPO_ROOT"/.agentcortex/bin/validate.sh "$REPO_ROOT"/.agentcortex/bin/validate.ps1 \
+             "$REPO_ROOT"/.agentcortex/metadata/trigger-registry.yaml "$REPO_ROOT"/.agentcortex/metadata/trigger-compact-index.json \
+             "$REPO_ROOT"/.agentcortex/templates/* \
+             "$REPO_ROOT"/.agentcortex/adr/*.md \
+             "$REPO_ROOT"/.claude/settings.json \
+             "$REPO_ROOT"/.claude/agents/*.md \
+             "$REPO_ROOT"/.codex/INSTALL.md \
+             "$REPO_ROOT"/.github/ISSUE_TEMPLATE/*.md "$REPO_ROOT"/.github/PULL_REQUEST_TEMPLATE.md; do
+        [ -f "$f" ] || continue
+        _dry_count=$((_dry_count + 1))
+        _bname="$(basename "$f")"
+        if [ -f "$TARGET/$_bname" ] || [ -f "$TARGET/.agent/rules/$_bname" ]; then
+            echo "  [UPDATE] $_bname"
+        else
+            echo "  [NEW]    $_bname"
+        fi
+    done
+    # Runtime tools (whitelist only — not all *.py)
+    for _bname in $_runtime_tools; do
+        f="$REPO_ROOT/.agentcortex/tools/$_bname"
+        [ -f "$f" ] || continue
+        _dry_count=$((_dry_count + 1))
+        if [ -f "$TARGET/.agentcortex/tools/$_bname" ]; then
+            echo "  [UPDATE] $_bname"
+        else
+            echo "  [NEW]    $_bname"
+        fi
+    done
+    # Skills (summarise counts instead of listing every file)
+    _skill_count=0
+    for skill_dir in "$REPO_ROOT/.agents/skills"/*/; do
+        [ -d "$skill_dir" ] || continue
+        while IFS= read -r -d '' sf; do _skill_count=$((_skill_count + 1)); done \
+            < <(find "$skill_dir" -type f -print0)
+    done
+    for sf in "$REPO_ROOT"/.agent/skills/*; do [ -f "$sf" ] && _skill_count=$((_skill_count + 1)); done
+    [ "$_skill_count" -gt 0 ] && echo "  [NEW]    ... $_skill_count skill files (.agent/skills/, .agents/skills/)"
+    # Docs (summarise)
+    _doc_count=0
+    for df in "$REPO_ROOT"/.agentcortex/docs/*.md "$REPO_ROOT"/.agentcortex/docs/guides/*.md \
+              "$REPO_ROOT"/README.md "$REPO_ROOT"/docs/README_zh-TW.md; do
+        [ -f "$df" ] && _doc_count=$((_doc_count + 1))
+    done
+    [ "$_doc_count" -gt 0 ] && echo "  [NEW]    ... $_doc_count reference docs (.agentcortex/docs/)"
+    # Claude commands
+    _cmd_count=0
+    for cf in "$REPO_ROOT"/.claude/commands/*; do [ -f "$cf" ] && _cmd_count=$((_cmd_count + 1)); done
+    [ "$_cmd_count" -gt 0 ] && echo "  [NEW]    ... $_cmd_count Claude slash command adapters (.claude/commands/)"
+    echo ""
+    echo "Total: ~$((_dry_count + _skill_count + _doc_count + _cmd_count)) files would be deployed."
+    echo "Run without --dry-run to apply."
+    exit 0
+fi
+
 # --- Create directory structure ---
 mkdir -p "$TARGET/.agent/rules"
 mkdir -p "$TARGET/.agent/workflows"
@@ -304,6 +465,7 @@ mkdir -p "$TARGET/.agent/skills"
 mkdir -p "$TARGET/.antigravity"
 mkdir -p "$TARGET/.agents/skills"
 mkdir -p "$TARGET/.claude/commands"
+mkdir -p "$TARGET/.claude/agents"
 mkdir -p "$TARGET/.codex"
 mkdir -p "$TARGET/codex/rules"
 mkdir -p "$TARGET/.github/ISSUE_TEMPLATE"
@@ -312,8 +474,9 @@ mkdir -p "$TARGET/.agentcortex/metadata"
 mkdir -p "$TARGET/.agentcortex/tools"
 mkdir -p "$TARGET/.agentcortex/docs/guides"
 mkdir -p "$TARGET/.agentcortex/context/work"
-mkdir -p "$TARGET/.agentcortex/context/review"
 mkdir -p "$TARGET/.agentcortex/context/archive"
+mkdir -p "$TARGET/.agentcortex/context/archive/work"
+mkdir -p "$TARGET/.agentcortex/templates"
 mkdir -p "$TARGET/.agentcortex/adr"
 mkdir -p "$TARGET/.agentcortex/specs"
 mkdir -p "$TARGET/docs/specs"
@@ -323,10 +486,14 @@ mkdir -p "$TARGET/docs/adr"
 deploy_file "$REPO_ROOT/AGENTS.md" "AGENTS.md"
 deploy_file "$REPO_ROOT/CLAUDE.md" "CLAUDE.md"
 
-# --- Deploy: wrapper scripts ---
-deploy_file "$REPO_ROOT/deploy_brain.sh" "deploy_brain.sh" "+x"
-deploy_file "$REPO_ROOT/deploy_brain.ps1" "deploy_brain.ps1"
-deploy_file "$REPO_ROOT/deploy_brain.cmd" "deploy_brain.cmd"
+# --- Deploy: .gitattributes (scaffold — user may extend) ---
+deploy_file "$REPO_ROOT/.gitattributes" ".gitattributes"
+
+# --- Deploy: wrapper scripts (into installers/ — not root) ---
+mkdir -p "$TARGET/installers"
+deploy_file "$REPO_ROOT/installers/deploy_brain.sh" "installers/deploy_brain.sh" "+x"
+deploy_file "$REPO_ROOT/installers/deploy_brain.ps1" "installers/deploy_brain.ps1"
+deploy_file "$REPO_ROOT/installers/deploy_brain.cmd" "installers/deploy_brain.cmd"
 
 # --- Deploy: platform rules (core) ---
 deploy_file "$REPO_ROOT/.antigravity/rules.md" ".antigravity/rules.md"
@@ -369,16 +536,31 @@ if [ -d "$REPO_ROOT/.agents/skills" ]; then
             echo "  [MIGRATE] removed flat file .agents/skills/$skill_name (now a directory)"
         fi
         mkdir -p "$TARGET/.agents/skills/$skill_name"
-        for skill_file in "$skill_dir"*; do
-            [ -f "$skill_file" ] || continue
-            local_name="$(basename "$skill_file")"
-            deploy_file "$skill_file" ".agents/skills/$skill_name/$local_name"
-        done
+        # Deploy all files recursively, preserving subdir structure (e.g. agents/openai.yaml)
+        while IFS= read -r -d '' skill_file; do
+            rel_to_skill="${skill_file#$skill_dir}"
+            parent_dir="$(dirname ".agents/skills/$skill_name/$rel_to_skill")"
+            mkdir -p "$TARGET/$parent_dir"
+            deploy_file "$skill_file" ".agents/skills/$skill_name/$rel_to_skill"
+        done < <(find "$skill_dir" -type f -print0)
     done
 fi
 
 touch "$TARGET/.agent/skills/.gitkeep"
 touch "$TARGET/.agents/skills/.gitkeep"
+
+# Ensure directories survive git clone (git doesn't track empty dirs).
+# Deploy .gitkeep.md from source if available; fall back to a plain touch.
+for _keep_pair in \
+    ".agentcortex/context/work/.gitkeep.md" \
+    "docs/specs/.gitkeep.md" \
+    "docs/adr/.gitkeep.md"; do
+    if [ -f "$REPO_ROOT/$_keep_pair" ]; then
+        cp ${CP_FLAG:+"$CP_FLAG"} "$REPO_ROOT/$_keep_pair" "$TARGET/$_keep_pair"
+    else
+        touch "$TARGET/$_keep_pair"
+    fi
+done
 
 # --- Deploy: .agentcortex/bin (core) ---
 for f in deploy.sh deploy.ps1 validate.sh validate.ps1; do
@@ -397,11 +579,18 @@ done
 # --- Deploy: .agentcortex/tools (runtime artifacts only; optional when present in source repo) ---
 runtime_tools=(
   guard_context_write.py
+  _yaml_loader.py
   check_command_sync.py
   check_text_integrity.py
   check_text_integrity.ps1
   text_integrity_baseline.txt
   sync_skills.sh
+  lint_governed_writes.py
+  check_lifecycle_frontmatter.py
+  check_lesson_chain.py
+  check_adr_coverage.py
+  append_chain_entry.py
+  append_lesson.py
 )
 for bname in "${runtime_tools[@]}"; do
     f="$REPO_ROOT/.agentcortex/tools/$bname"
@@ -412,7 +601,19 @@ for bname in "${runtime_tools[@]}"; do
 done
 
 # --- Deploy: .agentcortex/context/current_state.md (scaffold) ---
-deploy_file "$REPO_ROOT/.agentcortex/context/current_state.md" ".agentcortex/context/current_state.md"
+# Use the downstream template (generic placeholders) instead of the
+# framework's own SSoT which contains Agentic OS project-specific content.
+if [ -f "$REPO_ROOT/.agentcortex/templates/current_state.md" ]; then
+    deploy_file "$REPO_ROOT/.agentcortex/templates/current_state.md" ".agentcortex/context/current_state.md"
+else
+    deploy_file "$REPO_ROOT/.agentcortex/context/current_state.md" ".agentcortex/context/current_state.md"
+fi
+
+# --- Deploy: .agentcortex/templates (scaffold) ---
+for f in "$REPO_ROOT"/.agentcortex/templates/*; do
+    [ -f "$f" ] || continue
+    deploy_file "$f" ".agentcortex/templates/$(basename "$f")"
+done
 
 # --- Deploy: .agentcortex/adr (scaffold) ---
 for f in "$REPO_ROOT"/.agentcortex/adr/*.md; do
@@ -422,8 +623,9 @@ done
 
 # --- Deploy: reference docs to .agentcortex/docs/ (core) ---
 for f in \
-  "$REPO_ROOT"/README*.md \
-  "$REPO_ROOT"/AGENT_MODEL_GUIDE*.md \
+  "$REPO_ROOT"/README.md \
+  "$REPO_ROOT"/docs/README_zh-TW.md \
+  "$REPO_ROOT"/docs/AGENT_MODEL_GUIDE*.md \
   "$REPO_ROOT"/.agentcortex/docs/AGENT_PHILOSOPHY*.md \
   "$REPO_ROOT"/.agentcortex/docs/TESTING_PROTOCOL*.md \
   "$REPO_ROOT"/.agentcortex/docs/CODEX_PLATFORM_GUIDE*.md \
@@ -438,6 +640,12 @@ for f in "$REPO_ROOT"/.agentcortex/docs/guides/*.md; do
     [ -f "$f" ] || continue
     deploy_file "$f" ".agentcortex/docs/guides/$(basename "$f")"
 done
+# Downstream-facing quickstart guides live in framework's docs/guides/ (root-style path).
+# Deploy them to .agentcortex/docs/guides/ alongside the framework-internal guides.
+for f in "$REPO_ROOT"/docs/guides/token-optimization-quickstart*.md; do
+    [ -f "$f" ] || continue
+    deploy_file "$f" ".agentcortex/docs/guides/$(basename "$f")"
+done
 
 # --- Deploy: .claude/commands (core) ---
 if [ -d "$REPO_ROOT/.claude/commands" ]; then
@@ -445,6 +653,21 @@ if [ -d "$REPO_ROOT/.claude/commands" ]; then
         [ -f "$f" ] || continue
         deploy_file "$f" ".claude/commands/$(basename "$f")"
     done
+fi
+
+# --- Deploy: .claude/agents (core — acx-* sub-agent shims for native skill injection) ---
+if [ -d "$REPO_ROOT/.claude/agents" ]; then
+    mkdir -p "$TARGET/.claude/agents"
+    for f in "$REPO_ROOT"/.claude/agents/*.md; do
+        [ -f "$f" ] || continue
+        deploy_file "$f" ".claude/agents/$(basename "$f")"
+    done
+fi
+
+# --- Deploy: .claude/settings.json (scaffold — user may extend permissions/env) ---
+if [ -f "$REPO_ROOT/.claude/settings.json" ]; then
+    mkdir -p "$TARGET/.claude"
+    deploy_file "$REPO_ROOT/.claude/settings.json" ".claude/settings.json"
 fi
 
 # --- Deploy: .codex/INSTALL.md (core) ---
@@ -457,21 +680,28 @@ for f in "$REPO_ROOT"/.github/ISSUE_TEMPLATE/*.md; do
 done
 deploy_file "$REPO_ROOT/.github/PULL_REQUEST_TEMPLATE.md" ".github/PULL_REQUEST_TEMPLATE.md"
 
+# --- Deploy: .githooks/ advisory hook samples (scaffold) ---
+if [ -f "$REPO_ROOT/.githooks/pre-commit.guard-ssot.sample" ]; then
+    mkdir -p "$TARGET/.githooks"
+    deploy_file "$REPO_ROOT/.githooks/pre-commit.guard-ssot.sample" ".githooks/pre-commit.guard-ssot.sample"
+fi
+
 # ============================================================
 # .gitignore management (special — block-managed, not file-level)
 # ============================================================
 
 GITIGNORE="$TARGET/.gitignore"
-DOWNSTREAM_IGNORE_START="# AgentCortex Template - Downstream Ignore Defaults"
+DOWNSTREAM_IGNORE_START="# Agentic OS Template - Downstream Ignore Defaults"
 LEGACY_IGNORE_START="# AI Brain OS - Agent System & Local Context"
 
 write_downstream_ignore_block() {
     cat <<'EOT'
-# AgentCortex Template - Downstream Ignore Defaults
+# Agentic OS Template - Downstream Ignore Defaults
 
 # Runtime State (work logs are session-local; private is never committed)
 .agentcortex/context/work/*.md
-!.agentcortex/context/work/.gitkeep
+.agentcortex/context/work/*.lock.json
+!.agentcortex/context/work/.gitkeep.md
 .agentcortex/context/.guard_receipt.json
 .agentcortex/context/.guard_locks/
 .agentcortex/context/private/
@@ -487,7 +717,7 @@ write_downstream_ignore_block() {
 .cursor/
 .antigravity/scratch/
 
-# End AgentCortex Template - Downstream Ignore Defaults
+# End Agentic OS Template - Downstream Ignore Defaults
 EOT
 }
 
@@ -499,7 +729,8 @@ strip_managed_ignore_blocks() {
     BEGIN {
         # Current managed entries
         managed[".agentcortex/context/work/*.md"] = 1
-        managed["!.agentcortex/context/work/.gitkeep"] = 1
+        managed[".agentcortex/context/work/*.lock.json"] = 1
+        managed["!.agentcortex/context/work/.gitkeep.md"] = 1
         managed[".agentcortex/context/.guard_receipt.json"] = 1
         managed[".agentcortex/context/.guard_locks/"] = 1
         managed[".agentcortex/context/private/"] = 1
@@ -524,11 +755,12 @@ strip_managed_ignore_blocks() {
         managed["tools/validate.sh"] = 1
         managed["tools/validate.ps1"] = 1
         managed["tools/validate.cmd"] = 1
-        managed[".github/ISSUE_TEMPLATE/agent_issue.md"] = 1
+        managed[".github/ISSUE_TEMPLATE/bug_report.md"] = 1
+        managed[".github/ISSUE_TEMPLATE/feature_request.md"] = 1
         managed[".github/PULL_REQUEST_TEMPLATE.md"] = 1
         managed["docs/adr/"] = 1
         managed["docs/context/work/*.md"] = 1
-        managed["!docs/context/work/.gitkeep"] = 1
+        managed["!docs/context/work/.gitkeep.md"] = 1
         managed["docs/context/private/"] = 1
         managed["docs/context/"] = 1
         managed["docs/context/current_state.md"] = 1
@@ -563,9 +795,9 @@ strip_managed_ignore_blocks() {
         managed["tools/audit_ai_paths.sh"] = 1
     }
 
-    /^# AgentCortex Template - Downstream Ignore Defaults$/ { skip = 1; next }
+    /^# Agentic OS Template - Downstream Ignore Defaults$/ { skip = 1; next }
     /^# AI Brain OS - Agent System & Local Context$/ { skip = 1; next }
-    /^# End AgentCortex Template - Downstream Ignore Defaults$/ { skip = 0; next }
+    /^# End Agentic OS Template - Downstream Ignore Defaults$/ { skip = 0; next }
 
     skip {
         if ($0 == "" || ($0 in managed) || $0 ~ /^#/) { next }
@@ -588,7 +820,7 @@ TMP_NORMALIZED_GITIGNORE="$(mktemp)"
 if grep -Eq "^(${DOWNSTREAM_IGNORE_START}|${LEGACY_IGNORE_START})$" "$GITIGNORE"; then
     echo "Replacing managed downstream ignore defaults in .gitignore..."
 else
-    echo "Adding AgentCortex downstream ignore defaults to .gitignore..."
+    echo "Adding Agentic OS downstream ignore defaults to .gitignore..."
 fi
 
 strip_managed_ignore_blocks "$GITIGNORE" "$TMP_STRIPPED_GITIGNORE"
@@ -653,7 +885,7 @@ if [ -z "$MANIFEST_SOURCE_REPO" ]; then
 fi
 
 {
-    echo "# AgentCortex Deploy Manifest"
+    echo "# Agentic OS Deploy Manifest"
     echo "# DO NOT EDIT — regenerated on each deploy"
     echo "version: ${ACX_VERSION}"
     echo "source_commit: ${SOURCE_COMMIT}"
@@ -663,7 +895,8 @@ fi
     fi
     echo "---"
     sort -k2 "$DEPLOYED_FILES_TMP"
-} > "$MANIFEST_FILE"
+} > "$MANIFEST_FILE.tmp"
+mv "$MANIFEST_FILE.tmp" "$MANIFEST_FILE"
 
 # ============================================================
 # Summary
@@ -671,17 +904,20 @@ fi
 
 TOTAL_DEPLOYED="$(grep -c 'sha256:' "$DEPLOYED_FILES_TMP" 2>/dev/null || echo 0)"
 echo ""
-echo "AgentCortex v${ACX_VERSION} (${SOURCE_COMMIT}) deployed successfully!"
+echo "Agentic OS v${ACX_VERSION} (${SOURCE_COMMIT}) deployed successfully!"
 echo ""
 if $IS_UPDATE; then
     echo "Summary: ${COUNT_UPDATED} updated / ${COUNT_SKIPPED} skipped / ${COUNT_NEW} new / ${COUNT_REMOVED} removed"
-    if [ "$COUNT_SKIPPED" -gt 0 ]; then
-        echo ""
-        echo "Skipped files have .acx-incoming sidecars with the new version."
-        echo "Review and merge manually, then re-run deploy to update the manifest."
-    fi
 else
     echo "Installed ${TOTAL_DEPLOYED} files."
+fi
+if [ "$COUNT_SKIPPED" -gt 0 ]; then
+    echo ""
+    echo "⚠ Skipped files detected — your existing files were preserved."
+    echo "  New versions are saved as *.acx-incoming sidecars."
+    echo ""
+    echo "  → Manual merge:  diff each pair, keep your content + adopt framework updates, then re-run deploy."
+    echo "  → AI-assisted:   ask your AI agent — \"merge each *.acx-incoming into its target, preserving project-specific content and adopting framework updates, then delete the sidecars\""
 fi
 echo ""
 echo "Platform Entry Points Ready:"
@@ -689,17 +925,28 @@ echo "   .antigravity/rules.md  -> Google Antigravity"
 echo "   codex/rules/           -> Codex Web/App"
 echo "   CLAUDE.md              -> Claude (manual entry)"
 echo "   AGENTS.md              -> Cross-platform entry"
-echo "   .agentcortex/bin/      -> Canonical AgentCortex implementations"
+echo "   .agentcortex/bin/      -> Canonical Agentic OS implementations"
 echo ""
 echo "Git:"
 echo "   Framework files are git-tracked (available in worktrees and branches)."
 echo "   Only work logs and private state are gitignored."
-echo "   PR review mirrors under .agentcortex/context/review/ are optional; upstream repos may track them, downstream repos can opt in."
 echo "   .agentcortex-manifest tracks deployed files — commit this to your repo."
 echo ""
 echo "Next steps:"
-echo "   1. Stage framework files for git tracking:"
-echo "      git add .agentcortex-manifest AGENTS.md CLAUDE.md .agent/ .agents/ .agentcortex/ .claude/ .codex/ codex/ .antigravity/ .github/"
-echo "   2. Tell AI: 'Please run /bootstrap' to start"
-echo "   3. AgentCortex reference docs are under .agentcortex/docs/"
+echo "   1. Validate the installation (optional — Python is NOT required):"
+echo "      .agentcortex/bin/validate.sh              # full validation (uses Python if available)"
+echo "      .agentcortex/bin/validate.sh --no-python  # lightweight, text-only checks"
+echo "   2. Stage framework files for git tracking:"
+echo "      git add .agentcortex-manifest AGENTS.md CLAUDE.md .agent/ .agents/ .agentcortex/ .antigravity/ .codex/ codex/ docs/ installers/"
+echo "      # Also add if present: .claude/ .github/"
+echo "   3. Tell AI: 'Please run /bootstrap' to start"
+echo "   4. Agentic OS reference docs are under .agentcortex/docs/"
 echo ""
+
+# Python advisory — framework runs without Python, but guard_context_write.py
+# (SSoT optimistic locking) is Python-only; absent Python the AI falls back to
+# direct writes. Single-session safe; multi-session loses lock protection.
+if ! command -v python3 >/dev/null 2>&1 && ! command -v python >/dev/null 2>&1; then
+    echo "Note: Python not on PATH — SSoT multi-session locking disabled (single-session OK). Install Python 3.8+ for full safety."
+    echo ""
+fi

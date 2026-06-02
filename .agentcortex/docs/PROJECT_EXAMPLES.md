@@ -1,6 +1,6 @@
 # Project Examples (Node.js / Python)
 
-This document provides ready-to-copy "Real Project Integration" examples to help teams use the same AgentCortex process across Google Antigravity, Codex Web, and Codex App.
+This document provides ready-to-copy "Real Project Integration" examples to help teams use the same Agentic OS process across Google Antigravity, Codex Web, and Codex App.
 
 ## Example A: Node.js API Project
 
@@ -14,7 +14,7 @@ This document provides ready-to-copy "Real Project Integration" examples to help
 1. Deploy Template:
 
 ```bash
-./deploy_brain.sh .
+./installers/deploy_brain.sh .
 ./.agentcortex/bin/validate.sh
 ```
 
@@ -62,7 +62,7 @@ npm run lint
 1. Deploy Template:
 
 ```bash
-./deploy_brain.sh .
+./installers/deploy_brain.sh .
 ./.agentcortex/bin/validate.sh
 ```
 
@@ -109,4 +109,4 @@ ruff check .
 - [Non-Linear Scenarios (Model Switching, Session Crashes, Chaotic Workflows)](./NONLINEAR_SCENARIOS.md)
 - [Migration & Integration Guide (Legacy Project Takeover)](./guides/migration.md)
 - [Token Governance Guide](./guides/token-governance.md)
-- [Minimal Text Hardening Kit](./guides/minimal-text-hardening-kit.md)
+<!-- minimal-text-hardening-kit.md removed: content merged into check_text_integrity.py -->

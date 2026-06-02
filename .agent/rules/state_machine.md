@@ -2,7 +2,9 @@
 
 ## Defined States
 
-`INIT` -> `BOOTSTRAPPED` -> `CLASSIFIED` -> [`SPECIFIED`] -> `PLANNED` -> `IMPLEMENTABLE` -> `IMPLEMENTING` -> `REVIEWED` -> `TESTED` -> `SHIPPED`
+`INIT` -> `BOOTSTRAPPED` -> `CLASSIFIED` -> [`SPECIFIED`] -> `PLANNED` -> `IMPLEMENTABLE` -> `IMPLEMENTING` -> `REVIEWED` -> `TESTED` -> [`HANDEDOFF`] -> `SHIPPED`
+
+(`HANDEDOFF` is required for `feature` / `architecture-change`; skipped for `quick-win` / `hotfix`.)
 
 ## Allowed Transitions
 
@@ -19,8 +21,15 @@ AI MUST self-enforce this phase order. Users may trigger transitions via slash c
 - `IMPLEMENTABLE` --(begin implementation)--> `IMPLEMENTING`
 - `IMPLEMENTING` --(review pass)--> `REVIEWED`
 - `REVIEWED` --(test pass)--> `TESTED`
-- `TESTED` --(ship executed)--> `SHIPPED`
-- `IMPLEMENTING` --(evidence provided, quick-win/hotfix only)--> `SHIPPED`  [fast-path: skip REVIEWED/TESTED states when classification permits]
+- `TESTED` --(handoff executed, `feature`/`architecture-change` only)--> `HANDEDOFF`  [Writes `Current Phase: handoff` and gate receipt. Required before SHIPPED for these tiers.]
+- `HANDEDOFF` --(ship executed)--> `SHIPPED`
+- `TESTED` --(ship executed, `quick-win`/`hotfix` only)--> `SHIPPED`  [fast-path: handoff exempt for these tiers]
+- `IMPLEMENTING` --(evidence provided, `quick-win` only)--> `SHIPPED`  [fast-path: skip REVIEWED/TESTED/HANDEDOFF; `quick-win` only — `hotfix` MUST go through REVIEWED + TESTED]
+- `REVIEWED` --(defects found; code change required)--> `IMPLEMENTING`  [Reverse: "Not Ready" verdict. Record reason in Work Log `## Drift Log`; update `Current Phase: implement`.]
+- `TESTED` --(tests red; code change required)--> `IMPLEMENTING`  [Reverse: test suite stays red after debugging. Record reason in `## Drift Log`; update `Current Phase: implement`.]
+- `HANDEDOFF` --(ship Entry Condition fail; code change required)--> `IMPLEMENTING`  [Reverse: e.g. unresolved CRITICAL security finding at ship gate. Record reason in `## Drift Log`; re-run review → test → handoff to re-enter HANDEDOFF before ship.]
+- `IMPLEMENTING` --(scope creep detected; reclassification required)--> `CLASSIFIED`  [Reverse transition for Mid-Execution Guard. Required actions BEFORE this transition: (a) `git stash` any uncommitted code; (b) record the original classification + rollback reason in Work Log `## Drift Log`; (c) clear `Frozen: true` and set `Classification: CLASSIFIED` in Work Log header; (d) re-enter `/bootstrap §0–§3` to re-classify at the higher tier; (e) re-run all gates from the new classification's required path. NOT a free downgrade — pure re-traversal. See `.agent/workflows/implement.md §Mid-Execution Guard`.]
+- `IMPLEMENTABLE` --(scope creep detected pre-implementation)--> `CLASSIFIED`  [Same as above but no stash needed; just re-bootstrap.]
 
 ## Spec Gate (Hard)
 
@@ -30,7 +39,15 @@ AI MUST self-enforce this phase order. Users may trigger transitions via slash c
 
 ## Read-Only Actions (No State Change)
 
-- Listing help, available commands, generating test skeletons, producing handoff summaries
+- Listing help, available commands, generating test skeletons
+
+## Classification Escalation Rules
+
+These rules override the initial classification. AI MUST apply them during `/bootstrap` and re-check during `/implement` Mid-Execution Guard.
+
+- **Auth Escalation**: If a `quick-win` touches authentication, authorization, session management, or token handling → escalate to `hotfix` minimum. Hotfix requires REVIEWED + TESTED gates.
+- **Governance File Escalation**: If a `tiny-fix` modifies `.agent/rules/*`, `.agent/config.yaml`, or `AGENTS.md` → escalate to `quick-win` minimum.
+- **Scope Escalation**: If actual changes exceed classification threshold (e.g., `quick-win` touching >2 modules) → reverse-transition `IMPLEMENTING → CLASSIFIED` (or `IMPLEMENTABLE → CLASSIFIED`) per the explicit transitions above. **Hard-block thresholds**: user "no" answer to escalation prompt is NOT acceptable when ANY of these are true: actual diff > 200 lines OR > 2 modules touched OR new directory added. In those cases the reverse transition is MANDATORY; the only choice the user gets is which higher tier to escalate to.
 
 ## Hard Gates
 
