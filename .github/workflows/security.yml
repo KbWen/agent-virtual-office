@@ -1,0 +1,74 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Semgrep
+        run: pip install semgrep==1.123.0
+
+      # Report-only on introduction (no --error): surfaces findings as annotations
+      # without retroactively failing CI on a Node/JSX codebase. Tighten to --error
+      # once the baseline is triaged.
+      - name: Run Semgrep
+        run: semgrep --config auto .
+
+  trufflehog:
+    name: Secret Detection (TruffleHog)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # --only-verified keeps false positives near zero: only credentials that
+      # verify against a live service fail the job.
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@37b77001d0174ebec2fcca2bd83ff83a6d45a3ab  # v3.95.3
+        with:
+          extra_args: --only-verified
+
+  dependency-audit:
+    name: Dependency Audit (npm audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Report-only on introduction: prints the advisory table without failing the
+      # build on pre-existing transitive advisories. Raise to `--audit-level=high`
+      # (drop `|| true`) once the dependency tree is triaged.
+      - name: Audit npm dependencies
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then
+            npm audit --audit-level=critical || true
+          else
+            echo "::warning::dependency-audit: no package-lock.json at repo root — npm audit skipped"
+          fi

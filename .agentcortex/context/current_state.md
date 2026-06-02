@@ -1,5 +1,6 @@
 # Project Current State (vNext)
 
+- **Project Name**: Agent Virtual Office
 - **Project Intent**: Build a self-managed Agent OS for Codex Web / Codex App / Google Antigravity to reduce human procedural burden and continuously lower token costs.
 - **Core Guardrails**:
   - Correctness first: No claim of completion without evidence.
