@@ -84,3 +84,10 @@ dist/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Local verification / test artifacts (not part of the published package)
+/agent-virtual-office-*.png
+.tmp-vite-codex.*
+.playwright-mcp/
+test-results/
+.agentcortex/context/.guard_receipts/
