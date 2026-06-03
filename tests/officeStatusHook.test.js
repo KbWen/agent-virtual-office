@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, bashVibeLabel, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse, readLatestTokenUsage, effortLevel } = await import('../public/hooks/office-status-hook.js')
+const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, bashVibeLabel, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse, readLatestTokenUsage, effortLevel, helperHash, helperAdd, helperRemove } = await import('../public/hooks/office-status-hook.js')
 
 describe('effortLevel — AVO-102 effort extraction', () => {
   it('returns the level for each known ordinal value', () => {
@@ -619,6 +619,104 @@ describe('bashVibeLabel classification order fix-2', () => {
 
   it('node server.mjs still → a script (anchored ^node check)', () => {
     expect(bashVibeLabel('node server.mjs', 'en')).toBe('a script')
+  })
+})
+
+// ─── Helper-huddle: helperHash, helperAdd, helperRemove ───
+
+describe('helperHash', () => {
+  it('returns a 4-character string for any input', () => {
+    expect(helperHash('abc')).toHaveLength(4)
+    expect(helperHash('agent-id-123')).toHaveLength(4)
+    expect(helperHash('')).toHaveLength(4)
+  })
+
+  it('is stable — same input produces the same hash', () => {
+    expect(helperHash('agent-review-001')).toBe(helperHash('agent-review-001'))
+    expect(helperHash('impl-99')).toBe(helperHash('impl-99'))
+  })
+
+  it('produces different hashes for different inputs', () => {
+    expect(helperHash('agent-A')).not.toBe(helperHash('agent-B'))
+  })
+
+  it('handles null gracefully (returns 4-char fallback)', () => {
+    expect(helperHash(null)).toHaveLength(4)
+  })
+})
+
+describe('helperAdd', () => {
+  it('appends a helper record with a stable id of the form role#hash', () => {
+    const result = helperAdd([], 'qa', 'agent-1', '/review')
+    expect(result).toHaveLength(1)
+    const rec = result[0]
+    expect(rec.id).toBe('qa#' + helperHash('agent-1'))
+    expect(rec.parentRole).toBe('qa')
+    expect(rec.label).toBe('/review')
+  })
+
+  it('two different agent_ids for the same role produce two helpers (collapse bug gone)', () => {
+    let helpers = []
+    helpers = helperAdd(helpers, 'dev', 'agent-A', 'implement')
+    helpers = helperAdd(helpers, 'dev', 'agent-B', 'implement')
+    expect(helpers).toHaveLength(2)
+    expect(helpers[0].id).not.toBe(helpers[1].id)
+  })
+
+  it('uses agentType as hash seed when agentId is null/absent', () => {
+    const result = helperAdd([], 'ops', null, 'deploy')
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('ops#' + helperHash('deploy'))
+  })
+
+  it('caps the array at 64 entries (oldest evicted)', () => {
+    let helpers = []
+    for (let i = 0; i < 70; i++) helpers = helperAdd(helpers, 'dev', `agent-${i}`, 'impl')
+    expect(helpers).toHaveLength(64)
+    // The last 64 should be the newest (agent-6 through agent-69)
+    expect(helpers[63].id).toBe('dev#' + helperHash('agent-69'))
+  })
+
+  it('handles a null/undefined helpers array defensively', () => {
+    expect(helperAdd(null, 'qa', 'x', 'review')).toHaveLength(1)
+    expect(helperAdd(undefined, 'qa', 'x', 'review')).toHaveLength(1)
+  })
+})
+
+describe('helperRemove', () => {
+  it('removes the helper whose id matches role+hash(agentId)', () => {
+    let helpers = helperAdd([], 'qa', 'agent-1', '/review')
+    helpers = helperAdd(helpers, 'dev', 'agent-2', 'implement')
+    const result = helperRemove(helpers, 'qa', 'agent-1')
+    expect(result).toHaveLength(1)
+    expect(result[0].parentRole).toBe('dev')
+  })
+
+  it('leaves the list unchanged when the id is not found', () => {
+    const helpers = helperAdd([], 'qa', 'agent-1', '/review')
+    const result = helperRemove(helpers, 'qa', 'agent-MISSING')
+    expect(result).toHaveLength(1)
+  })
+
+  it('with no agentId, removes the OLDEST helper for that role (best-effort)', () => {
+    let helpers = helperAdd([], 'dev', 'agent-A', 'impl')
+    helpers = helperAdd(helpers, 'dev', 'agent-B', 'impl')
+    helpers = helperAdd(helpers, 'qa', 'agent-C', 'review')
+    // Remove oldest dev (agent-A)
+    const result = helperRemove(helpers, 'dev', null)
+    expect(result).toHaveLength(2)
+    // agent-A's id should be gone
+    const removedId = 'dev#' + helperHash('agent-A')
+    expect(result.find(h => h.id === removedId)).toBeUndefined()
+  })
+
+  it('handles empty helpers array without throwing', () => {
+    expect(helperRemove([], 'qa', 'agent-1')).toEqual([])
+  })
+
+  it('handles null/undefined helpers defensively', () => {
+    expect(helperRemove(null, 'qa', 'x')).toEqual([])
+    expect(helperRemove(undefined, 'qa', 'x')).toEqual([])
   })
 })
 

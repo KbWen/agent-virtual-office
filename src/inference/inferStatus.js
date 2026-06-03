@@ -83,6 +83,25 @@ export function sanitizeTokens(t) {
   }
 }
 
+// Subagent helper-huddle: validate a helpers array from untrusted channels.
+// Each entry must have string id + string parentRole (must be one of the 8 VALID_ROLES) +
+// optional string label. Caps at 64 entries. Returns the validated array (may be empty),
+// or undefined when the field is absent (not an array at all).
+export function sanitizeHelpers(raw) {
+  if (raw === undefined) return undefined
+  if (!Array.isArray(raw)) return undefined
+  return raw
+    .filter(h => h && typeof h === 'object'
+      && typeof h.id === 'string' && h.id.length > 0
+      && typeof h.parentRole === 'string' && VALID_ROLES.includes(h.parentRole))
+    .slice(0, 64)
+    .map(h => ({
+      id: h.id.slice(0, CAP),
+      parentRole: h.parentRole,
+      label: typeof h.label === 'string' ? h.label.slice(0, CAP) : undefined,
+    }))
+}
+
 /**
  * Normalize any incoming message to the unified office-status format
  */
@@ -120,11 +139,16 @@ export function normalizeStatusMessage(raw) {
       tokens: sanitizeTokens(raw.tokens),
       // AVO-102: effort level — only the 5 known ordinal values pass.
       effort: EFFORT_LEVELS.includes(raw.effort) ? raw.effort : undefined,
+      // Subagent helper-huddle: validate helpers array — each entry must have string id,
+      // string parentRole (one of the 8 base roles), and optional string label.
+      // Capped at 64 entries; malformed array or wrong parentRole → omit the field entirely.
+      helpers: sanitizeHelpers(raw.helpers),
     }
     if (validated.source === undefined) delete validated.source
     if (validated.mood === undefined) delete validated.mood
     if (validated.tokens === undefined) delete validated.tokens
     if (validated.effort === undefined) delete validated.effort
+    if (validated.helpers === undefined) delete validated.helpers
     return withStatusEnvelope(validated)
   }
 
@@ -673,6 +697,11 @@ export function startStatusIntegration(store) {
     if (msg.tokens) s.setTokens(msg.tokens)
     // AVO-102: effort level (also session-level) drives the thinking aura.
     if (msg.effort) s.setEffort(msg.effort)
+    // Subagent helper-huddle: helpers is present-or-absent (not presence-semantic like tokens).
+    // Explicit helpers:[] (empty array) must clear the slice — a stopped turn removes helpers.
+    // When the field is absent (undefined after normalizeStatusMessage deleted it), do NOT
+    // clear — the hook re-sends the authoritative list each poll, and store TTL self-heals.
+    if (msg.helpers !== undefined) s.setHelpers(msg.helpers)
 
     // Route agents
     const updates = routeExternalAgents(msg.agents || [])
@@ -826,10 +855,13 @@ export function startStatusIntegration(store) {
     }, STALENESS_TIMEOUT)
   }
 
-  // Expiry checker — clears 'done' agents after their expiresAt
+  // Expiry checker — clears 'done' agents after their expiresAt + prunes stale helpers
   const expiryInterval = setInterval(() => {
     const s = store.getState()
     const now = Date.now()
+    // Prune helpers whose TTL has expired (60s safety window). A missed SubagentStop
+    // self-heals here rather than accumulating stale helper figures at the desk.
+    s.pruneHelpers()
     // Iterate keys directly — Object.entries() allocates a [id,ext] pairs array
     // on every 5s expiry tick. Both id and ext are read in place below.
     const ext0 = s.externalStatus

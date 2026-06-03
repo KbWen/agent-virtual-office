@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createFilePollingState, pollFileStatusOnce, _globalPayloadSig } from '../src/inference/inferStatus.js'
+import { createFilePollingState, pollFileStatusOnce, _globalPayloadSig, normalizeStatusMessage } from '../src/inference/inferStatus.js'
 
 function makeResponse({ ok = true, status = 200, etag = null, jsonData = null, rawBody = null }) {
   const body = rawBody ?? (jsonData !== null ? JSON.stringify(jsonData) : 'null')
@@ -231,5 +231,124 @@ describe('startPolling — seq-less window global re-delivery', () => {
     const orig = JSON.stringify(payload)
     _globalPayloadSig(payload)
     expect(JSON.stringify(payload)).toBe(orig)
+  })
+})
+
+// ─── helpers field: polling apply-path tests ───────────────────────────
+// These tests verify that pollFileStatusOnce delivers a message whose normalizeStatusMessage
+// output correctly carries or omits the helpers field. The store apply-path (setHelpers call)
+// is verified via the callback receiving the normalized message — the apply logic itself is
+// pure (msg.helpers !== undefined → setHelpers) and does not need a full store mock here.
+describe('helpers field in pollFileStatusOnce delivery', () => {
+  it('delivers a valid helpers array through the normalizer unchanged', async () => {
+    const helpers = [
+      { id: 'dev#abc', parentRole: 'dev', label: 'Coder' },
+      { id: 'qa#def', parentRole: 'qa' },
+    ]
+    const body = JSON.stringify({
+      type: 'office-status',
+      agents: [{ role: 'dev', status: 'working' }],
+      helpers,
+    })
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: true, status: 200,
+      headers: { get: () => 'etag-1' },
+      text: vi.fn().mockResolvedValue(body),
+    })
+    const callback = vi.fn()
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(callback).toHaveBeenCalledOnce()
+    const msg = callback.mock.calls[0][0]
+    expect(msg.helpers).toEqual([
+      { id: 'dev#abc', parentRole: 'dev', label: 'Coder' },
+      { id: 'qa#def', parentRole: 'qa', label: undefined },
+    ])
+  })
+
+  it('drops malformed helpers (non-array) — field absent in delivered message', async () => {
+    const body = JSON.stringify({
+      type: 'office-status',
+      agents: [{ role: 'dev', status: 'working' }],
+      helpers: 'not-an-array',
+    })
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: true, status: 200,
+      headers: { get: () => 'etag-2' },
+      text: vi.fn().mockResolvedValue(body),
+    })
+    const callback = vi.fn()
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(callback).toHaveBeenCalledOnce()
+    const msg = callback.mock.calls[0][0]
+    expect('helpers' in msg).toBe(false)
+  })
+
+  it('delivers helpers:[] explicitly so a cleared turn removes helpers from the store', async () => {
+    const body = JSON.stringify({
+      type: 'office-status',
+      agents: [{ role: 'dev', status: 'done' }],
+      helpers: [],
+    })
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: true, status: 200,
+      headers: { get: () => 'etag-3' },
+      text: vi.fn().mockResolvedValue(body),
+    })
+    const callback = vi.fn()
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(callback).toHaveBeenCalledOnce()
+    const msg = callback.mock.calls[0][0]
+    expect(Array.isArray(msg.helpers)).toBe(true)
+    expect(msg.helpers).toHaveLength(0)
+  })
+
+  it('omits helpers from message when payload has no helpers field (no-clear semantics)', async () => {
+    const body = JSON.stringify({
+      type: 'office-status',
+      agents: [{ role: 'dev', status: 'working' }],
+      // no helpers field
+    })
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: true, status: 200,
+      headers: { get: () => 'etag-4' },
+      text: vi.fn().mockResolvedValue(body),
+    })
+    const callback = vi.fn()
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(callback).toHaveBeenCalledOnce()
+    const msg = callback.mock.calls[0][0]
+    expect('helpers' in msg).toBe(false)
+  })
+
+  it('filters out helpers entries whose parentRole is not a base role', async () => {
+    const body = JSON.stringify({
+      type: 'office-status',
+      agents: [{ role: 'dev', status: 'working' }],
+      helpers: [
+        { id: 'bad#1', parentRole: 'superuser' },
+        { id: 'dev#2', parentRole: 'dev' },
+      ],
+    })
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: true, status: 200,
+      headers: { get: () => 'etag-5' },
+      text: vi.fn().mockResolvedValue(body),
+    })
+    const callback = vi.fn()
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(callback).toHaveBeenCalledOnce()
+    const msg = callback.mock.calls[0][0]
+    expect(msg.helpers).toHaveLength(1)
+    expect(msg.helpers[0].parentRole).toBe('dev')
   })
 })

@@ -533,6 +533,58 @@ function effortLevel(event) {
   return HOOK_EFFORT_LEVELS.includes(lvl) ? lvl : null
 }
 
+// ─── Helper-huddle: subagent helper list ops ───
+// Produces a stable 4-char hex hash of a string, using the existing crypto module.
+// Stability contract: same agentId → same hash across calls within a process run.
+function helperHash(str) {
+  if (!str) return (Math.random().toString(16) + '0000').slice(2, 6)
+  try {
+    return require('crypto').createHash('md5').update(str).digest('hex').slice(0, 4)
+  } catch {
+    // Fallback: simple djb2 truncated to 4 hex chars (no crypto dep required)
+    let h = 5381
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i)
+    return ((h >>> 0).toString(16) + '0000').slice(0, 4)
+  }
+}
+
+// Returns a new helpers array with one helper appended for the given subagent.
+// Capped at 64 entries (oldest first-in is evicted when the cap is exceeded).
+function helperAdd(helpers, role, agentId, agentType) {
+  try {
+    const safeHelpers = Array.isArray(helpers) ? helpers : []
+    const id = role + '#' + helperHash(agentId || agentType || String(safeHelpers.length))
+    const record = {
+      id,
+      parentRole: typeof role === 'string' ? role : 'dev',
+      label: typeof agentType === 'string' ? agentType.slice(0, 200) : '',
+    }
+    const next = [...safeHelpers, record]
+    return next.length > 64 ? next.slice(next.length - 64) : next
+  } catch { return Array.isArray(helpers) ? helpers : [] }
+}
+
+// Returns a new helpers array with the matching helper removed.
+// Matches by id (role + '#' + hash(agentId)). When agentId is missing, removes the
+// oldest helper for that role (best-effort, per contract).
+function helperRemove(helpers, role, agentId) {
+  try {
+    const safeHelpers = Array.isArray(helpers) ? helpers : []
+    if (!safeHelpers.length) return safeHelpers
+    if (agentId) {
+      // Known agent_id: remove exact match; if no match found, return unchanged.
+      const targetId = role + '#' + helperHash(agentId)
+      const idx = safeHelpers.findIndex(h => h && h.id === targetId)
+      if (idx !== -1) return [...safeHelpers.slice(0, idx), ...safeHelpers.slice(idx + 1)]
+      return safeHelpers
+    }
+    // No agent_id: best-effort — remove oldest helper for this role
+    const idx = safeHelpers.findIndex(h => h && h.parentRole === role)
+    if (idx !== -1) return [...safeHelpers.slice(0, idx), ...safeHelpers.slice(idx + 1)]
+    return safeHelpers
+  } catch { return Array.isArray(helpers) ? helpers : [] }
+}
+
 // ─── Main ───
 
 function processEvent(event) {
@@ -552,6 +604,8 @@ function processEvent(event) {
   let workflowOverride = null  // only SubagentStart sets this; PreToolUse/PostToolUse must not clobber workflow
   let capturedPromptId = null  // PreToolUse captures current _promptId for straggler detection
   let newPromptId = null       // UserPromptSubmit sets a fresh _promptId each turn
+  // Helper-huddle: 'add' or 'remove' or null; resolved after merge-read using existingHelpers.
+  let helperAction = null  // { op: 'add'|'remove', role, agentId, agentType }
 
   switch (hookEvent) {
     case 'UserPromptSubmit': {
@@ -634,6 +688,7 @@ function processEvent(event) {
       workflowOverride = agentType  // set workflow to the subagent type on start
       // Persist skill context so tool calls within this subagent stay on the right role
       if (agentId) saveSkillContext(agentId, role, agentType)
+      helperAction = { op: 'add', role, agentId, agentType }
       break
     }
     case 'SubagentStop': {
@@ -655,6 +710,7 @@ function processEvent(event) {
       label = skillLabel(agentType, true)
       clearWorkflow = true  // subagent workflow ends; reset so it doesn't stick forever
       if (agentId) clearSkillContext(agentId)
+      helperAction = { op: 'remove', role, agentId, agentType }
       break
     }
     case 'Stop': {
@@ -696,6 +752,7 @@ function processEvent(event) {
           source: 'claude-cli',
           _promptId: data._promptId || null,
           _preToolPromptId: data._preToolPromptId || null,
+          helpers: [],  // turn over — clear all helpers
         }
         const dir = path.dirname(STATUS_FILE)
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
@@ -722,6 +779,7 @@ function processEvent(event) {
           _seq: nextSeq(),
           _stopped: true,
           _stoppedAt: Date.now(),
+          helpers: [],  // turn over — clear all helpers
         }
         const dir = path.dirname(STATUS_FILE)
         try {
@@ -752,6 +810,7 @@ function processEvent(event) {
   let existingPreToolPromptId = null
   let existingStopped = false
   let existingStoppedAt = null
+  let existingHelpers = []
   try {
     const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
     existing = Array.isArray(data.agents)
@@ -772,6 +831,7 @@ function processEvent(event) {
     existingPreToolPromptId = data._preToolPromptId || null
     existingStopped = Boolean(data._stopped)
     existingStoppedAt = typeof data._stoppedAt === 'number' ? data._stoppedAt : null
+    existingHelpers = Array.isArray(data.helpers) ? data.helpers.filter(h => h && typeof h.id === 'string') : []
   } catch {}
 
   // Detect stale workflow from a previous turn. Two conditions that independently indicate
@@ -884,6 +944,19 @@ function processEvent(event) {
   const outWorkflowPromptId = effectiveClearWorkflow ? null
     : (workflowOverride ? existingPromptId : existingWorkflowPromptId)
 
+  // Compute outHelpers: apply add/remove action on top of carried-over existingHelpers.
+  // Helpers are NOT roster agents — never filtered through VALID_HOOK_ROLES.
+  let outHelpers
+  try {
+    if (helperAction && helperAction.op === 'add') {
+      outHelpers = helperAdd(existingHelpers, helperAction.role, helperAction.agentId, helperAction.agentType)
+    } else if (helperAction && helperAction.op === 'remove') {
+      outHelpers = helperRemove(existingHelpers, helperAction.role, helperAction.agentId)
+    } else {
+      outHelpers = existingHelpers
+    }
+  } catch { outHelpers = existingHelpers }
+
   const output = {
     _seq: nextSeq(),
     _cwd: process.cwd(),
@@ -894,6 +967,7 @@ function processEvent(event) {
     _workflowAgentId: outWorkflowAgentId,
     _workflowPromptId: outWorkflowPromptId,
     source: 'claude-cli',
+    helpers: outHelpers,
     // AVO-108: session token usage (context size + last output). Omitted when null so the
     // store keeps its last value (presence semantics) — Stop and failed reads don't blank it.
     ...(tokens ? { tokens } : {}),
@@ -972,5 +1046,6 @@ if (typeof module !== 'undefined') {
     shortFile, shortCommand, bashVibeLabel, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
     shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse,
-    readLatestTokenUsage, effortLevel }
+    readLatestTokenUsage, effortLevel,
+    helperHash, helperAdd, helperRemove }
 }
