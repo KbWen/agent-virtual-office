@@ -646,11 +646,22 @@ const GRID_LINES = (() => {
   return lines
 })()
 
-// Below this container width/height ratio the office is a TALL-NARROW column (docked beside an
-// editor). Cropping the wide scene there cuts agents/events off-frame; shrinking it to fit makes
-// it tiny. So a narrow column switches to the vertical NarrowRoster widget — every role visible
-// as a readable card, nothing cropped. At/above this ratio the office stays the full wide room.
-export const PORTRAIT_RATIO = 1.0
+// The scene is authored at 800×560. We show the full room ONLY when the container can render it
+// near-100% (big/comfortable). Below that — a docked tall-narrow column OR a moderate small-ish
+// window — the office would shrink to a tiny, sparse strip (empty meeting room/lounge eat the
+// space, agents become unreadable), so we switch to the dense NarrowRoster widget: every role a
+// readable card, no crop, no wasted rooms. The decision is the scene's `meet` SCALE, not the raw
+// aspect ratio, so both thin columns and small landscape windows are covered.
+export const SCENE_W = 800
+export const SCENE_H = 560
+// Below this `meet` scale the room is too small to read comfortably → roster widget.
+export const MIN_READABLE_SCALE = 0.95
+export const PORTRAIT_RATIO = 1.0 // retained for back-compat; superseded by shouldUseRoster()
+
+export function shouldUseRoster(w, h) {
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return false
+  return Math.min(w / SCENE_W, h / SCENE_H) < MIN_READABLE_SCALE
+}
 
 export default function PixelOffice({ animationQuality = 'full', mode = 'full' }) {
   // Only re-render PixelOffice when agent IDs change, not on every property update.
@@ -781,9 +792,10 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       else if (ratio < 1.6) setPanelViewBox(`${60 - M} ${140 - M} ${540 + M * 2} ${340 + M * 2}`)
       else setPanelViewBox(`${60 - M} ${155 - M} ${540 + M * 2} ${260 + M * 2}`)
     } else {
-      // Default office: a tall-narrow column shows the vertical roster widget; otherwise the
-      // full wide scene. (No scene crop — cropping cuts agents/events off-frame.)
-      setIsNarrow(ratio < PORTRAIT_RATIO)
+      // Default office: when the room can't render near-100% (thin column OR small landscape
+      // window), show the dense roster widget; otherwise the full wide scene. Scale-based so a
+      // moderate small window isn't left as a tiny, half-empty room. (No scene crop ever.)
+      setIsNarrow(shouldUseRoster(w, h))
     }
   }, [isPanel])
 

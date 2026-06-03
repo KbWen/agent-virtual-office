@@ -51,10 +51,10 @@ export default function NarrowRoster() {
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
 
   return (
-    <div className="w-full min-h-full bg-gray-50 dark:bg-gray-900 p-2 flex flex-col gap-1.5" data-narrow-roster="1">
+    <div className="w-full min-h-full bg-gray-50 dark:bg-gray-900 p-2 grid gap-1.5 [align-content:safe_center] [grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]" data-narrow-roster="1">
       {activeEvent && (
         <div
-          className={`text-[11px] text-center font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded py-1 ${reducedMotion ? '' : 'animate-pulse'}`}
+          className={`[grid-column:1/-1] text-[11px] text-center font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded py-1 ${reducedMotion ? '' : 'animate-pulse'}`}
           data-roster-event="1"
         >
           {activeEvent.id ? eventName(activeEvent.id) : activeEvent.name}

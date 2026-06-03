@@ -1,34 +1,40 @@
 import { describe, it, expect } from 'vitest'
-import { PORTRAIT_RATIO } from '../src/components/PixelOffice.jsx'
+import { shouldUseRoster, SCENE_W, SCENE_H, MIN_READABLE_SCALE } from '../src/components/PixelOffice.jsx'
 import NarrowRoster from '../src/components/NarrowRoster.jsx'
 import { CharacterPixelSprite } from '../src/components/AgentCharacter.jsx'
 
-// The responsive contract (post-crop): a wide/square window renders the FULL scene unchanged;
-// only a tall-narrow column (ratio < PORTRAIT_RATIO) swaps to the vertical roster widget.
-// There is NO scene crop anymore — cropping cut agents/events off-frame, so it was removed.
-const isPortraitColumn = (ratio) => Number.isFinite(ratio) && ratio < PORTRAIT_RATIO
-
-describe('responsive office framing — widget-not-crop contract', () => {
-  it('PORTRAIT_RATIO is the 1:1 threshold', () => {
-    expect(PORTRAIT_RATIO).toBe(1.0)
+// Responsive contract (widget-not-crop): the full 800×560 scene renders ONLY when the container
+// can show it near-100%. A thin column OR a small-ish landscape window — anything that would shrink
+// the room below MIN_READABLE_SCALE — switches to the dense roster widget. No scene crop ever.
+describe('shouldUseRoster — scale-based scene/widget switch', () => {
+  it('big / comfortable windows keep the full scene', () => {
+    expect(shouldUseRoster(1280, 800)).toBe(false) // scale 1.43
+    expect(shouldUseRoster(1000, 700)).toBe(false) // scale 1.25
+    expect(shouldUseRoster(SCENE_W, SCENE_H)).toBe(false) // exactly 100%
   })
 
-  it('WIDE / SQUARE windows stay on the full scene (no widget, no crop)', () => {
-    for (const ratio of [1.0, 1.2, 1.6, 1.78, 2.4, 3.5]) {
-      expect(isPortraitColumn(ratio)).toBe(false)
-    }
+  it('a MODERATE small landscape window (the "still tiny original" case) uses the widget', () => {
+    // 840×500 → scale 0.893 < 0.95 — this is the size the user saw as a shrunk, half-empty room.
+    expect(shouldUseRoster(840, 500)).toBe(true)
+    expect(shouldUseRoster(700, 500)).toBe(true)
   })
 
-  it('TALL-NARROW columns switch to the roster widget', () => {
-    for (const ratio of [0.9, 0.6, 0.4, 0.3]) {
-      expect(isPortraitColumn(ratio)).toBe(true)
-    }
+  it('a TALL-NARROW docked column uses the widget', () => {
+    expect(shouldUseRoster(380, 950)).toBe(true)
+    expect(shouldUseRoster(300, 800)).toBe(true)
   })
 
-  it('defensive: NaN / non-finite ratio stays on the full scene (never a blank widget)', () => {
-    expect(isPortraitColumn(NaN)).toBe(false)
-    expect(isPortraitColumn(Infinity)).toBe(false)
-    expect(isPortraitColumn(undefined)).toBe(false)
+  it('the threshold is the meet-scale crossing MIN_READABLE_SCALE', () => {
+    const justBelow = MIN_READABLE_SCALE - 0.02
+    const justAbove = MIN_READABLE_SCALE + 0.02
+    expect(shouldUseRoster(SCENE_W * justBelow, SCENE_H * justBelow)).toBe(true)
+    expect(shouldUseRoster(SCENE_W * justAbove, SCENE_H * justAbove)).toBe(false)
+  })
+
+  it('defensive: non-finite / zero sizes never blank out (stay on the scene)', () => {
+    expect(shouldUseRoster(NaN, 500)).toBe(false)
+    expect(shouldUseRoster(800, 0)).toBe(false)
+    expect(shouldUseRoster(undefined, undefined)).toBe(false)
   })
 
   it('the widget and the shared sprite are exported and importable', () => {
