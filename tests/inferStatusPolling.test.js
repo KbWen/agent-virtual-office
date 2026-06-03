@@ -217,6 +217,35 @@ describe('startPolling — seq-less window global re-delivery', () => {
     expect(sig1).toBe(sig2)
   })
 
+  it('returns different sig when ONLY helpers change (helpers-only delta not deduped)', () => {
+    // Regression: old sig only covered agents+workflow, so a helpers-only delta
+    // (same agent statuses, same workflow) was silently deduped and never reached
+    // the store. The fix adds helpers (and tokens/effort/mood) to the signature.
+    const base = { agents: [{ role: 'dev', status: 'working' }], workflow: 'Build' }
+    const sig1 = _globalPayloadSig({ ...base, helpers: undefined })
+    const sig2 = _globalPayloadSig({ ...base, helpers: [{ id: 'dev#sub1', parentRole: 'dev', label: 'Coder' }] })
+    expect(sig1).not.toBe(sig2)
+  })
+
+  it('returns different sig when helpers list grows (SubagentStart mid-turn)', () => {
+    const base = { agents: [{ role: 'dev', status: 'working' }], workflow: null }
+    const sig1 = _globalPayloadSig({ ...base, helpers: [{ id: 'dev#1', parentRole: 'dev' }] })
+    const sig2 = _globalPayloadSig({ ...base, helpers: [{ id: 'dev#1', parentRole: 'dev' }, { id: 'dev#2', parentRole: 'dev' }] })
+    expect(sig1).not.toBe(sig2)
+  })
+
+  it('returns same sig when helpers, tokens, effort, and mood are all unchanged', () => {
+    const data = {
+      agents: [{ role: 'dev', status: 'working' }],
+      workflow: 'Build',
+      helpers: [{ id: 'dev#1', parentRole: 'dev' }],
+      tokens: { ctx: 1000, out: 200 },
+      effort: 'medium',
+      mood: 'focused',
+    }
+    expect(_globalPayloadSig(data)).toBe(_globalPayloadSig({ ...data }))
+  })
+
   it('does not mutate the externally-owned window.__office_status__ global', () => {
     // withStatusEnvelope stamps _seq and source — these must NOT land on the original
     // payload object. We verify the shallow-copy guard by checking the original is clean.

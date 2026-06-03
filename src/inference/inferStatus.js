@@ -300,12 +300,21 @@ function listenBroadcastChannel(callback) {
 // Compute a content signature for the window global payload. The documented
 // window.__office_status__ shape has no _seq field; the CLI mutates the object
 // in place so data._seq never changes and raw-_seq dedup delivers only once.
-// Dedupe on a JSON signature of the fields that actually change: agents +
-// workflow. Agents is the primary signal; workflow is secondary. We operate on
-// a shallow copy so we never mutate the externally-owned global in place.
+// Dedupe on a JSON signature of the fields that actually change: agents,
+// workflow, helpers, tokens, effort, and mood. Agents is the primary signal;
+// the rest are secondary but must also trigger delivery when they change alone
+// (e.g. a helpers-only SubagentStart delta where agents + workflow are the same).
+// We operate on a shallow copy so we never mutate the externally-owned global.
 export function _globalPayloadSig(data) {
   try {
-    return JSON.stringify({ agents: data.agents, workflow: data.workflow ?? null })
+    return JSON.stringify({
+      agents: data.agents,
+      workflow: data.workflow ?? null,
+      helpers: data.helpers ?? null,
+      tokens: data.tokens ?? null,
+      effort: data.effort ?? null,
+      mood: data.mood ?? null,
+    })
   } catch {
     return String(data._seq ?? '')
   }

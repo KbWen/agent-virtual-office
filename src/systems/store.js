@@ -239,6 +239,10 @@ const LOGGABLE_BEHAVIORS = new Set([
   'goto-coffee-machine', 'nap', 'scratch-head', 'desk-slam',
 ])
 
+// Valid base roles — used by setHelpers to reject unknown parentRole values.
+// Inline here to avoid a circular import with movementSystem (which imports store).
+const VALID_ROLES = new Set(['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer'])
+
 // Static lookup tables for applyExternalStatus — hoisted to module scope so they
 // are NOT reallocated on every update inside the per-update loop. behaviorMap maps
 // a work status to its visual behavior/expression; roleItems maps a base role to
@@ -376,17 +380,25 @@ export const useOfficeStore = create((set) => ({
   // desk never accumulates stale helpers. The authoritative list is re-sent by the hook each
   // poll (refreshing TTL), so a live SubagentStop removes the helper next tick regardless.
   setHelpers: (list, now = Date.now()) =>
-    set(() => ({
-      helpers: (Array.isArray(list) ? list : [])
-        .filter(h => h && typeof h.id === 'string' && typeof h.parentRole === 'string')
+    set(() => {
+      // (a) reject entries with an invalid parentRole; (b) de-dupe by id (last wins)
+      // so a doubled id never renders twice; (c) cap at 64 after dedup.
+      const seen = new Map()
+      for (const h of (Array.isArray(list) ? list : [])) {
+        if (!h || typeof h.id !== 'string' || typeof h.parentRole !== 'string') continue
+        if (!VALID_ROLES.has(h.parentRole)) continue
+        seen.set(h.id, h)  // last entry for a given id wins
+      }
+      const helpers = [...seen.values()]
         .slice(0, 64)  // hard bound — never let a runaway payload balloon the slice
         .map(h => ({
           id: h.id,
           parentRole: h.parentRole,
           label: typeof h.label === 'string' ? h.label : null,
           expiresAt: now + 60_000,
-        })),
-    })),
+        }))
+      return { helpers }
+    }),
   pruneHelpers: (now = Date.now()) =>
     set((s) => {
       const kept = s.helpers.filter(h => h.expiresAt > now)

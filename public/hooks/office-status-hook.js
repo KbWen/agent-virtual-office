@@ -549,6 +549,9 @@ function helperHash(str) {
 }
 
 // Returns a new helpers array with one helper appended for the given subagent.
+// De-duplicates by id: if a helper with the same id already exists, it is replaced
+// in-place (preserving position) rather than appended — prevents duplicate entries
+// when SubagentStart re-fires for the same agent_id.
 // Capped at 64 entries (oldest first-in is evicted when the cap is exceeded).
 function helperAdd(helpers, role, agentId, agentType) {
   try {
@@ -559,7 +562,14 @@ function helperAdd(helpers, role, agentId, agentType) {
       parentRole: typeof role === 'string' ? role : 'dev',
       label: typeof agentType === 'string' ? agentType.slice(0, 200) : '',
     }
-    const next = [...safeHelpers, record]
+    // De-duplicate: replace existing record with same id rather than appending a second copy.
+    const existingIdx = safeHelpers.findIndex(h => h && h.id === id)
+    let next
+    if (existingIdx !== -1) {
+      next = [...safeHelpers.slice(0, existingIdx), record, ...safeHelpers.slice(existingIdx + 1)]
+    } else {
+      next = [...safeHelpers, record]
+    }
     return next.length > 64 ? next.slice(next.length - 64) : next
   } catch { return Array.isArray(helpers) ? helpers : [] }
 }

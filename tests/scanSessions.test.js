@@ -423,12 +423,38 @@ describe('helpers data path (multi-session)', () => {
     expect(result.helpers[0].label).toBe('ok')
   })
 
-  it('does not include helpers key when all sessions have empty/absent helpers', () => {
+  it('sets helpers:[] (present, empty) when all sessions have empty/absent helpers', () => {
+    // Fix [LOW] AVO helpers clear delay: merged.helpers must ALWAYS be set so an
+    // explicit cleared state propagates on the next tick (not left absent, which
+    // ingestion treats as "no information" → lingering ~60 s TTL).
     const base = Date.now()
     writeSlugged('alpha', base + 100, [{ role: 'dev', status: 'working', task: null, label: null }])
     writeSlugged('beta', base + 200, [{ role: 'qa', status: 'working', task: null, label: null }])
     const result = scanAndMerge(dir, dir)
-    expect(result.helpers).toBeUndefined()
+    // helpers must be present (an explicit []) — not absent
+    expect(result.helpers).toBeDefined()
+    expect(Array.isArray(result.helpers)).toBe(true)
+    expect(result.helpers).toHaveLength(0)
+  })
+
+  it('all-empty multi-session helpers:[] clears promptly (not lingering via TTL)', () => {
+    // Regression: previously `if (allHelpers.length > 0) merged.helpers = allHelpers`
+    // omitted helpers entirely when all sessions had no helpers, so ingestion saw
+    // "absent = no information" and kept a finished subagent's helper visible for up
+    // to the TTL (~60 s) instead of clearing on the next tick.
+    const base = Date.now()
+    // Session A: had a helper before, now explicitly cleared (helpers: [])
+    writeSlugged('alpha', base + 100,
+      [{ role: 'dev', status: 'working', task: null, label: null }],
+      { helpers: [] })
+    // Session B: never had helpers (key absent)
+    writeSlugged('beta', base + 200,
+      [{ role: 'qa', status: 'working', task: null, label: null }])
+    const result = scanAndMerge(dir, dir)
+    expect(result.source).toBe('multi-session')
+    // The field must be present and empty so ingestion clears the stale helper
+    expect(Object.prototype.hasOwnProperty.call(result, 'helpers')).toBe(true)
+    expect(result.helpers).toEqual([])
   })
 
   it('passes through helpers in single-session path via spread', () => {

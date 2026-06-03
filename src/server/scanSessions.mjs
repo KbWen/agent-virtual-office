@@ -262,7 +262,14 @@ export function scanAndMerge(dir, projectRoot) {
       }
       if (allHelpers.length >= 64) break
     }
-    if (allHelpers.length > 0) merged.helpers = allHelpers
+    // Always assign merged.helpers — even when empty — so an explicit cleared state
+    // (all subagent helpers finished) propagates on the next tick instead of lingering
+    // up to TTL (~60 s). A missing field is treated as "no information" by ingestion;
+    // an explicit [] is treated as "cleared". Asymmetry with single-session (which
+    // passes helpers through via spread, including absence) is intentional: the multi-
+    // session path is the only place that aggregates across subagents and must own the
+    // cleared signal.
+    merged.helpers = allHelpers
   }
 
   // Zero-config signal: all data comes from file-watcher, meaning hooks aren't installed yet.

@@ -681,6 +681,36 @@ describe('helperAdd', () => {
     expect(helperAdd(null, 'qa', 'x', 'review')).toHaveLength(1)
     expect(helperAdd(undefined, 'qa', 'x', 'review')).toHaveLength(1)
   })
+
+  // ─── De-duplication fix (LOW finding) ───
+  it('adding the same agent_id twice yields ONE helper (no duplicate)', () => {
+    let helpers = []
+    helpers = helperAdd(helpers, 'qa', 'agent-1', '/review')
+    helpers = helperAdd(helpers, 'qa', 'agent-1', '/review')
+    expect(helpers).toHaveLength(1)
+    expect(helpers[0].id).toBe('qa#' + helperHash('agent-1'))
+  })
+
+  it('two different agent_ids for the same role yield TWO helpers', () => {
+    let helpers = []
+    helpers = helperAdd(helpers, 'qa', 'agent-A', '/review')
+    helpers = helperAdd(helpers, 'qa', 'agent-B', '/review')
+    expect(helpers).toHaveLength(2)
+    expect(helpers[0].id).toBe('qa#' + helperHash('agent-A'))
+    expect(helpers[1].id).toBe('qa#' + helperHash('agent-B'))
+  })
+
+  it('re-firing an existing id replaces the record in-place (does not move to tail)', () => {
+    let helpers = []
+    helpers = helperAdd(helpers, 'dev', 'agent-1', 'implement')
+    helpers = helperAdd(helpers, 'dev', 'agent-2', 'implement')
+    // Re-fire agent-1 — should replace index 0, not append a third entry
+    helpers = helperAdd(helpers, 'dev', 'agent-1', 'implement-v2')
+    expect(helpers).toHaveLength(2)
+    expect(helpers[0].id).toBe('dev#' + helperHash('agent-1'))
+    expect(helpers[0].label).toBe('implement-v2')
+    expect(helpers[1].id).toBe('dev#' + helperHash('agent-2'))
+  })
 })
 
 describe('helperRemove', () => {

@@ -1059,7 +1059,10 @@ function AgentCharacter({ agent }) {
     return { tagW: w, tagHalfW: w / 2 }
   }, [name])
   const tagFill = state.status !== 'idle' ? (STATUS_COLORS[state.status] || color) : color
-  const statusIcon = state.status === 'working' ? '⚡' : state.status === 'blocked' ? '✕' : state.status === 'done' ? '✓' : state.status === 'planning' ? '🧠' : null
+  // '◷' is a monochrome Unicode clock glyph — tints with tagFill like the other status icons,
+  // consistent with the 8×8 white badge. Replaces the colour emoji '🧠' which clipped and
+  // ignored tagFill at fontSize 7.
+  const statusIcon = state.status === 'working' ? '⚡' : state.status === 'blocked' ? '✕' : state.status === 'done' ? '✓' : state.status === 'planning' ? '◷' : null
   const glowColor = STATUS_COLORS[state.status]
   // AVO-128: show the name only when the agent is doing something or is being inspected.
   const showName = hovered || (state.status && state.status !== 'idle')
@@ -1086,12 +1089,21 @@ function AgentCharacter({ agent }) {
           </circle>
         )
       })()}
-      {/* AVO-138: calm SUPERVISING halo — a steady (non-pulsing) role-tinted ring while the lead
-          oversees its subagent helpers. The pulse above is RESERVED for the lead's OWN direct work
-          (no active helpers). Status visibility preserved by name tag + this halo + the 👀 chip. */}
+      {/* AVO-138: calm SUPERVISING halo — a gently-breathing (very slow, low-amplitude) role-tinted
+          ring while the lead oversees its subagent helpers. The 3s breathe is intentionally slower
+          and lower-amplitude than the own-work 1.5s pulse so the supervising vs working distinction
+          is preserved. reducedMotion → static ring (no animation). The fast pulse above is RESERVED
+          for the lead's OWN direct work (no active helpers). Status visibility preserved by name tag
+          + this halo + the 👀 chip. */}
       {(state.status === 'working' || state.status === 'planning') && hasActiveHelper && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth={BASE_GLOW.sw}
-          opacity={(BASE_GLOW.op * 0.6).toFixed(2)} data-supervise-halo="1" />
+          opacity={(BASE_GLOW.op * 0.6).toFixed(2)} data-supervise-halo="1">
+          {!reducedMotion && (
+            <animate attributeName="opacity"
+              values={`${(BASE_GLOW.op * 0.3).toFixed(2)};${(BASE_GLOW.op * 0.6).toFixed(2)};${(BASE_GLOW.op * 0.3).toFixed(2)}`}
+              dur="3s" repeatCount="indefinite" />
+          )}
+        </circle>
       )}
       {state.status === 'blocked' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.4">
