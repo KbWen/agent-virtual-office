@@ -646,21 +646,29 @@ const GRID_LINES = (() => {
   return lines
 })()
 
-// The scene is authored at 800×560. We show the full room ONLY when the container can render it
-// near-100% (big/comfortable). Below that — a docked tall-narrow column OR a moderate small-ish
-// window — the office would shrink to a tiny, sparse strip (empty meeting room/lounge eat the
-// space, agents become unreadable), so we switch to the dense NarrowRoster widget: every role a
-// readable card, no crop, no wasted rooms. The decision is the scene's `meet` SCALE, not the raw
-// aspect ratio, so both thin columns and small landscape windows are covered.
+// The scene is authored at 800×560. The DEFAULT behaviour for any reasonably-shaped window —
+// including a moderate small-ish or elongated one — is the office scene itself, kept readable by a
+// SCALE FLOOR (SCENE_MIN_HEIGHT): instead of shrinking the room to a tiny sparse strip when the
+// viewport is short, we hold it near 100% and let the container scroll a little. This fills the
+// width better (less letterbox) and keeps agents legible across portrait-ish sizes.
+//
+// The roster widget is a SPECIAL fallback, reserved for genuinely cramped frames where even a
+// floored scene can't work: a thin docked column (< MIN_SCENE_WIDTH wide → heavy horizontal
+// scrolling) or a short strip (< MIN_SCENE_HEIGHT tall → only a sliver of the room visible).
 export const SCENE_W = 800
 export const SCENE_H = 560
-// Below this `meet` scale the room is too small to read comfortably → roster widget.
-export const MIN_READABLE_SCALE = 0.95
+// Scale floor: the scene SVG never renders shorter than this, so a height-limited window shows the
+// room near 100% (scroll to pan) instead of a shrunken 0.8× strip. Native height = readable agents.
+export const SCENE_MIN_HEIGHT = 560
+// Roster-widget (special fallback) thresholds — only genuinely cramped frames.
+export const MIN_SCENE_WIDTH = 480
+export const MIN_SCENE_HEIGHT = 320
 export const PORTRAIT_RATIO = 1.0 // retained for back-compat; superseded by shouldUseRoster()
 
 export function shouldUseRoster(w, h) {
   if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return false
-  return Math.min(w / SCENE_W, h / SCENE_H) < MIN_READABLE_SCALE
+  // Only the cramped cases the floored scene can't serve: a thin column or a short strip.
+  return w < MIN_SCENE_WIDTH || h < MIN_SCENE_HEIGHT
 }
 
 export default function PixelOffice({ animationQuality = 'full', mode = 'full' }) {
@@ -792,9 +800,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       else if (ratio < 1.6) setPanelViewBox(`${60 - M} ${140 - M} ${540 + M * 2} ${340 + M * 2}`)
       else setPanelViewBox(`${60 - M} ${155 - M} ${540 + M * 2} ${260 + M * 2}`)
     } else {
-      // Default office: when the room can't render near-100% (thin column OR small landscape
-      // window), show the dense roster widget; otherwise the full wide scene. Scale-based so a
-      // moderate small window isn't left as a tiny, half-empty room. (No scene crop ever.)
+      // Default office: the adaptive scene (scale-floored, scrollable) handles almost everything;
+      // the roster widget is only for genuinely cramped frames (thin column / short strip).
       setIsNarrow(shouldUseRoster(w, h))
     }
   }, [isPanel])
@@ -824,7 +831,13 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   }, [updateViewBox])
 
   const viewBox = isPanel ? panelViewBox : '0 0 800 560'
-  const svgStyle = isPanel ? {} : { maxHeight: 'calc(100vh - 44px)', minWidth: '480px' }
+  // Scale floor: minHeight holds the room at its native height on a SHORT viewport (e.g. 840×500),
+  // so meet scales the office up to ~100% and the container scrolls a little, instead of squashing
+  // it to a tiny 0.89× strip with wide letterbox. minWidth keeps the existing horizontal floor.
+  // On a comfortable desktop (tall enough) minHeight isn't binding → wide stays byte-identical.
+  const svgStyle = isPanel
+    ? {}
+    : { maxHeight: 'calc(100vh - 44px)', minWidth: '480px', minHeight: `${SCENE_MIN_HEIGHT}px` }
 
   const svgElement = (
     <svg

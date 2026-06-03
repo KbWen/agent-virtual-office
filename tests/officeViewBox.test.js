@@ -1,37 +1,38 @@
 import { describe, it, expect } from 'vitest'
-import { shouldUseRoster, SCENE_W, SCENE_H, MIN_READABLE_SCALE } from '../src/components/PixelOffice.jsx'
+import { shouldUseRoster, MIN_SCENE_WIDTH, MIN_SCENE_HEIGHT } from '../src/components/PixelOffice.jsx'
 import NarrowRoster from '../src/components/NarrowRoster.jsx'
 import { CharacterPixelSprite } from '../src/components/AgentCharacter.jsx'
 
-// Responsive contract (widget-not-crop): the full 800×560 scene renders ONLY when the container
-// can show it near-100%. A thin column OR a small-ish landscape window — anything that would shrink
-// the room below MIN_READABLE_SCALE — switches to the dense roster widget. No scene crop ever.
-describe('shouldUseRoster — scale-based scene/widget switch', () => {
-  it('big / comfortable windows keep the full scene', () => {
-    expect(shouldUseRoster(1280, 800)).toBe(false) // scale 1.43
-    expect(shouldUseRoster(1000, 700)).toBe(false) // scale 1.25
-    expect(shouldUseRoster(SCENE_W, SCENE_H)).toBe(false) // exactly 100%
+// Contract: the office SCENE is the default for any reasonably-shaped window — it stays readable
+// via a scale floor (held near 100%, scroll to pan) instead of shrinking to a tiny strip. The
+// roster widget is a SPECIAL fallback, only for genuinely cramped frames (thin column / short
+// strip). No scene crop ever.
+describe('shouldUseRoster — widget is a special fallback, scene is the default', () => {
+  it('big / comfortable windows use the scene', () => {
+    expect(shouldUseRoster(1280, 800)).toBe(false)
+    expect(shouldUseRoster(1000, 700)).toBe(false)
   })
 
-  it('a MODERATE small landscape window (the "still tiny original" case) uses the widget', () => {
-    // 840×500 → scale 0.893 < 0.95 — this is the size the user saw as a shrunk, half-empty room.
-    expect(shouldUseRoster(840, 500)).toBe(true)
-    expect(shouldUseRoster(700, 500)).toBe(true)
+  it('a MODERATE small / short landscape window keeps the (scale-floored) scene, NOT the widget', () => {
+    // 840×500 is the case the user saw shrunk; it must now stay the scene (floored to ~100%).
+    expect(shouldUseRoster(840, 500)).toBe(false)
+    expect(shouldUseRoster(700, 520)).toBe(false)
+    expect(shouldUseRoster(960, 540)).toBe(false)
   })
 
-  it('a TALL-NARROW docked column uses the widget', () => {
+  it('a THIN docked column (narrower than the office can show) falls back to the widget', () => {
     expect(shouldUseRoster(380, 950)).toBe(true)
-    expect(shouldUseRoster(300, 800)).toBe(true)
+    expect(shouldUseRoster(MIN_SCENE_WIDTH - 1, 900)).toBe(true)
+    expect(shouldUseRoster(MIN_SCENE_WIDTH, 900)).toBe(false) // at the floor → scene
   })
 
-  it('the threshold is the meet-scale crossing MIN_READABLE_SCALE', () => {
-    const justBelow = MIN_READABLE_SCALE - 0.02
-    const justAbove = MIN_READABLE_SCALE + 0.02
-    expect(shouldUseRoster(SCENE_W * justBelow, SCENE_H * justBelow)).toBe(true)
-    expect(shouldUseRoster(SCENE_W * justAbove, SCENE_H * justAbove)).toBe(false)
+  it('a SHORT strip (too little height to show the room) falls back to the widget', () => {
+    expect(shouldUseRoster(1200, 240)).toBe(true)
+    expect(shouldUseRoster(1200, MIN_SCENE_HEIGHT - 1)).toBe(true)
+    expect(shouldUseRoster(1200, MIN_SCENE_HEIGHT)).toBe(false) // at the floor → scene
   })
 
-  it('defensive: non-finite / zero sizes never blank out (stay on the scene)', () => {
+  it('defensive: non-finite / zero sizes stay on the scene (never a blank widget)', () => {
     expect(shouldUseRoster(NaN, 500)).toBe(false)
     expect(shouldUseRoster(800, 0)).toBe(false)
     expect(shouldUseRoster(undefined, undefined)).toBe(false)
