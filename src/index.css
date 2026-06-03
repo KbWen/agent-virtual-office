@@ -30,3 +30,9 @@ html, body, #root {
   94%           { opacity: 0.20; }
   96%           { opacity: 0; }
 }
+/* Team-chat "typing…" indicator: three dots pulse in a wave. Subtle (opacity only),
+   no transform, so it stays calm but alive. Staggered per-dot via animation-delay. */
+@keyframes chat-typing {
+  0%, 70%, 100% { opacity: 0.25; }
+  35%           { opacity: 1; }
+}
