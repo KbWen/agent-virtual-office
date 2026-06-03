@@ -1104,7 +1104,18 @@ function AgentCharacter({ agent }) {
       />
 
       {/* Behavior-specific indicator icon */}
-      {!isWalking && <BehaviorIndicator behavior={state.behavior} />}
+      {/* AVO-134: a one-shot pop-in (scale + slight squash) when the behavior CHANGES.
+          Keyed on the behavior so React remounts (replays the pop) on a real change, but a
+          same-behavior re-render reuses the element → no re-fire. reducedMotion → static. */}
+      {!isWalking && (
+        <g key={state.behavior}>
+          {!reducedMotion && (
+            <animateTransform attributeName="transform" type="scale"
+              values="0 0;1.15 0.9;1 1" keyTimes="0;0.6;1" dur="0.3s" repeatCount="1" fill="freeze" />
+          )}
+          <BehaviorIndicator behavior={state.behavior} />
+        </g>
+      )}
 
       {/* Name tag + bubble: inverse-scale to keep text at original size despite character scale */}
       <g transform={`scale(${1/1.35})`}>

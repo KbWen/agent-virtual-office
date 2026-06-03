@@ -133,3 +133,39 @@ describe('behaviorEngine — role-specific behavior filtering', () => {
     }
   })
 })
+
+// AVO-133: a blocked agent must visibly read as "stuck" — the behavior engine biases it
+// toward the frustration cluster (scratch-head / sigh / desk-slam) so trouble is legible
+// from posture in peripheral vision before anyone clicks to inspect.
+describe('getNextBehavior — blocked biases toward frustration (AVO-133)', () => {
+  const FRUSTRATED = ['scratch-head', 'sigh', 'desk-slam']
+
+  it('picks the frustrated category far above a uniform baseline when blocked', () => {
+    let frustrated = 0
+    const N = 400
+    for (let i = 0; i < N; i++) {
+      // hour 10 = no hour modifier, mood normal = no mood blend → clean status weights
+      if (getNextBehavior('dev', 'blocked', 10, 'normal').category === 'frustrated') frustrated++
+    }
+    // blocked weights frustrated at 60/100; a uniform pick over 5 categories would be ~20%
+    expect(frustrated / N).toBeGreaterThan(0.4)
+  })
+
+  it('every frustrated behavior a blocked agent picks is the scratch-head/sigh/desk-slam cluster', () => {
+    const seen = new Set()
+    for (let i = 0; i < 400; i++) {
+      const b = getNextBehavior('qa', 'blocked', 10, 'normal')
+      if (b.category === 'frustrated') seen.add(b.behaviorId)
+    }
+    expect(seen.size).toBeGreaterThan(0)
+    for (const id of seen) expect(FRUSTRATED).toContain(id)
+  })
+
+  it('an idle agent does NOT read as frustrated (contrast — no false "stuck" signal)', () => {
+    let frustrated = 0
+    for (let i = 0; i < 400; i++) {
+      if (getNextBehavior('dev', 'idle', 10, 'normal').category === 'frustrated') frustrated++
+    }
+    expect(frustrated / 400).toBeLessThan(0.2)
+  })
+})
