@@ -9,6 +9,7 @@ import { startWorkflowHandoffs } from '../inference/workflowHandoff'
 import { eventName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import HelperHuddles from './HelperHuddle'
+import NarrowRoster from './NarrowRoster'
 import AgentInspector from './AgentInspector'
 import {
   Bookshelf, Plant, Couch, RoundTable, MeetingTable,
@@ -645,26 +646,11 @@ const GRID_LINES = (() => {
   return lines
 })()
 
-// Full-room viewBox — the canonical wide experience. Landscape/square windows get this
-// EXACTLY, so wide users are byte-for-byte unchanged (asserted in tests).
-export const FULL_OFFICE_VIEWBOX = '0 0 800 560'
-// Below this width/height ratio the container is "portrait" (a tall narrow side-column, the
-// dock-beside-your-editor case). At/above it the office stays the full room.
+// Below this container width/height ratio the office is a TALL-NARROW column (docked beside an
+// editor). Cropping the wide scene there cuts agents/events off-frame; shrinking it to fit makes
+// it tiny. So a narrow column switches to the vertical NarrowRoster widget — every role visible
+// as a readable card, nothing cropped. At/above this ratio the office stays the full wide room.
 export const PORTRAIT_RATIO = 1.0
-
-// Adaptive office viewBox as a PURE function of the container aspect ratio. The whole point:
-// a wide/square window keeps the full 800x560 room (unchanged); a portrait/tall-narrow column
-// gets a STATIC, zoomed, in-bounds crop centered on the desk cluster so the office fills the
-// column at a readable sprite scale instead of shrinking to a thin strip. No auto-pan (calm,
-// no seasick chasing), no movement-system involvement, and clamped to 0..800 / 0..560 so the
-// crop never reveals the dark void outside the room. Exact crop framing is a visual-taste call.
-export function computeOfficeViewBox(ratio) {
-  if (!Number.isFinite(ratio) || ratio >= PORTRAIT_RATIO) return FULL_OFFICE_VIEWBOX
-  // Portrait crop: taller-than-wide, zoomed in (width 360 << 800), centered on the busy
-  // desk cluster (arch/qa/dev/ops/res), fully within the room bounds.
-  const x = 200, y = 30, w = 360, h = 500   // 200..560 / 30..530  ⊂  0..800 / 0..560
-  return `${x} ${y} ${w} ${h}`
-}
 
 export default function PixelOffice({ animationQuality = 'full', mode = 'full' }) {
   // Only re-render PixelOffice when agent IDs change, not on every property update.
@@ -778,9 +764,10 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const isPanel = mode === 'panel'
   const containerRef = useRef(null)
   const [panelViewBox, setPanelViewBox] = useState('60 155 540 260')
-  // Default full-office adaptive viewBox — starts as the full room so the first paint (and any
-  // non-DOM render) is byte-identical to the legacy wide experience until the observer measures.
-  const [officeViewBox, setOfficeViewBox] = useState(FULL_OFFICE_VIEWBOX)
+  // Default office: is the container a tall-narrow column? Starts false so the first paint is
+  // the full wide room (byte-identical to legacy) until the observer measures. A false<->true
+  // boolean — re-renders only on a real shape transition, not per resize pixel.
+  const [isNarrow, setIsNarrow] = useState(false)
 
   const updateViewBox = useCallback(() => {
     if (!containerRef.current) return
@@ -794,9 +781,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       else if (ratio < 1.6) setPanelViewBox(`${60 - M} ${140 - M} ${540 + M * 2} ${340 + M * 2}`)
       else setPanelViewBox(`${60 - M} ${155 - M} ${540 + M * 2} ${260 + M * 2}`)
     } else {
-      // Default full office: wide/square keeps the full room (unchanged); a portrait/tall-narrow
-      // column gets a zoomed crop so it fills the column instead of shrinking to a thin strip.
-      setOfficeViewBox(computeOfficeViewBox(ratio))
+      // Default office: a tall-narrow column shows the vertical roster widget; otherwise the
+      // full wide scene. (No scene crop — cropping cuts agents/events off-frame.)
+      setIsNarrow(ratio < PORTRAIT_RATIO)
     }
   }, [isPanel])
 
@@ -824,14 +811,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     }
   }, [updateViewBox])
 
-  const viewBox = isPanel ? panelViewBox : officeViewBox
-  // The legacy 480px floor is what makes a docked narrow column overflow/shrink; keep it ONLY
-  // for the full-room (wide/square) view, drop it once we've cropped to portrait so the office
-  // fills the column. Wide users keep the exact legacy style.
-  const isPortraitCrop = !isPanel && officeViewBox !== FULL_OFFICE_VIEWBOX
-  const svgStyle = isPanel
-    ? {}
-    : { maxHeight: 'calc(100vh - 44px)', ...(isPortraitCrop ? {} : { minWidth: '480px' }) }
+  const viewBox = isPanel ? panelViewBox : '0 0 800 560'
+  const svgStyle = isPanel ? {} : { maxHeight: 'calc(100vh - 44px)', minWidth: '480px' }
 
   const svgElement = (
     <svg
@@ -1179,9 +1160,12 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     )
   }
 
+  // A tall-narrow column renders the vertical roster widget (everything visible, nothing cropped);
+  // a wide/square window renders the full scene exactly as before. The containerRef wrapper is
+  // ALWAYS present so the ResizeObserver can keep measuring and flip back when the window widens.
   return (
     <div ref={containerRef} className="w-full flex-1 overflow-auto min-h-0">
-      {svgElement}
+      {isNarrow ? <NarrowRoster /> : svgElement}
     </div>
   )
 }

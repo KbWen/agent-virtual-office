@@ -320,7 +320,7 @@ function PixelSprite({ grid, flipX = false, scale = 1 }) {
 // stable. Memo elides the component invocation (and its baseRole string-split +
 // CHAR_STYLES lookup) on the ~28-of-30 frames per second where no prop changed; the
 // inner useMemos only guarded the sprite-grid generation, not the function body itself.
-const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing }) {
+export const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing }) {
   // Strip session prefix for style lookup: "feat-x~dev" → use dev's style
   const baseRole = charId.includes('~') ? charId.split('~').pop() : charId
   const style = CHAR_STYLES[charId] || CHAR_STYLES[baseRole] || CHAR_STYLES.pm
