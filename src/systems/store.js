@@ -295,6 +295,9 @@ export const useOfficeStore = create((set) => ({
   minute: new Date().getMinutes(),
   activeEvent: null,
   isPaused: typeof window !== 'undefined' && (() => { try { return localStorage.getItem('office-paused') === 'true' } catch { return false } })(),
+  // View mode: the OFFICE scene is the primary view at every size; the roster is an OPTIONAL
+  // manual toggle (a glanceable list), never an automatic size-based switch. Persisted per user.
+  rosterMode: typeof window !== 'undefined' && (() => { try { return localStorage.getItem('office-view') === 'roster' } catch { return false } })(),
   // Subagent helper-huddle: ephemeral helper figures clustered at a parent role's desk when
   // it dispatches subagents. Kept OUT of `agents` (no eviction / overflow / name tag / ring).
   helpers: [],  // [{ id: 'role#hash', parentRole, label, expiresAt }]
@@ -530,6 +533,11 @@ export const useOfficeStore = create((set) => ({
     const next = !s.isPaused
     try { if (typeof window !== 'undefined') localStorage.setItem('office-paused', String(next)) } catch {}
     return { isPaused: next }
+  }),
+  toggleRosterMode: () => set((s) => {
+    const next = !s.rosterMode
+    try { if (typeof window !== 'undefined') localStorage.setItem('office-view', next ? 'roster' : 'office') } catch {}
+    return { rosterMode: next }
   }),
   triggerWorkflow: () => set({ showWorkflow: true }),
   endWorkflow: () => set({ showWorkflow: false }),

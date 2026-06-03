@@ -646,22 +646,13 @@ const GRID_LINES = (() => {
   return lines
 })()
 
-// FIT-OR-ROSTER (expert-panel consensus). The room is authored at a FIXED 800×560 — every desk,
-// home and pathfinding waypoint is a hardcoded coordinate in movementSystem.js, so the room can NOT
-// be reflowed into portrait. Below its native size the room could only be shown by shrinking (tiny
-// unreadable text), cropping (info off-frame) or scrolling — all rejected by the user. So the rule
-// is binary and consistent across every size: show the full room ONLY when it fits WHOLE at full
-// scale (container ≥ 800×560 in BOTH dimensions); anything smaller shows the roster instead — the
-// same chibi sprites + live status as readable HTML cards that reflow to fill the frame. The roster
-// is the honest "tall reflow": it reflows the DATA, since the pixels can't.
+// The office scene is authored at a FIXED 800×560 (every desk/home/waypoint is a hardcoded
+// movementSystem coordinate, so it can't be reflowed to portrait). The office is the PRIMARY view
+// at EVERY size — scaled to fit via SVG `meet`. The roster is an OPTIONAL manual toggle
+// (store.rosterMode), never an automatic size-based switch, so the office always leads and the
+// list is just an extra glanceable lens the user can opt into.
 export const SCENE_W = 800
 export const SCENE_H = 560
-
-export function shouldUseRoster(w, h) {
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return false
-  // Scene only when it fits whole at 100%; otherwise the roster (never shrink/crop/scroll the room).
-  return w < SCENE_W || h < SCENE_H
-}
 
 export default function PixelOffice({ animationQuality = 'full', mode = 'full' }) {
   // Only re-render PixelOffice when agent IDs change, not on every property update.
@@ -778,64 +769,44 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   // Default office: is the container a tall-narrow column? Starts false so the first paint is
   // the full wide room (byte-identical to legacy) until the observer measures. A false<->true
   // boolean — re-renders only on a real shape transition, not per resize pixel.
-  const [isNarrow, setIsNarrow] = useState(false)
+  // Office is the primary view at every size; the roster is an opt-in MANUAL toggle (not size-based).
+  const rosterMode = useOfficeStore((s) => s.rosterMode)
 
-  const updateViewBox = useCallback((measuredW, measuredH) => {
+  const updateViewBox = useCallback(() => {
+    if (!isPanel) return
     const el = containerRef.current
     if (!el) return
-    const w = measuredW != null ? measuredW : el.clientWidth
-    const h = measuredH != null ? measuredH : el.clientHeight
+    const { clientWidth: w, clientHeight: h } = el
     if (w === 0 || h === 0) return
     const ratio = w / h
-    if (isPanel) {
-      // Panel (compact embed): its own intentional crops per container shape.
-      const M = 20  // margin to prevent edge clipping of agents
-      if (ratio < 1) setPanelViewBox(`${100 - M} ${130 - M} ${400 + M * 2} ${400 + M * 2}`)
-      else if (ratio < 1.6) setPanelViewBox(`${60 - M} ${140 - M} ${540 + M * 2} ${340 + M * 2}`)
-      else setPanelViewBox(`${60 - M} ${155 - M} ${540 + M * 2} ${260 + M * 2}`)
-    } else {
-      // Default office: the adaptive scene (scale-floored, scrollable) handles almost everything;
-      // the roster widget is only for genuinely cramped frames (thin column / short strip).
-      setIsNarrow(shouldUseRoster(w, h))
-    }
+    // Panel (compact embed): its own intentional crops per container shape.
+    const M = 20  // margin to prevent edge clipping of agents
+    if (ratio < 1) setPanelViewBox(`${100 - M} ${130 - M} ${400 + M * 2} ${400 + M * 2}`)
+    else if (ratio < 1.6) setPanelViewBox(`${60 - M} ${140 - M} ${540 + M * 2} ${340 + M * 2}`)
+    else setPanelViewBox(`${60 - M} ${155 - M} ${540 + M * 2} ${260 + M * 2}`)
   }, [isPanel])
 
-  // Measure DIRECTLY from the ResizeObserver entry — do NOT route through requestAnimationFrame.
-  // In an embedded preview/webview (the way this office is docked) rAF is throttled or fully
-  // suspended when the pane is not focused, so a rAF-gated handler would MISS the resize that
-  // widens a narrow column back to a full window — leaving it stuck on the roster widget at a
-  // size that should show the scene. ResizeObserver fires on the layout lifecycle (not rAF), so
-  // reading entry.contentRect here is reliable. The observed element is the flex-sized wrapper,
-  // whose box does NOT change when scene↔widget swaps inside it, so there is no observer loop.
+  // Only PANEL mode adapts its viewBox to the embed shape. The default office does NOT measure or
+  // auto-switch — its view is a manual toggle (rosterMode) — which also means there is no resize-
+  // driven state that could get stuck when the embedded preview throttles rAF/ResizeObserver.
   useEffect(() => {
+    if (!isPanel) return
     const el = containerRef.current
     if (!el) return
     updateViewBox()
-    const ro = new ResizeObserver((entries) => {
-      const cr = entries[entries.length - 1]?.contentRect
-      if (cr) updateViewBox(cr.width, cr.height)
-    })
+    const ro = new ResizeObserver(() => updateViewBox())
     ro.observe(el)
-    // Backup for iframe/webview embedding where ResizeObserver can be unreliable.
     const onWinResize = () => updateViewBox()
     window.addEventListener('resize', onWinResize)
-    // Self-heal safety net: in an embedded preview/webview, ResizeObserver delivery can be deferred
-    // when the pane is not actively painting, which previously left the view STUCK on the wrong
-    // representation after a resize (e.g. a narrow→wide drag the observer missed). setInterval keeps
-    // firing (it is clamped, never suspended, unlike requestAnimationFrame), so a stale view always
-    // self-corrects within ~0.5s. updateViewBox only calls setState when the boolean actually flips,
-    // so a steady-state poll is a cheap no-op.
-    const poll = setInterval(() => updateViewBox(), 500)
     return () => {
       ro.disconnect()
       window.removeEventListener('resize', onWinResize)
-      clearInterval(poll)
     }
-  }, [updateViewBox])
+  }, [updateViewBox, isPanel])
 
   const viewBox = isPanel ? panelViewBox : '0 0 800 560'
-  // No min-width/min-height floor: the scene is only ever shown when it already fits whole at full
-  // scale (shouldUseRoster gates that), so it never needs to scroll or be propped to a larger box.
+  // The office scales to fit via `meet`. maxHeight keeps it within the viewport so the page itself
+  // never scrolls; the wrapper is overflow-hidden so the scene never needs a scrollbar.
   const svgStyle = isPanel ? {} : { maxHeight: 'calc(100vh - 44px)' }
 
   const svgElement = (
@@ -1184,13 +1155,13 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     )
   }
 
-  // FIT-OR-ROSTER: the full room when it fits whole at full scale, else the readable roster. The
-  // containerRef wrapper is always mounted so the observer + safety poll keep measuring across the
-  // transition. overflow-hidden because the scene never scrolls (it is only shown when it already
-  // fits); the roster does its own internal scroll if a very small frame ever needs it.
+  // Office-primary: the full scene by default at every size (scaled to fit). The roster is shown
+  // ONLY when the user manually toggles it (store.rosterMode) — it is an optional extra lens, never
+  // an automatic size-based switch. overflow-hidden: the office fits via `meet` (no scrollbar); the
+  // roster does its own internal scroll if a very small frame needs it.
   return (
     <div ref={containerRef} className="w-full flex-1 overflow-hidden min-h-0">
-      {isNarrow ? <NarrowRoster /> : svgElement}
+      {rosterMode ? <NarrowRoster /> : svgElement}
     </div>
   )
 }
