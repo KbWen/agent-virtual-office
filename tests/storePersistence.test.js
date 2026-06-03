@@ -102,6 +102,69 @@ describe('validatePersistedAgent — deskItemCount sanitization (R63)', () => {
   })
 })
 
+describe('createPersistedState — session-carrying dynamic agent exclusion', () => {
+  it('excludes an agent with a non-null session field from the persisted snapshot', () => {
+    const persisted = createPersistedState({
+      agents: {
+        dev: {
+          behavior: 'typing',
+          expression: 'focused',
+          deskItemCount: { coffee: 1, sticky: 0, books: 0 },
+          position: { x: 10, y: 20 },
+          facing: 'left',
+          status: 'working',
+          bubble: null,
+          // static roster agent — no session field
+        },
+        'worktree1~dev': {
+          behavior: 'typing',
+          expression: 'focused',
+          deskItemCount: { coffee: 0, sticky: 0, books: 0 },
+          position: { x: 400, y: 300 },
+          facing: 'down',
+          status: 'working',
+          bubble: null,
+          session: 'worktree1',  // session-carrying dynamic agent — must be excluded
+        },
+      },
+    })
+
+    expect(persisted.agents['dev']).toBeDefined()
+    expect(persisted.agents['worktree1~dev']).toBeUndefined()
+  })
+
+  it('includes an agent with session: null (static role reached via dynamic path)', () => {
+    // applyExternalStatus can create a dynamic agent with session: null when the
+    // agentId is a VALID_ROLES id not in the current roster. Only non-null session
+    // is the discriminator for ephemeral worktree agents.
+    const persisted = createPersistedState({
+      agents: {
+        dev: {
+          behavior: 'idle',
+          expression: 'normal',
+          deskItemCount: { coffee: 0, sticky: 0, books: 0 },
+          position: { x: 10, y: 20 },
+          facing: 'down',
+          status: 'idle',
+          bubble: null,
+          session: null,
+        },
+      },
+    })
+    expect(persisted.agents['dev']).toBeDefined()
+  })
+
+  it('produces an empty agents map when all agents are session-carrying', () => {
+    const persisted = createPersistedState({
+      agents: {
+        'abc~pm': { behavior: 'gantt-chart', expression: 'focused', deskItemCount: { coffee: 0, sticky: 2, books: 0 }, position: { x: 400, y: 300 }, facing: 'down', status: 'working', bubble: null, session: 'abc' },
+        'xyz~dev': { behavior: 'typing', expression: 'focused', deskItemCount: { coffee: 3, sticky: 0, books: 0 }, position: { x: 450, y: 300 }, facing: 'left', status: 'working', bubble: null, session: 'xyz' },
+      },
+    })
+    expect(Object.keys(persisted.agents)).toHaveLength(0)
+  })
+})
+
 describe('validatePersistedDailyDoneLedger — stale-day reconciliation (R73)', () => {
   // Local day key for a fixed reference instant — built the same way the store does.
   function dayKeyFor(ts) {

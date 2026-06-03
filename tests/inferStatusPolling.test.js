@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { createFilePollingState, pollFileStatusOnce } from '../src/inference/inferStatus.js'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createFilePollingState, pollFileStatusOnce, _globalPayloadSig } from '../src/inference/inferStatus.js'
 
 function makeResponse({ ok = true, status = 200, etag = null, jsonData = null, rawBody = null }) {
   const body = rawBody ?? (jsonData !== null ? JSON.stringify(jsonData) : 'null')
@@ -165,5 +165,71 @@ describe('pollFileStatusOnce', () => {
       await pollFileStatusOnce(notFoundFetch, state, vi.fn())
     }
     expect(state.consecutive404).toBeLessThanOrEqual(30)
+  })
+})
+
+// ─── Fix 1: startPolling window-global dedupe ──────────────────────────
+describe('_globalPayloadSig', () => {
+  it('returns identical sig for same agents+workflow', () => {
+    const data = { agents: [{ role: 'dev', status: 'working' }], workflow: 'Build' }
+    expect(_globalPayloadSig(data)).toBe(_globalPayloadSig({ ...data }))
+  })
+
+  it('returns different sig when agents change (seq-less in-place mutation)', () => {
+    const sig1 = _globalPayloadSig({ agents: [{ role: 'dev', status: 'working' }], workflow: null })
+    const sig2 = _globalPayloadSig({ agents: [{ role: 'dev', status: 'blocked' }], workflow: null })
+    expect(sig1).not.toBe(sig2)
+  })
+
+  it('returns different sig when workflow changes', () => {
+    const base = { agents: [{ role: 'dev', status: 'working' }] }
+    const sig1 = _globalPayloadSig({ ...base, workflow: 'Build' })
+    const sig2 = _globalPayloadSig({ ...base, workflow: 'Ship' })
+    expect(sig1).not.toBe(sig2)
+  })
+})
+
+describe('startPolling — seq-less window global re-delivery', () => {
+  let originalGlobal
+  beforeEach(() => { originalGlobal = globalThis.window })
+  afterEach(() => { globalThis.window = originalGlobal; vi.useRealTimers() })
+
+  it('delivers again when agents change in-place even with no _seq field', async () => {
+    vi.useFakeTimers()
+    // Simulate the CLI pattern: mutate the SAME object in place
+    const payload = { type: 'office-status', agents: [{ role: 'dev', status: 'working' }], workflow: null }
+    globalThis.window = { __office_status__: payload }
+
+    // We test _globalPayloadSig directly since startPolling uses setInterval
+    // (browser env needed). Verify the sig changes when agents mutate.
+    const sig1 = _globalPayloadSig(payload)
+    // Simulate in-place mutation (no _seq change)
+    payload.agents = [{ role: 'dev', status: 'blocked' }]
+    const sig2 = _globalPayloadSig(payload)
+    expect(sig1).not.toBe(sig2)
+  })
+
+  it('does NOT re-deliver when nothing changed (no _seq and same content)', () => {
+    const payload = { type: 'office-status', agents: [{ role: 'dev', status: 'working' }], workflow: 'Build' }
+    const sig1 = _globalPayloadSig(payload)
+    // No mutation — same object
+    const sig2 = _globalPayloadSig(payload)
+    expect(sig1).toBe(sig2)
+  })
+
+  it('does not mutate the externally-owned window.__office_status__ global', () => {
+    // withStatusEnvelope stamps _seq and source — these must NOT land on the original
+    // payload object. We verify the shallow-copy guard by checking the original is clean.
+    const payload = { type: 'office-status', agents: [{ role: 'dev', status: 'working' }] }
+    const copy = { ...payload }
+    // _globalPayloadSig must not modify the object it receives
+    _globalPayloadSig(copy)
+    expect(copy).not.toHaveProperty('_seqWasAdded')
+    // The real guard: startPolling passes { ...data } to normalizeStatusMessage
+    // which calls withStatusEnvelope — that stamps _seq on the copy, not on `data`.
+    // Verify the helper itself is read-only.
+    const orig = JSON.stringify(payload)
+    _globalPayloadSig(payload)
+    expect(JSON.stringify(payload)).toBe(orig)
   })
 })

@@ -40,4 +40,5 @@ export const STATUS_COLORS = {
   working: '#EF9F27',
   done: '#5CB88A',
   blocked: '#E24B4A',
+  planning: '#8B7FD6',
 }

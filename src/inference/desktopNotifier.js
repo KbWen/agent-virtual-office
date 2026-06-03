@@ -33,6 +33,12 @@ const POLL_INTERVAL_MS = 5_000
 const blockedSince = new Map()  // agentId → timestamp when first observed in blocked state
 const notifiedFor  = new Map()  // agentId → blocked-since timestamp we already fired for
 
+// Statuses that the idle-gap inferrer reclassifies FROM 'blocked' (fix #2).
+// These are still considered part of the same blocked episode for dedupe
+// purposes — clearing blockedSince/notifiedFor here would cause a 2nd OS
+// notification when the same unanswered prompt re-asserts 'blocked'.
+const BLOCKED_DERIVED = new Set(['awaiting-approval'])
+
 export function getNotificationState() {
   if (typeof Notification === 'undefined') return 'unsupported'
   return Notification.permission  // 'default' | 'granted' | 'denied'
@@ -107,16 +113,22 @@ function tick(store, opts, now = Date.now) {
   const agents = store.getState().agents
   for (const id of Object.keys(agents)) {
     const a = agents[id]
-    if (a?.status === 'blocked') {
-      if (!blockedSince.has(id)) blockedSince.set(id, t0)
-      if (!canFire) continue
+    if (a?.status === 'blocked' || BLOCKED_DERIVED.has(a?.status)) {
+      // 'blocked' and derived statuses (e.g. 'awaiting-approval' inferred by idle-gap)
+      // are treated as the SAME episode. If the episode started while status was 'blocked'
+      // and idle-gap reclassified to 'awaiting-approval', we must not clear blockedSince —
+      // doing so would reset the episode and allow a 2nd OS notification when the real
+      // 'blocked' signal re-asserts for the same unanswered prompt.
+      if (a?.status === 'blocked' && !blockedSince.has(id)) blockedSince.set(id, t0)
+      if (!canFire || !blockedSince.has(id)) continue
       const since = blockedSince.get(id)
       if (t0 - since >= opts.thresholdMs && notifiedFor.get(id) !== since) {
         fireNotification(id)
         notifiedFor.set(id, since)  // dedupe — same episode keyed by start-time
       }
     } else {
-      // Transition out → reset both maps so the next blocked episode is fresh.
+      // Genuine transition out of blocked family → reset both maps so the next
+      // blocked episode is fresh.
       blockedSince.delete(id)
       notifiedFor.delete(id)
     }
@@ -154,6 +166,15 @@ export function startDesktopNotifier(store, options = {}) {
   const id = setInterval(() => tick(store, opts, opts.now), opts.intervalMs)
   return function stopDesktopNotifier() {
     if (typeof clearInterval !== 'undefined') clearInterval(id)
+    // Prune Map entries for agents no longer present in the store so
+    // evicted/worktree agents don't accumulate across spawned instances.
+    const currentAgents = store.getState?.()?.agents ?? {}
+    for (const agentId of blockedSince.keys()) {
+      if (!(agentId in currentAgents)) {
+        blockedSince.delete(agentId)
+        notifiedFor.delete(agentId)
+      }
+    }
   }
 }
 

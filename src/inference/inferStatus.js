@@ -273,13 +273,32 @@ function listenBroadcastChannel(callback) {
 
 // ─── Global polling (CLI injects window.__office_status__) ─────────────
 
+// Compute a content signature for the window global payload. The documented
+// window.__office_status__ shape has no _seq field; the CLI mutates the object
+// in place so data._seq never changes and raw-_seq dedup delivers only once.
+// Dedupe on a JSON signature of the fields that actually change: agents +
+// workflow. Agents is the primary signal; workflow is secondary. We operate on
+// a shallow copy so we never mutate the externally-owned global in place.
+export function _globalPayloadSig(data) {
+  try {
+    return JSON.stringify({ agents: data.agents, workflow: data.workflow ?? null })
+  } catch {
+    return String(data._seq ?? '')
+  }
+}
+
 function startPolling(callback, intervalMs = 2000) {
-  let lastSeq = null
+  let lastSig = null
   const timer = setInterval(() => {
     const data = window.__office_status__
-    if (data && data._seq !== lastSeq) {
-      lastSeq = data._seq
-      const msg = normalizeStatusMessage(data)
+    if (!data) return
+    // Work on a shallow copy so normalizeStatusMessage (and withStatusEnvelope)
+    // never mutate the externally-owned global object.
+    const copy = { ...data }
+    const sig = _globalPayloadSig(copy)
+    if (sig !== lastSig) {
+      lastSig = sig
+      const msg = normalizeStatusMessage(copy)
       if (msg) callback(msg)
     }
   }, intervalMs)

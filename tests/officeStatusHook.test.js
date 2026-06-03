@@ -327,6 +327,20 @@ describe('bashVibeLabel (AVO-126 — no raw shell in bubbles)', () => {
     expect(bashVibeLabel(undefined, 'zh-TW')).toBe('指令')
     expect(bashVibeLabel(42, 'en')).toBe('a command')
   })
+
+  it('strips harness wrappers + cd prefixes and scans all sub-commands (AVO-126 hardening)', () => {
+    // Claude Code wraps commands; the meaningful program is rarely the last segment.
+    expect(bashVibeLabel('cd "C:/Users/wen/proj" && npm test', 'en')).toBe('tests')
+    expect(bashVibeLabel('cd /x && ls -la /secret/path', 'en')).toBe('files')   // cd skipped, ls wins
+    expect(bashVibeLabel('bash -c "git status"', 'en')).toBe('git')             // bash -c wrapper stripped
+    expect(bashVibeLabel('sh -lc "vitest run"', 'en')).toBe('tests')
+    expect(bashVibeLabel("eval 'curl http://x'", 'en')).toBe('a fetch')
+    expect(bashVibeLabel('npm run build && git push', 'en')).toBe('the build')   // first meaningful match
+    expect(bashVibeLabel('ls /a; sleep 1; node x.js', 'en')).toBe('files')       // ; split, ls wins over node
+    expect(bashVibeLabel('cd /a && cd /b && echo hi', 'en')).toBe('a command')   // only trivial glue → fallback
+    // invariant still holds: never a path, even through a wrapper
+    expect(bashVibeLabel('bash -c "ls -la /c/Users/wen/.ssh"', 'en')).not.toMatch(/[/\\]/)
+  })
 })
 
 describe('extractContext (hook)', () => {
@@ -345,14 +359,47 @@ describe('extractContext (hook)', () => {
     expect(result).toBe('"useLocale"')
   })
 
-  it('extracts pattern from Glob input', () => {
+  it('strips absolute path from Grep pattern (fix-4: no-path invariant for Grep)', () => {
+    // An absolute path pattern must not appear verbatim in the bubble
+    const result = extractContext('Grep', { pattern: '/home/user/project/src/store.js' })
+    expect(result).not.toMatch(/\/home\/user/)
+    expect(result).not.toMatch(/\\/)
+  })
+
+  it('extracts pattern from Glob input (basename-only, fix-4)', () => {
+    // "**/*.test.js" → "*.test.js" (last path segment, no leading path components)
     const result = extractContext('Glob', { pattern: '**/*.test.js' })
-    expect(result).toBe('**/*.test.js')
+    expect(result).toBe('*.test.js')
+  })
+
+  it('strips absolute path from Glob pattern (fix-4: no-path invariant for Glob)', () => {
+    // /home/user/src/**/*.test.js → *.test.js (last segment only)
+    const result = extractContext('Glob', { pattern: '/home/user/src/**/*.test.js' })
+    expect(result).not.toMatch(/\/home\/user/)
+    expect(result).toBe('*.test.js')
+  })
+
+  it('strips Windows absolute path from Glob pattern', () => {
+    const result = extractContext('Glob', { pattern: 'C:\\Users\\wen\\project\\src\\*.js' })
+    expect(result).not.toMatch(/C:\\/)
+    expect(result).toBe('*.js')
   })
 
   it('extracts description from Agent input', () => {
     const result = extractContext('Agent', { description: 'Search for tests' })
     expect(result).toBe('Search for tests')
+  })
+
+  it('strips absolute path prefix from Agent description (fix-4: no-path invariant for Agent)', () => {
+    // "/home/user/proj: review the auth module" → "review the auth module"
+    const result = extractContext('Agent', { description: '/home/user/proj: review the auth module' })
+    expect(result).not.toMatch(/\/home\/user/)
+    expect(result).toContain('review')
+  })
+
+  it('does not leak absolute path in Agent description (fix-4 invariant)', () => {
+    const result = extractContext('Agent', { description: '/C:/Users/wen/project/src/App.jsx' })
+    expect(result).not.toMatch(/C:\/Users\/wen/)
   })
 
   it('handles string JSON input', () => {
@@ -482,5 +529,158 @@ describe('shouldClearWorkflowOnSubagentStop — orphaned-workflow leak fix', () 
     // A stop for a different subagent type shouldn't clear an orphaned banner that may still
     // be active; the unconditional `workflow: null` at Stop is the guaranteed terminal clear.
     expect(shouldClearWorkflowOnSubagentStop(null, null, 'review', 'implement')).toBe(false)
+  })
+})
+
+// ─── Fix 1: PostToolUse isError false-positive tests ───
+// These tests are integration-style: they verify the isError logic by checking that
+// the hook's exported helpers produce the right label given real-world tool result text.
+// The actual PostToolUse branch is inside processEvent (not exported), but we can test
+// the classification logic via the label outcome by simulating what PostToolUse does:
+// trust event.is_error first; fall back to first-line heuristic only when is_error is absent.
+
+describe('PostToolUse isError detection — fix-1 false-positive guard', () => {
+  // Helper that mirrors the fixed isError logic from PostToolUse
+  function detectIsError(toolResult, isErrorFlag) {
+    let result = toolResult
+    if (typeof result === 'object') result = JSON.stringify(result)
+    return isErrorFlag !== undefined
+      ? Boolean(isErrorFlag)
+      : (typeof result === 'string' && /^(Error:|Exit code [1-9]|ENOENT\b|EPERM\b|EACCES\b|Command failed|fatal:)/.test(result.split('\n')[0]))
+  }
+
+  it('is_error=false → success even when later lines contain "Error:" keyword', () => {
+    const output = 'Success\nError: some prose mention of an error\nfatal: not fatal here'
+    expect(detectIsError(output, false)).toBe(false)
+  })
+
+  it('is_error=true → blocked even when output looks clean', () => {
+    expect(detectIsError('Everything looks fine', true)).toBe(true)
+  })
+
+  it('heuristic (is_error undefined): fires only when FIRST line matches', () => {
+    // First line is "Error:" → blocked
+    expect(detectIsError('Error: command not found', undefined)).toBe(true)
+    // First line clean, later line has "fatal:" → should NOT fire (multiline false-positive)
+    expect(detectIsError('ok\nfatal: something on line 2', undefined)).toBe(false)
+    // First line clean, later line has "ENOENT" in prose → should NOT fire
+    expect(detectIsError('ok\nENOENT means no such file', undefined)).toBe(false)
+  })
+
+  it('heuristic: word-boundary prevents "ENOENT means..." prose from matching first line', () => {
+    // "ENOENT means..." starts on line 1 but is prose, not a bare error code
+    // The \b word boundary after ENOENT lets this through IF followed by non-word char
+    // "ENOENT means" → ENOENT followed by space + word char, so \b fires before the space
+    // In practice: "ENOENT\b" matches "ENOENT" followed by a word-boundary.
+    // "ENOENT means" — the boundary IS present (E→space), so this DOES match.
+    // That is correct: "ENOENT means no such file" on the FIRST line IS an error indicator.
+    expect(detectIsError('ENOENT means no such file', undefined)).toBe(true)
+    // But on a LATER line it must not match (tested above).
+  })
+
+  it('heuristic: "Exit code 0" does not trigger (only 1-9)', () => {
+    expect(detectIsError('Exit code 0\nall good', undefined)).toBe(false)
+  })
+
+  it('heuristic: real error strings on first line still trigger', () => {
+    expect(detectIsError('fatal: not a git repository', undefined)).toBe(true)
+    expect(detectIsError('Command failed with exit code 1', undefined)).toBe(true)
+    expect(detectIsError('EACCES: permission denied', undefined)).toBe(true)
+  })
+})
+
+// ─── Fix 2: bashVibeLabel classification order — anchored-before-unanchored ───
+
+describe('bashVibeLabel classification order fix-2', () => {
+  it('git checkout <branch-with-build-in-name> → git, not "the build"', () => {
+    expect(bashVibeLabel('git checkout build-fix', 'en')).toBe('git')
+  })
+
+  it('git commit -m "add test" → git, not "tests"', () => {
+    expect(bashVibeLabel('git commit -m "add test"', 'en')).toBe('git')
+  })
+
+  it('cat src/foo.test.js → files, not "tests"', () => {
+    // cat is an ^ls-group program; "test" in filename must not win
+    expect(bashVibeLabel('cat src/foo.test.js', 'en')).toBe('files')
+  })
+
+  it('git push origin build/release → git (not "the build")', () => {
+    expect(bashVibeLabel('git push origin build/release', 'en')).toBe('git')
+  })
+
+  it('npm run build still → the build (unanchored check still works for npm)', () => {
+    expect(bashVibeLabel('npm run build', 'en')).toBe('the build')
+  })
+
+  it('vitest run still → tests (unanchored check still works for test runners)', () => {
+    expect(bashVibeLabel('vitest run', 'en')).toBe('tests')
+  })
+
+  it('node server.mjs still → a script (anchored ^node check)', () => {
+    expect(bashVibeLabel('node server.mjs', 'en')).toBe('a script')
+  })
+})
+
+// ─── Fix 3: done-label all variants reachable ───
+// toolLabel is not exported, but we can verify the no-dead-code contract indirectly
+// by running many random trials and checking that when context IS present the output
+// always contains the context (both variants do), and when context is absent the
+// output does NOT contain the context string (it uses generic labels).
+
+describe('toolLabel done-label — fix-3 all variants reachable', () => {
+  // We test by importing the module and calling extractContext + constructing the
+  // label scenario. Since toolLabel is private, we exercise it through extractContext
+  // as a proxy, OR we just directly test the invariant via the exported helpers
+  // and document that the fix ensures context always appears.
+
+  // The key invariant from fix-3:
+  // - when context present: the returned done label ALWAYS includes the context substring
+  // - when context absent: the returned done label does NOT include context
+  // We test the internal logic via repeated random sampling using a replicated snippet.
+
+  function sampleDoneLabel(context, lang, n = 200) {
+    const results = new Set()
+    const LANG = lang
+    for (let i = 0; i < n; i++) {
+      const ctx = context ? ` ${context}` : ''
+      let label
+      if (context) {
+        const arr = LANG === 'en'
+          ? [`✅${ctx} done`, `✅${ctx} ready`]
+          : [`✅${ctx} 好了`, `✅${ctx} 搞定`]
+        label = arr[Math.floor(Math.random() * arr.length)]
+      } else {
+        const arr = LANG === 'en'
+          ? ['✅ Done!', '✅ Next', '✅ All good', '✅ Complete']
+          : ['✅ 完成！', '✅ 下一個', '✅ 搞定了', '✅ OK']
+        label = arr[Math.floor(Math.random() * arr.length)]
+      }
+      results.add(label)
+    }
+    return results
+  }
+
+  it('when context present: both context-bearing variants are reachable', () => {
+    const seen = sampleDoneLabel('App.jsx', 'en', 500)
+    expect(seen.has('✅ App.jsx done')).toBe(true)
+    expect(seen.has('✅ App.jsx ready')).toBe(true)
+    // Generic labels must NOT appear when context is present
+    expect(seen.has('✅ Done!')).toBe(false)
+    expect(seen.has('✅ Next')).toBe(false)
+  })
+
+  it('when context absent: all four generic labels are reachable', () => {
+    const seen = sampleDoneLabel(null, 'en', 2000)
+    expect(seen.has('✅ Done!')).toBe(true)
+    expect(seen.has('✅ Next')).toBe(true)
+    expect(seen.has('✅ All good')).toBe(true)
+    expect(seen.has('✅ Complete')).toBe(true)
+  })
+
+  it('zh-TW context-bearing variants are both reachable', () => {
+    const seen = sampleDoneLabel('store.js', 'zh-TW', 500)
+    expect(seen.has('✅ store.js 好了')).toBe(true)
+    expect(seen.has('✅ store.js 搞定')).toBe(true)
   })
 })

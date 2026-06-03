@@ -64,6 +64,13 @@ export function createPersistedState(state) {
     dailyBlockedLedger: ensureCurrentDailyBlockedLedger(state.dailyBlockedLedger),
   }
   for (const [id, a] of Object.entries(state.agents)) {
+    // Skip session-carrying dynamic worktree agents ('slug~role'). They are
+    // ephemeral — created per-session by applyExternalStatus, not present in
+    // the static roster, and never restored by initAgents. Persisting them
+    // bloats the localStorage snapshot and leaves orphaned entries after short
+    // sessions end. The discriminator mirrors applyExternalStatus: a non-null
+    // `session` field is ONLY ever set by the dynamic-creation branch.
+    if (a.session) continue
     data.agents[id] = {
       // Don't persist status — it's transient, driven only by external hooks
       behavior: a.behavior,
@@ -962,17 +969,26 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     if (_persistTimer) { clearTimeout(_persistTimer); _persistTimer = null }
     _unsubscribePersist()
+    if (_storageHandler && typeof window !== 'undefined') {
+      window.removeEventListener('storage', _storageHandler)
+      _storageHandler = null
+    }
   })
 }
 
 // ─── Cross-tab pause sync ───
+// Keep a module-scope reference so the HMR dispose path can remove it.
+// Without this, each HMR cycle re-registers a NEW listener while the old
+// one remains live — duplicate listeners accumulate and fire redundantly.
+let _storageHandler = null
 if (typeof window !== 'undefined') {
-  window.addEventListener('storage', (e) => {
+  _storageHandler = (e) => {
     if (e.key === 'office-paused') {
       const paused = e.newValue === 'true'
       if (useOfficeStore.getState().isPaused !== paused) {
         useOfficeStore.setState({ isPaused: paused })
       }
     }
-  })
+  }
+  window.addEventListener('storage', _storageHandler)
 }

@@ -514,3 +514,169 @@ describe('triggerInteractiveEvent — guards (isPaused, unknown event)', () => {
     expect(result).toBe(true)
   })
 })
+
+// ─── Fix coverage: Fix 1 (lunch-nap mutex), Fix 2 (inGroupEvent exclusion), Fix 3 (empty pool) ───
+
+describe('officeLife — Fix 1: lunch-nap sets activeEvent (mutex participation)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    // Set system time to just before 12:00 so the first tick sees hour 12.
+    vi.setSystemTime(new Date('2026-01-05T11:59:30'))
+    // Pin random: ensure half-filter picks agents (< 0.5 branch), but pin schedulers far.
+    // We alternate: first call for agentIds.filter returns 0.3 (< 0.5 → include),
+    // subsequent calls return 0.999 to arm daily/rare timers far out.
+    let callCount = 0
+    vi.spyOn(Math, 'random').mockImplementation(() => {
+      callCount++
+      // First two calls are for agentId filter in nap block (one per agent) — return < 0.5.
+      // All subsequent calls (scheduler intervals) → 0.999 to arm far out.
+      return callCount <= 2 ? 0.3 : 0.999
+    })
+  })
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('hour-12 lunch-nap sets activeEvent so concurrent scheduled events are blocked', () => {
+    const store = makeFakeStore()
+    store._setHour(12)
+    const cleanup = startOfficeLife(store)
+
+    // Advance one tick to fire the timeEventInterval at hour 12.
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100)
+
+    // The lunch-nap block must have set activeEvent — it now participates in the mutex.
+    expect(store.getState().activeEvent).not.toBeNull()
+    expect(store.getState().activeEvent?.id).toBe('lunch-nap')
+
+    // After 45 s the nap releases and clears activeEvent.
+    vi.advanceTimersByTime(45000)
+    expect(store.getState().activeEvent).toBeNull()
+
+    cleanup()
+  })
+})
+
+describe('officeLife — Fix 2: in-group agent is not re-picked by a second event', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-05T09:00:00'))
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999)
+  })
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('an agent already inGroupEvent is excluded from pickParticipants for a second event', () => {
+    // Use a 3-agent store so locking dev still leaves qa+arch available.
+    const state = {
+      isPaused: false, activeEvent: null,
+      agents: {
+        dev:  { id: 'dev',  inGroupEvent: true,  groupTarget: null, behavior: 'meeting', expression: 'normal', bubble: null, position: { x: 100, y: 100 } },
+        qa:   { id: 'qa',   inGroupEvent: false, groupTarget: null, behavior: 'typing',  expression: 'normal', bubble: null, position: { x: 200, y: 200 } },
+        arch: { id: 'arch', inGroupEvent: false, groupTarget: null, behavior: 'typing',  expression: 'normal', bubble: null, position: { x: 300, y: 200 } },
+      },
+      externalStatus: {},
+      hour: 9,
+    }
+    const api = {
+      get agents()         { return state.agents },
+      get isPaused()       { return state.isPaused },
+      get activeEvent()    { return state.activeEvent },
+      get externalStatus() { return state.externalStatus },
+      get hour()           { return state.hour },
+      updateTime:              () => {},
+      setActiveEvent:          (e) => { state.activeEvent = e },
+      clearActiveEvent:        ()  => { state.activeEvent = null },
+      setAgentBehavior:        (id, behavior, expression, bubble) => {
+        if (!state.agents[id]) return
+        state.agents[id] = { ...state.agents[id], behavior, expression: expression || state.agents[id].expression, bubble: bubble || null }
+      },
+      setAgentGroupEvent: (id, { behavior, expression, bubble, groupTarget } = {}) => {
+        if (!state.agents[id]) return
+        state.agents[id] = { ...state.agents[id], behavior, expression, bubble: bubble || null, inGroupEvent: true, groupTarget: groupTarget || null }
+      },
+      setMultipleAgentGroupEvents: (updates) => { for (const u of updates) api.setAgentGroupEvent(u.id, u) },
+      clearAgentGroupEvent: (id) => {
+        if (!state.agents[id]) return
+        state.agents[id] = { ...state.agents[id], inGroupEvent: false, groupTarget: null }
+      },
+      clearBubble: (id) => {
+        if (!state.agents[id]) return
+        state.agents[id] = { ...state.agents[id], bubble: null }
+      },
+    }
+    const store = { getState: () => api }
+
+    // group-stretch uses participants: 'all' — with fix, dev (inGroupEvent) must be excluded.
+    const result = triggerInteractiveEvent(store, 'group-stretch')
+    expect(result).toBe(true)
+    // Advance past staggered setAgentGroupEvent callbacks.
+    vi.advanceTimersByTime(4000)
+
+    // dev was already inGroupEvent — must NOT be re-picked and its state unchanged.
+    expect(state.agents.dev.inGroupEvent).toBe(true)
+    expect(state.agents.dev.behavior).toBe('meeting') // original behavior preserved
+
+    // qa and arch were free → they join the stretch.
+    expect(state.agents.qa.inGroupEvent).toBe(true)
+    expect(state.agents.arch.inGroupEvent).toBe(true)
+  })
+})
+
+describe('officeLife — Fix 3: coffee-spill on empty pool does not create phantom activeEvent', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-05T09:00:00'))
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999)
+  })
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('coffee-spill with zero agents returns [] — no phantom activeEvent blocks future events', () => {
+    // Empty-agents store: pool will be [] → random-1-neighbor must return []
+    // without inserting undefined. triggerInteractiveEvent still sets activeEvent
+    // (that is expected) — the key invariant is that the spiller is not undefined.
+    const state = {
+      isPaused: false, activeEvent: null,
+      agents: {},
+      externalStatus: {},
+      hour: 9,
+    }
+    let setActiveEventCallCount = 0
+    const api = {
+      get agents()         { return state.agents },
+      get isPaused()       { return state.isPaused },
+      get activeEvent()    { return state.activeEvent },
+      get externalStatus() { return state.externalStatus },
+      get hour()           { return state.hour },
+      updateTime:              () => {},
+      setActiveEvent:          (e) => { state.activeEvent = e; setActiveEventCallCount++ },
+      clearActiveEvent:        ()  => { state.activeEvent = null },
+      setAgentBehavior:        () => {},
+      setAgentGroupEvent:      (id, opts) => {
+        // With empty pool, participants[0] is undefined — this must NOT be called
+        // (or if called with undefined id, must not throw or corrupt state).
+        if (id === undefined) throw new Error('setAgentGroupEvent called with undefined id — phantom participant from empty pool')
+      },
+      setMultipleAgentGroupEvents: () => {},
+      clearAgentGroupEvent:    () => {},
+      clearBubble:             () => {},
+    }
+    const store = { getState: () => api }
+
+    // Must not throw (no "undefined id" error from setAgentGroupEvent).
+    expect(() => triggerInteractiveEvent(store, 'coffee-spill')).not.toThrow()
+
+    // After 45 s the event duration elapses and clearActiveEvent fires — no phantom lock.
+    vi.advanceTimersByTime(50000)
+    expect(state.activeEvent).toBeNull()
+  })
+})

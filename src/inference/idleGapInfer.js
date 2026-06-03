@@ -165,6 +165,12 @@ export function startIdleGapInference(store, options = {}) {
   return function stopIdleGapInference() {
     if (typeof clearInterval !== 'undefined') clearInterval(intervalId)
     if (typeof unsubscribe === 'function') unsubscribe()
+    // Prune Map entries for agents no longer present in the store so
+    // evicted/worktree agents don't accumulate across spawned instances (fix #3).
+    const currentAgents = store.getState?.()?.agents ?? {}
+    for (const agentId of lastUpdatedAt.keys()) {
+      if (!(agentId in currentAgents)) lastUpdatedAt.delete(agentId)
+    }
   }
 }
 

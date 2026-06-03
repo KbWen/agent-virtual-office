@@ -9,6 +9,7 @@ const statusEmoji = {
   working: '⚡',
   done: '✅',
   blocked: '🚫',
+  planning: '🧠',
 }
 
 export default function AgentInspector() {
@@ -135,8 +136,8 @@ export default function AgentInspector() {
       </text>
 
       {/* Status badge */}
-      <circle cx={px + 12} cy={py + 42} r={5} fill={STATUS_COLORS[status]} />
-      <text x={px + 22} y={py + 45} fontSize="10" fontFamily="monospace" fill={STATUS_COLORS[status]} fontWeight="bold">
+      <circle cx={px + 12} cy={py + 42} r={5} fill={STATUS_COLORS[status] || color || '#888'} />
+      <text x={px + 22} y={py + 45} fontSize="10" fontFamily="monospace" fill={STATUS_COLORS[status] || color || '#888'} fontWeight="bold">
         {statusEmoji[status]} {statusLabel}
       </text>
 

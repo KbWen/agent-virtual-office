@@ -68,10 +68,13 @@ function jitter(pos, amount = 20) {
 
 function pickParticipants(event, agents, externalStatus) {
   const ext = externalStatus || {}
-  // Exclude agents that are externally busy (working/blocked)
+  // Exclude agents that are externally busy (working/blocked) OR already in a group event.
+  // Without the inGroupEvent guard a second concurrent event re-locks an already-locked
+  // agent: pickParticipants only inspected externalStatus, so an agent locked by the first
+  // event was still "available" to the second event's picker.
   const isAvailable = (id) => {
     const es = ext[id]
-    return !es || es.status === 'done' || es.status === 'idle'
+    return (!es || es.status === 'done' || es.status === 'idle') && !agents[id]?.inGroupEvent
   }
   const agentIds = Object.keys(agents)
   const available = agentIds.filter(isAvailable)
@@ -87,8 +90,12 @@ function pickParticipants(event, agents, externalStatus) {
   }
   if (event.participants === 'random-1-neighbor') {
     const pool = available.length >= 2 ? available : agentIds
+    // Guard empty pool: if no agents exist, return [] rather than [undefined].
+    // An empty/single-element pool produced [undefined] which triggerInteractiveEvent
+    // then used to create a phantom activeEvent — blocking all subsequent events.
+    if (pool.length === 0) return []
     const idx = Math.floor(Math.random() * pool.length)
-    const result = [pool[idx]]
+    const result = [pool[idx]].filter(Boolean)
     if (idx + 1 < pool.length) result.push(pool[idx + 1])
     return result
   }
@@ -166,6 +173,11 @@ const EVENT_HANDLERS = {
 
   'coffee-spill': (store, participants, cancelled) => {
     const spiller = participants[0]
+    // Guard empty pool: pickParticipants returns [] when no agents are available,
+    // so participants[0] may be undefined. Without this guard, setAgentGroupEvent
+    // receives undefined as the id — producing a phantom group-event slot and
+    // a stuck activeEvent that blocks all subsequent events.
+    if (!spiller) return
     store.getState().setAgentGroupEvent(spiller, {
       behavior: 'scratch-head',
       expression: 'confused',
@@ -596,9 +608,15 @@ export function startOfficeLife(store) {
 
     const agentIds = Object.keys(state.agents)
 
-    // 12:00-13:00 — Lunch nap: half the agents nap at desk
+    // 12:00-13:00 — Lunch nap: half the agents nap at desk.
+    // Participates in the event mutex via setActiveEvent so a concurrent scheduled
+    // event cannot re-lock the same agents while the nap is active. Without this,
+    // the daily/rare schedulers could fire between the nap's setMultipleAgentGroupEvents
+    // and its 45 s release, re-picking the already-locked nappers.
     if (hour === 12) {
-      const nappers = agentIds.filter(() => Math.random() < 0.5)
+      const lunchNapEvent = { id: 'lunch-nap', duration: 45000 }
+      store.getState().setActiveEvent(lunchNapEvent)
+      const nappers = agentIds.filter((id) => !state.agents[id]?.inGroupEvent && Math.random() < 0.5)
       store.getState().setMultipleAgentGroupEvents(
         nappers.map((id) => ({
           id,
@@ -623,6 +641,7 @@ export function startOfficeLife(store) {
             s.clearBubble(id)
           }
         })
+        s.clearActiveEvent()
       }, 45000)
     }
 

@@ -215,22 +215,44 @@ function shortCommand(cmd) {
 // in-character. Unknown commands fall back to a generic noun, never the raw string.
 function bashVibeLabel(cmd, lang = LANG) {
   const zh = lang === 'zh-TW'
-  if (!cmd || typeof cmd !== 'string') return zh ? '指令' : 'a command'
-  // Resolve to the last && segment's program token, lowercased.
-  const seg = cmd.split('&&').map(s => s.trim()).filter(Boolean).pop() || cmd
-  const prog = seg.toLowerCase()
-  const has = (re) => re.test(prog)
-  if (has(/(vitest|jest|pytest|mocha|\btest\b)/)) return zh ? '測試' : 'tests'
-  if (has(/(npm run build|vite build|\btsc\b|webpack|rollup|\bcompile\b|\bmake\b|\bbuild\b)/)) return zh ? '建置' : 'the build'
-  if (has(/(npm i\b|npm ci\b|npm install|yarn add|pnpm i\b|pnpm add|pip install|\binstall\b)/)) return zh ? '套件' : 'deps'
-  if (has(/^git\b/)) return 'git'
-  if (has(/^(ls|dir|find|cat|head|tail|grep|rg|less|more|tree|stat|wc|pwd|echo|which|file)\b/)) return zh ? '檔案' : 'files'
-  if (has(/^(cd|mkdir|rm|mv|cp|touch|chmod|chown|ln|tar|zip|unzip)\b/)) return zh ? '檔案' : 'files'
-  if (has(/^(curl|wget|http|ping|ssh|scp|rsync)\b/)) return zh ? '連線' : 'a fetch'
-  if (has(/^(docker|kubectl|helm|terraform|pm2|systemctl|nginx|serve)\b/)) return zh ? '部署' : 'ops'
-  if (has(/^(python|python3|node|deno|bun|go|cargo|ruby|php|java|dotnet)\b/)) return zh ? '程式' : 'a script'
-  if (has(/(npm run|npm start|yarn |pnpm |npx )/)) return zh ? '腳本' : 'a script'
-  return zh ? '指令' : 'a command'
+  const fallback = zh ? '指令' : 'a command'
+  if (!cmd || typeof cmd !== 'string') return fallback
+  // Split the command into sub-commands on &&, ||, ;, |, and newlines, then classify each.
+  // The Claude Code harness often wraps a command as `cd "<dir>" && <real cmd>` or
+  // `bash -c "<real cmd>"`, so the meaningful program is rarely the WHOLE string and not
+  // always the LAST segment. Scan every segment and return the FIRST meaningful office
+  // noun, skipping trivial glue (cd/echo/sleep/pwd). Never returns a raw command or path.
+  const classifySeg = (segRaw) => {
+    let s = segRaw
+    // Strip surrounding quotes + shell-wrapper prefixes (bash -c, sh -c, pwsh -Command, eval), iteratively.
+    for (let i = 0; i < 3; i++) {
+      s = s.replace(/^(['"])([\s\S]*)\1$/, '$2').trim()
+      s = s.replace(/^(?:eval|bash|sh|zsh|dash|ksh|pwsh|powershell|cmd(?:\.exe)?)\b(?:\s+(?:-{1,2}[a-z]+|\/[a-z]+))*\s+/i, '').trim()
+    }
+    const prog = s.toLowerCase()
+    if (!prog) return null
+    // Program-anchored checks MUST run first so that compound commands like
+    // 'git checkout build-fix' or 'git commit -m "add test"' match 'git' (^git anchor)
+    // rather than the unanchored 'build'/'test' keyword checks below.
+    // Invariant: no case below may match before a more-specific ^anchor case above it.
+    if (/^git\b/.test(prog)) return 'git'
+    if (/^(curl|wget|http|ping|ssh|scp|rsync)\b/.test(prog)) return zh ? '連線' : 'a fetch'
+    if (/^(docker|kubectl|helm|terraform|pm2|systemctl|nginx|serve)\b/.test(prog)) return zh ? '部署' : 'ops'
+    if (/^(python|python3|node|deno|bun|go|cargo|ruby|php|java|dotnet)\b/.test(prog)) return zh ? '程式' : 'a script'
+    if (/^(ls|dir|find|cat|head|tail|grep|rg|less|more|tree|stat|wc|file)\b/.test(prog)) return zh ? '檔案' : 'files'
+    if (/^(mkdir|rm|mv|cp|touch|chmod|chown|ln|tar|zip|unzip)\b/.test(prog)) return zh ? '檔案' : 'files'
+    // Unanchored keyword checks — only reached when the program is not one of the above
+    if (/(vitest|jest|pytest|mocha|\btest\b)/.test(prog)) return zh ? '測試' : 'tests'
+    if (/(npm run build|vite build|\btsc\b|webpack|rollup|\bcompile\b|\bmake\b|\bbuild\b)/.test(prog)) return zh ? '建置' : 'the build'
+    if (/(npm i\b|npm ci\b|npm install|yarn add|pnpm i\b|pnpm add|pip install|\binstall\b)/.test(prog)) return zh ? '套件' : 'deps'
+    if (/(npm run|npm start|yarn |pnpm |npx )/.test(prog)) return zh ? '腳本' : 'a script'
+    return null  // trivial glue (cd/echo/sleep/pwd/which) or unknown — skip
+  }
+  for (const seg of cmd.split(/&&|\|\||;|\n|\|/).map(s => s.trim()).filter(Boolean)) {
+    const m = classifySeg(seg)
+    if (m) return m
+  }
+  return fallback
 }
 
 function extractContext(tool, toolInput) {
@@ -245,13 +267,33 @@ function extractContext(tool, toolInput) {
       case 'Bash':
         // AVO-126: never surface a raw shell command/path in a bubble — use an office-vibe noun.
         return bashVibeLabel(input.command || input.cmd)
-      case 'Grep':
-        return input.pattern ? `"${input.pattern.slice(0, 20)}"` : null
-      case 'Glob':
-        return input.pattern ? input.pattern : null
-      case 'Agent':
-        return input.description || input.prompt?.slice(0, 20) || null
+      case 'Grep': {
+        // Strip leading path components from the pattern so absolute paths don't leak into
+        // bubbles: "/home/user/src/**/*.js" → "*.js"; "useLocale" stays "useLocale"
+        const pat = input.pattern ? path.basename(input.pattern.replace(/\\/g, '/')).slice(0, 20) : null
+        return pat ? `"${pat}"` : null
+      }
+      case 'Glob': {
+        // Basename-ize glob patterns — an absolute path like /home/user/src/**/*.test.js
+        // is reduced to *.test.js so the bubble never leaks a filesystem path.
+        const gPat = input.pattern || null
+        if (!gPat) return null
+        // If the pattern contains a slash, extract only the final path component / glob segment
+        const gBase = gPat.replace(/\\/g, '/').split('/').pop() || gPat
+        return gBase.slice(0, 30)
+      }
+      case 'Agent': {
+        // Strip leading absolute path components from descriptions so a long description
+        // like "/home/user/proj: review the auth module" becomes "review the auth module".
+        const desc = input.description || input.prompt?.slice(0, 40) || null
+        if (!desc) return null
+        // Remove any leading path segment (starts with / or drive letter + colon)
+        const stripped = desc.replace(/^(?:[A-Za-z]:)?\/[^\s:]*[:\s]+/, '').trim()
+        return stripped.slice(0, 30)
+      }
       case 'WebFetch':
+        // Use only the hostname (no path) to avoid leaking absolute URLs into bubbles
+        return input.query || (input.url ? (() => { try { return new URL(input.url).hostname.slice(0, 25) } catch { return input.url.replace(/^https?:\/\//, '').split('/')[0].slice(0, 25) } })() : null)
       case 'WebSearch':
         return input.query || input.url?.replace(/^https?:\/\//, '').slice(0, 25) || null
       case 'TodoWrite':
@@ -274,10 +316,19 @@ function extractContext(tool, toolInput) {
 function toolLabel(tool, context, isDone) {
   if (isDone) {
     const ctx = context ? ` ${context}` : ''
-    const doneLabels = LANG === 'en'
-      ? [`✅${ctx} done`, `✅${ctx} ready`, `✅ Done!`, `✅ Next`]
-      : [`✅${ctx} 好了`, `✅${ctx} 搞定`, `✅ 完成！`, `✅ 下一個`]
-    return context ? doneLabels[Math.floor(Math.random() * 2)] : pick(doneLabels)
+    // When context is present: use only the two context-bearing variants (indices 0 and 1)
+    // so the context string is always visible in the bubble.
+    // When context is absent: pick from all four labels (indices 0-3 are generic anyway).
+    // The "* 2" multiplier on random was dead code that made labels 2 and 3 unreachable
+    // when context was present — removed in favour of this explicit two-array pattern.
+    if (context) {
+      return pick(LANG === 'en'
+        ? [`✅${ctx} done`, `✅${ctx} ready`]
+        : [`✅${ctx} 好了`, `✅${ctx} 搞定`])
+    }
+    return pick(LANG === 'en'
+      ? ['✅ Done!', '✅ Next', '✅ All good', '✅ Complete']
+      : ['✅ 完成！', '✅ 下一個', '✅ 搞定了', '✅ OK'])
   }
 
   if (context) {
@@ -561,7 +612,14 @@ function processEvent(event) {
       // Detect errors from tool result
       let toolResult = event.tool_result || ''
       if (typeof toolResult === 'object') toolResult = JSON.stringify(toolResult)
-      const isError = event.is_error || (typeof toolResult === 'string' && /^(Error:|Exit code [1-9]|ENOENT|EPERM|EACCES|Command failed|fatal:)/im.test(toolResult.slice(0, 300)))
+      // Trust event.is_error as primary source of truth.
+      // Apply the heuristic ONLY when is_error is undefined (older hook payloads that omit the field).
+      // Test only the FIRST line of output so "Error:" or "fatal:" appearing in body prose does not
+      // fire a false positive (e.g. a successful grep result that mentions an error keyword).
+      // Word-boundary anchors (\b) prevent substring matches like "ENOENT means…" in prose.
+      const isError = event.is_error !== undefined
+        ? Boolean(event.is_error)
+        : (typeof toolResult === 'string' && /^(Error:|Exit code [1-9]|ENOENT\b|EPERM\b|EACCES\b|Command failed|fatal:)/.test(toolResult.split('\n')[0]))
       status = isError ? 'blocked' : 'done'
       hint = isError ? 'error' : null
       const ctx = extractContext(tool, toolInput)

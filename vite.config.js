@@ -152,7 +152,11 @@ function officeStatusPlugin() {
     configureServer(server) {
       server.middlewares.use('/api/status', (req, res, next) => {
         // Pass sub-paths (e.g. /stream) to their own handlers registered below.
-        if (req.url && req.url !== '/' && !req.url.startsWith('?')) { next(); return }
+        // Gate on pathname only — connect strips the mount prefix so /api/status?t=1
+        // arrives as req.url === '/?t=1'. Comparing req.url directly to '/' would fail
+        // for any query string. Split on '?' and compare path segment only.
+        const statusPathname = req.url ? req.url.split('?')[0] : '/'
+        if (statusPathname !== '/') { next(); return }
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Cache-Control', 'no-cache')
         res.setHeader('X-Content-Type-Options', 'nosniff')

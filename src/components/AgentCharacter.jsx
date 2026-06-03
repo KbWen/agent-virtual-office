@@ -756,6 +756,9 @@ function AgentCharacter({ agent }) {
   useEffect(() => {
     if (!isWalking) return
     const watchdog = setInterval(() => {
+      // A backgrounded tab pauses RAF; skip the watchdog while hidden to avoid
+      // false-positive stall diagnostics and spurious RAF re-queues.
+      if (document.visibilityState !== 'visible') return
       if (Date.now() - lastFrameWallTimeRef.current < 1500) return
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
@@ -1051,7 +1054,7 @@ function AgentCharacter({ agent }) {
     return { tagW: w, tagHalfW: w / 2 }
   }, [name])
   const tagFill = state.status !== 'idle' ? (STATUS_COLORS[state.status] || color) : color
-  const statusIcon = state.status === 'working' ? '⚡' : state.status === 'blocked' ? '✕' : state.status === 'done' ? '✓' : null
+  const statusIcon = state.status === 'working' ? '⚡' : state.status === 'blocked' ? '✕' : state.status === 'done' ? '✓' : state.status === 'planning' ? '🧠' : null
   const glowColor = STATUS_COLORS[state.status]
   // AVO-128: show the name only when the agent is doing something or is being inspected.
   const showName = hovered || (state.status && state.status !== 'idle')
@@ -1065,20 +1068,21 @@ function AgentCharacter({ agent }) {
       data-agent-behavior={state.behavior || 'idle'}
       role="button" aria-label={name} tabIndex={0}
       onKeyDown={handleKeyDown}>
-      {/* AVO-132: single working glow ring; effort (high/xhigh/max) intensifies it
-          (peak opacity + stroke width) instead of stacking a second concentric aura. */}
-      {state.status === 'working' && (() => {
-        const g = EFFORT_GLOW[effort] || BASE_GLOW
+      {/* AVO-132: single working/planning glow ring; effort (high/xhigh/max) intensifies it
+          (peak opacity + stroke width) instead of stacking a second concentric aura.
+          Planning uses a calm violet ring at BASE_GLOW intensity (effort does not apply). */}
+      {(state.status === 'working' || state.status === 'planning') && (() => {
+        const g = state.status === 'working' ? (EFFORT_GLOW[effort] || BASE_GLOW) : BASE_GLOW
         return (
           <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth={g.sw} opacity={g.op}>
-            <animate attributeName="opacity" values={`${(g.op * 0.4).toFixed(2)};${g.op};${(g.op * 0.4).toFixed(2)}`} dur="1.5s" repeatCount="indefinite" />
-            <animate attributeName="r" values="20;24;20" dur="1.5s" repeatCount="indefinite" />
+            {!reducedMotion && <animate attributeName="opacity" values={`${(g.op * 0.4).toFixed(2)};${g.op};${(g.op * 0.4).toFixed(2)}`} dur="1.5s" repeatCount="indefinite" />}
+            {!reducedMotion && <animate attributeName="r" values="20;24;20" dur="1.5s" repeatCount="indefinite" />}
           </circle>
         )
       })()}
       {state.status === 'blocked' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.4">
-          <animate attributeName="opacity" values="0.2;0.5;0.2" dur="1s" repeatCount="indefinite" />
+          {!reducedMotion && <animate attributeName="opacity" values="0.2;0.5;0.2" dur="1s" repeatCount="indefinite" />}
         </circle>
       )}
 

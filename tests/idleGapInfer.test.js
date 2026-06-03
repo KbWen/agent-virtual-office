@@ -193,3 +193,41 @@ describe('idleGapInfer — applyExternalStatus call meta', () => {
     stop()
   })
 })
+
+// ─── Fix 3: stop() prunes evicted agent entries from lastUpdatedAt ────
+describe('idleGapInfer — stop() prunes evicted agents (fix #3)', () => {
+  it('stop() removes Map entries for agents no longer in the store', () => {
+    // Start with two agents, then evict one before stopping.
+    // After stop(), a second inference instance with only the remaining agent
+    // should not carry phantom state from the evicted agent.
+    const store = makeStore({
+      dev: { status: 'working', task: 'Bash' },
+      qa:  { status: 'working', task: 'Test' },
+    })
+    const stop = startIdleGapInference(store, { intervalMs: 1000 })
+    vi.advanceTimersByTime(10000)
+
+    // Evict 'qa' — store no longer has it
+    store.setAgents({ dev: store.getState().agents.dev })
+    stop()
+    // The pruning in stopIdleGapInference() should have removed 'qa'.
+    // Now start a fresh instance — it should seed only 'dev' and not re-infer 'qa'.
+    const store2 = makeStore({ dev: { status: 'working', task: 'Bash' } })
+    const stop2 = startIdleGapInference(store2, { intervalMs: 1000 })
+    vi.advanceTimersByTime(45000)
+    // Only dev should infer; qa phantom should not appear
+    const inferCalls = store2.applyExternalStatus.mock.calls.filter(c => c[1]?.source === 'idle-gap-infer')
+    expect(inferCalls.length).toBeGreaterThanOrEqual(1)
+    const inferredIds = inferCalls.flatMap(c => c[0].map(u => u.agentId))
+    expect(inferredIds).not.toContain('qa')
+    stop2()
+  })
+
+  it('stop() is safe when no agents remain in the store', () => {
+    const store = makeStore({ dev: { status: 'working', task: 'Bash' } })
+    const stop = startIdleGapInference(store, { intervalMs: 1000 })
+    // Evict all agents
+    store.setAgents({})
+    expect(() => stop()).not.toThrow()
+  })
+})
