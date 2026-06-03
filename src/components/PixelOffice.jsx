@@ -788,9 +788,11 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   // boolean — re-renders only on a real shape transition, not per resize pixel.
   const [isNarrow, setIsNarrow] = useState(false)
 
-  const updateViewBox = useCallback(() => {
-    if (!containerRef.current) return
-    const { clientWidth: w, clientHeight: h } = containerRef.current
+  const updateViewBox = useCallback((measuredW, measuredH) => {
+    const el = containerRef.current
+    if (!el) return
+    const w = measuredW != null ? measuredW : el.clientWidth
+    const h = measuredH != null ? measuredH : el.clientHeight
     if (w === 0 || h === 0) return
     const ratio = w / h
     if (isPanel) {
@@ -806,27 +808,28 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     }
   }, [isPanel])
 
-  // rAF-coalesce the resize handler. ResizeObserver and the window 'resize' backup
-  // can both fire for a single drag-resize frame — each invocation reads clientWidth/
-  // clientHeight (a forced layout flush) and runs the ratio math. Collapsing bursts to
-  // one call per frame dedupes that double-work; the pending handle is cancelled on
-  // cleanup so a queued frame can't fire updatePanelViewBox against an unmounted panel.
+  // Measure DIRECTLY from the ResizeObserver entry — do NOT route through requestAnimationFrame.
+  // In an embedded preview/webview (the way this office is docked) rAF is throttled or fully
+  // suspended when the pane is not focused, so a rAF-gated handler would MISS the resize that
+  // widens a narrow column back to a full window — leaving it stuck on the roster widget at a
+  // size that should show the scene. ResizeObserver fires on the layout lifecycle (not rAF), so
+  // reading entry.contentRect here is reliable. The observed element is the flex-sized wrapper,
+  // whose box does NOT change when scene↔widget swaps inside it, so there is no observer loop.
   useEffect(() => {
-    if (!containerRef.current) return
-    let rafId = null
-    const schedule = () => {
-      if (rafId != null) return
-      rafId = requestAnimationFrame(() => { rafId = null; updateViewBox() })
-    }
+    const el = containerRef.current
+    if (!el) return
     updateViewBox()
-    const ro = new ResizeObserver(schedule)
-    ro.observe(containerRef.current)
-    // Backup: window resize for iframe/webview embedding
-    window.addEventListener('resize', schedule)
+    const ro = new ResizeObserver((entries) => {
+      const cr = entries[entries.length - 1]?.contentRect
+      if (cr) updateViewBox(cr.width, cr.height)
+    })
+    ro.observe(el)
+    // Backup for iframe/webview embedding where ResizeObserver can be unreliable.
+    const onWinResize = () => updateViewBox()
+    window.addEventListener('resize', onWinResize)
     return () => {
-      if (rafId != null) cancelAnimationFrame(rafId)
       ro.disconnect()
-      window.removeEventListener('resize', schedule)
+      window.removeEventListener('resize', onWinResize)
     }
   }, [updateViewBox])
 
