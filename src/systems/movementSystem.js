@@ -172,6 +172,38 @@ export const HOME_POSITIONS = {
   planner: { x: 200, y: 274 }, worker: { x: 400, y: 304 }, checker: { x: 500, y: 254 },
 }
 
+// ─── Subagent helper-huddle placement ───────────────────────────────
+// Small downward fan around the parent's chair. HARD-CAP at 3 visible + a tight ±15px clamp,
+// so helpers never overlap an adjacent desk (desks are ≥80px apart) or pile on each other;
+// any surplus collapses into a single "+N" glyph. Heavy fan-out (Claude firing 10+ subagents)
+// renders 3 sprites + "+N", never N bodies.
+export const HELPER_MAX_VISIBLE = 3
+export const HELPER_OFFSETS = [
+  { dx: -15, dy: 16 },
+  { dx: 15, dy: 16 },
+  { dx: 0, dy: 27 },
+]
+export const HELPER_BADGE_OFFSET = { dx: 25, dy: 25 }
+// Lightweight roster colors (planner / worker / checker), cycled across helper figures.
+export const HELPER_COLORS = ['#378ADD', '#1D9E75', '#BA7517']
+// A parent with this many active helpers shows a "swamped / heavy load" cue.
+export const HELPER_HEAVY_THRESHOLD = 4
+
+// Pure resolver: up to HELPER_MAX_VISIBLE helper screen positions for a parent role + the
+// overflow count + whether the load is "heavy". Easy to unit-test; the render is a thin shell.
+export function resolveHelperLayout(parentRole, count) {
+  const anchor = HOME_POSITIONS[parentRole]
+  const n = Math.max(0, count | 0)
+  if (!anchor || n === 0) return { sprites: [], overflow: 0, heavy: false }
+  const visible = Math.min(n, HELPER_MAX_VISIBLE)
+  const sprites = []
+  for (let i = 0; i < visible; i++) {
+    const off = HELPER_OFFSETS[i]
+    sprites.push({ x: anchor.x + off.dx, y: anchor.y + off.dy, color: HELPER_COLORS[i % HELPER_COLORS.length] })
+  }
+  return { sprites, overflow: Math.max(0, n - HELPER_MAX_VISIBLE), heavy: n >= HELPER_HEAVY_THRESHOLD }
+}
+
 // ─── Zones (for pathfinding — which room is a point in?) ────────────
 const ZONES = [
   { id: 'entrance',    x1: 0,   y1: 0,   x2: 598, y2: 148 },

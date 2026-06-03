@@ -291,6 +291,9 @@ export const useOfficeStore = create((set) => ({
   minute: new Date().getMinutes(),
   activeEvent: null,
   isPaused: typeof window !== 'undefined' && (() => { try { return localStorage.getItem('office-paused') === 'true' } catch { return false } })(),
+  // Subagent helper-huddle: ephemeral helper figures clustered at a parent role's desk when
+  // it dispatches subagents. Kept OUT of `agents` (no eviction / overflow / name tag / ring).
+  helpers: [],  // [{ id: 'role#hash', parentRole, label, expiresAt }]
   reducedMotion: typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || false,
   showWorkflow: false,
   // Diagnostic counter: how many times the AgentCharacter RAF watchdog had to restart a
@@ -367,6 +370,29 @@ export const useOfficeStore = create((set) => ({
     }),
 
   recordWatchdogRestart: () => set((s) => ({ watchdogRestarts: s.watchdogRestarts + 1 })),
+
+  // ─── Subagent helper-huddle ───
+  // HELPER_TTL = 60s safety window: a missed SubagentStop self-heals via pruneHelpers, so a
+  // desk never accumulates stale helpers. The authoritative list is re-sent by the hook each
+  // poll (refreshing TTL), so a live SubagentStop removes the helper next tick regardless.
+  setHelpers: (list, now = Date.now()) =>
+    set(() => ({
+      helpers: (Array.isArray(list) ? list : [])
+        .filter(h => h && typeof h.id === 'string' && typeof h.parentRole === 'string')
+        .slice(0, 64)  // hard bound — never let a runaway payload balloon the slice
+        .map(h => ({
+          id: h.id,
+          parentRole: h.parentRole,
+          label: typeof h.label === 'string' ? h.label : null,
+          expiresAt: now + 60_000,
+        })),
+    })),
+  pruneHelpers: (now = Date.now()) =>
+    set((s) => {
+      const kept = s.helpers.filter(h => h.expiresAt > now)
+      return kept.length === s.helpers.length ? s : { helpers: kept }
+    }),
+  clearHelpers: () => set((s) => (s.helpers.length ? { helpers: [] } : s)),
 
   // Batch version: apply group events to multiple agents in one state update
   setMultipleAgentGroupEvents: (updates) =>

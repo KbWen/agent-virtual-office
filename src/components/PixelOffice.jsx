@@ -8,6 +8,7 @@ import { startIdleGapInference } from '../inference/idleGapInfer'
 import { startWorkflowHandoffs } from '../inference/workflowHandoff'
 import { eventName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
+import HelperHuddles from './HelperHuddle'
 import AgentInspector from './AgentInspector'
 import {
   Bookshelf, Plant, Couch, RoundTable, MeetingTable,
@@ -1050,6 +1051,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {agentList.map((agent) => (
         <AgentCharacter key={agent.id} agent={agent} />
       ))}
+
+      {/* ═══ SUBAGENT HELPER HUDDLES ═══ (capped desk-side helper figures) */}
+      <HelperHuddles />
 
       {/* ═══ SPECIAL EVENT CHARACTERS ═══ */}
       {activeEvent?.id === 'boss-visit' && <WalkingBoss />}
