@@ -834,13 +834,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   }, [updateViewBox])
 
   const viewBox = isPanel ? panelViewBox : '0 0 800 560'
-  // Scale floor: minHeight holds the room at its native height on a SHORT viewport (e.g. 840×500),
-  // so meet scales the office up to ~100% and the container scrolls a little, instead of squashing
-  // it to a tiny 0.89× strip with wide letterbox. minWidth keeps the existing horizontal floor.
-  // On a comfortable desktop (tall enough) minHeight isn't binding → wide stays byte-identical.
-  const svgStyle = isPanel
-    ? {}
-    : { maxHeight: 'calc(100vh - 44px)', minWidth: '480px', minHeight: `${SCENE_MIN_HEIGHT}px` }
+  const svgStyle = isPanel ? {} : { maxHeight: 'calc(100vh - 44px)', minWidth: '480px' }
 
   const svgElement = (
     <svg
@@ -1188,12 +1182,15 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     )
   }
 
-  // A tall-narrow column renders the vertical roster widget (everything visible, nothing cropped);
-  // a wide/square window renders the full scene exactly as before. The containerRef wrapper is
-  // ALWAYS present so the ResizeObserver can keep measuring and flip back when the window widens.
+  // INTERIM BASELINE: always render the full scene. The previous JS-measured auto-switch to the
+  // roster widget proved unreliable in an embedded preview/webview — rAF AND ResizeObserver can be
+  // throttled there, so a narrow→wide resize could leave it stuck on the widget at a size that
+  // should show the room. Until the responsive design is settled (expert panel), the office always
+  // shows the scene (the known-good wide behaviour); the NarrowRoster will be re-wired with a
+  // throttle-proof mechanism (CSS container query / manual toggle). isNarrow is intentionally unused.
   return (
     <div ref={containerRef} className="w-full flex-1 overflow-auto min-h-0">
-      {isNarrow ? <NarrowRoster /> : svgElement}
+      {svgElement}
     </div>
   )
 }
