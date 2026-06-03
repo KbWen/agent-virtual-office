@@ -645,6 +645,27 @@ const GRID_LINES = (() => {
   return lines
 })()
 
+// Full-room viewBox — the canonical wide experience. Landscape/square windows get this
+// EXACTLY, so wide users are byte-for-byte unchanged (asserted in tests).
+export const FULL_OFFICE_VIEWBOX = '0 0 800 560'
+// Below this width/height ratio the container is "portrait" (a tall narrow side-column, the
+// dock-beside-your-editor case). At/above it the office stays the full room.
+export const PORTRAIT_RATIO = 1.0
+
+// Adaptive office viewBox as a PURE function of the container aspect ratio. The whole point:
+// a wide/square window keeps the full 800x560 room (unchanged); a portrait/tall-narrow column
+// gets a STATIC, zoomed, in-bounds crop centered on the desk cluster so the office fills the
+// column at a readable sprite scale instead of shrinking to a thin strip. No auto-pan (calm,
+// no seasick chasing), no movement-system involvement, and clamped to 0..800 / 0..560 so the
+// crop never reveals the dark void outside the room. Exact crop framing is a visual-taste call.
+export function computeOfficeViewBox(ratio) {
+  if (!Number.isFinite(ratio) || ratio >= PORTRAIT_RATIO) return FULL_OFFICE_VIEWBOX
+  // Portrait crop: taller-than-wide, zoomed in (width 360 << 800), centered on the busy
+  // desk cluster (arch/qa/dev/ops/res), fully within the room bounds.
+  const x = 200, y = 30, w = 360, h = 500   // 200..560 / 30..530  ⊂  0..800 / 0..560
+  return `${x} ${y} ${w} ${h}`
+}
+
 export default function PixelOffice({ animationQuality = 'full', mode = 'full' }) {
   // Only re-render PixelOffice when agent IDs change, not on every property update.
   // AgentCharacter subscribes to its own agent state independently.
@@ -757,23 +778,25 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const isPanel = mode === 'panel'
   const containerRef = useRef(null)
   const [panelViewBox, setPanelViewBox] = useState('60 155 540 260')
+  // Default full-office adaptive viewBox — starts as the full room so the first paint (and any
+  // non-DOM render) is byte-identical to the legacy wide experience until the observer measures.
+  const [officeViewBox, setOfficeViewBox] = useState(FULL_OFFICE_VIEWBOX)
 
-  const updatePanelViewBox = useCallback(() => {
-    if (!isPanel || !containerRef.current) return
+  const updateViewBox = useCallback(() => {
+    if (!containerRef.current) return
     const { clientWidth: w, clientHeight: h } = containerRef.current
     if (w === 0 || h === 0) return
     const ratio = w / h
-    // Add margin (M) to prevent edge clipping of agents
-    const M = 20
-    if (ratio < 1) {
-      // Portrait (sidebar): show taller crop centered on desks
-      setPanelViewBox(`${100 - M} ${130 - M} ${400 + M * 2} ${400 + M * 2}`)
-    } else if (ratio < 1.6) {
-      // Squarish: balanced crop
-      setPanelViewBox(`${60 - M} ${140 - M} ${540 + M * 2} ${340 + M * 2}`)
+    if (isPanel) {
+      // Panel (compact embed): its own intentional crops per container shape.
+      const M = 20  // margin to prevent edge clipping of agents
+      if (ratio < 1) setPanelViewBox(`${100 - M} ${130 - M} ${400 + M * 2} ${400 + M * 2}`)
+      else if (ratio < 1.6) setPanelViewBox(`${60 - M} ${140 - M} ${540 + M * 2} ${340 + M * 2}`)
+      else setPanelViewBox(`${60 - M} ${155 - M} ${540 + M * 2} ${260 + M * 2}`)
     } else {
-      // Landscape (bottom panel): wide, short crop
-      setPanelViewBox(`${60 - M} ${155 - M} ${540 + M * 2} ${260 + M * 2}`)
+      // Default full office: wide/square keeps the full room (unchanged); a portrait/tall-narrow
+      // column gets a zoomed crop so it fills the column instead of shrinking to a thin strip.
+      setOfficeViewBox(computeOfficeViewBox(ratio))
     }
   }, [isPanel])
 
@@ -783,13 +806,13 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   // one call per frame dedupes that double-work; the pending handle is cancelled on
   // cleanup so a queued frame can't fire updatePanelViewBox against an unmounted panel.
   useEffect(() => {
-    if (!isPanel || !containerRef.current) return
+    if (!containerRef.current) return
     let rafId = null
     const schedule = () => {
       if (rafId != null) return
-      rafId = requestAnimationFrame(() => { rafId = null; updatePanelViewBox() })
+      rafId = requestAnimationFrame(() => { rafId = null; updateViewBox() })
     }
-    updatePanelViewBox()
+    updateViewBox()
     const ro = new ResizeObserver(schedule)
     ro.observe(containerRef.current)
     // Backup: window resize for iframe/webview embedding
@@ -799,16 +822,23 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       ro.disconnect()
       window.removeEventListener('resize', schedule)
     }
-  }, [isPanel, updatePanelViewBox])
+  }, [updateViewBox])
 
-  const viewBox = isPanel ? panelViewBox : '0 0 800 560'
+  const viewBox = isPanel ? panelViewBox : officeViewBox
+  // The legacy 480px floor is what makes a docked narrow column overflow/shrink; keep it ONLY
+  // for the full-room (wide/square) view, drop it once we've cropped to portrait so the office
+  // fills the column. Wide users keep the exact legacy style.
+  const isPortraitCrop = !isPanel && officeViewBox !== FULL_OFFICE_VIEWBOX
+  const svgStyle = isPanel
+    ? {}
+    : { maxHeight: 'calc(100vh - 44px)', ...(isPortraitCrop ? {} : { minWidth: '480px' }) }
 
   const svgElement = (
     <svg
       viewBox={viewBox}
       xmlns="http://www.w3.org/2000/svg"
       className="w-full h-full"
-      style={isPanel ? {} : { maxHeight: 'calc(100vh - 44px)', minWidth: '480px' }}
+      style={svgStyle}
       preserveAspectRatio="xMidYMid meet"
     >
       <defs>
@@ -1150,7 +1180,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   }
 
   return (
-    <div className="w-full flex-1 overflow-auto min-h-0">
+    <div ref={containerRef} className="w-full flex-1 overflow-auto min-h-0">
       {svgElement}
     </div>
   )
