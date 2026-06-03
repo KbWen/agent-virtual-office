@@ -1085,6 +1085,15 @@ function AgentCharacter({ agent }) {
           {!reducedMotion && <animate attributeName="opacity" values="0.2;0.5;0.2" dur="1s" repeatCount="indefinite" />}
         </circle>
       )}
+      {/* AVO-135: 'done' is a ONE-SHOT celebratory flash, not a standing ring — removes the
+          last "status board" tell (a permanent done state). Expands + fades once, then gone;
+          the ✓ status icon + green name carry the done state after. reducedMotion → no flash. */}
+      {state.status === 'done' && !reducedMotion && (
+        <circle cx={0} cy={-18} r={16} fill="none" stroke={glowColor} strokeWidth="2.5" opacity="0.6">
+          <animate attributeName="r" values="16;30" dur="0.7s" repeatCount="1" fill="freeze" />
+          <animate attributeName="opacity" values="0.6;0" dur="0.7s" repeatCount="1" fill="freeze" />
+        </circle>
+      )}
 
       <CharacterPixelSprite
         charId={id}
