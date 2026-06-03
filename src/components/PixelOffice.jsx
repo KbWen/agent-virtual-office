@@ -1047,13 +1047,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
         </g>
       )}
 
+      {/* ═══ SUBAGENT HELPER HUDDLES ═══ (capped helper figures — painted BEHIND the agents
+          so the full-size lead is never clipped by its own helpers; they trail the lead's live pos) */}
+      <HelperHuddles />
+
       {/* ═══ AGENTS ═══ */}
       {agentList.map((agent) => (
         <AgentCharacter key={agent.id} agent={agent} />
       ))}
-
-      {/* ═══ SUBAGENT HELPER HUDDLES ═══ (capped desk-side helper figures) */}
-      <HelperHuddles />
 
       {/* ═══ SPECIAL EVENT CHARACTERS ═══ */}
       {activeEvent?.id === 'boss-visit' && <WalkingBoss />}

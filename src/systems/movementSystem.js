@@ -191,17 +191,16 @@ export const HELPER_HEAVY_THRESHOLD = 4
 
 // Pure resolver: up to HELPER_MAX_VISIBLE helper screen positions for a parent role + the
 // overflow count + whether the load is "heavy". Easy to unit-test; the render is a thin shell.
-export function resolveHelperLayout(parentRole, count) {
-  const anchor = HOME_POSITIONS[parentRole]
+export function resolveHelperLayout(parentRole, count, anchor = HOME_POSITIONS[parentRole]) {
   const n = Math.max(0, count | 0)
-  if (!anchor || n === 0) return { sprites: [], overflow: 0, heavy: false }
+  if (!anchor || n === 0) return { sprites: [], overflow: 0, heavy: false, anchor: null }
   const visible = Math.min(n, HELPER_MAX_VISIBLE)
   const sprites = []
   for (let i = 0; i < visible; i++) {
     const off = HELPER_OFFSETS[i]
-    sprites.push({ x: anchor.x + off.dx, y: anchor.y + off.dy, color: HELPER_COLORS[i % HELPER_COLORS.length] })
+    sprites.push({ x: anchor.x + off.dx, y: anchor.y + off.dy })
   }
-  return { sprites, overflow: Math.max(0, n - HELPER_MAX_VISIBLE), heavy: n >= HELPER_HEAVY_THRESHOLD }
+  return { sprites, overflow: Math.max(0, n - HELPER_MAX_VISIBLE), heavy: n >= HELPER_HEAVY_THRESHOLD, anchor }
 }
 
 // ─── Zones (for pathfinding — which room is a point in?) ────────────
