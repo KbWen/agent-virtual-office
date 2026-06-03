@@ -608,6 +608,11 @@ function AgentCharacter({ agent }) {
   // AVO-132: session effort level intensifies the working glow ring (folded in from the
   // removed ThinkingAura). Subscribe to just `effort` so we re-render only when it changes.
   const effort = useOfficeStore((s) => s.effort)
+  // AVO-138: is THIS role currently supervising active subagent helpers? Role-scoped boolean →
+  // referentially stable, re-renders only on a false<->true transition. When true, the lead
+  // shows a calm 'supervising' state (steady halo + 👀) and the pulsing working ring is
+  // suppressed — the helper huddle carries the live "work is happening" motion instead.
+  const hasActiveHelper = useOfficeStore((s) => s.helpers.some((h) => h.parentRole === id))
 
   const timerRef = useRef(null)
   const pathRef = useRef([])
@@ -1066,12 +1071,13 @@ function AgentCharacter({ agent }) {
       data-agent-id={id}
       data-agent-status={state.status || 'idle'}
       data-agent-behavior={state.behavior || 'idle'}
+      data-supervising={hasActiveHelper ? '1' : '0'}
       role="button" aria-label={name} tabIndex={0}
       onKeyDown={handleKeyDown}>
       {/* AVO-132: single working/planning glow ring; effort (high/xhigh/max) intensifies it
           (peak opacity + stroke width) instead of stacking a second concentric aura.
           Planning uses a calm violet ring at BASE_GLOW intensity (effort does not apply). */}
-      {(state.status === 'working' || state.status === 'planning') && (() => {
+      {(state.status === 'working' || state.status === 'planning') && !hasActiveHelper && (() => {
         const g = state.status === 'working' ? (EFFORT_GLOW[effort] || BASE_GLOW) : BASE_GLOW
         return (
           <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth={g.sw} opacity={g.op}>
@@ -1080,6 +1086,13 @@ function AgentCharacter({ agent }) {
           </circle>
         )
       })()}
+      {/* AVO-138: calm SUPERVISING halo — a steady (non-pulsing) role-tinted ring while the lead
+          oversees its subagent helpers. The pulse above is RESERVED for the lead's OWN direct work
+          (no active helpers). Status visibility preserved by name tag + this halo + the 👀 chip. */}
+      {(state.status === 'working' || state.status === 'planning') && hasActiveHelper && (
+        <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth={BASE_GLOW.sw}
+          opacity={(BASE_GLOW.op * 0.6).toFixed(2)} data-supervise-halo="1" />
+      )}
       {state.status === 'blocked' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.4">
           {!reducedMotion && <animate attributeName="opacity" values="0.2;0.5;0.2" dur="1s" repeatCount="indefinite" />}
@@ -1146,6 +1159,13 @@ function AgentCharacter({ agent }) {
             <g transform={`translate(${tagHalfW - 2}, -2)`}>
               <rect x={-4} y={-4} width={8} height={8} rx={2} fill="white" opacity="0.9" />
               <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="7" fill={tagFill}>{statusIcon}</text>
+            </g>
+          )}
+          {/* AVO-138: steady 👀 overseer chip on the opposite shoulder while supervising helpers. */}
+          {hasActiveHelper && (
+            <g transform={`translate(${-(tagHalfW - 2)}, -2)`} data-supervise-cue="1">
+              <rect x={-5} y={-5} width={10} height={10} rx={3} fill="white" opacity="0.9" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="8">👀</text>
             </g>
           )}
         </g>
