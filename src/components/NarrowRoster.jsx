@@ -32,7 +32,7 @@ function RosterCard({ agent, ext, reducedMotion }) {
           <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} aria-hidden="true" />
           <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 truncate">{name}</span>
           {status !== 'idle' && (
-            <span className={`text-[9px] uppercase tracking-wide ${blocked ? 'text-red-500' : 'text-gray-400'}`}>{status}</span>
+            <span className={`text-[10px] uppercase tracking-wide ${blocked ? 'text-red-500' : 'text-gray-400'}`}>{status}</span>
           )}
         </div>
         <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{bubble || label}</div>
@@ -51,7 +51,11 @@ export default function NarrowRoster() {
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
 
   return (
-    <div className="w-full min-h-full bg-gray-50 dark:bg-gray-900 p-2 grid gap-1.5 [align-content:safe_center] [grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]" data-narrow-roster="1">
+    <div
+      className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-900 p-2 grid gap-1.5 [align-content:safe_center]"
+      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}
+      data-narrow-roster="1"
+    >
       {activeEvent && (
         <div
           className={`[grid-column:1/-1] text-[11px] text-center font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded py-1 ${reducedMotion ? '' : 'animate-pulse'}`}
