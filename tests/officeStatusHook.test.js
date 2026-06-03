@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse, readLatestTokenUsage, effortLevel } = await import('../public/hooks/office-status-hook.js')
+const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, bashVibeLabel, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse, readLatestTokenUsage, effortLevel } = await import('../public/hooks/office-status-hook.js')
 
 describe('effortLevel — AVO-102 effort extraction', () => {
   it('returns the level for each known ordinal value', () => {
@@ -288,15 +288,56 @@ describe('shortCommand', () => {
   })
 })
 
+describe('bashVibeLabel (AVO-126 — no raw shell in bubbles)', () => {
+  it('maps common dev commands to friendly nouns (en)', () => {
+    expect(bashVibeLabel('npm test', 'en')).toBe('tests')
+    expect(bashVibeLabel('cd /x && vitest run', 'en')).toBe('tests')
+    expect(bashVibeLabel('npm run build', 'en')).toBe('the build')
+    expect(bashVibeLabel('npm install', 'en')).toBe('deps')
+    expect(bashVibeLabel('git status', 'en')).toBe('git')
+    expect(bashVibeLabel('ls -lt /c/Users/wen', 'en')).toBe('files')
+    expect(bashVibeLabel('curl http://x', 'en')).toBe('a fetch')
+    expect(bashVibeLabel('node server.mjs', 'en')).toBe('a script')
+  })
+
+  it('maps to friendly nouns (zh-TW)', () => {
+    expect(bashVibeLabel('npm test', 'zh-TW')).toBe('測試')
+    expect(bashVibeLabel('ls -lt /c/Users/wen', 'zh-TW')).toBe('檔案')
+    expect(bashVibeLabel('git push', 'zh-TW')).toBe('git')
+  })
+
+  it('falls back to a generic noun for unknown commands — never the raw string', () => {
+    expect(bashVibeLabel('frobnicate --weird /c/Users/wen/secret', 'en')).toBe('a command')
+    expect(bashVibeLabel('zzz', 'zh-TW')).toBe('指令')
+  })
+
+  it('NEVER returns a filesystem path or the raw command (invariant)', () => {
+    const samples = ['ls -lt /c/Users/wen/.gemini', 'cat /etc/passwd', 'rm -rf ./dist',
+      'cd "C:\\\\Users\\\\wen" && dir', 'grep -r token /var/log', 'unknowncmd /deep/secret/path']
+    for (const cmd of samples) {
+      const out = bashVibeLabel(cmd, 'en')
+      expect(out).not.toMatch(/[/\\]/)        // no slashes
+      expect(out.length).toBeLessThan(20)     // short office noun, not a command
+      expect(cmd.includes(out)).toBe(false)   // not a substring of the raw command
+    }
+  })
+
+  it('handles null / non-string defensively', () => {
+    expect(bashVibeLabel(null, 'en')).toBe('a command')
+    expect(bashVibeLabel(undefined, 'zh-TW')).toBe('指令')
+    expect(bashVibeLabel(42, 'en')).toBe('a command')
+  })
+})
+
 describe('extractContext (hook)', () => {
   it('extracts file path from Edit input', () => {
     const result = extractContext('Edit', { file_path: '/project/src/App.jsx' })
     expect(result).toBe('App.jsx')
   })
 
-  it('extracts command from Bash input', () => {
+  it('maps Bash input to an office-vibe noun, never the raw command (AVO-126)', () => {
     const result = extractContext('Bash', { command: 'npm test' })
-    expect(result).toBe('npm test')
+    expect(result).toBe('tests')
   })
 
   it('extracts pattern from Grep input', () => {

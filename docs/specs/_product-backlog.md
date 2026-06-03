@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-06-02
+last_updated: 2026-06-03
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -44,6 +44,18 @@ last_updated: 2026-06-02
 | AVO-123 | Office theme / skin selector | product | brand | P2 | — | feature | Pending | — |
 | AVO-124 | Agent appearance customization | product | brand | P3 | — | feature | Pending | — |
 | AVO-125 | Cozy micro-interactions | product | game-feel | P3 | — | feature | Pending | AVO-111 |
+| AVO-126 | Bubble register unification (banish raw shell strings) | review-finding | vibe-rebalance | P0 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | — |
+| AVO-127 | Token meter off the default view | review-finding | vibe-rebalance | P0 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | AVO-108 |
+| AVO-128 | Name pills → reveal-on-active | review-finding | vibe-rebalance | P0 | docs/specs/ux-vibe-rebalance.md | feature | Done | — |
+| AVO-129 | Done/blocked KPI off the persistent bar | review-finding | vibe-rebalance | P1 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | — |
+| AVO-130 | Control-bar reduction (gear menu + single health dot) | review-finding | vibe-rebalance | P1 | — | feature | Pending | — |
+| AVO-131 | TaskLabel pill → inspector-only | review-finding | vibe-rebalance | P1 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | AVO-103 |
+| AVO-132 | ThinkingAura → fold into glow ring | review-finding | vibe-rebalance | P1 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | AVO-102 |
+| AVO-133 | Blocked reads from posture (physical legibility) | product | vibe-rebalance | P1 | — | feature | Pending | AVO-110 |
+| AVO-134 | BehaviorIndicator micro-telegraphs | product | game-feel | P2 | — | quick-win | Pending | — |
+| AVO-135 | Status-ring distance encoding (breathe/flash) | product | game-feel | P2 | — | quick-win | Pending | — |
+| AVO-136 | Event juice pass (reaction beats / shake / confetti) | product | game-feel | P2 | — | feature | Pending | AVO-112 |
+| AVO-137 | Density-layer foundation (glance-L1 default + zen far-view) | product | vibe-rebalance | P1 | — | architecture-change | Pending | AVO-126, AVO-127, AVO-128 |
 | #20 | Hook read-modify-write atomic | chore | tech-debt | P3 | — | quick-win | Deferred | — |
 
 ## Status Key
@@ -52,7 +64,7 @@ last_updated: 2026-06-02
 - **Priority**: P0 (must) → P3 (nice to have)
 - **Kind**: `product` (player-facing feature) | `infra` (developer-facing tooling/telemetry) | `chore` (hardening)
 - **Tier**: expected classification when built (`feature` | `quick-win` | `architecture-change`)
-- **Labels**: theme — `real-ai-behavior` · `multi-agent` · `info-density` · `game-feel` · `observability` · `brand` · `tech-debt`
+- **Labels**: theme — `real-ai-behavior` · `multi-agent` · `info-density` · `game-feel` · `observability` · `brand` · `tech-debt` · `vibe-rebalance`
 
 > Done rows are kept here for one wave for traceability, then rotate to `_shipped-log.md`.
 > AVO-103/105 shipped 2026-05-29; AVO-101/102 shipped + AVO-108 core shipped in PR #22 (2026-05-29/30); the rolling-1h / $ cost / sparkline portion of AVO-108 remains.
@@ -101,6 +113,42 @@ last_updated: 2026-06-02
 - **AVO-123 Office theme / skin selector** — Gather.town lets you reskin walls/floors. A theme switcher: default / dark-mode / seasonal / cyberpunk palette swaps over the existing SVG office. Visual-only; persists to store.
 - **AVO-124 Agent appearance customization** — Gather.town avatar customization (hair/clothing/accessories). Per-role cosmetic options (hat / color / accessory) so users can personalize their roster; persists to store like `deskItemCount`.
 - **AVO-125 Cozy micro-interactions** — Cozy-sim polish: desk plants that grow with `growthLevel`, coffee steam, monitor glow tint by status, desk-lamp halos at night. Small SVG/animation touches that deepen the "alive office" feel; complements AVO-111 lighting.
+
+### 🎯 UX Vibe Rebalance Wave (AVO-126+, added 2026-06-03)
+> Sourced from a 5-lens expert design panel (game-designer · calm-tech · first-time-user ·
+> audience-readability · clutter-auditor) reviewing the live product. Owner-approved "do all".
+> Verdict: "cute engine with a dashboard bolted on" — the cure is **deletion + diegetic show-don't-tell**,
+> default density **glance-L1**, exact detail opt-in via click-to-inspect. Full raw verdict was in
+> `_raw-intake.md` (deleted after spec generation per spec-intake §1a). **Several items AMEND already-shipped
+> features** — see Dependencies column. Parent/unifier: AVO-137.
+
+- **AVO-126 Bubble register unification** — banish raw shell strings from speech bubbles; route Bash (and any
+  tool with no friendly verb) through the same human-verb/emoji-noun label table the other tools use. The #1,
+  unanimous, cheapest-highest-impact fix. Touches `public/hooks/office-status-hook.js` (`toolLabel` Bash branch + `shortCommand`).
+- **AVO-127 Token meter off the default view** — remove the 🪙 ctx/out chip from the persistent bar; expose in the
+  L2 inspector only. *Amends AVO-108 (keep the data path, demote the surface).*
+- **AVO-128 Name pills → reveal-on-active** — stop rendering 8 persistent English name tags; reveal a name on
+  active/state-change (peripheral-triggered, works on wall-TV/stream) + hover on desktop, fade on idle. At rest,
+  identity rides on sprite + color + desk position (optionally a small role glyph).
+- **AVO-129 Done/blocked KPI off the persistent bar** — move the ✓N/✗M counter to on-demand / settings; the day's
+  rhythm is felt through events, not read off a tally.
+- **AVO-130 Control-bar reduction** — resting bar = clock · live-dot · pause; collapse EN/中, run, test, notify
+  behind one gear; integration-health 4 pills → 1 dot that only colors on trouble.
+- **AVO-131 TaskLabel pill → inspector-only** — drop the monospace tool pill from the glance layer; the bubble +
+  prop-icon already carry the action. Exact tool string lives in the inspector. *Amends AVO-103.*
+- **AVO-132 ThinkingAura → fold into glow ring** — one ring per sprite; encode effort in the glow's intensity/pulse
+  instead of a second concentric halo. *Amends AVO-102.*
+- **AVO-133 Blocked reads from posture** — make "stuck" legible physically (slump / scratch-head / 💢 desk-slam)
+  so trouble reads in peripheral vision before any click. *Relates AVO-110.*
+- **AVO-134 BehaviorIndicator micro-telegraphs** — anticipation pop-in (0→1.1→1) + squash on icon appear so state
+  CHANGES are caught by motion, not by reading text.
+- **AVO-135 Status-ring distance encoding** — idle = slow breathe / no ring, working 1.5s, blocked 1s, done = a
+  one-shot celebratory flash rather than a standing state. Pre-attentive far-read for the wall-TV persona.
+- **AVO-136 Event juice pass** — shared reaction beats (synchronized expression flips), screen-shake on desk-slam,
+  confetti on deploy-success, bigger boss-visit scramble. *Overlaps AVO-112 (eureka cascade).*
+- **AVO-137 Density-layer foundation** — formalize the L0/L1/L2 model: glance-L1 default (in-world core always on),
+  click-to-inspect = L2 (self-demonstrating, no settings slider), optional `zen` far-view mode for streamer/wall-TV.
+  *Architecture-change; build AFTER the cheap wins (126–128) per "fix the default first, ship the dial second".*
 
 ### 🔧 Carried-over from prior wave
 - **#20 Hook read-modify-write atomic** — PID isolation + rename fallback already mitigates risk; full file lock or append-only design would be ideal. *Deferred — current mitigation acceptable; revisit only if state-loss reports surface.*

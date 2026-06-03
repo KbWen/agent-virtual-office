@@ -209,6 +209,30 @@ function shortCommand(cmd) {
   return last.length > 30 ? last.slice(0, 27) + '...' : last
 }
 
+// AVO-126: a Bash bubble must read like office life, never like a terminal. Map the
+// command to a friendly noun (no raw command, no filesystem path EVER) so the working
+// ("⚡ tests"), done ("✅ tests done") and error ("❌ tests failed") frames all stay
+// in-character. Unknown commands fall back to a generic noun, never the raw string.
+function bashVibeLabel(cmd, lang = LANG) {
+  const zh = lang === 'zh-TW'
+  if (!cmd || typeof cmd !== 'string') return zh ? '指令' : 'a command'
+  // Resolve to the last && segment's program token, lowercased.
+  const seg = cmd.split('&&').map(s => s.trim()).filter(Boolean).pop() || cmd
+  const prog = seg.toLowerCase()
+  const has = (re) => re.test(prog)
+  if (has(/(vitest|jest|pytest|mocha|\btest\b)/)) return zh ? '測試' : 'tests'
+  if (has(/(npm run build|vite build|\btsc\b|webpack|rollup|\bcompile\b|\bmake\b|\bbuild\b)/)) return zh ? '建置' : 'the build'
+  if (has(/(npm i\b|npm ci\b|npm install|yarn add|pnpm i\b|pnpm add|pip install|\binstall\b)/)) return zh ? '套件' : 'deps'
+  if (has(/^git\b/)) return 'git'
+  if (has(/^(ls|dir|find|cat|head|tail|grep|rg|less|more|tree|stat|wc|pwd|echo|which|file)\b/)) return zh ? '檔案' : 'files'
+  if (has(/^(cd|mkdir|rm|mv|cp|touch|chmod|chown|ln|tar|zip|unzip)\b/)) return zh ? '檔案' : 'files'
+  if (has(/^(curl|wget|http|ping|ssh|scp|rsync)\b/)) return zh ? '連線' : 'a fetch'
+  if (has(/^(docker|kubectl|helm|terraform|pm2|systemctl|nginx|serve)\b/)) return zh ? '部署' : 'ops'
+  if (has(/^(python|python3|node|deno|bun|go|cargo|ruby|php|java|dotnet)\b/)) return zh ? '程式' : 'a script'
+  if (has(/(npm run|npm start|yarn |pnpm |npx )/)) return zh ? '腳本' : 'a script'
+  return zh ? '指令' : 'a command'
+}
+
 function extractContext(tool, toolInput) {
   if (!toolInput) return null
   try {
@@ -219,7 +243,8 @@ function extractContext(tool, toolInput) {
       case 'Read':
         return shortFile(input.file_path || input.path)
       case 'Bash':
-        return shortCommand(input.command || input.cmd)
+        // AVO-126: never surface a raw shell command/path in a bubble — use an office-vibe noun.
+        return bashVibeLabel(input.command || input.cmd)
       case 'Grep':
         return input.pattern ? `"${input.pattern.slice(0, 20)}"` : null
       case 'Glob':
@@ -886,7 +911,7 @@ function processEvent(event) {
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)
 if (typeof module !== 'undefined') {
   module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
-    shortFile, shortCommand, extractContext, sanitizeId,
+    shortFile, shortCommand, bashVibeLabel, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
     shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse,
     readLatestTokenUsage, effortLevel }

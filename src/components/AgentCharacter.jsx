@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
-import { classifyTask } from '../systems/classify'
 import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale } from '../i18n'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT } from '../systems/constants.js'
@@ -587,54 +586,16 @@ function estimateTextWidth(str) {
   return w
 }
 
-// ─── ThinkingAura — AVO-102 extended-thinking halo ──────────────────────
-// A subtle violet ring whose radius + opacity scale with the model's effort level. Only
-// elevated effort (high / xhigh / max) shows it, so normal work stays uncluttered — per the
-// "畫面清楚好懂、不過分花俏" brief. Renders behind the character; reducedMotion drops the pulse.
-const EFFORT_AURA = { high: { r: 28, op: 0.16 }, xhigh: { r: 31, op: 0.22 }, max: { r: 34, op: 0.30 } }
-function ThinkingAura({ effort, reducedMotion }) {
-  const a = EFFORT_AURA[effort]
-  if (!a) return null
-  return (
-    <circle cx={0} cy={-18} r={a.r} fill="none" stroke="#8B7FD6" strokeWidth="2" opacity={a.op}>
-      {!reducedMotion && <animate attributeName="opacity" values={`${a.op * 0.5};${a.op};${a.op * 0.5}`} dur="2.4s" repeatCount="indefinite" />}
-      {!reducedMotion && <animate attributeName="r" values={`${a.r - 2};${a.r + 2};${a.r - 2}`} dur="2.4s" repeatCount="indefinite" />}
-    </circle>
-  )
-}
-
-// ─── TaskLabel — small monospace pill showing the current tool (AVO-103) ──
-// Tiny, low-contrast, never animated. The brief was "clear and not flashy",
-// so this is intentionally unobtrusive — just a 7px monospace label in a
-// rounded rect, placed below the name tag. Shows the classifier's
-// `visualLabel` so MCP tools collapse to `notion::create` instead of
-// `mcp__notion__create_page` (Tier 4 inner-verb bubble-up from the recent
-// classifier fix carries this for us). Returns null when no task is set,
-// so idle agents stay clean.
-function TaskLabel({ task }) {
-  if (!task) return null
-  const c = classifyTask(task)
-  const label = c.visualLabel
-  // Conservative width estimate: ~5.4px per char at 7px monospace.
-  const charW = 5.4
-  const labelW = Math.min(72, Math.max(20, label.length * charW + 6))
-  const halfW = labelW / 2
-  return (
-    <g transform="translate(0, -29)" aria-hidden="true">
-      <rect
-        x={-halfW} y={-5} width={labelW} height={10} rx={5}
-        fill="#1a1a1a" opacity="0.55"
-      />
-      <text
-        x={0} y={1.5}
-        textAnchor="middle" dominantBaseline="middle"
-        fontSize="7" fontFamily="monospace" fill="#E8E8E8" opacity="0.95"
-      >
-        {label}
-      </text>
-    </g>
-  )
-}
+// ─── AVO-132: effort folded into the single working glow ring ───────────
+// The old AVO-102 ThinkingAura was a SECOND concentric violet ring stacked on the working
+// glow — ring-on-ring clutter on a 32px sprite. Instead, elevated effort (high/xhigh/max)
+// now intensifies the ONE working glow ring (stronger peak opacity + thicker stroke), so a
+// sprite never shows two rings. Normal/absent effort leaves the ring at its base intensity.
+const EFFORT_GLOW = { high: { op: 0.7, sw: 2.5 }, xhigh: { op: 0.85, sw: 3 }, max: { op: 1, sw: 3.5 } }
+const BASE_GLOW = { op: 0.5, sw: 2 }
+// AVO-131: the in-scene TaskLabel tool pill (AVO-103) was removed — the exact tool now
+// shows only in the AgentInspector (click-to-inspect). The classifier still backs the
+// inspector's `inspectorTaskLabel`; nothing in the office scene renders the raw tool string.
 
 // ═══ AGENT CHARACTER WITH RAF-BASED MOVEMENT ═══
 
@@ -644,11 +605,8 @@ function AgentCharacter({ agent }) {
   const name = charName(id)
   const agentState = useOfficeStore((s) => s.agents[id])
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
-  // AVO-103: per-agent task signal for the tool-inventory label. Subscribe to
-  // just the `task` string so we re-render only when the tool changes — not on
-  // every other externalStatus tick (label, expiresAt, etc.).
-  const currentTask = useOfficeStore((s) => s.externalStatus[id]?.task ?? null)
-  // AVO-102: session effort level drives a subtle thinking aura on active agents.
+  // AVO-132: session effort level intensifies the working glow ring (folded in from the
+  // removed ThinkingAura). Subscribe to just `effort` so we re-render only when it changes.
   const effort = useOfficeStore((s) => s.effort)
 
   const timerRef = useRef(null)
@@ -657,6 +615,10 @@ function AgentCharacter({ agent }) {
   const movingStuckRef = useRef(0)
   const pendingBehaviorRef = useRef(null) // deferred behavior for location-based actions
   const [walkFrame, setWalkFrame] = useState(0)
+  // AVO-128: name tags are revealed only when an agent is active (working/blocked/
+  // planning/done) or hovered, and hidden at rest — at idle, identity rides on the
+  // sprite + color + desk position. `hovered` lets a desktop user pull up any name.
+  const [hovered, setHovered] = useState(false)
   // Tracks every fire-and-forget setTimeout (bubble clears, handoff steps) so the
   // unmount cleanup can cancel them. Without this, a deferred clearBubble/handoff
   // callback fires up to ~4s after the component unmounts and mutates the store
@@ -1091,26 +1053,29 @@ function AgentCharacter({ agent }) {
   const tagFill = state.status !== 'idle' ? (STATUS_COLORS[state.status] || color) : color
   const statusIcon = state.status === 'working' ? '⚡' : state.status === 'blocked' ? '✕' : state.status === 'done' ? '✓' : null
   const glowColor = STATUS_COLORS[state.status]
+  // AVO-128: show the name only when the agent is doing something or is being inspected.
+  const showName = hovered || (state.status && state.status !== 'idle')
 
   return (
     <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}
       style={{ cursor: 'pointer' }} onClick={handleClick}
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       data-agent-id={id}
       data-agent-status={state.status || 'idle'}
       data-agent-behavior={state.behavior || 'idle'}
       role="button" aria-label={name} tabIndex={0}
       onKeyDown={handleKeyDown}>
-      {/* AVO-102: thinking aura — only on active agents at elevated effort, behind the glow */}
-      {(state.status === 'working' || state.status === 'planning') && (
-        <ThinkingAura effort={effort} reducedMotion={reducedMotion} />
-      )}
-      {/* Working glow ring */}
-      {state.status === 'working' && (
-        <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.5">
-          <animate attributeName="opacity" values="0.2;0.6;0.2" dur="1.5s" repeatCount="indefinite" />
-          <animate attributeName="r" values="20;24;20" dur="1.5s" repeatCount="indefinite" />
-        </circle>
-      )}
+      {/* AVO-132: single working glow ring; effort (high/xhigh/max) intensifies it
+          (peak opacity + stroke width) instead of stacking a second concentric aura. */}
+      {state.status === 'working' && (() => {
+        const g = EFFORT_GLOW[effort] || BASE_GLOW
+        return (
+          <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth={g.sw} opacity={g.op}>
+            <animate attributeName="opacity" values={`${(g.op * 0.4).toFixed(2)};${g.op};${(g.op * 0.4).toFixed(2)}`} dur="1.5s" repeatCount="indefinite" />
+            <animate attributeName="r" values="20;24;20" dur="1.5s" repeatCount="indefinite" />
+          </circle>
+        )
+      })()}
       {state.status === 'blocked' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.4">
           <animate attributeName="opacity" values="0.2;0.5;0.2" dur="1s" repeatCount="indefinite" />
@@ -1142,12 +1107,17 @@ function AgentCharacter({ agent }) {
               </text>
             </g>
           )}
-          <rect x={-tagHalfW} y={-11} width={tagW} height={20} rx={10}
-            fill={tagFill} opacity="0.92" />
-          <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"
-            fontSize="12" fontFamily="monospace" fontWeight="bold" fill="white">
-            {name}
-          </text>
+          {/* AVO-128: name tag only when active or hovered; hidden at idle rest. */}
+          {showName && (
+            <>
+              <rect x={-tagHalfW} y={-11} width={tagW} height={20} rx={10}
+                fill={tagFill} opacity="0.92" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"
+                fontSize="12" fontFamily="monospace" fontWeight="bold" fill="white">
+                {name}
+              </text>
+            </>
+          )}
           {statusIcon && (
             <g transform={`translate(${tagHalfW - 2}, -2)`}>
               <rect x={-4} y={-4} width={8} height={8} rx={2} fill="white" opacity="0.9" />
@@ -1157,9 +1127,9 @@ function AgentCharacter({ agent }) {
         </g>
 
         <BehaviorBubble x={0} y={-68} message={state.bubble} />
-        {/* AVO-103: tool inventory label between the name tag and the head.
-            Only renders when externalStatus carries a task. */}
-        <TaskLabel task={currentTask} />
+        {/* AVO-131: the monospace tool pill was removed from the glance layer — the
+            prop-icon + bubble carry the action in-world; the exact tool is shown in the
+            AgentInspector (click-to-inspect) instead. */}
       </g>
     </g>
   )

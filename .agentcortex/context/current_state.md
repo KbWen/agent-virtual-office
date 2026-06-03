@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-02
-- **Update Sequence**: 29
+- **Last Updated**: 2026-06-03
+- **Update Sequence**: 30
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -67,6 +67,7 @@
   - [v1.1.0 inference] docs/specs/desktop-notifications.md [Shipped]  *(#8)*
   - [v1.1.0 inference] docs/specs/idle-gap-inference.md [Shipped]  *(#C)*
   - [v1.1.0 compatibility] docs/specs/csp-compatibility.md [Shipped]  *(#27)*
+  - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Frozen]  *(AVO-126/127/128/129/131/132 — branch feat/ux-vibe-rebalance, not yet merged)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -115,6 +116,19 @@
 - [Category: packaging][Severity: MEDIUM][Trigger: dependency-presence-check][prev: 9da72f26] An installed package's CLI launcher must detect its own runtime deps via `require.resolve(dep, {paths:[root]})` (honors npm hoisting to a parent node_modules), not `fs.existsSync(root/node_modules/<dep>)` — the latter always misses hoisted deps and re-runs `npm install` on every launch.
 
 ## Ship History
+
+### feat-ux-vibe-rebalance-2026-06-03 (UX Vibe Rebalance — deletion/demotion core)
+
+- Branch `feat/ux-vibe-rebalance`, classification feature. **Committed to branch, NOT merged** — for human review/merge (main is protected). Spec `docs/specs/ux-vibe-rebalance.md` [Frozen].
+- Sourced from a 5-lens expert design panel (game-designer · calm-tech · first-time-user · audience-readability · clutter-auditor). Verdict: "cute engine with a dashboard bolted on" → cure = deletion, default density glance-L1, detail on-demand. Owner approved "do all"; this branch ships the deletion/demotion core (AVO-126/127/128/129/131/132). Additive juice (AVO-133–136) + density dial (AVO-137) deferred.
+- **AVO-126** — `bashVibeLabel` in `public/hooks/office-status-hook.js`: Bash bubbles map to office nouns (測試/建置/檔案/git/…), never a raw command or path, across working/done/error frames. +5 unit tests incl. a path-leak invariant.
+- **AVO-127 / AVO-129** — `ControlPanel.jsx`: 🪙 token meter and ✓/✗ KPI removed from the persistent bar (full + panel); both surfaced on-demand (full = "?" popover; panel = hover tooltip + sr-only mirror). Data paths (tokens, ledgers) untouched.
+- **AVO-128** — `AgentCharacter.jsx`: name tags revealed only when an agent is non-idle OR hovered; hidden at idle rest (identity rides on sprite+color+desk). Session badge + status icon unaffected. Live-verified 8/8 idle→no name, working→name.
+- **AVO-131** — removed the in-scene monospace TaskLabel pill (+ dead `currentTask`/`classifyTask`); the tool now shows only in the AgentInspector (`inspectorTaskLabel`).
+- **AVO-132** — removed the separate violet ThinkingAura; effort (high/xhigh/max) now folds into the single working glow ring's intensity (op+stroke). Live-verified exactly 1 ring/sprite.
+- **Verification**: vitest 1042→1047 (+5), build clean (390.97 KB / 122.62 KB gzip, −1.5 KB), 0 console errors; live DOM/store ground-truth confirmed each AC.
+- **Review**: independent acx-reviewer on the diff — round 1 NOT READY (AVO-129 panel on-demand gap) → fixed → round 2 PASS. Accepted scoped deviation: `planning` status loses its ring (still has gantt+expression+name; no `STATUS_COLORS` entry) — documented in spec `## Review Deviations`.
+- **Remaining for human**: review + merge branch `feat/ux-vibe-rebalance`; then the additive juice wave (AVO-133–136) + density dial (AVO-137), which benefit from owner visual review.
 
 ### Ship-chore-migrate-agentic-os-v1.2.0-2026-06-02 (governance brain migration + SSoT reconciliation)
 

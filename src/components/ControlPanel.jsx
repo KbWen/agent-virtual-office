@@ -126,7 +126,16 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   // ─── Panel mode: compact single-line status bar ───
   if (isPanel) {
     return (
-      <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t border-gray-200 dark:border-gray-700 px-2 py-1 text-[10px] select-none shrink-0">
+      <div
+        className="bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t border-gray-200 dark:border-gray-700 px-2 py-1 text-[10px] select-none shrink-0"
+        title={t('ui.todayMetricsTooltip', 'Today: {0} done, {1} blocked').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
+      >
+        {/* AVO-129: panel mode has no "?" popover, so the day's ✓/✗ counts are surfaced
+            on-demand here — a hover tooltip plus an always-present sr-only mirror — instead
+            of a persistent visible chip. Keeps the compact bar calm; a11y intact. */}
+        <span className="sr-only">
+          {t('ui.todayMetricsA11y', '{0} completed, {1} blocked today').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
+        </span>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 flex-1 overflow-x-auto">
             {agentList.map((agent) => {
@@ -151,15 +160,8 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
               <span className="text-red-600 dark:text-red-400 font-medium">{t('status.offline', 'offline')}</span>
             </div>
           )}
-          <div
-            className="shrink-0 px-1 py-0.5 rounded text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 font-mono"
-            title={t('ui.todayMetricsTooltip', 'Today: {0} done, {1} blocked').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
-          >
-            <span aria-hidden="true">✓{totalDoneToday}/✗{totalBlockedToday}</span>
-            <span className="sr-only">
-              {t('ui.todayMetricsA11y', '{0} completed, {1} blocked today').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
-            </span>
-          </div>
+          {/* AVO-129: ✓/✗ KPI removed from the persistent bar (the day's rhythm is felt
+              through events, not read off a tally). Data path (ledgers) is unchanged. */}
           <button onClick={togglePause} className="px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={isPaused ? t('aria.resume', 'Resume') : t('aria.pause', 'Pause')}>
             {isPaused ? '▶' : '⏸'}
           </button>
@@ -181,6 +183,20 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             <div>{t('onboarding.shortcutPause')}</div>
             <div>{t('onboarding.shortcutLang')}</div>
             <div>{t('onboarding.shortcutClick')}</div>
+          </div>
+          {/* AVO-127 + AVO-129: today's metrics + token usage live here on-demand,
+              demoted from the persistent bar to keep the office calm. */}
+          <div className="border-t border-gray-100 dark:border-gray-700 pt-2 mb-2 text-gray-500 dark:text-gray-400 space-y-0.5 font-mono text-[11px]">
+            <div title={t('ui.todayMetricsTooltip', 'Today: {0} done, {1} blocked').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}>
+              <span aria-hidden="true">✓ {totalDoneToday} · ✗ {totalBlockedToday}</span>
+              <span className="sr-only">{t('ui.todayMetricsA11y', '{0} completed, {1} blocked today').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}</span>
+            </div>
+            {tokens && (
+              <div title={t('ui.tokensTooltip', 'Context: {0} tokens · last output {1}{2}').replace('{0}', tokens.ctx.toLocaleString()).replace('{1}', tokens.out.toLocaleString()).replace('{2}', tokens.model ? ' · ' + tokens.model : '')}>
+                <span aria-hidden="true">🪙 {formatTokens(tokens.ctx)}</span>
+                <span className="sr-only">{t('ui.tokensA11y', '{0} context tokens, {1} output tokens').replace('{0}', String(tokens.ctx)).replace('{1}', String(tokens.out))}</span>
+              </div>
+            )}
           </div>
           <button
             onClick={dismissInfo}
@@ -253,36 +269,10 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
           </div>
         )}
 
-        <div
-          className="text-[10px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded shrink-0 font-mono"
-          title={t('ui.todayMetricsTooltip', 'Today: {0} done, {1} blocked').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
-        >
-          <span aria-hidden="true">
-            <span className="text-emerald-600 dark:text-emerald-400">✓{totalDoneToday}</span>
-            <span className="text-gray-400 dark:text-gray-500"> / </span>
-            <span className="text-red-600 dark:text-red-400">✗{totalBlockedToday}</span>
-          </span>
-          <span className="sr-only">
-            {t('ui.todayMetricsA11y', '{0} completed, {1} blocked today').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
-          </span>
-        </div>
-
-        {/* AVO-108: token meter — context size headline, full counts + model in tooltip */}
-        {tokens && (
-          <div
-            className="text-[10px] text-indigo-600 dark:text-indigo-300 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded shrink-0 font-mono"
-            title={t('ui.tokensTooltip', 'Context: {0} tokens · last output {1}{2}')
-              .replace('{0}', tokens.ctx.toLocaleString())
-              .replace('{1}', tokens.out.toLocaleString())
-              .replace('{2}', tokens.model ? ' · ' + tokens.model : '')}
-          >
-            <span aria-hidden="true">🪙 {formatTokens(tokens.ctx)}</span>
-            <span className="sr-only">
-              {t('ui.tokensA11y', '{0} context tokens, {1} output tokens')
-                .replace('{0}', String(tokens.ctx)).replace('{1}', String(tokens.out))}
-            </span>
-          </div>
-        )}
+        {/* AVO-129 + AVO-127: the ✓/✗ done/blocked KPI and the 🪙 token meter are no longer
+            persistent chrome on the bar (they read as a monitoring dashboard, which this
+            vibe tool is explicitly not). Both are surfaced on-demand in the "?" info popover
+            above; their data paths (ledgers, tokens) are untouched. */}
 
         <div className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded shrink-0">
           {t('ui.platforms.' + platform, platform)}
