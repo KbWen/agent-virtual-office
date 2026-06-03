@@ -56,6 +56,7 @@ last_updated: 2026-06-03
 | AVO-135 | Status-ring distance encoding (breathe/flash) | product | game-feel | P2 | — | quick-win | Done | — |
 | AVO-136 | Event juice pass (reaction beats / shake / confetti) | product | game-feel | P2 | — | feature | Pending | AVO-112 |
 | AVO-137 | Density-layer foundation (glance-L1 default + zen far-view) | product | vibe-rebalance | P1 | — | architecture-change | Pending | AVO-126, AVO-127, AVO-128 |
+| AVO-138 | Subagent helper huddle (desk-side capped figures + heavy-load cue) | product | game-feel | P1 | docs/specs/subagent-helper-huddle.md | feature | Done | AVO-106 |
 | #20 | Hook read-modify-write atomic | chore | tech-debt | P3 | — | quick-win | Deferred | — |
 
 ## Status Key
