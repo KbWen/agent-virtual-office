@@ -62,6 +62,7 @@ last_updated: 2026-06-05
 | AVO-141 | Comms / vertical (☰ roster) deeper optimization — "still lots of room" | product | vibe-rebalance | P2 | docs/specs/living-office-events.md | feature | Pending | AVO-140 |
 | AVO-142 | Drag-to-move agents (manual reposition for realer interaction) | product | game-feel | P2 | — | feature | Pending | — |
 | AVO-143 | applyExternalStatus: skip no-op agent re-allocation (don't re-render all agents each poll) | chore | tech-debt | P3 | — | quick-win | Pending | — |
+| AVO-144 | Sustained inter-agent separation in free movement (agents pass THROUGH each other in transit; RAF loop has no per-frame separation — only gather targets are deconflicted) | product | game-feel | P2 | — | feature | Pending | — |
 | #20 | Hook read-modify-write atomic | chore | tech-debt | P3 | — | quick-win | Deferred | — |
 
 ## Status Key

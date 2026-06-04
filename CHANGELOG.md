@@ -34,7 +34,9 @@ became a fluid, honest, alive companion — and stopped breaking on resize.
   target is now clamped to a walkable floor cell** (no agent can stand in a wall); real-seed events
   globally cooldown-gated to stay rare; **speech bubbles + activity-feed entries + the mood engine
   now react only to real status changes, not to every status poll/heartbeat** (killed the "every
-  character suddenly speaks for no reason / refresh" glitch and false `rushing`/weather inflation).
+  character suddenly speaks for no reason / refresh" glitch and false `rushing`/weather inflation);
+  **gather events now deconflict their targets** so agents never pile onto one cell (which previously
+  let the upper sprite fully hide the others — "4 piled, one disappeared").
 
 ### Notes
 
