@@ -1213,10 +1213,20 @@ function AgentCharacter({ agent }) {
         </g>
 
         {/* Bubble grows in place too (anchored at its -68 origin). At labelScale 1 this is
-            identical to the prior `<BehaviorBubble x={0} y={-68}/>` directly under scale(1/1.35). */}
-        <g transform={`translate(0, -68) scale(${labelScale})`}>
-          <BehaviorBubble x={0} y={0} message={state.bubble} />
-        </g>
+            identical to the prior `<BehaviorBubble x={0} y={-68}/>` directly under scale(1/1.35).
+            FLIP-BELOW: an agent near the office top (e.g. the Gatekeeper at the top wall) would draw
+            its above-the-head bubble past the SVG's y=0 edge and get clipped. The bubble's projected
+            top is pos.y − 68 − 34·labelScale; when that crosses the top edge we anchor it just below
+            the agent (+6) and flip the tail up so the whole bubble stays inside the scene. */}
+        {(() => {
+          const bubbleTopAbove = pos.y - 68 - 34 * labelScale
+          const below = bubbleTopAbove < 6
+          return (
+            <g transform={`translate(0, ${below ? 6 : -68}) scale(${labelScale})`}>
+              <BehaviorBubble x={0} y={0} below={below} message={state.bubble} />
+            </g>
+          )
+        })()}
         {/* AVO-131: the monospace tool pill was removed from the glance layer — the
             prop-icon + bubble carry the action in-world; the exact tool is shown in the
             AgentInspector (click-to-inspect) instead. */}
