@@ -604,3 +604,21 @@ export function calcFacing(fromX, fromY, toX, toY) {
   return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')
 }
 
+// living-office L2 (focusAnchor): the facing an UNTRACKED, stationary agent should adopt to orient
+// toward the hottest live desk — or null if it must NOT orient. Pure + exported so AC-4 is testable
+// without the doSchedule component loop. Honesty guards baked in:
+//   - tracked agent (has a live externalStatus entry) → null (R1: never modulate a real desk)
+//   - no anchor / self / stale anchor (missing or idle) → null (stale-pointer bail)
+//   - slug~role worktree anchor falls back to its base-role rendered agent
+export function resolveFocusFacing(state, id, fromX, fromY) {
+  if (!state || !id) return null
+  if (state.externalStatus && state.externalStatus[id]) return null // tracked → never (R1)
+  const anchorId = state.focusAnchor
+  if (!anchorId || anchorId === id) return null
+  const agents = state.agents || {}
+  let anchor = agents[anchorId]
+  if (!anchor && anchorId.includes('~')) anchor = agents[anchorId.slice(anchorId.lastIndexOf('~') + 1)]
+  if (!anchor || !anchor.position || anchor.status === 'idle') return null // stale/missing/idle bail
+  return calcFacing(fromX, fromY, anchor.position.x, anchor.position.y)
+}
+

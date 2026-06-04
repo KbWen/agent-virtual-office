@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
-import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS } from '../systems/movementSystem'
+import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveFocusFacing } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale } from '../i18n'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
@@ -974,19 +974,13 @@ function AgentCharacter({ agent }) {
         if (next.bubble) {
           scheduleDeferred(() => useOfficeStore.getState().clearBubble(id), Math.min(next.duration * 0.5, 4000))
         }
-        // L2 focusAnchor (spec living-office-events.md): a STATIONARY, UNTRACKED idle agent orients
-        // toward the hottest live desk — the room "turns toward where the real work is". Honest
-        // (orientation ≠ work-claim). Skipped for tracked agents (R1); bails on a stale/missing/idle
-        // anchor; base-role fallback resolves a 'slug~role' worktree anchor to its rendered agent.
-        if (!willWalk && !tracked && store.focusAnchor && store.focusAnchor !== id && visualPosRef.current) {
-          let anchor = store.agents[store.focusAnchor]
-          if (!anchor && store.focusAnchor.includes('~')) {
-            anchor = store.agents[store.focusAnchor.slice(store.focusAnchor.lastIndexOf('~') + 1)]
-          }
-          if (anchor && anchor.status && anchor.status !== 'idle' && anchor.position) {
-            const dir = calcFacing(visualPosRef.current.x, visualPosRef.current.y, anchor.position.x, anchor.position.y)
-            store.setAgentFacing(id, dir)
-          }
+        // L2 focusAnchor (spec living-office-events.md): a STATIONARY, UNTRACKED agent orients toward
+        // the hottest live desk — the room "turns toward where the real work is" (honest; orientation
+        // ≠ work-claim). All honesty guards (tracked→skip per R1, stale/idle/self bail, slug~role
+        // fallback) live in the pure resolveFocusFacing helper so AC-4 is unit-testable without this loop.
+        if (!willWalk && visualPosRef.current) {
+          const dir = resolveFocusFacing(store, id, visualPosRef.current.x, visualPosRef.current.y)
+          if (dir) store.setAgentFacing(id, dir)
         }
       }
 
