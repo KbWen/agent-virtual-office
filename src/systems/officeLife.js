@@ -1,12 +1,13 @@
 import eventsData from '../config/officeEvents.json'
 import { WAYPOINTS, MEETING_CHAIRS, HOME_POSITIONS } from './movementSystem.js'
 import { eventBubble } from '../i18n'
-import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL, WORK_CLAIM_SIGNAL_WINDOW, LIVE_FLOOR_FIRE_CHANCE } from './constants.js'
+import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL, WORK_CLAIM_SIGNAL_WINDOW, LIVE_FLOOR_FIRE_CHANCE, SEED_COOLDOWN_MS } from './constants.js'
 
 let dailyTimer = null
 let rareTimer = null
 let timeInterval = null
 let timeEventInterval = null
+let seedUnsub = null   // living-office P4: store subscription for real-seeded event triggers
 // Module-level cancellation flag so a double-init can fully cancel the PRIOR instance.
 // startOfficeLife's closures all read activeCancelled by reference, so reassigning it
 // here both starts a fresh flag and lets the double-init guard flip the old one true.
@@ -582,12 +583,13 @@ export function startOfficeLife(store) {
   // and its cancellation flag. Previously only dailyTimer/rareTimer were module-level,
   // so a re-init without cleanup leaked the two setInterval loops and left the prior
   // instance's stale event callbacks firing (its `cancelled` flag never flipped).
-  if (dailyTimer || rareTimer || timeInterval || timeEventInterval) {
+  if (dailyTimer || rareTimer || timeInterval || timeEventInterval || seedUnsub) {
     if (activeCancelled) activeCancelled.value = true
     clearTimeout(dailyTimer)
     clearTimeout(rareTimer)
     clearInterval(timeInterval)
     clearInterval(timeEventInterval)
+    if (seedUnsub) { seedUnsub(); seedUnsub = null }
     dailyTimer = rareTimer = timeInterval = timeEventInterval = null
     // Cancel any in-flight interactive events from the prior instance.
     for (const c of interactiveCancellers) c.value = true
@@ -650,6 +652,39 @@ export function startOfficeLife(store) {
 
   scheduleDaily()
   scheduleRare()
+
+  // ─── Real-seeded triggers (living-office Phase 4) ───────────────────────────────
+  // The causal real→event link the owner asked for ("沒有驅動任何一件事情"): a REAL signal
+  // EDGE fires the matching coordinated event IMMEDIATELY (instead of only making it eligible for
+  // the next random tick). Honesty-gated (same eventEligible), mutex'd (skip if activeEvent),
+  // per-event cooldown'd (SEED_COOLDOWN_MS — a flapping signal can't spam, R4). Edge-detected on
+  // the cheap tracked fields only; high-frequency position churn early-returns.
+  const seedCooldown = {}
+  const fireSeed = (state, eventId) => {
+    if (state.isPaused || state.activeEvent) return
+    const ev = EVENT_BY_ID[eventId]
+    if (!ev || !eventEligible(ev, state)) return // signal must really be present (honesty double-check)
+    const now = Date.now()
+    if (seedCooldown[eventId] && now - seedCooldown[eventId] < SEED_COOLDOWN_MS) return
+    seedCooldown[eventId] = now
+    const participants = pickParticipants(ev, state.agents, state.externalStatus)
+    store.getState().setActiveEvent(ev)
+    executeEvent(store, ev, participants, cancelled)
+  }
+  seedUnsub = typeof store.subscribe === 'function' ? store.subscribe((state, prev) => {
+    if (cancelled.value || !prev || state.isPaused || state.activeEvent) return
+    // mood edge → real block-streak / done-streak coordinated moment (cadence source #2)
+    if (state.mood !== prev.mood) {
+      if (state.mood === 'frustrated' || state.mood === 'stuck') fireSeed(state, 'dev-arch-disagree')
+      else if (state.mood === 'smooth') fireSeed(state, 'eureka')
+    }
+    // real deploy: Ops just transitioned to done (cadence source #1)
+    if (state.externalStatus?.ops?.status === 'done' && prev.externalStatus?.ops?.status !== 'done') {
+      fireSeed(state, 'deploy-success')
+    }
+    // a subagent just started (helpers count rose) → the team coordinates (cadence source #1)
+    if ((state.helpers?.length || 0) > (prev.helpers?.length || 0)) fireSeed(state, 'standup')
+  }) : null
 
   // Update time every minute
   timeInterval = setInterval(() => {
@@ -767,6 +802,7 @@ export function startOfficeLife(store) {
     clearTimeout(rareTimer)
     clearInterval(timeInterval)
     clearInterval(timeEventInterval)
+    if (seedUnsub) { seedUnsub(); seedUnsub = null }
     dailyTimer = rareTimer = timeInterval = timeEventInterval = null
     // Cancel any in-flight interactive events so their deferred callbacks don't
     // fire against a torn-down store.

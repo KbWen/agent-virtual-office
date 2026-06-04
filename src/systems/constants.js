@@ -33,6 +33,9 @@ export const WORK_CLAIM_SIGNAL_WINDOW = 90000          // 90s, the "recently" bo
 // (scaled, NOT muted — AC-7: working must not feel quieter than idle). Base daily ~1/2min × 0.3
 // ≈ 1 coordinated scene / ~6-7min, the calm target band. Real events keep instant priority.
 export const LIVE_FLOOR_FIRE_CHANCE = 0.3
+// living-office-events Phase 4: a real-signal edge CAUSALLY fires the matching coordinated event;
+// per-event cooldown so a flapping signal can't spam (anti-thrash, R4).
+export const SEED_COOLDOWN_MS = 120000                 // 2 min per real-seeded event type
 
 // API
 export const STATUS_POLL_INTERVAL = 1000   // ms — matches startFilePolling default
