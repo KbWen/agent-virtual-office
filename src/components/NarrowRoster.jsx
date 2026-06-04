@@ -5,7 +5,7 @@ import { charName, behaviorLabel, t, useLocale, eventName } from '../i18n'
 import { CharacterPixelSprite } from './AgentCharacter'
 import { agentLineLabel, taskChipLabel, formatTokens } from './ControlPanel'
 import { formatTimeAgo } from '../utils/formatTime'
-import { comparePresence, isIdleStatus } from '../systems/rosterModel'
+import { comparePresence, isIdleStatus, feedEntries } from '../systems/rosterModel'
 
 // ─── Vertical office: presence rail (COMMS rebuild — Phase 1: the honest, lively spine) ─────────
 // The optional ☰ lens on the office. Instead of a flat declaration-ordered list, this is a PRESENCE
@@ -108,6 +108,43 @@ function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expa
   )
 }
 
+// ─── Activity feed row (Phase 2) — one real event: status change, handoff, or team event ───────
+// Sourced from the store's activityLog, already filtered to non-organic origins. Time-decayed
+// opacity (older = quieter) gives the "journal that's been written in" resting feel (calm-tech).
+function FeedRow({ entry, color, ageMs }) {
+  const ago = formatTimeAgo(entry.timestamp, { compact: true })
+  // decay: full opacity when fresh, easing toward 0.45 over ~20 min — never invisible.
+  const opacity = Math.max(0.45, 1 - (ageMs || 0) / (20 * 60 * 1000))
+  if (entry.type === 'event') {
+    return (
+      <div className="text-[10px] text-center text-amber-700 dark:text-amber-300/90 py-0.5" style={{ opacity }}>
+        🎉 {eventName(entry.message) || entry.message}
+      </div>
+    )
+  }
+  if (entry.type === 'handoff') {
+    return (
+      <div className="flex items-baseline gap-1.5 text-[11px] py-0.5 pl-2 border-l-2" style={{ borderColor: color, opacity }}>
+        <span className="text-gray-600 dark:text-gray-300 truncate">{charName(entry.from)} <span className="text-gray-400">→</span> {charName(entry.to)}</span>
+        <span className="ml-auto text-[9px] text-gray-400 shrink-0 tabular-nums">{ago}</span>
+      </div>
+    )
+  }
+  // status
+  const tone = entry.status === 'blocked' ? 'text-red-600 dark:text-red-400'
+    : entry.status === 'done' ? 'text-green-700 dark:text-green-400'
+    : 'text-gray-600 dark:text-gray-300'
+  return (
+    <div className="flex items-baseline gap-1.5 text-[11px] py-0.5 pl-2 border-l-2" style={{ borderColor: color, opacity }}>
+      <span className="font-medium text-gray-700 dark:text-gray-200 shrink-0">{charName(entry.agentId)}</span>
+      <span className={`truncate ${tone}`}>{entry.message}</span>
+      <span className="ml-auto text-[9px] text-gray-400 shrink-0 tabular-nums">{ago}</span>
+    </div>
+  )
+}
+
+const HEALTH_DOT = { online: '#1D9E75', degraded: '#E8A317', offline: '#E24B4A', idle: '#9aa' }
+
 export default function NarrowRoster() {
   useLocale() // re-render on language switch
   // Salience-relevant SIGNATURE only — id|status|behavior|bubble|task|expiresAt per agent. It
@@ -129,8 +166,17 @@ export default function NarrowRoster() {
   const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
   const tokens = useOfficeStore((s) => s.tokens)
   const effort = useOfficeStore((s) => s.effort)
+  const activityLog = useOfficeStore(useShallow((s) => s.activityLog))
+  const health = useOfficeStore((s) => s.integrationHealth?.state || 'idle')
 
   const [expandedId, setExpandedId] = useState(null)
+  const [notifyPerm, setNotifyPerm] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  )
+  const requestNotify = () => {
+    if (typeof Notification === 'undefined') return
+    Notification.requestPermission().then((p) => setNotifyPerm(p)).catch(() => {})
+  }
 
   // Build rows from ground-truth via getState(), keyed on the signature → no per-movement-tick
   // rebuild. (Reading getState() in a useMemo keyed on a subscribed signature is the same pattern
@@ -156,6 +202,16 @@ export default function NarrowRoster() {
   // churn for everyone else. (Smooth FLIP animation for that one move lands in Phase 3.)
   const renderRows = sorted
 
+  // Activity feed (Phase 2): real events only (organic theater filtered by feedEntries), newest
+  // first, capped. Per-agent colour for the left edge; time-decay handled in FeedRow.
+  const colorById = useMemo(() => {
+    const map = {}
+    for (const r of rows) map[r.id] = r.agent.color
+    return map
+  }, [rows])
+  const feed = useMemo(() => feedEntries(activityLog).slice(0, 12), [activityLog])
+  const now = Date.now()
+
   const subagentCount = (roleId) => helpers.reduce((n, h) => (h.parentRole === roleId ? n + 1 : n), 0)
   const activeCount = sorted.filter((r) => !isIdleStatus(r.status)).length
   const totalDone = Object.values(doneCounts).reduce((a, b) => a + (b || 0), 0)
@@ -175,8 +231,16 @@ export default function NarrowRoster() {
           {totalDone > 0 && <> · <span className="text-gray-700 dark:text-gray-200">{totalDone}</span> {t('chat.done', 'done')}</>}
         </span>
         <span className="flex items-center gap-2 shrink-0">
+          {notifyPerm === 'default' && (
+            <button onClick={requestNotify} title={t('chat.enableNotify', 'Notify me when blocked')} className="text-[11px] leading-none hover:opacity-70" aria-label={t('chat.enableNotify', 'Notify me when blocked')}>🔔</button>
+          )}
           {effort && <span title={t('chat.effort', 'effort')}>⚡{effort}</span>}
           {tokens && Number.isFinite(tokens.out) && <span title="tokens">{formatTokens(tokens.out)} tok</span>}
+          {/* Integration heartbeat/health — so idle never reads as "is it even alive?" */}
+          <span className="inline-flex items-center gap-1" title={health} data-roster-health={health}>
+            <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: HEALTH_DOT[health] || HEALTH_DOT.idle }} />
+            {health === 'offline' && <span className="text-red-500">{t('chat.offline', 'Disconnected')}</span>}
+          </span>
         </span>
       </div>
 
@@ -210,6 +274,24 @@ export default function NarrowRoster() {
           onToggle={() => setExpandedId((cur) => (cur === r.id ? null : r.id))}
           reducedMotion={reducedMotion}
         />
+      ))}
+
+      {/* Activity feed (Phase 2): the cross-agent "what just happened" stream — real events only
+          (organic theater filtered out), newest first, time-decayed. Static here; the rate-limited
+          entrance animation is Phase 3. Honest empty states (no nagging void). */}
+      {feed.length > 0 ? (
+        <div className="[grid-column:1/-1] mt-1 pt-1.5 border-t border-gray-200 dark:border-gray-700" data-roster-feed="1">
+          <div className="text-[9px] uppercase tracking-wider text-gray-400 px-1 pb-0.5">{t('chat.activity', 'Activity')}</div>
+          <div className="flex flex-col gap-0.5">
+            {feed.map((e) => (
+              <FeedRow key={e.id} entry={e} color={colorById[e.agentId] || colorById[e.from] || '#888'} ageMs={now - e.timestamp} />
+            ))}
+          </div>
+        </div>
+      ) : (!quiet && (
+        <div className="[grid-column:1/-1] text-[10px] text-center text-gray-400 dark:text-gray-500 mt-1 pt-1.5 border-t border-gray-200 dark:border-gray-700" data-roster-feed="empty">
+          {t('chat.feedEmpty', 'No activity yet — waiting for the team…')}
+        </div>
       ))}
     </div>
   )

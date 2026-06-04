@@ -94,3 +94,9 @@ describe('NarrowRoster render order (controlled store, no live poll)', () => {
     expect(html.includes('data-roster-quiet="1"')).toBe(false)
   })
 })
+
+// NOTE: the activity feed + health-dot rendering is verified LIVE in the preview, not via SSR —
+// renderToStaticMarkup reads a one-shot useSyncExternalStore snapshot that doesn't reflect an
+// activityLog replaced late in a test (an SSR artifact, not a runtime bug; the live app updates via
+// the normal subscribe path). The feed's DATA correctness (origin filter) is covered by
+// rosterModel.test.js `feedEntries`, and the origin tagging by activityOrigin.test.js.

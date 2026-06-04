@@ -304,7 +304,12 @@
     "online": "active",
     "done": "done",
     "effort": "effort",
-    "quiet": "Quiet right now — the team is resting"
+    "quiet": "Quiet right now — the team is resting",
+    "activity": "Activity",
+    "feedEmpty": "No activity yet — waiting for the team…",
+    "enableNotify": "Notify me when blocked",
+    "offline": "Disconnected",
+    "handoff": "handed off to"
   },
   "notify": {
     "blockedTitle": "Agent stuck",
