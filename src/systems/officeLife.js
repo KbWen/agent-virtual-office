@@ -1,7 +1,7 @@
 import eventsData from '../config/officeEvents.json'
 import { WAYPOINTS, MEETING_CHAIRS, HOME_POSITIONS } from './movementSystem.js'
 import { eventBubble } from '../i18n'
-import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL } from './constants.js'
+import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL, WORK_CLAIM_SIGNAL_WINDOW, LIVE_FLOOR_FIRE_CHANCE } from './constants.js'
 
 let dailyTimer = null
 let rareTimer = null
@@ -35,6 +35,48 @@ const EVENT_BY_ID = (() => {
 
 function randomInterval(range) {
   return range[0] + Math.random() * (range[1] - range[0])
+}
+
+// ─── living-office-events Phase 2: honesty gating ───────────────────────────────
+// Event Decision Framework (spec docs/specs/living-office-events.md):
+//   WORK-CLAIM events assert a specific REAL work outcome → may fire ONLY when a matching real
+//   signal fired within WORK_CLAIM_SIGNAL_WINDOW (R2). No signal → ineligible (a SOCIAL/WORLD
+//   event is drawn instead). SOCIAL/WORLD events make no work-claim → always eligible (honest for
+//   the untracked agents pickParticipants already selects). To classify a FUTURE event: if it
+//   asserts/implies a real outcome, add it here with its gate; otherwise leave it out.
+const recentSignal = (es, now) => !!(es && es.changedAt && (now - es.changedAt) < WORK_CLAIM_SIGNAL_WINDOW)
+const WORK_CLAIM_GATES = {
+  // deploy claims → Ops had a real recent signal (working→done on a ship)
+  'deploy-success':       (s, now) => recentSignal(s.externalStatus?.ops, now),
+  'ops-dev-deploy-check': (s, now) => recentSignal(s.externalStatus?.ops, now),
+  // design friction → a real block-streak (moodEngine distils this from real signals)
+  'dev-arch-disagree':    (s)      => s.mood === 'frustrated' || s.mood === 'stuck',
+  // breakthrough → a real done-streak / smooth momentum
+  'eureka':               (s)      => s.mood === 'smooth',
+  // review friction → QA/Gatekeeper had a real recent signal (no distinct "review subagent" on wire)
+  'review-debate':        (s, now) => recentSignal(s.externalStatus?.qa, now) || recentSignal(s.externalStatus?.gate, now),
+}
+
+// Exported for tests. true if the event may HONESTLY fire given the current real-signal state.
+export function eventEligible(event, state, now = Date.now()) {
+  if (!event) return false
+  const gate = WORK_CLAIM_GATES[event.id]
+  return gate ? !!gate(state, now) : true
+}
+
+// Pick a random event from `pool` that is currently eligible (work-claims gated). null if none.
+function pickEligibleEvent(pool, state) {
+  const now = Date.now()
+  const eligible = (pool || []).filter((e) => eventEligible(e, state, now))
+  if (eligible.length === 0) return null
+  return eligible[Math.floor(Math.random() * eligible.length)]
+}
+
+// When a real session is live, scale the ambient floor DOWN (not mute) so working never feels
+// quieter than idle/demo (AC-7). Returns true if this tick should be allowed to fire.
+function floorTickAllowed(state) {
+  const live = state.statusSource === 'external' && (state.teamPulse || 0) > 0.2
+  return !live || Math.random() < LIVE_FLOOR_FIRE_CHANCE
 }
 
 // Release EVERY agent currently locked in a group event back to organic scheduling.
@@ -558,13 +600,14 @@ export function startOfficeLife(store) {
     dailyTimer = setTimeout(() => {
       if (cancelled.value) return
       const state = store.getState()
-      if (!state.isPaused && !state.activeEvent) {
-        const pool = eventsData.daily
-        const event = pool[Math.floor(Math.random() * pool.length)]
-        const participants = pickParticipants(event, state.agents, state.externalStatus)
-
-        store.getState().setActiveEvent(event)
-        executeEvent(store, event, participants, cancelled)
+      if (!state.isPaused && !state.activeEvent && floorTickAllowed(state)) {
+        // Honesty gate: skip ungated work-claim events; draw an eligible SOCIAL/WORLD one instead.
+        const event = pickEligibleEvent(eventsData.daily, state)
+        if (event) {
+          const participants = pickParticipants(event, state.agents, state.externalStatus)
+          store.getState().setActiveEvent(event)
+          executeEvent(store, event, participants, cancelled)
+        }
       }
       scheduleDaily()
     }, randomInterval(DAILY_EVENT_INTERVAL))
@@ -575,13 +618,13 @@ export function startOfficeLife(store) {
     rareTimer = setTimeout(() => {
       if (cancelled.value) return
       const state = store.getState()
-      if (!state.isPaused && !state.activeEvent) {
-        const pool = eventsData.rare
-        const event = pool[Math.floor(Math.random() * pool.length)]
-        const participants = pickParticipants(event, state.agents, state.externalStatus)
-
-        store.getState().setActiveEvent(event)
-        executeEvent(store, event, participants, cancelled)
+      if (!state.isPaused && !state.activeEvent && floorTickAllowed(state)) {
+        const event = pickEligibleEvent(eventsData.rare, state)
+        if (event) {
+          const participants = pickParticipants(event, state.agents, state.externalStatus)
+          store.getState().setActiveEvent(event)
+          executeEvent(store, event, participants, cancelled)
+        }
       }
       scheduleRare()
     }, randomInterval(RARE_EVENT_INTERVAL))

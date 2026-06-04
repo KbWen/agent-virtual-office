@@ -25,6 +25,14 @@ export const DOOR_JITTER = 20           // px jitter for door waypoints
 export const DAILY_EVENT_INTERVAL = [60000, 180000]    // 1–3 min
 export const RARE_EVENT_INTERVAL = [300000, 600000]    // 5–10 min
 export const TIME_CHECK_INTERVAL = 60000               // 1 min
+// living-office-events Phase 2: a WORK-CLAIM event may only fire if its matching real signal
+// fired within this window (R2 — the claim must not outlive its truth). Counts/ledgers are NOT
+// allowed to extend recency.
+export const WORK_CLAIM_SIGNAL_WINDOW = 90000          // 90s, the "recently" bound for work-claims
+// When a real session is LIVE, scale the random ambient floor DOWN to this per-tick fire chance
+// (scaled, NOT muted — AC-7: working must not feel quieter than idle). Base daily ~1/2min × 0.3
+// ≈ 1 coordinated scene / ~6-7min, the calm target band. Real events keep instant priority.
+export const LIVE_FLOOR_FIRE_CHANCE = 0.3
 
 // API
 export const STATUS_POLL_INTERVAL = 1000   // ms — matches startFilePolling default
