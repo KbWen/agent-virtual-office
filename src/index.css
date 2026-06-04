@@ -36,3 +36,10 @@ html, body, #root {
   0%, 70%, 100% { opacity: 0.25; }
   35%           { opacity: 1; }
 }
+/* Activity-feed new-item entrance (COMMS Phase 3): a single gentle fade + tiny rise, ~250ms, ONCE.
+   Per the calm-tech motion contract — fade OR slide (not both hard), no flash, settles to static.
+   Applied only when reducedMotion is off; new rows animate because React mounts them on a new key. */
+@keyframes chat-feed-in {
+  0%   { opacity: 0; transform: translateY(-3px); }
+  100% { opacity: 1; transform: translateY(0); }
+}

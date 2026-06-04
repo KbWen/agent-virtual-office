@@ -111,20 +111,23 @@ function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expa
 // ─── Activity feed row (Phase 2) — one real event: status change, handoff, or team event ───────
 // Sourced from the store's activityLog, already filtered to non-organic origins. Time-decayed
 // opacity (older = quieter) gives the "journal that's been written in" resting feel (calm-tech).
-function FeedRow({ entry, color, ageMs }) {
+function FeedRow({ entry, color, ageMs, reducedMotion }) {
   const ago = formatTimeAgo(entry.timestamp, { compact: true })
   // decay: full opacity when fresh, easing toward 0.45 over ~20 min — never invisible.
   const opacity = Math.max(0.45, 1 - (ageMs || 0) / (20 * 60 * 1000))
+  // Phase 3: a single gentle fade+rise on MOUNT only (new key → React remounts → runs once).
+  // reducedMotion → no entrance. CSS reverts to the inline `opacity` (decay) after the 250ms run.
+  const anim = reducedMotion ? null : 'chat-feed-in 0.25s ease-out'
   if (entry.type === 'event') {
     return (
-      <div className="text-[10px] text-center text-amber-700 dark:text-amber-300/90 py-0.5" style={{ opacity }}>
+      <div className="text-[10px] text-center text-amber-700 dark:text-amber-300/90 py-0.5" style={{ opacity, animation: anim }}>
         🎉 {eventName(entry.message) || entry.message}
       </div>
     )
   }
   if (entry.type === 'handoff') {
     return (
-      <div className="flex items-baseline gap-1.5 text-[11px] py-0.5 pl-2 border-l-2" style={{ borderColor: color, opacity }}>
+      <div className="flex items-baseline gap-1.5 text-[11px] py-0.5 pl-2 border-l-2" style={{ borderColor: color, opacity, animation: anim }}>
         <span className="text-gray-600 dark:text-gray-300 truncate">{charName(entry.from)} <span className="text-gray-400">→</span> {charName(entry.to)}</span>
         <span className="ml-auto text-[9px] text-gray-400 shrink-0 tabular-nums">{ago}</span>
       </div>
@@ -135,7 +138,7 @@ function FeedRow({ entry, color, ageMs }) {
     : entry.status === 'done' ? 'text-green-700 dark:text-green-400'
     : 'text-gray-600 dark:text-gray-300'
   return (
-    <div className="flex items-baseline gap-1.5 text-[11px] py-0.5 pl-2 border-l-2" style={{ borderColor: color, opacity }}>
+    <div className="flex items-baseline gap-1.5 text-[11px] py-0.5 pl-2 border-l-2" style={{ borderColor: color, opacity, animation: anim }}>
       <span className="font-medium text-gray-700 dark:text-gray-200 shrink-0">{charName(entry.agentId)}</span>
       <span className={`truncate ${tone}`}>{entry.message}</span>
       <span className="ml-auto text-[9px] text-gray-400 shrink-0 tabular-nums">{ago}</span>
@@ -209,7 +212,15 @@ export default function NarrowRoster() {
     for (const r of rows) map[r.id] = r.agent.color
     return map
   }, [rows])
-  const feed = useMemo(() => feedEntries(activityLog).slice(0, 12), [activityLog])
+  // Phase 3: when a row is expanded, FOCUS the feed on that agent (their events only). Tapping
+  // the row again clears it (expandedId toggles). Otherwise the feed shows the whole team.
+  const feed = useMemo(() => {
+    const all = feedEntries(activityLog)
+    const scoped = expandedId
+      ? all.filter((e) => e.agentId === expandedId || e.from === expandedId || e.to === expandedId)
+      : all
+    return scoped.slice(0, 12)
+  }, [activityLog, expandedId])
   const now = Date.now()
 
   const subagentCount = (roleId) => helpers.reduce((n, h) => (h.parentRole === roleId ? n + 1 : n), 0)
@@ -281,10 +292,13 @@ export default function NarrowRoster() {
           entrance animation is Phase 3. Honest empty states (no nagging void). */}
       {feed.length > 0 ? (
         <div className="[grid-column:1/-1] mt-1 pt-1.5 border-t border-gray-200 dark:border-gray-700" data-roster-feed="1">
-          <div className="text-[9px] uppercase tracking-wider text-gray-400 px-1 pb-0.5">{t('chat.activity', 'Activity')}</div>
+          <div className="text-[9px] uppercase tracking-wider text-gray-400 px-1 pb-0.5">
+            {t('chat.activity', 'Activity')}
+            {expandedId && <span className="normal-case text-gray-500"> · {charName(expandedId)}</span>}
+          </div>
           <div className="flex flex-col gap-0.5">
             {feed.map((e) => (
-              <FeedRow key={e.id} entry={e} color={colorById[e.agentId] || colorById[e.from] || '#888'} ageMs={now - e.timestamp} />
+              <FeedRow key={e.id} entry={e} color={colorById[e.agentId] || colorById[e.from] || '#888'} ageMs={now - e.timestamp} reducedMotion={reducedMotion} />
             ))}
           </div>
         </div>
