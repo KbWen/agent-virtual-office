@@ -75,7 +75,9 @@ function pickEligibleEvent(pool, state) {
 // When a real session is live, scale the ambient floor DOWN (not mute) so working never feels
 // quieter than idle/demo (AC-7). Returns true if this tick should be allowed to fire.
 function floorTickAllowed(state) {
-  const live = state.statusSource === 'external' && (state.teamPulse || 0) > 0.2
+  // 'fallback' = a count-only live session (#count=N, no role keys) — still real activity that
+  // pushes teamPulse, so it must scale the floor too (AC-7), not just 'external'.
+  const live = (state.statusSource === 'external' || state.statusSource === 'fallback') && (state.teamPulse || 0) > 0.2
   return !live || Math.random() < LIVE_FLOOR_FIRE_CHANCE
 }
 
@@ -97,6 +99,7 @@ function releaseAllGroupEvents(store) {
         s.clearBubble(id)
       }
     }
+    if (s.clearReluctant) s.clearReluctant()  // P3: don't strand reluctant tells on teardown/HMR
     s.clearActiveEvent()
   } catch { /* store may be torn down — best effort */ }
 }
