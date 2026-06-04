@@ -740,16 +740,23 @@ export const useOfficeStore = create((set) => ({
         // Don't overwrite behavior/expression during group events (officeLife controls those)
         const prevAgent = agents[u.agentId]
         const inGroup = prevAgent.inGroupEvent
-        // Context-aware bubble > status pool fallback
-        const bubble = generateContextBubble(u.agentId, u, ext)
-          || randomBubble(u.status === 'blocked' ? 'blocked-status' : u.status === 'done' ? 'done-status' : 'working-status')
         const nextAgent = {
           ...prevAgent,
           status: u.status,
           behavior: inGroup ? prevAgent.behavior : (bmBehavior || prevAgent.behavior),
           expression: inGroup ? prevAgent.expression : (bm.expression || prevAgent.expression),
         }
-        if (bubble && !inGroup) nextAgent.bubble = bubble
+        // Bubble fires only on a REAL status/task change (sigChanged) — NOT on every poll re-apply.
+        // A status file re-written each tick (changed timestamp/seq/expiry but SAME status+task) passes
+        // transport dedup and re-runs this; without the guard, every active agent re-popped a fresh
+        // bubble at once → the reported "every character suddenly speaks for no reason / refresh feel".
+        // Same principle as `changedAt` above (cf. the earlier 0s-everywhere fix). An unchanged re-apply
+        // now keeps the prior bubble, which clears on its own doSchedule timer.
+        if (sigChanged && !inGroup) {
+          const bubble = generateContextBubble(u.agentId, u, ext)
+            || randomBubble(u.status === 'blocked' ? 'blocked-status' : u.status === 'done' ? 'done-status' : 'working-status')
+          if (bubble) nextAgent.bubble = bubble
+        }
         agents[u.agentId] = nextAgent
         // Log activity inline (single loop instead of two). Tag origin so the feed can trust it:
         // idle-gap-inferred statuses are heuristic (not real hook events) → 'inferred'.
