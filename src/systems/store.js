@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
-import { HOME_POSITIONS, OVERFLOW_POSITIONS, OVERFLOW_SLOT_BY_XY, clampToFloor } from './movementSystem.js'
+import { HOME_POSITIONS, OVERFLOW_POSITIONS, OVERFLOW_SLOT_BY_XY, clampToFloor, avoidOverlap } from './movementSystem.js'
 import { randomBubble, setNameResolver, behaviorLabel } from '../i18n'
 import { generateContextBubble } from './contextBubble'
 import { detectProjectMode } from './platformDetect'
@@ -359,6 +359,18 @@ export const useOfficeStore = create((set) => ({
   setAgentGroupEvent: (id, { behavior, expression, bubble, groupTarget }) =>
     set((s) => {
       if (!s.agents[id]) return s
+      let gt = null
+      if (groupTarget) {
+        // clamp to floor, then push off OTHER in-group agents so single-agent event actors
+        // (coffee-spill, food bringer, dog) don't land on a participant already gathered.
+        const occupied = []
+        for (const oid of Object.keys(s.agents)) {
+          if (oid === id) continue
+          const a = s.agents[oid]
+          if (a.inGroupEvent && (a.groupTarget || a.position)) occupied.push(a.groupTarget || a.position)
+        }
+        gt = avoidOverlap(clampToFloor(groupTarget), occupied)
+      }
       return {
         agents: {
           ...s.agents,
@@ -366,9 +378,7 @@ export const useOfficeStore = create((set) => ({
             ...s.agents[id],
             behavior, expression, bubble: bubble || null,
             inGroupEvent: true,
-            // clamp to a walkable floor cell — event handlers set gather spots directly and could
-            // otherwise place an agent in a wall/furniture (module contract: every position is clamped).
-            groupTarget: groupTarget ? clampToFloor(groupTarget) : null,
+            groupTarget: gt,
           },
         },
       }
@@ -435,14 +445,24 @@ export const useOfficeStore = create((set) => ({
   setMultipleAgentGroupEvents: (updates) =>
     set((s) => {
       const agents = { ...s.agents }
+      // Deconflict gather targets so participants never stack on one cell (the reported "4 agents
+      // piled up, one disappeared" — SVG paints opaque sprites in y-order, so an exact overlap fully
+      // hides the lower agent). Clamp to floor, then push each target ≥ MIN_AGENT_DIST off the ones
+      // already assigned in THIS batch (avoidOverlap re-clamps to floor too). One chokepoint covers
+      // every gather event (standup / meetings / tea-break / deploy / boss-visit …).
+      const assigned = []
       for (const { id, behavior, expression, bubble, groupTarget } of updates) {
         if (!agents[id]) continue
+        let gt = null
+        if (groupTarget) {
+          gt = avoidOverlap(clampToFloor(groupTarget), assigned)
+          assigned.push(gt)
+        }
         agents[id] = {
           ...agents[id],
           behavior, expression, bubble: bubble || null,
           inGroupEvent: true,
-          // clamp every gather target to a walkable cell — no event can place an agent off-floor.
-          groupTarget: groupTarget ? clampToFloor(groupTarget) : null,
+          groupTarget: gt,
         }
       }
       return { agents }

@@ -505,7 +505,7 @@ function getOccupiedPositions(agentId, allAgents) {
 }
 
 // Push a position away from all occupied positions
-function avoidOverlap(pos, occupied, maxAttempts = 8) {
+export function avoidOverlap(pos, occupied, maxAttempts = 8) {
   let { x, y } = pos
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     let tooClose = false
