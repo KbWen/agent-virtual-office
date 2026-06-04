@@ -68,6 +68,7 @@
   - [v1.1.0 inference] docs/specs/idle-gap-inference.md [Shipped]  *(#C)*
   - [v1.1.0 compatibility] docs/specs/csp-compatibility.md [Shipped]  *(#27)*
   - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Frozen]  *(AVO-126/127/128/129/131/132 — branch feat/ux-vibe-rebalance, not yet merged)*
+  - [living-office] docs/specs/living-office-events.md [DRAFT, review-gated]  *(P1-P4 shipped to branch feat/ux-vibe-rebalance, not merged; AC-3 pixel-dominance pending owner visual confirm)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -116,6 +117,20 @@
 - [Category: packaging][Severity: MEDIUM][Trigger: dependency-presence-check][prev: 9da72f26] An installed package's CLI launcher must detect its own runtime deps via `require.resolve(dep, {paths:[root]})` (honors npm hoisting to a parent node_modules), not `fs.existsSync(root/node_modules/<dep>)` — the latter always misses hoisted deps and re-runs `npm install` on every launch.
 
 ## Ship History
+
+### feat-ux-vibe-rebalance-2026-06-04b (responsive fill + living-office-events honest liveliness)
+
+- Branch `feat/ux-vibe-rebalance`, classification feature. **Committed to branch (8 commits), NOT pushed/merged** — for human PR review (main protected). Owner-directed UX follow-on; living-office-events has its own spec `docs/specs/living-office-events.md` (DRAFT, review-gated). Screenshots broken in env → **all verification is test/measurement-based; PIXEL appearance pending owner visual confirm at PR time.**
+- **Responsive fill** — office now spans full browser WIDTH at every pane shape (`PixelOffice` svg width-driven via `aspect-ratio: 800/560` + center + clip; `b61e020`) fixing the left/right-whitespace complaint; roster fills width (drop `max-w` gutters; `ad1db61`); top-row agents' speech bubbles flip BELOW when they'd clip the office top edge (`BehaviorBubble` `below` prop; `52ba139`). Measured via getBoundingClientRect across sizes.
+- **living-office-events** — the office now HONESTLY reflects real work without faking status, via a 3-expert roundtable (game/AI-systems/calm-tech) ×2 + 2 code audits + adversarial review (all R1/R2 honesty rules upheld in code). 4 phases:
+  - **P1 (`a6c6668`)** L2 derived team-affect: transient `teamPulse` (room "leans in" with real-signal density) + `focusAnchor` (idle agents orient toward the live desk via new `setAgentFacing`), UNTRACKED-only (a tracked desk is never modulated — R1). Derived in `moodEngine.updateStoreMood`.
+  - **P2 (`2a5d7c0`)** honesty gating: 5 work-claim events (deploy-success/ops-dev-deploy-check/dev-arch-disagree/eureka/review-debate) fire ONLY with a matching real signal within `WORK_CLAIM_SIGNAL_WINDOW` (90s); random floor scaled-not-muted when live (`floorTickAllowed`, incl. fallback sessions).
+  - **P3 (`5a288b6`)** reluctant participant: a tracked agent torn by a set-piece shows a sub-dominant ⏳ (PURE OVERLAY — `store.reluctant`; never touches status/behavior/bubble/position; real bubbles preempt).
+  - **P4 (`6f...`/real-seed)** the CAUSAL real→event link (closes owner's "沒有驅動任何一件事情"): a real-signal EDGE (mood→smooth/frustrated, Ops→done, SubagentStart) immediately fires the matching event — honesty-gated + mutex'd + 120s per-event cooldown.
+  - **Review + measurement**: 3-lens adversarial /review (correctness PASS, regression PASS w/ 2 fixes applied, honesty surfaced the causal gap → P4 built); extracted pure `resolveFocusFacing` + exported `floorTickAllowed` for AC-4/AC-7 measurement tests.
+- **AC**: AC-1✅ AC-2✅ **AC-3⚠️** (structural dominance enforced+tested — overlay never touches live channels; pixel dominance + keep-out routing design-asserted, needs owner visual confirm) AC-4✅ AC-5✅ AC-6✅ AC-7✅.
+- **Verification**: vitest **1260 passed / 49 files** (+~38: teamAffectL2 ×13, eventHonestyGate ×6, realSeedTriggers ×6, teamAffectMeasure ×7, +responsive guards), build clean. Behavioral logic test-authoritative (vitest = real modules, no dup); live preview_eval CANNOT drive the app store (module-duplication) + screenshots broken → no live behavioral/visual proof this session.
+- **Remaining for human**: PR review + visual confirm (the ⏳/lean-in/orientation tells) + push/merge. Optional deferred: AC-3 keep-out routing, Standby-roster richness, overlay-pull.
 
 ### feat-ux-vibe-rebalance-2026-06-04 (POINT 2 readable labels + COMMS vertical living-feed rebuild)
 
