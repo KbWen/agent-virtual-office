@@ -61,6 +61,7 @@ last_updated: 2026-06-05
 | AVO-140 | Living-office honest events (L2 team-affect + honesty gating + reluctant + real-seed) | product | real-ai-behavior | P1 | docs/specs/living-office-events.md | feature | Done | AVO-138 |
 | AVO-141 | Comms / vertical (☰ roster) deeper optimization — "still lots of room" | product | vibe-rebalance | P2 | docs/specs/living-office-events.md | feature | Pending | AVO-140 |
 | AVO-142 | Drag-to-move agents (manual reposition for realer interaction) | product | game-feel | P2 | — | feature | Pending | — |
+| AVO-143 | applyExternalStatus: skip no-op agent re-allocation (don't re-render all agents each poll) | chore | tech-debt | P3 | — | quick-win | Pending | — |
 | #20 | Hook read-modify-write atomic | chore | tech-debt | P3 | — | quick-win | Deferred | — |
 
 ## Status Key
