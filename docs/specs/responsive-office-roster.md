@@ -8,8 +8,20 @@ created: 2026-06-04
 
 # Spec: Responsive Office / Roster Layout (the ☰ views must FILL the pane)
 
-> **Status: DRAFT — awaiting owner approval before any implementation.** This formalizes the
-> responsive behavior that the recent ad-hoc iteration kept getting wrong. Build is GATED on this.
+> **⚠️ AS-BUILT NOTE (2026-06-04, supersedes the Hybrid decision below).** The owner REJECTED the
+> "Hybrid" (office band + roster panel stacked: "為啥直式混橫式"). The SHIPPED design is:
+> **the office is width-driven (`aspect-ratio: 800/560`), centered, and clips the top/bottom overflow**
+> — it always fills the pane width (no left/right whitespace, sides never cropped); the roster stays a
+> **manual ☰ toggle** (not an auto hybrid). Verified by getBoundingClientRect: L/R gap 0 at all sizes.
+> **Accepted limitations** (documented, owner-aware): (a) at *extreme* wide-short ratios (≳1.8:1, e.g.
+> 1280×560) up to ~38% top/bottom is clipped — can drop the top entrance/gatekeeper + bottom
+> lounge from view; minimal near the office's 1.43 ratio. (b) Agent name labels hold ~12px on-screen
+> down to office-scale 0.667 (`LABEL_SCALE_MAX=1.5`, kept to avoid name-tag collision); below that
+> (very narrow docks) they shrink — so AC-4's "≥14px at width 360" is NOT met in a narrow *dock*
+> (only in the full window). Raising the cap is an owner call (trades readability for collision risk).
+> The Hybrid AC-1/2/3 below are HISTORICAL (not the as-built contract).
+>
+> **Status: DRAFT — the responsive behavior is SHIPPED (per As-Built above); the Hybrid text is retained for history.**
 
 ## Problem
 
