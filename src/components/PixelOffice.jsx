@@ -1168,14 +1168,15 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           <ellipse cx={705} cy={162} rx={60} ry={45} fill="url(#mtg-light)" />
           {/* Lounge ambient warm light */}
           <ellipse cx={120} cy={480} rx={80} ry={50} fill="url(#lounge-light)" />
-          {/* Late night overtime indicator */}
+          {/* Late-night OVERTIME indicator (shown when the office clock hour ≥ 22). Spelled out (was
+              the cryptic "OT") + larger so it reads clearly; width kept so it never overlaps the clock. */}
           {hour >= 22 && (
             <g>
-              <rect x={485} y={143} width={45} height={12} rx={6} fill="#E24B4A" opacity="0.85">
-                <animate attributeName="opacity" values="0.85;0.5;0.85" dur="2s" repeatCount="indefinite" />
+              <rect x={485} y={142} width={45} height={14} rx={7} fill="#E24B4A" opacity="0.9">
+                <animate attributeName="opacity" values="0.9;0.55;0.9" dur="2s" repeatCount="indefinite" />
               </rect>
-              <text x={508} y={152} textAnchor="middle" fontSize="6" fill="white" fontFamily="monospace" fontWeight="bold">
-                OT
+              <text x={507} y={149} textAnchor="middle" dominantBaseline="middle" fontSize="6.5" fill="white" fontFamily="monospace" fontWeight="bold">
+                OVERTIME
               </text>
             </g>
           )}
