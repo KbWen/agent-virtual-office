@@ -40,15 +40,15 @@ const SprintKanban = React.memo(function SprintKanban({ x, y, doneCount = 0 }) {
       <rect x={x} y={y} width={W} height={H} rx={2} fill="#F8F4E8" stroke="#C8C0A8" strokeWidth="0.8" />
       {/* Header bar */}
       <rect x={x} y={y} width={W} height={10} rx={2} fill="#7070A0" opacity="0.9" />
-      <text x={x + 28} y={y + 7} textAnchor="middle" fontSize="5" fill="white" fontFamily="monospace" fontWeight="bold">SPRINT</text>
-      <text x={x + W - 4} y={y + 7} textAnchor="end" fontSize="4.5" fill="#FFE08A" fontFamily="monospace" fontWeight="bold">{doneCount}</text>
+      <text x={x + 28} y={y + 7.5} textAnchor="middle" fontSize="6" fill="white" fontFamily="monospace" fontWeight="bold">SPRINT</text>
+      <text x={x + W - 4} y={y + 7.5} textAnchor="end" fontSize="6" fill="#FFE08A" fontFamily="monospace" fontWeight="bold">{doneCount}</text>
       {/* Column dividers */}
       <line x1={x + 26} y1={y + 10} x2={x + 26} y2={y + H} stroke="#D8D0C0" strokeWidth="0.6" />
       <line x1={x + 52} y1={y + 10} x2={x + 52} y2={y + H} stroke="#D8D0C0" strokeWidth="0.6" />
       {/* Column headers */}
-      <text x={x + 13} y={y + 17} textAnchor="middle" fontSize="3.5" fill="#999" fontFamily="monospace">TODO</text>
-      <text x={x + 39} y={y + 17} textAnchor="middle" fontSize="3.5" fill="#999" fontFamily="monospace">DOING</text>
-      <text x={x + 65} y={y + 17} textAnchor="middle" fontSize="3.5" fill={filled > 0 ? '#2E7D32' : '#999'} fontFamily="monospace" fontWeight={filled > 0 ? 'bold' : 'normal'}>DONE</text>
+      <text x={x + 13} y={y + 17} textAnchor="middle" fontSize="5.5" fill="#888" fontFamily="monospace">TODO</text>
+      <text x={x + 39} y={y + 17} textAnchor="middle" fontSize="5.5" fill="#888" fontFamily="monospace">DOING</text>
+      <text x={x + 65} y={y + 17} textAnchor="middle" fontSize="5.5" fill={filled > 0 ? '#2E7D32' : '#888'} fontFamily="monospace" fontWeight={filled > 0 ? 'bold' : 'normal'}>DONE</text>
       {/* TODO column: static colored task cards */}
       {todoCards.map((color, i) => (
         <rect key={i} x={x + 3} y={y + 20 + i * 8} width={20} height={6} rx={1} fill={color} opacity="0.25" />
@@ -990,7 +990,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <Plant x={170} y={100} />
       <Plant x={170} y={50} />
       <rect x={65} y={120} width={70} height={12} rx={2} fill="#9B8B6B" opacity="0.7" />
-      <text x={100} y={129} textAnchor="middle" fontSize="5" fill="#C8A878" fontFamily="monospace" opacity="0.8">WELCOME</text>
+      <text x={100} y={129} textAnchor="middle" fontSize="6.5" fill="#C8A878" fontFamily="monospace" opacity="0.85">WELCOME</text>
 
       {/* ═══ HALLWAY (connecting entrance to meeting room) ═══ */}
       <WallWindow x={250} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={reducedMotion} />
@@ -1003,7 +1003,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <rect x={236} y={58} width={10} height={7} fill="#FF9E9E" />
       <rect x={223} y={68} width={10} height={7} fill="#A8E6CF" />
       <rect x={236} y={68} width={10} height={7} fill="#87CEEB" />
-      <text x={245} y={87} textAnchor="middle" fontSize="4" fill="#8B7355" fontFamily="monospace" opacity="0.6">NOTICE</text>
+      <text x={245} y={87} textAnchor="middle" fontSize="6" fill="#8B7355" fontFamily="monospace" opacity="0.7">NOTICE</text>
       {/* Coat rack */}
       <line x1={400} y1={50} x2={400} y2={80} stroke="#6B5335" strokeWidth="2" />
       <circle cx={400} cy={47} r={3} fill="#6B5335" />
@@ -1017,8 +1017,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {/* ═══ MAIN OFFICE ═══ */}
       {/* SHIP IT poster on north wall interior */}
       <rect x={15} y={170} width={50} height={28} rx={2} fill="#F5F0E0" stroke="#CCC" strokeWidth="0.8" />
-      <text x={40} y={184} textAnchor="middle" fontSize="5.5" fill="#7F77DD" fontFamily="monospace">SHIP IT</text>
-      <text x={40} y={193} textAnchor="middle" fontSize="4.5" fill="#888" fontFamily="monospace">everyday</text>
+      <text x={40} y={184} textAnchor="middle" fontSize="7" fill="#7F77DD" fontFamily="monospace">SHIP IT</text>
+      <text x={40} y={194} textAnchor="middle" fontSize="6" fill="#888" fontFamily="monospace">everyday</text>
 
       {/* Sprint Kanban board on north wall, planning area (clear of door at x=88-140) */}
       <SprintKanban x={160} y={165} doneCount={totalDoneToday} />
