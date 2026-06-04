@@ -309,7 +309,9 @@
     "feedEmpty": "No activity yet — waiting for the team…",
     "feedEmptyFocused": "no recent activity",
     "enableNotify": "Notify me when blocked",
-    "offline": "Disconnected"
+    "offline": "Disconnected",
+    "teamNow": "Now",
+    "teamBlocked": "Waiting on you"
   },
   "notify": {
     "blockedTitle": "Agent stuck",

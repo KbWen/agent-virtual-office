@@ -90,3 +90,25 @@ describe('eventFeed — real events survive the organic flood (HIGH-1 regression
     expect(ef.some((e) => e.type === 'handoff' && e.from === 'arch')).toBe(false)
   })
 })
+
+describe('externalStatus.changedAt — last CHANGE, not last poll (the "0s" bug fix)', () => {
+  beforeEach(() => useOfficeStore.setState({ externalStatus: {} }))
+
+  it('holds steady across a same-signature poll refresh, moves on a real change', () => {
+    const apply = (u, now) => useOfficeStore.getState().applyExternalStatus(u, { now })
+    apply([{ agentId: 'dev', status: 'working', task: 'build' }], 1000)
+    expect(useOfficeStore.getState().externalStatus.dev.changedAt).toBe(1000)
+
+    // poll refresh 5s later, SAME status+task → expiry moves, changedAt does NOT (was the "0s" bug)
+    apply([{ agentId: 'dev', status: 'working', task: 'build' }], 6000)
+    const e1 = useOfficeStore.getState().externalStatus.dev
+    expect(e1.expiresAt).toBe(6000 + 300000) // refreshed
+    expect(e1.changedAt).toBe(1000)          // unchanged → "since" now shows 5s, not 0s
+
+    apply([{ agentId: 'dev', status: 'working', task: 'test' }], 9000)  // task change → re-stamp
+    expect(useOfficeStore.getState().externalStatus.dev.changedAt).toBe(9000)
+
+    apply([{ agentId: 'dev', status: 'done', task: 'test' }], 12000)    // status change → re-stamp
+    expect(useOfficeStore.getState().externalStatus.dev.changedAt).toBe(12000)
+  })
+})

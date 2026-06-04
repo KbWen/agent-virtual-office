@@ -697,6 +697,13 @@ export const useOfficeStore = create((set) => ({
             groupTarget: null,
           }
         }
+        // `changedAt` = when this agent's status/task last MEANINGFULLY changed. Stamped only on a
+        // real signature change — NOT on every poll refresh (expiresAt moves each tick, so deriving
+        // "since" from it always read ~now → the "0s everywhere" bug). Carry the prior stamp forward
+        // on a same-signature refresh so the roster shows "since last change". Transient (rides in
+        // externalStatus, which is never persisted). label/hint excluded — cosmetic, they flap.
+        const prevExt = ext[u.agentId]
+        const sigChanged = !prevExt || prevExt.status !== u.status || (prevExt.task || '') !== (u.task || '')
         ext[u.agentId] = {
           status: u.status,
           task: u.task,
@@ -707,6 +714,7 @@ export const useOfficeStore = create((set) => ({
           // expiry caused the workflow banner to flicker off mid-run and then self-heal.
           // done: 10s expiry (brief celebration then back to idle)
           expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
+          changedAt: sigChanged ? now : (Number.isFinite(prevExt.changedAt) ? prevExt.changedAt : now),
         }
         // Immediately set behavior + expression to match work status. Behavior/
         // expression/bubble are all folded into a SINGLE object spread below —

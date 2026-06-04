@@ -309,7 +309,9 @@
     "feedEmpty": "目前還沒有動態 — 等待團隊…",
     "feedEmptyFocused": "暫無動態",
     "enableNotify": "卡住時通知我",
-    "offline": "已斷線"
+    "offline": "已斷線",
+    "teamNow": "現在",
+    "teamBlocked": "等你處理"
   },
   "notify": {
     "blockedTitle": "Agent 卡住了",

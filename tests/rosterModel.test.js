@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  salienceTier, comparePresence, isIdleStatus, isFeedWorthy, feedEntries, PRESENCE_TIER, FEED_ORIGINS,
+  salienceTier, comparePresence, isIdleStatus, isFeedWorthy, feedEntries, teamStatus, PRESENCE_TIER, FEED_ORIGINS,
 } from '../src/systems/rosterModel.js'
 
 // The vertical roster's "liveliness" is its ordering (urgent rises, idle sinks) + an honest feed
@@ -91,6 +91,27 @@ describe('feed origin filter — real signal only, not organic theater', () => {
   it('feedEntries tolerates a non-array', () => {
     expect(feedEntries(null)).toEqual([])
     expect(feedEntries(undefined)).toEqual([])
+  })
+})
+
+describe('teamStatus — honest team-state strip priority (blocked > workflow > active > none)', () => {
+  it('blocked outranks workflow AND active count', () => {
+    const s = teamStatus({ blockedNames: ['QA'], activeWorkflow: 'review', activeCount: 5 })
+    expect(s).toEqual({ kind: 'blocked', names: ['QA'] })
+  })
+  it('shows the live workflow phase when nobody is blocked', () => {
+    expect(teamStatus({ activeWorkflow: 'review', activeCount: 3 })).toEqual({ kind: 'workflow', workflow: 'review', activeCount: 3 })
+  })
+  it('falls back to active count when no workflow', () => {
+    expect(teamStatus({ activeCount: 4 })).toEqual({ kind: 'active', activeCount: 4 })
+  })
+  it('is "none" when the team is quiet (so the quiet hint shows instead)', () => {
+    expect(teamStatus({})).toEqual({ kind: 'none' })
+    expect(teamStatus({ blockedNames: [], activeWorkflow: null, activeCount: 0 })).toEqual({ kind: 'none' })
+  })
+  it('does NOT surface decorative events/mood (only blocked/workflow/active are inputs)', () => {
+    // teamStatus has no event/mood parameter at all — proven by the signature ignoring extras
+    expect(teamStatus({ activeEvent: 'tea-break', mood: 'rushing', activeCount: 0 })).toEqual({ kind: 'none' })
   })
 })
 

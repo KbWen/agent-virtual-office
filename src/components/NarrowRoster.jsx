@@ -5,7 +5,7 @@ import { charName, behaviorLabel, t, useLocale, eventName } from '../i18n'
 import { CharacterPixelSprite } from './AgentCharacter'
 import { agentLineLabel, taskChipLabel, formatTokens } from './ControlPanel'
 import { formatTimeAgo } from '../utils/formatTime'
-import { comparePresence, isIdleStatus } from '../systems/rosterModel'
+import { comparePresence, isIdleStatus, teamStatus } from '../systems/rosterModel'
 
 // ─── Vertical office: presence rail (COMMS rebuild — Phase 1: the honest, lively spine) ─────────
 // The optional ☰ lens on the office. Instead of a flat declaration-ordered list, this is a PRESENCE
@@ -17,11 +17,11 @@ import { comparePresence, isIdleStatus } from '../systems/rosterModel'
 const presenceColor = (status) => STATUS_COLORS[status] || STATUS_COLORS.idle
 const isBusy = (status) => status === 'working' || status === 'planning' || status === 'thinking'
 
-// "Last active" time, derived from the external status' expiresAt (= set-time + TTL). Read-only —
-// avoids touching the heavily-optimised applyExternalStatus. Null when there is no external status.
-function lastActiveAt(ext) {
-  if (!ext || !Number.isFinite(ext.expiresAt)) return null
-  return ext.expiresAt - (ext.status === 'done' ? 10000 : 300000)
+// Time the agent's status/task last MEANINGFULLY changed (stamped in applyExternalStatus only on a
+// real signature change, NOT on every poll refresh). This is the fix for the "0s everywhere" bug —
+// the old code derived this from expiresAt, which the live poll refreshes every tick → always ~now.
+function lastChangedAt(ext) {
+  return ext && Number.isFinite(ext.changedAt) ? ext.changedAt : null
 }
 
 function TypingDots({ reducedMotion }) {
@@ -54,7 +54,10 @@ function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expa
   const color = presenceColor(status)
   const blocked = status === 'blocked'
   const busy = isBusy(status)
-  const since = ext ? formatTimeAgo(lastActiveAt(ext), { compact: true }) : null
+  // "since last change" — hidden when <10s (too fresh to be meaningful; avoids the "0s" noise) or
+  // when the agent has no real status yet. Shows real elapsed time once stamped (e.g. "3m", "12m").
+  const changedAt = lastChangedAt(ext)
+  const since = changedAt && Date.now() - changedAt >= 10000 ? formatTimeAgo(changedAt, { compact: true }) : null
   const message = agent.bubble || (ext ? agentLineLabel(ext, t) : null) || behaviorLabel(agent.behavior)
   const tool = taskChipLabel(ext?.task) || (ext ? agentLineLabel(ext, t) : null) || '—'
 
@@ -67,23 +70,25 @@ function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expa
           : 'bg-white/90 dark:bg-gray-800/80 border-gray-100 dark:border-gray-700'
       } ${dimmed ? 'opacity-60' : 'opacity-100'}`}
     >
-      <button onClick={onToggle} className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left" aria-expanded={expanded}>
+      <button onClick={onToggle} className="w-full flex items-center gap-3 px-3 py-3 text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70" aria-expanded={expanded}>
         <div className="relative shrink-0">
-          <svg viewBox="-18 -40 36 46" width="38" height="46" aria-hidden="true">
+          <svg viewBox="-18 -40 36 46" width="46" height="56" aria-hidden="true">
             <CharacterPixelSprite charId={agent.id} expression={agent.expression || 'normal'} isMoving={false} walkFrame={0} facing="down" />
           </svg>
           <span
-            className="absolute bottom-1 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-gray-800"
+            className="absolute bottom-1 right-0 w-3 h-3 rounded-full ring-2 ring-white dark:ring-gray-800"
             style={{ backgroundColor: color }}
+            role="img"
+            aria-label={t(`statusLabels.${status}`, status)}
             title={t(`statusLabels.${status}`, status)}
           />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{name}</span>
-            {since && <span className="ml-auto text-[10px] text-gray-400 shrink-0 tabular-nums">{since}</span>}
+            <span className="text-base font-semibold text-gray-800 dark:text-gray-100 truncate">{name}</span>
+            {since && <span className="ml-auto text-xs text-gray-400 shrink-0 tabular-nums">{since}</span>}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400 truncate flex items-center gap-1.5">
+          <div className="text-sm text-gray-500 dark:text-gray-400 truncate flex items-center gap-1.5">
             {busy ? (
               <>
                 <TypingDots reducedMotion={reducedMotion} />
@@ -120,16 +125,16 @@ function FeedRow({ entry, color, ageMs, reducedMotion }) {
   const anim = reducedMotion ? null : 'chat-feed-in 0.25s ease-out'
   if (entry.type === 'event') {
     return (
-      <div className="text-[10px] text-center text-amber-700 dark:text-amber-300/90 py-0.5" style={{ opacity, animation: anim }}>
+      <div className="text-[12px] text-center text-amber-700 dark:text-amber-300/90 py-1" style={{ opacity, animation: anim }}>
         🎉 {eventName(entry.message) || entry.message}
       </div>
     )
   }
   if (entry.type === 'handoff') {
     return (
-      <div className="flex items-baseline gap-1.5 text-[11px] py-0.5 pl-2 border-l-2" style={{ borderColor: color, opacity, animation: anim }}>
+      <div className="flex items-baseline gap-2 text-[13px] py-1 pl-2 border-l-2" style={{ borderColor: color, opacity, animation: anim }}>
         <span className="text-gray-600 dark:text-gray-300 truncate">{charName(entry.from)} <span className="text-gray-400">→</span> {charName(entry.to)}</span>
-        <span className="ml-auto text-[9px] text-gray-400 shrink-0 tabular-nums">{ago}</span>
+        <span className="ml-auto text-[10px] text-gray-400 shrink-0 tabular-nums">{ago}</span>
       </div>
     )
   }
@@ -138,7 +143,7 @@ function FeedRow({ entry, color, ageMs, reducedMotion }) {
     : entry.status === 'done' ? 'text-green-700 dark:text-green-400'
     : 'text-gray-600 dark:text-gray-300'
   return (
-    <div className="flex items-baseline gap-1.5 text-[11px] py-0.5 pl-2 border-l-2" style={{ borderColor: color, opacity, animation: anim }}>
+    <div className="flex items-baseline gap-2 text-[13px] py-1 pl-2 border-l-2" style={{ borderColor: color, opacity, animation: anim }}>
       <span className="font-medium text-gray-700 dark:text-gray-200 shrink-0">{charName(entry.agentId)}</span>
       <span className={`truncate ${tone}`}>{entry.message}</span>
       <span className="ml-auto text-[9px] text-gray-400 shrink-0 tabular-nums">{ago}</span>
@@ -159,14 +164,16 @@ export default function NarrowRoster() {
       .filter((a) => !a.session)
       .map((a) => {
         const ext = s.externalStatus[a.id]
-        return `${a.id}|${ext?.status || a.status || 'idle'}|${a.behavior || ''}|${a.bubble || ''}|${ext?.task || ''}|${ext?.expiresAt || 0}`
+        return `${a.id}|${ext?.status || a.status || 'idle'}|${a.behavior || ''}|${a.bubble || ''}|${ext?.task || ''}|${ext?.expiresAt || 0}|${ext?.changedAt || 0}`
       })
   ))
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
   const helpers = useOfficeStore(useShallow((s) => s.helpers))
   const doneCounts = useOfficeStore(useShallow((s) => s.dailyDoneLedger?.counts || {}))
   const blockedCounts = useOfficeStore(useShallow((s) => s.dailyBlockedLedger?.counts || {}))
-  const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
+  // Team-state signal: the REAL workflow phase from hooks (NOT the decorative officeLife activeEvent
+  // banner, which is theater — surfacing it as "team status" was the lie the user flagged).
+  const activeWorkflow = useOfficeStore((s) => s.activeWorkflow)
   const tokens = useOfficeStore((s) => s.tokens)
   const effort = useOfficeStore((s) => s.effort)
   // The feed reads the dedicated eventFeed buffer (real events only, filled at write time) — NOT a
@@ -194,7 +201,7 @@ export default function NarrowRoster() {
       .map((a) => {
         const ext = s.externalStatus[a.id]
         const status = ext?.status || a.status || 'idle'
-        return { id: a.id, agent: a, ext, status, lastActiveAt: lastActiveAt(ext) }
+        return { id: a.id, agent: a, ext, status }
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presenceSig])
@@ -225,20 +232,30 @@ export default function NarrowRoster() {
   }, [eventFeed, expandedId])
   const now = Date.now()
 
-  const subagentCount = (roleId) => helpers.reduce((n, h) => (h.parentRole === roleId ? n + 1 : n), 0)
+  // Memoized subagent counts (was an O(rows·helpers) reduce called per row in the render map).
+  const subagentCountById = useMemo(() => {
+    const map = {}
+    for (const h of helpers) map[h.parentRole] = (map[h.parentRole] || 0) + 1
+    return map
+  }, [helpers])
   const activeCount = sorted.filter((r) => !isIdleStatus(r.status)).length
+  const blockedNames = sorted.filter((r) => r.status === 'blocked' || r.status === 'awaiting-approval').map((r) => charName(r.id))
+  const team = teamStatus({ blockedNames, activeWorkflow, activeCount })
   const totalDone = Object.values(doneCounts).reduce((a, b) => a + (b || 0), 0)
   const quiet = activeCount === 0
 
   return (
+    // Single centered column (NOT an auto-fill grid — that turned the "vertical" view into a sparse
+    // multi-column card grid with a big empty void on wide panes). max-width keeps it a tidy column
+    // and centers it on a wide pane; full-width on a thin docked column.
     <div
-      className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-900 p-2 grid gap-1.5 [align-content:safe_start]"
-      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}
+      className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-900 p-2 flex flex-col items-center"
       data-narrow-roster="1"
     >
+      <div className="w-full max-w-[520px] min-h-full flex flex-col gap-2">
       {/* Team pulse header — static tint (no "breathing" per calm-tech). Global token/effort live
           here (team-wide, not per-agent). */}
-      <div className="[grid-column:1/-1] flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-between gap-2 px-2 py-1 text-[13px] text-gray-500 dark:text-gray-400">
         <span className="font-medium">
           <span className={quiet ? 'text-gray-400' : 'text-gray-700 dark:text-gray-200'}>{activeCount}</span> {t('chat.online', 'active')}
           {totalDone > 0 && <> · <span className="text-gray-700 dark:text-gray-200">{totalDone}</span> {t('chat.done', 'done')}</>}
@@ -264,12 +281,25 @@ export default function NarrowRoster() {
         </div>
       )}
 
-      {activeEvent && (
+      {/* Honest TEAM-STATUS strip — the REAL signal in priority order: who's blocked › the live
+          workflow phase › how many are active. Replaces the old decorative officeLife event banner
+          (theater that the agents can't truthfully reflect). aria-live so screen readers hear the
+          change. Decorative events still live in the activity feed only. */}
+      {!quiet && team.kind !== 'none' && (
         <div
-          className={`[grid-column:1/-1] text-[11px] text-center font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded py-1 ${reducedMotion ? '' : 'animate-pulse'}`}
-          data-roster-event="1"
+          className={`text-[12px] text-center font-medium rounded py-1 px-2 ${
+            team.kind === 'blocked'
+              ? 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20'
+              : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800/60'
+          }`}
+          data-roster-team={team.kind}
+          aria-live="polite"
         >
-          {activeEvent.id ? eventName(activeEvent.id) : activeEvent.name}
+          {team.kind === 'blocked'
+            ? `⚠ ${t('chat.teamBlocked', 'Waiting on you')}: ${team.names.join(', ')}`
+            : team.kind === 'workflow'
+              ? `${t('chat.teamNow', 'Now')}: ${team.workflow} · ${team.activeCount} ${t('chat.online', 'active')}`
+              : `${team.activeCount} ${t('chat.online', 'active')}`}
         </div>
       )}
 
@@ -282,7 +312,7 @@ export default function NarrowRoster() {
           dimmed={isIdleStatus(r.status)}
           doneCount={doneCounts[r.id] || 0}
           blockedCount={blockedCounts[r.id] || 0}
-          subagents={subagentCount(r.id)}
+          subagents={subagentCountById[r.id] || 0}
           expanded={expandedId === r.id}
           onToggle={() => setExpandedId((cur) => (cur === r.id ? null : r.id))}
           reducedMotion={reducedMotion}
@@ -293,24 +323,25 @@ export default function NarrowRoster() {
           (organic theater filtered out), newest first, time-decayed. Static here; the rate-limited
           entrance animation is Phase 3. Honest empty states (no nagging void). */}
       {feed.length > 0 ? (
-        <div className="[grid-column:1/-1] mt-1 pt-1.5 border-t border-gray-200 dark:border-gray-700" data-roster-feed="1">
-          <div className="text-[9px] uppercase tracking-wider text-gray-400 px-1 pb-0.5">
+        <div className="flex-1 min-h-0 flex flex-col mt-1 pt-2 border-t border-gray-200 dark:border-gray-700" data-roster-feed="1">
+          <div className="text-[11px] uppercase tracking-wider text-gray-400 px-1 pb-1">
             {t('chat.activity', 'Activity')}
             {expandedId && <span className="normal-case text-gray-500"> · {charName(expandedId)}</span>}
           </div>
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1 overflow-y-auto">
             {feed.map((e) => (
               <FeedRow key={e.id} entry={e} color={colorById[e.agentId] || colorById[e.from] || '#888'} ageMs={now - e.timestamp} reducedMotion={reducedMotion} />
             ))}
           </div>
         </div>
       ) : (!quiet && (
-        <div className="[grid-column:1/-1] text-[10px] text-center text-gray-400 dark:text-gray-500 mt-1 pt-1.5 border-t border-gray-200 dark:border-gray-700" data-roster-feed="empty">
+        <div className="flex-1 text-[12px] text-center text-gray-400 dark:text-gray-500 mt-1 pt-3 border-t border-gray-200 dark:border-gray-700" data-roster-feed="empty">
           {expandedId
             ? `${charName(expandedId)} — ${t('chat.feedEmptyFocused', 'no recent activity')}`
             : t('chat.feedEmpty', 'No activity yet — waiting for the team…')}
         </div>
       ))}
+      </div>
     </div>
   )
 }

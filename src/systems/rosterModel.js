@@ -42,6 +42,18 @@ export function isIdleStatus(status) {
   return !status || status === 'idle'
 }
 
+// Team-status strip priority (COMMS point 4): the HONEST team signal, most-urgent first —
+//   blocked (someone needs a human) > live workflow phase (real hook signal) > active count > none.
+// Decorative officeLife events (tea-break/standup/…) and mood/weather are intentionally EXCLUDED:
+// they're theater, not team state. Surfacing them as "team status" was the disconnect the user hit
+// (a "Review 爭論" banner the agents couldn't truthfully reflect).
+export function teamStatus({ blockedNames = [], activeWorkflow = null, activeCount = 0 } = {}) {
+  if (blockedNames.length > 0) return { kind: 'blocked', names: blockedNames }
+  if (activeWorkflow) return { kind: 'workflow', workflow: activeWorkflow, activeCount }
+  if (activeCount > 0) return { kind: 'active', activeCount }
+  return { kind: 'none' }
+}
+
 // Activity-feed filter — the office's `activityLog` is flooded by organic officeLife "theater"
 // (typing/coffee/whiteboard behaviors, 8-50/min) that would drown and evict the real events.
 // The feed shows ONLY genuine signal: real hook status changes, workflow/team events, and
