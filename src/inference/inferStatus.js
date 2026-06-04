@@ -195,6 +195,19 @@ export function isHookOrigin(source) {
   return HOOK_ORIGIN.has(source)
 }
 
+// Which of `updates` represent a REAL status/task change vs the prior externalStatus snapshot.
+// Used to gate the moodEngine feed: a poll/heartbeat that re-delivers unchanged statuses (new ETag
+// from a cosmetic re-write) must not push repeated events into the sliding-window mood/teamPulse
+// (false 'rushing'/'intense' + pinned teamPulse → bad weather/lean-in cascade). Mirrors the
+// sigChanged gate in store.applyExternalStatus. Pure → directly testable.
+export function changedUpdates(prevExt, updates) {
+  const prev = prevExt || {}
+  return (updates || []).filter((u) => {
+    const p = prev[u.agentId]
+    return !p || p.status !== u.status || (p.task || '') !== (u.task || '')
+  })
+}
+
 // A 'multi-session' payload is an AUTHORITATIVE full snapshot produced by scanAndMerge from
 // ALL active worktree sessions. Its `_seq` is the MAX of the contributing sessions' seqs —
 // NOT a monotonic clock. When the session holding the highest seq exits, the merged `_seq`
@@ -726,6 +739,7 @@ export function startStatusIntegration(store) {
     const hasWorkflow = 'workflow' in msg
 
     if (updates.length > 0) {
+      const prevExt = s.externalStatus // pre-apply snapshot (s captured at top, before this set())
       s.applyExternalStatus(updates, {
         source: msg.source || 'external',
         seq: msg._seq || null,
@@ -736,9 +750,17 @@ export function startStatusIntegration(store) {
         workflow: msg.workflow ?? null,
       })
 
-      // Feed mood engine — batch to recompute mood once instead of once per agent
-      pushEventBatch(updates.map(u => ({ role: u.agentId, status: u.status, task: u.task, hint: u.hint || null })))
+      // Feed mood engine ONLY for agents whose status/task ACTUALLY changed. A poll/heartbeat that
+      // re-delivers the same statuses (new ETag from a cosmetic re-write) must NOT push repeated
+      // events into the sliding-window mood/teamPulse — that falsely trips 'rushing'/'intense' and
+      // pins teamPulse high, cascading to weather + the L2 lean-in + real-seed. Same change-gate as
+      // the bubble/feed/changedAt guards in applyExternalStatus.
+      const changed = changedUpdates(prevExt, updates)
+      if (changed.length) {
+        pushEventBatch(changed.map(u => ({ role: u.agentId, status: u.status, task: u.task, hint: u.hint || null })))
+      }
     } else if (msg.activeCount > 0) {
+      const prevExt = s.externalStatus
       const ids = distributeFallbackCount(msg.activeCount)
       const fallbackUpdates = ids.map(id => ({ agentId: id, status: 'working', task: null, label: null }))
       s.applyExternalStatus(fallbackUpdates, {
@@ -753,7 +775,10 @@ export function startStatusIntegration(store) {
       // '#count=8' hash, with no role keys) produces zero routed agents but N active
       // workers — without this the mood engine never sees those events and mood stays
       // permanently 'idle' even while the office shows 8 busy characters.
-      pushEventBatch(fallbackUpdates.map(u => ({ role: u.agentId, status: u.status, task: null, hint: null })))
+      const changedFallback = changedUpdates(prevExt, fallbackUpdates)
+      if (changedFallback.length) {
+        pushEventBatch(changedFallback.map(u => ({ role: u.agentId, status: u.status, task: null, hint: null })))
+      }
     } else if (msg.source === 'multi-session') {
       // Empty multi-session payload — every worktree session's agents are all 'done'
       // (or idle), so scanAndMerge's merge produced zero working/blocked representatives.
