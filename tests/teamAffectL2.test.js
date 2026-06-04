@@ -100,3 +100,56 @@ describe('moodEngine derives team signals into the store', () => {
     expect(useOfficeStore.getState().focusAnchor).toBeNull()
   })
 })
+
+describe('L3 reluctant participant (pure overlay, R1-safe)', () => {
+  const until = 9_999_999_999_999
+  beforeEach(() => {
+    useOfficeStore.setState({ reluctant: {}, externalStatus: {} })
+    useOfficeStore.setState((s) => {
+      const agents = {}
+      for (const [id, a] of Object.entries(s.agents)) agents[id] = { ...a, inGroupEvent: false, status: 'idle', behavior: 'idle', bubble: null }
+      return { agents }
+    })
+  })
+
+  it('marks only a TRACKED working/blocked agent — not idle/done/untracked', () => {
+    useOfficeStore.setState((s) => ({ externalStatus: { ...s.externalStatus, dev: { status: 'working' }, qa: { status: 'done' } } }))
+    useOfficeStore.getState().setReluctant(['dev', 'qa', 'ops'], until) // ops has no ext entry
+    const r = useOfficeStore.getState().reluctant
+    expect(r.dev).toBe(until)   // working → marked
+    expect(r.qa).toBeUndefined() // done → not torn
+    expect(r.ops).toBeUndefined() // untracked → nothing to be torn from
+  })
+
+  it('does NOT mark an agent already in a group event', () => {
+    useOfficeStore.setState((s) => ({
+      externalStatus: { ...s.externalStatus, dev: { status: 'working' } },
+      agents: { ...s.agents, dev: { ...s.agents.dev, inGroupEvent: true } },
+    }))
+    useOfficeStore.getState().setReluctant(['dev'], until)
+    expect(useOfficeStore.getState().reluctant.dev).toBeUndefined()
+  })
+
+  it('NEVER touches the agent status/behavior/bubble/position (R1)', () => {
+    useOfficeStore.setState((s) => ({ externalStatus: { ...s.externalStatus, dev: { status: 'working' } } }))
+    const before = { ...useOfficeStore.getState().agents.dev }
+    useOfficeStore.getState().setReluctant(['dev'], until)
+    const after = useOfficeStore.getState().agents.dev
+    expect(after.status).toBe(before.status)
+    expect(after.behavior).toBe(before.behavior)
+    expect(after.bubble).toBe(before.bubble)
+    expect(after.position).toBe(before.position)
+  })
+
+  it('clearReluctant + clearExternalStatus both reset the map', () => {
+    useOfficeStore.setState((s) => ({ externalStatus: { ...s.externalStatus, dev: { status: 'working' } } }))
+    useOfficeStore.getState().setReluctant(['dev'], until)
+    useOfficeStore.getState().clearReluctant()
+    expect(Object.keys(useOfficeStore.getState().reluctant).length).toBe(0)
+
+    useOfficeStore.getState().setReluctant(['dev'], until)
+    useOfficeStore.setState({ externalStatus: {} })
+    useOfficeStore.getState().clearExternalStatus()
+    expect(Object.keys(useOfficeStore.getState().reluctant).length).toBe(0)
+  })
+})

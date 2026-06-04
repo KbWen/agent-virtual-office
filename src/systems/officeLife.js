@@ -516,7 +516,21 @@ function executeEvent(store, event, participants, cancelled) {
   if (handler) {
     handler(store, participants, cancelled)
 
-    // Clean up after event duration — release all participants
+    // living-office P3 (reluctant participants): TRACKED (working/blocked) agents NOT in the scene
+    // get a brief, sub-dominant "torn" tell — the team's life happens AROUND them while they stay
+    // heads-down. PURE OVERLAY (setReluctant never touches status/behavior/position; it self-guards
+    // to only working/blocked non-group agents), so it cannot freeze or falsify a real desk (R1).
+    const s0 = store.getState()
+    const pset = new Set(participants)
+    const reluctantIds = Object.keys(s0.agents).filter((id) => {
+      const es = s0.externalStatus[id]
+      return !pset.has(id) && es && (es.status === 'working' || es.status === 'blocked')
+    })
+    if (reluctantIds.length && s0.setReluctant) {
+      s0.setReluctant(reluctantIds, Date.now() + Math.min(event.duration || 8000, 6000))
+    }
+
+    // Clean up after event duration — release all participants + clear reluctant tells
     setTimeout(() => {
       if (cancelled.value) return
       const s = store.getState()
@@ -526,6 +540,7 @@ function executeEvent(store, event, participants, cancelled) {
           s.clearBubble(id)
         }
       })
+      if (s.clearReluctant) s.clearReluctant()
       s.clearActiveEvent()
     }, event.duration)
   }

@@ -925,7 +925,7 @@ export const useOfficeStore = create((set) => ({
         if (Object.keys(ext).length === 0) {
           // Office went quiet → reset L2 scalars (updateStoreMood is NOT called on clear, so the
           // anchor would otherwise stay pinned in an idle office).
-          return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null, teamPulse: 0, focusAnchor: null, ...selectionPatch }
+          return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null, teamPulse: 0, focusAnchor: null, reluctant: {}, ...selectionPatch }
         }
         return { externalStatus: ext, agents, ...selectionPatch }
       }
@@ -944,7 +944,7 @@ export const useOfficeStore = create((set) => ({
       }
       return {
         externalStatus: {}, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null,
-        teamPulse: 0, focusAnchor: null,
+        teamPulse: 0, focusAnchor: null, reluctant: {},
         ...(evictedSelected ? { selectedAgent: null } : {}),
       }
     }),
@@ -969,6 +969,30 @@ export const useOfficeStore = create((set) => ({
     if (!a || a.isMoving || a.inGroupEvent || a.facing === dir) return {}
     return { agents: { ...s.agents, [id]: { ...a, facing: dir } } }
   }),
+
+  // ─── L3 reluctant participant (spec living-office-events.md Phase 3; transient, NOT persisted) ───
+  // When a set-piece fires, a TRACKED (working/blocked) agent that is NOT in the scene becomes a
+  // brief "reluctant participant": a sub-dominant glance/⏳ tell shows the team's life happening
+  // AROUND it while it stays heads-down. This is a PURE OVERLAY keyed by a per-agent expiry
+  // timestamp — it NEVER touches status/behavior/bubble/position, so it cannot freeze or falsify a
+  // real desk (R1). Map: { [agentId]: untilTs }.
+  reluctant: {},
+  setReluctant: (ids, until) => set((s) => {
+    const next = { ...s.reluctant }
+    let changed = false
+    for (const id of ids) {
+      const a = s.agents[id]
+      const es = s.externalStatus[id]
+      // Only a genuinely-working/blocked, non-group agent can be "reluctant" (it has real work to be
+      // torn from). Never an idle/done/untracked agent (nothing to be reluctant about).
+      if (a && !a.inGroupEvent && es && (es.status === 'working' || es.status === 'blocked')) {
+        next[id] = until
+        changed = true
+      }
+    }
+    return changed ? { reluctant: next } : {}
+  }),
+  clearReluctant: () => set((s) => (Object.keys(s.reluctant).length ? { reluctant: {} } : {})),
 
   // Same-value guards on the integration-channel setters. setActiveWorkflow is
   // still called standalone from applyMessage's workflow-only branch (a workflow-

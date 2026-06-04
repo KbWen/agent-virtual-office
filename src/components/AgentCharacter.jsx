@@ -639,6 +639,8 @@ function AgentCharacter({ agent }) {
   // re-renders only when the scale actually changes (PixelOffice no-ops equal writes).
   const sceneScale = useOfficeStore((s) => s.sceneScale)
   const labelScale = computeLabelScale(sceneScale)
+  // L3 reluctant-participant tell (transient expiry ts). Pure overlay — never affects behavior.
+  const reluctantUntil = useOfficeStore((s) => s.reluctant?.[id])
 
   const timerRef = useRef(null)
   const pathRef = useRef([])
@@ -1245,6 +1247,16 @@ function AgentCharacter({ agent }) {
             </g>
           )
         })()}
+
+        {/* L3 reluctant-participant tell (spec living-office-events.md): a tracked agent torn by a
+            set-piece nearby shows a sub-dominant ⏳ — "knows it has work but the event is happening".
+            Real-context bubbles PREEMPT it (only shown when no bubble); never moves the body / never
+            touches status. Sits to the upper-right of the head so it doesn't fight the name tag. */}
+        {!state.bubble && reluctantUntil && reluctantUntil > Date.now() && (
+          <g transform={`translate(10, -34) scale(${labelScale})`} data-reluctant="1" opacity="0.7" pointerEvents="none">
+            <text x={0} y={0} textAnchor="middle" dominantBaseline="middle" fontSize="9">⏳</text>
+          </g>
+        )}
         {/* AVO-131: the monospace tool pill was removed from the glance layer — the
             prop-icon + bubble carry the action in-world; the exact tool is shown in the
             AgentInspector (click-to-inspect) instead. */}
