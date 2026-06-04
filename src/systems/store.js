@@ -309,6 +309,12 @@ export const useOfficeStore = create((set) => ({
   // never persisted.
   watchdogRestarts: 0,
 
+  // POINT 2: live on-screen scale of the office SVG (the `meet` fit ratio = min(w/800, h/560)).
+  // PixelOffice measures it on resize; AgentCharacter reads it to counter-scale name/status
+  // labels so glance-text stays readable while the office shrinks. Transient — never persisted
+  // (savePersistedState whitelists fields and this is not one), same as watchdogRestarts.
+  sceneScale: 1,
+
   setAgentBehavior: (id, behavior, expression, bubble) =>
     set((s) => {
       const current = s.agents[id]
@@ -377,6 +383,10 @@ export const useOfficeStore = create((set) => ({
     }),
 
   recordWatchdogRestart: () => set((s) => ({ watchdogRestarts: s.watchdogRestarts + 1 })),
+
+  // POINT 2: store the measured office `meet` scale. No-op when unchanged so resize ticks that
+  // re-measure the same value don't wake subscribers (AgentCharacter) for nothing.
+  setSceneScale: (scale) => set((s) => (s.sceneScale === scale ? s : { sceneScale: scale })),
 
   // ─── Subagent helper-huddle ───
   // HELPER_TTL = 60s safety window: a missed SubagentStop self-heals via pruneHelpers, so a

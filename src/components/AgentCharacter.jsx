@@ -597,6 +597,27 @@ const BASE_GLOW = { op: 0.5, sw: 2 }
 // shows only in the AgentInspector (click-to-inspect). The classifier still backs the
 // inspector's `inspectorTaskLabel`; nothing in the office scene renders the raw tool string.
 
+// ─── POINT 2: counter-scale glance-text so it stays readable as the office shrinks ──────
+// The office renders with `meet`, so when its on-screen scale (sceneScale) drops below 1 every
+// label would shrink with it. The label group cancels the office shrink (×1/sceneScale) to hold
+// a ~constant on-screen text size. sceneScale ≥ 1 (office at/above native) → factor 1 (labels
+// ride the office up, already big enough; wide desktop is byte-identical).
+//
+// CAP = 1.5 is an overlap guard, NOT arbitrary. Desks are fixed coordinates (dev/ops are 120
+// units apart; pm/designer too). On-screen agent separation AND pill size both scale with
+// sceneScale, so in the capped region their ratio is constant: a name pill (~80 units for the
+// widest name) stays narrower than the 120-unit gap as long as cap < 120/80 ≈ 1.5 → adjacent
+// active agents' name tags never collide. At the threshold sceneScale = 1/1.5 ≈ 0.667 the net
+// on-screen text reaches full size (1.0) right where the office is already spread enough to clear;
+// below that the cap lets text shrink gently (still far larger than with no counter-scale at all).
+// Empirically verified overlap-free with all 8 agents active across a 320–1280px sweep.
+// Pure for unit testing.
+export const LABEL_SCALE_MAX = 1.5
+export function computeLabelScale(sceneScale, max = LABEL_SCALE_MAX) {
+  if (!(sceneScale > 0)) return 1
+  return Math.min(max, 1 / Math.min(sceneScale, 1))
+}
+
 // ═══ AGENT CHARACTER WITH RAF-BASED MOVEMENT ═══
 
 function AgentCharacter({ agent }) {
@@ -613,6 +634,11 @@ function AgentCharacter({ agent }) {
   // shows a calm 'supervising' state (steady halo + 👀) and the pulsing working ring is
   // suppressed — the helper huddle carries the live "work is happening" motion instead.
   const hasActiveHelper = useOfficeStore((s) => s.helpers.some((h) => h.parentRole === id))
+  // POINT 2: counter-scale name/status/bubble labels by the office's live shrink factor so
+  // glance-text stays readable when the office is docked small. Primitive subscription →
+  // re-renders only when the scale actually changes (PixelOffice no-ops equal writes).
+  const sceneScale = useOfficeStore((s) => s.sceneScale)
+  const labelScale = computeLabelScale(sceneScale)
 
   const timerRef = useRef(null)
   const pathRef = useRef([])
@@ -1142,9 +1168,13 @@ function AgentCharacter({ agent }) {
         </g>
       )}
 
-      {/* Name tag + bubble: inverse-scale to keep text at original size despite character scale */}
-      <g transform={`scale(${1/1.35})`}>
-        <g transform="translate(0, -48)">
+      {/* Name tag + bubble: undo the 1.35 character scale, then grow each block IN PLACE by
+          labelScale around its own anchor (POINT 2). Anchor-preserving (translate THEN scale, not
+          scale-the-whole-group) so a counter-scaled label gets bigger without floating upward into
+          the agent above it — that float was what made adjacent active agents' tags collide. At
+          labelScale 1 (office ≥ native) this is byte-identical to the prior `scale(1/1.35)`. */}
+      <g transform={`scale(${1 / 1.35})`}>
+        <g transform={`translate(0, -48) scale(${labelScale})`}>
           {/* Session branch badge — shown above name tag for worktree agents */}
           {session && (
             <g transform="translate(0, -16)">
@@ -1182,7 +1212,11 @@ function AgentCharacter({ agent }) {
           )}
         </g>
 
-        <BehaviorBubble x={0} y={-68} message={state.bubble} />
+        {/* Bubble grows in place too (anchored at its -68 origin). At labelScale 1 this is
+            identical to the prior `<BehaviorBubble x={0} y={-68}/>` directly under scale(1/1.35). */}
+        <g transform={`translate(0, -68) scale(${labelScale})`}>
+          <BehaviorBubble x={0} y={0} message={state.bubble} />
+        </g>
         {/* AVO-131: the monospace tool pill was removed from the glance layer — the
             prop-icon + bubble carry the action in-world; the exact tool is shown in the
             AgentInspector (click-to-inspect) instead. */}
