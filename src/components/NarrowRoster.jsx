@@ -246,14 +246,15 @@ export default function NarrowRoster() {
   const quiet = activeCount === 0
 
   return (
-    // Single centered column (NOT an auto-fill grid — that turned the "vertical" view into a sparse
-    // multi-column card grid with a big empty void on wide panes). max-width keeps it a tidy column
-    // and centers it on a wide pane; full-width on a thin docked column.
+    // Single column that FILLS the pane width (no max-width gutters — those manufactured the
+    // left/right whitespace the owner flagged; "fill the container" is the web-standard, per spec).
+    // A thin dock → tidy single column; a wide pane → full-width rows (the office is the wide view
+    // via the hybrid, so the ☰ list filling width here is the honest no-whitespace behavior).
     <div
-      className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-900 p-2 flex flex-col items-center"
+      className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-900 p-2 flex flex-col"
       data-narrow-roster="1"
     >
-      <div className="w-full max-w-[520px] min-h-full flex flex-col gap-2">
+      <div className="w-full min-h-full flex flex-col gap-2">
       {/* Team pulse header — static tint (no "breathing" per calm-tech). Global token/effort live
           here (team-wide, not per-agent). */}
       <div className="flex items-center justify-between gap-2 px-2 py-1 text-[13px] text-gray-500 dark:text-gray-400">
