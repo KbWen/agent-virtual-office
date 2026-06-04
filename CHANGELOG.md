@@ -32,7 +32,8 @@ became a fluid, honest, alive companion — and stopped breaking on resize.
   red **"OT"** night badge spelled out to **"OVERTIME"**.
 - **Stability** — fixed agents piling on top of each other during `standup`; **every event gather
   target is now clamped to a walkable floor cell** (no agent can stand in a wall); real-seed events
-  globally cooldown-gated to stay rare.
+  globally cooldown-gated to stay rare; **speech bubbles now fire on a real status change, not on
+  every status poll** (killed the "every character suddenly speaks for no reason / refresh" glitch).
 
 ### Notes
 
