@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-03
-- **Update Sequence**: 30
+- **Last Updated**: 2026-06-04
+- **Update Sequence**: 31
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -116,6 +116,15 @@
 - [Category: packaging][Severity: MEDIUM][Trigger: dependency-presence-check][prev: 9da72f26] An installed package's CLI launcher must detect its own runtime deps via `require.resolve(dep, {paths:[root]})` (honors npm hoisting to a parent node_modules), not `fs.existsSync(root/node_modules/<dep>)` — the latter always misses hoisted deps and re-runs `npm install` on every launch.
 
 ## Ship History
+
+### feat-ux-vibe-rebalance-2026-06-04 (POINT 2 readable labels + COMMS vertical living-feed rebuild)
+
+- Branch `feat/ux-vibe-rebalance`, classification feature. **Committed to branch, NOT pushed/merged** — for human review (main protected). Informal owner-directed UX follow-on (beyond the frozen `ux-vibe-rebalance` spec; re-spec if formalizing). Autonomous session (user delegated full completion + stepped out).
+- **POINT 2 (`75038c3`)** — in-scene text stays readable as the office scales below native: `store.sceneScale` (measured `meet` scale, svgRef + ResizeObserver + 600ms self-heal poll for the throttled webview) drives counter-scaling of agent name/status/bubble (cap 1.5, anchor-preserving grow-in-place — overlap guard), the click-inspector popover (cap 2.5), the event banner, desk nameplates + room headers. Faint area-labels + decoration left small. Verified 320–1280px: readable, 0 overlap/clip, desktop ~unchanged.
+- **COMMS vertical living-feed rebuild** — the ☰ roster went from a flat lifeless list to a living **presence rail + activity feed**, per a **5-expert design roundtable** (game-feel · UI/chat-UX · operator · systems-engineer · calm-tech; unanimous REFINE). Commits: **`a01a64c`** P1 rail (2-tier salience — blocked pins top, only blocked reorders; idle dimmed in place; honest quiet state; `rosterModel.js` pure logic + `origin`-tagged activityLog + handoffs logged), **`130649a`** P2 feed (real-events-only, heartbeat/health dot, 🔔 notify), **`1988e74`** P3 juice (feed fade-in, tap-to-focus), **`3c5dc18`** fix review HIGH-1 (separate bounded `eventFeed` — organic theater could otherwise evict real events from activityLog's write-time 50-cap), **`9d20dcb`** review LOW (shared FEED_ORIGINS source).
+- **Key design correction (live testing)**: a 3-tier active/idle sort thrashed under live churn → collapsed to 2 tiers (only blocked reorders). **Key proof technique**: dep-free SSR render tests (react-dom/server) since the live office is wired to the active Claude session whose hook poll races injected statuses.
+- **Verification**: vitest **1222 passed / 45 files** (+32: rosterModel, activityOrigin incl. eventFeed-survival regression, narrowRosterOrder SSR), build clean, 0 console errors, i18n en/zh-TW parity. Live-verified each phase (the feed even showed this session's real events). Independent acx-reviewer: round-1 NOT READY (HIGH-1) → fixed → **round-2 READY**.
+- **Remaining for human**: review + push/merge the branch. Then the deferred additive-juice wave (AVO-133–136) + density dial (AVO-137).
 
 ### feat-ux-vibe-rebalance-2026-06-03 (UX Vibe Rebalance — deletion/demotion core)
 
