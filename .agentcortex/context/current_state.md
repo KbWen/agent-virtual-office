@@ -116,6 +116,19 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard][prev: d5689fc7] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 - [Category: packaging][Severity: MEDIUM][Trigger: dependency-presence-check][prev: 9da72f26] An installed package's CLI launcher must detect its own runtime deps via `require.resolve(dep, {paths:[root]})` (honors npm hoisting to a parent node_modules), not `fs.existsSync(root/node_modules/<dep>)` — the latter always misses hoisted deps and re-runs `npm install` on every launch.
 
+## Protected Surfaces (layout/movement/scale-critical — DO NOT casually edit)
+
+> These have caused repeated visual regressions. `preview_screenshot` is BROKEN here and `preview_eval`
+> CANNOT reach the running app's store (module duplication) — so an AI **cannot see pixels**. Before
+> changing ANY of these, verify by `getBoundingClientRect`/computed-font measurement across window
+> sizes AND get OWNER VISUAL CONFIRMATION. Never claim a visual change "works" from code/tests alone.
+
+- **Office viewBox `0 0 800 560` + width-fill layer** (`PixelOffice.jsx` svgElement: `aspect-ratio:800/560`, center, clip) — the responsive proportion. Owner requires fill-width, no L/R whitespace, no crop of agents. Changing risks re-breaking proportions.
+- **`movementSystem.js` agent coordinates / HOME_POSITIONS / MEETING_CHAIRS / event gather spots** (`officeLife.js` EVENT_HANDLERS) — hardcoded; tight gather spots already caused an all-agent pile-up (fixed by spreading `standup`). Any gather spot must keep ≥8 distinct, spaced targets.
+- **`LABEL_SCALE_MAX = 1.5`** (`AgentCharacter.jsx`) — POINT-2-tuned so active name tags don't collide. Raising it improves small-dock readability but risks label collision — owner's call, verify collisions by measuring label rects at a small window.
+- **`officeLife.js` event cadence** — real-seed triggers are GLOBAL-cooldown-gated to stay rare (calm-tech); do NOT seed all-gather events (e.g. `standup`) off frequent signals (SubagentStart) — that froze the office in perpetual gathering.
+- **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
+
 ## Ship History
 
 ### feat-ux-vibe-rebalance-2026-06-04b (responsive fill + living-office-events honest liveliness)
