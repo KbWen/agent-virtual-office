@@ -923,7 +923,9 @@ export const useOfficeStore = create((set) => ({
         }
         const selectionPatch = evictedSelected ? { selectedAgent: null } : {}
         if (Object.keys(ext).length === 0) {
-          return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null, ...selectionPatch }
+          // Office went quiet → reset L2 scalars (updateStoreMood is NOT called on clear, so the
+          // anchor would otherwise stay pinned in an idle office).
+          return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null, teamPulse: 0, focusAnchor: null, ...selectionPatch }
         }
         return { externalStatus: ext, agents, ...selectionPatch }
       }
@@ -942,6 +944,7 @@ export const useOfficeStore = create((set) => ({
       }
       return {
         externalStatus: {}, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null,
+        teamPulse: 0, focusAnchor: null,
         ...(evictedSelected ? { selectedAgent: null } : {}),
       }
     }),
@@ -949,6 +952,23 @@ export const useOfficeStore = create((set) => ({
   // ─── Mood system ───
   mood: 'normal',  // normal | rushing | frustrated | stuck | smooth | intense | idle (transient, not persisted)
   setMood: (mood) => set({ mood }),
+
+  // ─── L2 derived team-affect (spec living-office-events.md; transient, NOT persisted) ───
+  // Set only by moodEngine.updateStoreMood. UNTRACKED agents use these to honestly reflect the
+  // 1-2 lit desks' real activity; a TRACKED agent is never modulated by them (enforced at the
+  // doSchedule call site, R1). Reset to 0/null when the external-status set empties (below).
+  teamPulse: 0,        // 0..1 real-signal density — the room "leans in" proportionally
+  focusAnchor: null,   // agentId of the hottest live desk — idle agents orient toward it
+  setTeamSignals: ({ teamPulse, focusAnchor }) => set((s) =>
+    (s.teamPulse === teamPulse && s.focusAnchor === focusAnchor) ? {} : { teamPulse, focusAnchor }
+  ),
+  // The ONLY path that sets `facing` without a walk (today facing is a walk side-effect only).
+  // Guarded: never fight movement/group events, and no-op when unchanged (idle-only orientation).
+  setAgentFacing: (id, dir) => set((s) => {
+    const a = s.agents[id]
+    if (!a || a.isMoving || a.inGroupEvent || a.facing === dir) return {}
+    return { agents: { ...s.agents, [id]: { ...a, facing: dir } } }
+  }),
 
   // Same-value guards on the integration-channel setters. setActiveWorkflow is
   // still called standalone from applyMessage's workflow-only branch (a workflow-

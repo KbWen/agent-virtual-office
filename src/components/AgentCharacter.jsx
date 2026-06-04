@@ -931,7 +931,11 @@ function AgentCharacter({ agent }) {
       }
       movingStuckRef.current = 0
 
-      const next = getNextBehavior(id, agent.status || 'idle', new Date().getHours(), store.mood || 'normal')
+      // L2: an UNTRACKED agent (no live real signal) leans in with teamPulse; a TRACKED agent is
+      // never modulated (R1) → pass teamPulse 0. `tracked` is reused for the focusAnchor bias below.
+      const tracked = !!store.externalStatus[id]
+      const teamPulse = tracked ? 0 : (store.teamPulse || 0)
+      const next = getNextBehavior(id, agent.status || 'idle', new Date().getHours(), store.mood || 'normal', teamPulse)
       // Guard the re-schedule delay: a non-finite or non-positive duration would make
       // setTimeout(doSchedule, nextDelay) fire on the next tick, spinning the behavior
       // chain in a tight CPU loop. Fall back to the 8s default if the value is unusable.
@@ -967,6 +971,20 @@ function AgentCharacter({ agent }) {
         // Clear bubble after a while
         if (next.bubble) {
           scheduleDeferred(() => useOfficeStore.getState().clearBubble(id), Math.min(next.duration * 0.5, 4000))
+        }
+        // L2 focusAnchor (spec living-office-events.md): a STATIONARY, UNTRACKED idle agent orients
+        // toward the hottest live desk — the room "turns toward where the real work is". Honest
+        // (orientation ≠ work-claim). Skipped for tracked agents (R1); bails on a stale/missing/idle
+        // anchor; base-role fallback resolves a 'slug~role' worktree anchor to its rendered agent.
+        if (!willWalk && !tracked && store.focusAnchor && store.focusAnchor !== id && visualPosRef.current) {
+          let anchor = store.agents[store.focusAnchor]
+          if (!anchor && store.focusAnchor.includes('~')) {
+            anchor = store.agents[store.focusAnchor.slice(store.focusAnchor.lastIndexOf('~') + 1)]
+          }
+          if (anchor && anchor.status && anchor.status !== 'idle' && anchor.position) {
+            const dir = calcFacing(visualPosRef.current.x, visualPosRef.current.y, anchor.position.x, anchor.position.y)
+            store.setAgentFacing(id, dir)
+          }
         }
       }
 

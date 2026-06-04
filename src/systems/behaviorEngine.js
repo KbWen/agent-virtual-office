@@ -146,7 +146,7 @@ const moodModifiers = {
   idle:       { work: 20, daily: 30, social: 20, away: 30 },
 }
 
-export function getNextBehavior(agentId, status = 'idle', hour = new Date().getHours(), mood = 'normal') {
+export function getNextBehavior(agentId, status = 'idle', hour = new Date().getHours(), mood = 'normal', teamPulse = 0) {
   // Start with status-based weights, then apply hour modifiers
   let weights = { ...(statusOverrides[status] || baseWeights) }
   const hourMod = getHourModifiers(hour)
@@ -164,6 +164,18 @@ export function getNextBehavior(agentId, status = 'idle', hour = new Date().getH
   if (mm) {
     for (const key of Object.keys(mm)) {
       weights[key] = Math.round((weights[key] || 0) * 0.7 + mm[key] * 0.3)
+    }
+  }
+
+  // L2 teamPulse "lean-in" (spec living-office-events.md): the busier the REAL session is, the more
+  // an UNTRACKED agent's organic rhythm tightens toward focus — fewer coffee runs / wanders, more
+  // desk work. Applies in ALL moods incl. `normal` (where `mm` is undefined and the above no-ops).
+  // The CALLER passes teamPulse=0 for tracked agents, so this never modulates a real-work desk (R1).
+  if (teamPulse > 0) {
+    const FOCUS = { work: 90, daily: 4, social: 3, away: 3 } // `frustrated` intentionally untouched
+    const k = Math.min(0.4, teamPulse * 0.4)
+    for (const key of Object.keys(FOCUS)) {
+      weights[key] = Math.round((weights[key] || 0) * (1 - k) + FOCUS[key] * k)
     }
   }
 

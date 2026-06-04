@@ -110,12 +110,43 @@ function computeMood() {
   return 'normal'
 }
 
+// L2 derived team-affect (spec living-office-events.md): two transient scalars that let the idle
+// majority HONESTLY reflect the 1-2 lit desks' real activity — never a per-agent work claim.
+//   teamPulse   — real-signal density 0..1 over the rushing window; the room "leans in" with it.
+//   focusAnchor — the hottest live desk's agent id (the most recent active event's raw role, which
+//                 IS the agent id, incl. a 'slug~role' worktree agent). Consumers resolve/bail.
+// Both are PURE functions of the event window here; tracked/untracked scoping + stale-agent bail
+// live at the consumer (AgentCharacter), per R1/R3.
+function computeTeamSignals() {
+  pruneStale()
+  if (events.length === 0) return { teamPulse: 0, focusAnchor: null }
+  const now = Date.now()
+  let recentCount = 0
+  for (const e of events) {
+    if (now - e.timestamp < RUSHING_WINDOW) recentCount++
+  }
+  const teamPulse = Math.min(1, recentCount / RUSHING_THRESHOLD)
+  let focusAnchor = null
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]
+    if (now - e.timestamp > INTENSE_WINDOW) break // older than 30s → not "hot"
+    if (typeof e.role === 'string' && e.status && e.status !== 'done' && e.status !== 'idle') {
+      focusAnchor = e.role
+      break
+    }
+  }
+  return { teamPulse, focusAnchor }
+}
+
 function updateStoreMood() {
   const mood = computeMood()
   const store = useOfficeStore.getState()
   if (store.mood !== mood) {
     store.setMood(mood)
   }
+  // L2: derive + push the team-affect scalars (no-op guarded inside setTeamSignals).
+  const { teamPulse, focusAnchor } = computeTeamSignals()
+  if (store.setTeamSignals) store.setTeamSignals({ teamPulse, focusAnchor })
 }
 
 function resetIdleTimer() {
