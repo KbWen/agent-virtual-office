@@ -760,7 +760,10 @@ export const useOfficeStore = create((set) => ({
         agents[u.agentId] = nextAgent
         // Log activity inline (single loop instead of two). Tag origin so the feed can trust it:
         // idle-gap-inferred statuses are heuristic (not real hook events) → 'inferred'.
-        if (u.status === 'done' || u.status === 'blocked' || (u.status === 'working' && u.label)) {
+        // sigChanged guard: only log on a REAL status/task change, not on every poll re-apply — else a
+        // persisting `blocked`/`done` (re-written each tick with a new timestamp) floods the feed with
+        // duplicate entries (the activity→eventFeed path prepends without dedup). Same class as the bubble fix.
+        if (sigChanged && (u.status === 'done' || u.status === 'blocked' || (u.status === 'working' && u.label))) {
           activities.push(mkActivity({
             type: 'status', agentId: u.agentId, status: u.status, message: u.label || u.status,
             origin: meta.source === 'idle-gap-infer' ? 'inferred' : 'hook',
