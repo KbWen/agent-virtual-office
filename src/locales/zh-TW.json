@@ -311,7 +311,8 @@
     "enableNotify": "卡住時通知我",
     "offline": "已斷線",
     "teamNow": "現在",
-    "teamBlocked": "等你處理"
+    "teamBlocked": "等你處理",
+    "justNow": "剛剛"
   },
   "notify": {
     "blockedTitle": "Agent 卡住了",

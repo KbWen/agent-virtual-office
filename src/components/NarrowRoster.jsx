@@ -117,7 +117,8 @@ function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expa
 // Sourced from the store's activityLog, already filtered to non-organic origins. Time-decayed
 // opacity (older = quieter) gives the "journal that's been written in" resting feel (calm-tech).
 function FeedRow({ entry, color, ageMs, reducedMotion }) {
-  const ago = formatTimeAgo(entry.timestamp, { compact: true })
+  // "剛剛/now" for fresh events instead of a bare "0s".
+  const ago = ageMs != null && ageMs < 10000 ? t('chat.justNow', 'now') : formatTimeAgo(entry.timestamp, { compact: true })
   // decay: full opacity when fresh, easing toward 0.45 over ~20 min — never invisible.
   const opacity = Math.max(0.45, 1 - (ageMs || 0) / (20 * 60 * 1000))
   // Phase 3: a single gentle fade+rise on MOUNT only (new key → React remounts → runs once).
@@ -228,7 +229,7 @@ export default function NarrowRoster() {
     const scoped = expandedId
       ? eventFeed.filter((e) => e.agentId === expandedId || e.from === expandedId || e.to === expandedId)
       : eventFeed
-    return scoped.slice(0, 12)
+    return scoped.slice(0, 18)
   }, [eventFeed, expandedId])
   const now = Date.now()
 

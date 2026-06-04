@@ -311,7 +311,8 @@
     "enableNotify": "Notify me when blocked",
     "offline": "Disconnected",
     "teamNow": "Now",
-    "teamBlocked": "Waiting on you"
+    "teamBlocked": "Waiting on you",
+    "justNow": "now"
   },
   "notify": {
     "blockedTitle": "Agent stuck",
