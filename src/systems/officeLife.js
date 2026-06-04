@@ -172,11 +172,11 @@ const EVENT_HANDLERS = {
   },
 
   'standup': (store, participants, cancelled) => {
-    // Everyone gathers at whiteboard area
+    // Everyone gathers in front of the whiteboard — 8 SPACED spots (was a 40×30 pile that made the
+    // whole team visually overlap; spread ~90×55 in two rows so each agent reads as distinct).
     const whiteboardSpots = [
-      { x: 530, y: 355 }, { x: 550, y: 370 }, { x: 570, y: 355 },
-      { x: 530, y: 385 }, { x: 550, y: 385 }, { x: 570, y: 370 },
-      { x: 540, y: 365 },
+      { x: 510, y: 348 }, { x: 545, y: 343 }, { x: 580, y: 348 }, { x: 612, y: 360 },
+      { x: 510, y: 390 }, { x: 545, y: 398 }, { x: 580, y: 392 }, { x: 612, y: 380 },
     ]
     store.getState().setMultipleAgentGroupEvents(
       participants.map((id, i) => ({
@@ -184,7 +184,7 @@ const EVENT_HANDLERS = {
         behavior: i === 0 ? 'whiteboard' : 'meeting',
         expression: 'normal',
         bubble: i < 2 ? eventBubble('standup') : null,
-        groupTarget: jitter(whiteboardSpots[i % whiteboardSpots.length], 8),
+        groupTarget: jitter(whiteboardSpots[i % whiteboardSpots.length], 7),
       }))
     )
     setTimeout(() => {
@@ -660,20 +660,26 @@ export function startOfficeLife(store) {
   // per-event cooldown'd (SEED_COOLDOWN_MS — a flapping signal can't spam, R4). Edge-detected on
   // the cheap tracked fields only; high-frequency position churn early-returns.
   const seedCooldown = {}
+  let lastSeedAt = 0   // GLOBAL real-seed cooldown — keeps the causal layer RARE (calm-tech). A busy
+                       // session fires many signal edges; without a global gate the office would be in
+                       // perpetual event-mode (agents stuck gathering). At most one real-seed / window.
   const fireSeed = (state, eventId) => {
     if (state.isPaused || state.activeEvent) return
     const ev = EVENT_BY_ID[eventId]
     if (!ev || !eventEligible(ev, state)) return // signal must really be present (honesty double-check)
     const now = Date.now()
-    if (seedCooldown[eventId] && now - seedCooldown[eventId] < SEED_COOLDOWN_MS) return
+    if (now - lastSeedAt < SEED_COOLDOWN_MS) return                       // GLOBAL gate (anti event-spam)
+    if (seedCooldown[eventId] && now - seedCooldown[eventId] < SEED_COOLDOWN_MS * 3) return // per-event
     seedCooldown[eventId] = now
+    lastSeedAt = now
     const participants = pickParticipants(ev, state.agents, state.externalStatus)
     store.getState().setActiveEvent(ev)
     executeEvent(store, ev, participants, cancelled)
   }
   seedUnsub = typeof store.subscribe === 'function' ? store.subscribe((state, prev) => {
     if (cancelled.value || !prev || state.isPaused || state.activeEvent) return
-    // mood edge → real block-streak / done-streak coordinated moment (cadence source #2)
+    // mood edge → real block-streak / done-streak coordinated moment (cadence source #2). Mood is a
+    // slow-moving distillation of real signals, so these are naturally infrequent.
     if (state.mood !== prev.mood) {
       if (state.mood === 'frustrated' || state.mood === 'stuck') fireSeed(state, 'dev-arch-disagree')
       else if (state.mood === 'smooth') fireSeed(state, 'eureka')
@@ -682,8 +688,9 @@ export function startOfficeLife(store) {
     if (state.externalStatus?.ops?.status === 'done' && prev.externalStatus?.ops?.status !== 'done') {
       fireSeed(state, 'deploy-success')
     }
-    // a subagent just started (helpers count rose) → the team coordinates (cadence source #1)
-    if ((state.helpers?.length || 0) > (prev.helpers?.length || 0)) fireSeed(state, 'standup')
+    // NOTE: the former `helpers-rise → standup` real-seed was REMOVED — SubagentStart fires often, and
+    // `standup` gathers ALL agents, so it made the office perpetually clustered/frozen in a busy
+    // session (regression). SubagentStart liveliness already shows via the helper-huddle sprites.
   }) : null
 
   // Update time every minute

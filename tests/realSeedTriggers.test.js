@@ -32,9 +32,17 @@ describe('real-seeded triggers (P4)', () => {
     expect(useOfficeStore.getState().activeEvent?.id).toBe('deploy-success')
   })
 
-  it('a new subagent (helpers count rises) fires standup', () => {
+  it('a new subagent (helpers rises) does NOT fire standup (regression fix — standup piles all agents)', () => {
     useOfficeStore.setState({ helpers: [{ id: 'h1', parentRole: 'dev', role: 'dev' }] })
-    expect(useOfficeStore.getState().activeEvent?.id).toBe('standup')
+    expect(useOfficeStore.getState().activeEvent).toBeNull() // SubagentStart shows via helper sprites, not a gather
+  })
+
+  it('global cooldown: a second distinct real-seed is gated right after the first (calm-tech, anti event-spam)', () => {
+    useOfficeStore.setState({ mood: 'smooth' })
+    expect(useOfficeStore.getState().activeEvent?.id).toBe('eureka')
+    useOfficeStore.setState({ activeEvent: null, externalStatus: { ops: { status: 'working', changedAt: Date.now() } } })
+    useOfficeStore.setState({ externalStatus: { ops: { status: 'done', changedAt: Date.now() } } }) // ops→done edge, but within global cooldown
+    expect(useOfficeStore.getState().activeEvent).toBeNull()
   })
 
   it('mutex: nothing real-seeds while an event is already active', () => {
