@@ -174,9 +174,12 @@ const EVENT_HANDLERS = {
   'standup': (store, participants, cancelled) => {
     // Everyone gathers in front of the whiteboard — 8 SPACED spots (was a 40×30 pile that made the
     // whole team visually overlap; spread ~90×55 in two rows so each agent reads as distinct).
+    // 8 spots IN FRONT OF the whiteboard, all verified on the mainOffice floor (x15-593, y168-394)
+    // and clear of the whiteboard (x525-590,y278-342) + desks (y≤360): row1 right of opsDesk just
+    // below the board, row2 below the desk row. (Earlier spread put 4 spots in walls/furniture.)
     const whiteboardSpots = [
-      { x: 510, y: 348 }, { x: 545, y: 343 }, { x: 580, y: 348 }, { x: 612, y: 360 },
-      { x: 510, y: 390 }, { x: 545, y: 398 }, { x: 580, y: 392 }, { x: 612, y: 380 },
+      { x: 500, y: 350 }, { x: 525, y: 348 }, { x: 550, y: 350 }, { x: 578, y: 354 },
+      { x: 445, y: 382 }, { x: 490, y: 384 }, { x: 535, y: 382 }, { x: 578, y: 380 },
     ]
     store.getState().setMultipleAgentGroupEvents(
       participants.map((id, i) => ({

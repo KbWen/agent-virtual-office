@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
-import { HOME_POSITIONS, OVERFLOW_POSITIONS, OVERFLOW_SLOT_BY_XY } from './movementSystem.js'
+import { HOME_POSITIONS, OVERFLOW_POSITIONS, OVERFLOW_SLOT_BY_XY, clampToFloor } from './movementSystem.js'
 import { randomBubble, setNameResolver, behaviorLabel } from '../i18n'
 import { generateContextBubble } from './contextBubble'
 import { detectProjectMode } from './platformDetect'
@@ -366,7 +366,9 @@ export const useOfficeStore = create((set) => ({
             ...s.agents[id],
             behavior, expression, bubble: bubble || null,
             inGroupEvent: true,
-            groupTarget: groupTarget || null,
+            // clamp to a walkable floor cell — event handlers set gather spots directly and could
+            // otherwise place an agent in a wall/furniture (module contract: every position is clamped).
+            groupTarget: groupTarget ? clampToFloor(groupTarget) : null,
           },
         },
       }
@@ -439,7 +441,8 @@ export const useOfficeStore = create((set) => ({
           ...agents[id],
           behavior, expression, bubble: bubble || null,
           inGroupEvent: true,
-          groupTarget: groupTarget || null,
+          // clamp every gather target to a walkable cell — no event can place an agent off-floor.
+          groupTarget: groupTarget ? clampToFloor(groupTarget) : null,
         }
       }
       return { agents }

@@ -57,11 +57,11 @@ const MEETING_TABLE = OBSTACLE_RECTS[7]
 
 // ─── Walkability functions ──────────────────────────────────────────
 
-function isOnFloor(x, y) {
+export function isOnFloor(x, y) {
   return FLOOR_ZONES.some(z => x >= z.x1 && x <= z.x2 && y >= z.y1 && y <= z.y2)
 }
 
-function isOnObstacle(x, y) {
+export function isOnObstacle(x, y) {
   return OBSTACLE_RECTS.some(r => x >= r.x1 && x <= r.x2 && y >= r.y1 && y <= r.y2)
 }
 
@@ -83,7 +83,7 @@ function pushOutOfObstacle(x, y) {
 }
 
 // Master clamping function: snap to nearest floor, push off obstacles
-function clampToFloor(pos) {
+export function clampToFloor(pos) {
   let { x, y } = pos
 
   // Step 1: If not on any floor zone, snap to nearest one
