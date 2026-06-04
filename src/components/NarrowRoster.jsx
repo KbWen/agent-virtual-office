@@ -208,7 +208,7 @@ export default function NarrowRoster() {
   // churn for everyone else. (Smooth FLIP animation for that one move lands in Phase 3.)
   const renderRows = sorted
 
-  // Activity feed (Phase 2): real events only (organic theater filtered by feedEntries), newest
+  // Activity feed (Phase 2): reads the write-time eventFeed buffer (real events only), newest
   // first, capped. Per-agent colour for the left edge; time-decay handled in FeedRow.
   const colorById = useMemo(() => {
     const map = {}

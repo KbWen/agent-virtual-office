@@ -6,6 +6,7 @@ import { generateContextBubble } from './contextBubble'
 import { detectProjectMode } from './platformDetect'
 import { STATUS_COLORS } from './constants.js'
 import { classifyTask, familyToBehavior, decideBehavior } from './classify.js'
+import { FEED_ORIGINS } from './rosterModel.js'
 
 export { STATUS_COLORS }
 
@@ -227,13 +228,12 @@ let _activityId = 0
 function mkActivity(entry) {
   return { id: ++_activityId, timestamp: Date.now(), origin: 'organic', ...entry }
 }
-// Origins that belong in the activity FEED (real signal, not organic officeLife theater). The feed
-// reads a SEPARATE `eventFeed` buffer filled at WRITE time — filtering the shared activityLog only
-// at read time let organic events (8-50/min) evict real ones from the 50-slot ring before the feed
-// ever saw them (the cap-before-filter bug). Keep this in sync with rosterModel.FEED_ORIGINS.
-const FEED_WORTHY_ORIGINS = new Set(['hook', 'event', 'inferred'])
+// The feed reads a SEPARATE `eventFeed` buffer filled at WRITE time with FEED_ORIGINS-only entries
+// (the single source of truth, shared with rosterModel) — filtering the shared activityLog only at
+// read time let organic events (8-50/min) evict real ones from the 50-slot ring before the feed
+// ever saw them (the cap-before-filter bug).
 const pushFeed = (eventFeed, entry) =>
-  FEED_WORTHY_ORIGINS.has(entry.origin) ? [entry, ...eventFeed].slice(0, 30) : eventFeed
+  FEED_ORIGINS.has(entry.origin) ? [entry, ...eventFeed].slice(0, 30) : eventFeed
 
 // Monotonic id for handoff animations. MUST NOT be Date.now(): two handoffs added
 // in the same millisecond (multiple agents picking 'pass-document' on the same tick,
@@ -834,7 +834,7 @@ export const useOfficeStore = create((set) => ({
       // Feed buffer: status activities are all hook/inferred origin (feed-worthy) → keep them in the
       // separate eventFeed where organic theater can't evict them.
       const feedLog = activities.length > 0
-        ? [...activities.filter((a) => FEED_WORTHY_ORIGINS.has(a.origin)), ...s.eventFeed].slice(0, 30)
+        ? [...activities.filter((a) => FEED_ORIGINS.has(a.origin)), ...s.eventFeed].slice(0, 30)
         : s.eventFeed
       // Coalesce the integration-channel field writes into THIS single set().
       // applyMessage previously called applyExternalStatus + setStatusSource +
