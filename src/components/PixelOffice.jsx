@@ -766,9 +766,6 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const isPanel = mode === 'panel'
   const containerRef = useRef(null)
   const [panelViewBox, setPanelViewBox] = useState('60 155 540 260')
-  // Default office: is the container a tall-narrow column? Starts false so the first paint is
-  // the full wide room (byte-identical to legacy) until the observer measures. A false<->true
-  // boolean — re-renders only on a real shape transition, not per resize pixel.
   // Office is the primary view at every size; the roster is an opt-in MANUAL toggle (not size-based).
   const rosterMode = useOfficeStore((s) => s.rosterMode)
 
