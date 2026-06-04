@@ -303,7 +303,8 @@
     "subagents": "subagents",
     "online": "active",
     "done": "done",
-    "effort": "effort"
+    "effort": "effort",
+    "quiet": "Quiet right now — the team is resting"
   },
   "notify": {
     "blockedTitle": "Agent stuck",

@@ -221,8 +221,11 @@ const _customProfiles = (() => {
 
 // ─── Activity log helpers ───
 let _activityId = 0
+// `origin` separates REAL hook/workflow events from organic officeLife theater so the activity
+// feed can filter out the 8–50 fake behavior entries/min that would otherwise drown (and evict,
+// via the 50-cap) the genuine ones. Default 'organic'; real callers override (see call sites).
 function mkActivity(entry) {
-  return { id: ++_activityId, timestamp: Date.now(), ...entry }
+  return { id: ++_activityId, timestamp: Date.now(), origin: 'organic', ...entry }
 }
 
 // Monotonic id for handoff animations. MUST NOT be Date.now(): two handoffs added
@@ -530,7 +533,7 @@ export const useOfficeStore = create((set) => ({
 
   setActiveEvent: (event) => set((s) => {
     if (!event) return { activeEvent: event }
-    const entry = mkActivity({ type: 'event', agentId: null, message: event.id || event.name || 'event' })
+    const entry = mkActivity({ type: 'event', agentId: null, message: event.id || event.name || 'event', origin: 'event' })
     return { activeEvent: event, activityLog: [entry, ...s.activityLog].slice(0, 50) }
   }),
   // Guard against a no-op clear — clearActiveEvent is called on every officeLife
@@ -730,9 +733,13 @@ export const useOfficeStore = create((set) => ({
         }
         if (bubble && !inGroup) nextAgent.bubble = bubble
         agents[u.agentId] = nextAgent
-        // Log activity inline (single loop instead of two)
+        // Log activity inline (single loop instead of two). Tag origin so the feed can trust it:
+        // idle-gap-inferred statuses are heuristic (not real hook events) → 'inferred'.
         if (u.status === 'done' || u.status === 'blocked' || (u.status === 'working' && u.label)) {
-          activities.push(mkActivity({ type: 'status', agentId: u.agentId, status: u.status, message: u.label || u.status }))
+          activities.push(mkActivity({
+            type: 'status', agentId: u.agentId, status: u.status, message: u.label || u.status,
+            origin: meta.source === 'idle-gap-infer' ? 'inferred' : 'hook',
+          }))
         }
         if (u.status === 'done') {
           const eventKey = buildDoneEventKey(u, meta)
@@ -989,7 +996,18 @@ export const useOfficeStore = create((set) => ({
         subtle: !!opts.subtle,
       }
       const next = [...s.handoffs, entry]
-      return { handoffs: next.length > 20 ? next.slice(-20) : next }
+      // Also record the handoff in the activity feed — it's the cross-agent "A→B" moment the
+      // feed otherwise can't show (handoffs were never logged before). Workflow handoffs
+      // (opts.subtle, real phase transitions) are feed-worthy → 'event'; organic pass-document
+      // theater stays 'organic' so it doesn't flood the feed.
+      const act = mkActivity({
+        type: 'handoff', agentId: from, from, to, message: `${from}→${to}`,
+        origin: opts.subtle ? 'event' : 'organic',
+      })
+      return {
+        handoffs: next.length > 20 ? next.slice(-20) : next,
+        activityLog: [act, ...s.activityLog].slice(0, 50),
+      }
     }),
   removeHandoff: (id) =>
     set((s) => ({

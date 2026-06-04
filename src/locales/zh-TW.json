@@ -303,7 +303,8 @@
     "subagents": "子代理",
     "online": "在線",
     "done": "完成",
-    "effort": "強度"
+    "effort": "強度",
+    "quiet": "現在很安靜 — 團隊休息中"
   },
   "notify": {
     "blockedTitle": "Agent 卡住了",

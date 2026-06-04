@@ -1,20 +1,21 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { charName, behaviorLabel, t, useLocale, eventName } from '../i18n'
 import { CharacterPixelSprite } from './AgentCharacter'
 import { agentLineLabel, taskChipLabel, formatTokens } from './ControlPanel'
 import { formatTimeAgo } from '../utils/formatTime'
+import { comparePresence, isIdleStatus } from '../systems/rosterModel'
 
-// ─── Team-chat widget ─────────────────────────────────────────────────────────
-// An OPTIONAL "messaging app" lens on the office (toggled via the ☰ button) — every role is a
-// chat row: the real chibi avatar + a presence dot + their latest message, with a live "typing…"
-// indicator while they work. Tap a row to expand richer detail (tool/task, today's done/blocked,
-// subagents). Built to be glanceable AND alive — relative times tick, presence shifts, messages
-// stream — so it stays watchable. Reuses the office's own sprites + status formatters (no rebuild).
+// ─── Vertical office: presence rail (COMMS rebuild — Phase 1: the honest, lively spine) ─────────
+// The optional ☰ lens on the office. Instead of a flat declaration-ordered list, this is a PRESENCE
+// RAIL sorted by salience (blocked > working/planning > recently-done > idle): the row that needs
+// attention rises to the top, idle roles dim and sink. The reshuffle itself conveys "the team is
+// moving" — using the trustworthy externalStatus, not organic animation. (The activity FEED and the
+// motion "juice" land in later phases; this phase delivers correct, calm, alive ordering.)
 
 const presenceColor = (status) => STATUS_COLORS[status] || STATUS_COLORS.idle
-const isBusy = (status) => status === 'working' || status === 'planning'
+const isBusy = (status) => status === 'working' || status === 'planning' || status === 'thinking'
 
 // "Last active" time, derived from the external status' expiresAt (= set-time + TTL). Read-only —
 // avoids touching the heavily-optimised applyExternalStatus. Null when there is no external status.
@@ -48,9 +49,8 @@ function DetailChip({ icon, label, value }) {
   )
 }
 
-function ChatCard({ agent, ext, doneCount, blockedCount, subagents, expanded, onToggle, reducedMotion }) {
+function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expanded, onToggle, reducedMotion, dimmed }) {
   const name = charName(agent.id)
-  const status = ext?.status || agent.status || 'idle'
   const color = presenceColor(status)
   const blocked = status === 'blocked'
   const busy = isBusy(status)
@@ -60,11 +60,12 @@ function ChatCard({ agent, ext, doneCount, blockedCount, subagents, expanded, on
 
   return (
     <div
-      className={`rounded-xl border transition-colors ${
+      data-roster-status={status}
+      className={`rounded-xl border transition-[opacity,background-color,border-color] duration-300 ${
         blocked
           ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
           : 'bg-white/90 dark:bg-gray-800/80 border-gray-100 dark:border-gray-700'
-      }`}
+      } ${dimmed ? 'opacity-60' : 'opacity-100'}`}
     >
       <button onClick={onToggle} className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left" aria-expanded={expanded}>
         <div className="relative shrink-0">
@@ -109,38 +110,68 @@ function ChatCard({ agent, ext, doneCount, blockedCount, subagents, expanded, on
 
 export default function NarrowRoster() {
   useLocale() // re-render on language switch
-  const agents = useOfficeStore(useShallow((s) => Object.values(s.agents).filter((a) => !a.session)))
-  const externalStatus = useOfficeStore(useShallow((s) => s.externalStatus))
-  const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
+  // Salience-relevant SIGNATURE only — id|status|behavior|bubble|task|expiresAt per agent. It
+  // deliberately EXCLUDES position, so the ~30fps movement ticks that replace agent objects do NOT
+  // re-render or re-sort the rail (the systems-review thrash fix). useShallow compares the string
+  // array element-wise, so it short-circuits unless a salience-relevant field actually changed.
+  const presenceSig = useOfficeStore(useShallow((s) =>
+    Object.values(s.agents)
+      .filter((a) => !a.session)
+      .map((a) => {
+        const ext = s.externalStatus[a.id]
+        return `${a.id}|${ext?.status || a.status || 'idle'}|${a.behavior || ''}|${a.bubble || ''}|${ext?.task || ''}|${ext?.expiresAt || 0}`
+      })
+  ))
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
   const helpers = useOfficeStore(useShallow((s) => s.helpers))
   const doneCounts = useOfficeStore(useShallow((s) => s.dailyDoneLedger?.counts || {}))
   const blockedCounts = useOfficeStore(useShallow((s) => s.dailyBlockedLedger?.counts || {}))
+  const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
   const tokens = useOfficeStore((s) => s.tokens)
   const effort = useOfficeStore((s) => s.effort)
 
   const [expandedId, setExpandedId] = useState(null)
-  // Relative times stay fresh from the office's own frequent store ticks (movement/events re-render
-  // the widget continuously while active); no extra timer needed, and none to keep the page from
-  // ever settling. The typing-dots CSS animation supplies the "alive" feel on its own.
+
+  // Build rows from ground-truth via getState(), keyed on the signature → no per-movement-tick
+  // rebuild. (Reading getState() in a useMemo keyed on a subscribed signature is the same pattern
+  // PixelOffice uses for its agentList.)
+  const rows = useMemo(() => {
+    const s = useOfficeStore.getState()
+    return Object.values(s.agents)
+      .filter((a) => !a.session)
+      .map((a) => {
+        const ext = s.externalStatus[a.id]
+        const status = ext?.status || a.status || 'idle'
+        return { id: a.id, agent: a, ext, status, lastActiveAt: lastActiveAt(ext) }
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presenceSig])
+
+  const sorted = useMemo(() => [...rows].sort(comparePresence), [rows])
+  // The sort is tier-stable: blocked pins to the top; everyone else holds a FIXED id order. So
+  // `sorted` only re-orders when an agent crosses the blocked boundary — a rare, meaningful event.
+  // We therefore render it DIRECTLY (no debounce/throttle): movement/position ticks never reach
+  // here (excluded from presenceSig), and React's keyed reconcile (key=id) moves only the single
+  // row that changed — so a newly-blocked agent surfaces to the top IMMEDIATELY, with no per-tick
+  // churn for everyone else. (Smooth FLIP animation for that one move lands in Phase 3.)
+  const renderRows = sorted
 
   const subagentCount = (roleId) => helpers.reduce((n, h) => (h.parentRole === roleId ? n + 1 : n), 0)
-  const activeCount = agents.filter((a) => {
-    const st = externalStatus[a.id]?.status || a.status
-    return st && st !== 'idle'
-  }).length
+  const activeCount = sorted.filter((r) => !isIdleStatus(r.status)).length
   const totalDone = Object.values(doneCounts).reduce((a, b) => a + (b || 0), 0)
+  const quiet = activeCount === 0
 
   return (
     <div
-      className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-900 p-2 grid gap-1.5 [align-content:safe_center]"
+      className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-900 p-2 grid gap-1.5 [align-content:safe_start]"
       style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}
       data-narrow-roster="1"
     >
-      {/* Team pulse header — global token/effort live here (they are team-wide, not per-agent) */}
+      {/* Team pulse header — static tint (no "breathing" per calm-tech). Global token/effort live
+          here (team-wide, not per-agent). */}
       <div className="[grid-column:1/-1] flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-gray-500 dark:text-gray-400">
         <span className="font-medium">
-          <span className="text-gray-700 dark:text-gray-200">{activeCount}</span> {t('chat.online', 'active')}
+          <span className={quiet ? 'text-gray-400' : 'text-gray-700 dark:text-gray-200'}>{activeCount}</span> {t('chat.online', 'active')}
           {totalDone > 0 && <> · <span className="text-gray-700 dark:text-gray-200">{totalDone}</span> {t('chat.done', 'done')}</>}
         </span>
         <span className="flex items-center gap-2 shrink-0">
@@ -148,6 +179,13 @@ export default function NarrowRoster() {
           {tokens && Number.isFinite(tokens.out) && <span title="tokens">{formatTokens(tokens.out)} tok</span>}
         </span>
       </div>
+
+      {/* Honest quiet/resting state — "office with the lights low", not a nagging void (calm-tech). */}
+      {quiet && (
+        <div className="[grid-column:1/-1] text-[11px] text-center text-gray-400 dark:text-gray-500 py-0.5" data-roster-quiet="1">
+          {t('chat.quiet', 'Quiet right now — the team is resting')}
+        </div>
+      )}
 
       {activeEvent && (
         <div
@@ -158,16 +196,18 @@ export default function NarrowRoster() {
         </div>
       )}
 
-      {agents.map((a) => (
+      {renderRows.map((r) => (
         <ChatCard
-          key={a.id}
-          agent={a}
-          ext={externalStatus[a.id]}
-          doneCount={doneCounts[a.id] || 0}
-          blockedCount={blockedCounts[a.id] || 0}
-          subagents={subagentCount(a.id)}
-          expanded={expandedId === a.id}
-          onToggle={() => setExpandedId((cur) => (cur === a.id ? null : a.id))}
+          key={r.id}
+          agent={r.agent}
+          ext={r.ext}
+          status={r.status}
+          dimmed={isIdleStatus(r.status)}
+          doneCount={doneCounts[r.id] || 0}
+          blockedCount={blockedCounts[r.id] || 0}
+          subagents={subagentCount(r.id)}
+          expanded={expandedId === r.id}
+          onToggle={() => setExpandedId((cur) => (cur === r.id ? null : r.id))}
           reducedMotion={reducedMotion}
         />
       ))}
