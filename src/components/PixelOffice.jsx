@@ -872,16 +872,19 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   }, [isPanel, rosterMode, setSceneScale])
 
   const viewBox = isPanel ? panelViewBox : '0 0 800 560'
-  // The office scales to fit via `meet`. maxHeight keeps it within the viewport so the page itself
-  // never scrolls; the wrapper is overflow-hidden so the scene never needs a scrollbar.
-  const svgStyle = isPanel ? {} : { maxHeight: 'calc(100vh - 44px)' }
+  // Office (non-panel) FILLS THE WIDTH at every pane shape: the svg is width-driven via aspect-ratio
+  // (800/560), so the scene ALWAYS spans the full browser width — no left/right whitespace, ever.
+  // Its height follows the ratio; the wrapper centers + clips, so a wide-short pane trims the empty
+  // ceiling/floor symmetrically (no side gaps) while a tall pane just gets vertical breathing room.
+  // Panel mode keeps its own crop+fit (w-full h-full + meet).
+  const svgStyle = isPanel ? {} : { aspectRatio: '800 / 560' }
 
   const svgElement = (
     <svg
       ref={svgRef}
       viewBox={viewBox}
       xmlns="http://www.w3.org/2000/svg"
-      className="w-full h-full"
+      className={isPanel ? 'w-full h-full' : 'w-full'}
       style={svgStyle}
       preserveAspectRatio="xMidYMid meet"
     >
@@ -1226,13 +1229,18 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     )
   }
 
-  // Office-primary: the full scene by default at every size (scaled to fit). The roster is shown
-  // ONLY when the user manually toggles it (store.rosterMode) — it is an optional extra lens, never
-  // an automatic size-based switch. overflow-hidden: the office fits via `meet` (no scrollbar); the
-  // roster does its own internal scroll if a very small frame needs it.
-  return (
+  // Office-primary: the full scene by default at every size. The roster is shown ONLY when the user
+  // manually toggles it (store.rosterMode) — an optional lens, never an automatic size-based switch.
+  // Office branch CENTERS + CLIPS: the width-driven svg spans the full width, so vertical overflow on
+  // a wide-short pane is clipped symmetrically (no left/right whitespace) and vertical slack on a tall
+  // pane is centered. Roster branch keeps its own internal scroll.
+  return rosterMode ? (
     <div ref={containerRef} className="w-full flex-1 overflow-hidden min-h-0">
-      {rosterMode ? <NarrowRoster /> : svgElement}
+      <NarrowRoster />
+    </div>
+  ) : (
+    <div ref={containerRef} className="w-full flex-1 overflow-hidden min-h-0 flex items-center justify-center">
+      {svgElement}
     </div>
   )
 }
