@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-04
-- **Update Sequence**: 31
+- **Last Updated**: 2026-06-05
+- **Update Sequence**: 32
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -131,6 +131,16 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### feat-ux-vibe-rebalance-2026-06-05 (final pre-merge hardening + ship closure)
+
+- Branch `feat/ux-vibe-rebalance`, classification feature. Branch closed for merge (owner-directed; main protected → human owns the protected-remote push/PR). Final HEAD `1a708bf`, 59 commits ahead of `main`, clean fast-forward (main behind 0).
+- **Agent-clustering fix ("4 piled, one disappeared")** — root cause: group-event gather (`store.setMultipleAgentGroupEvents` / `setAgentGroupEvent`) wrote `groupTarget` with NO inter-agent separation, so participants stacked on one cell and the y-ordered opaque SVG sprite on top fully occluded the ones beneath. Fix: deconflict every gather target through `clampToFloor` + `avoidOverlap` (push ≥ `MIN_AGENT_DIST`) at the store chokepoint — one fix covers ALL group events; the "disappear" is cured by never fully overlapping.
+- **Test-gap closure** — every prior movement test checked agent-vs-MAP only; NONE checked agent-vs-AGENT (why the suite stayed green while sprites stacked). Added `tests/agentSeparationInvariants.test.js` (+5), incl. the exact-bug case "all participants assigned the SAME cell must fan out" (FAILs pre-fix).
+- **Fresh-eyes pre-merge sweep** — independent full-branch-diff reviewer: **0 HIGH / 0 MED**; no debug leftovers / `.only` / dup exports; i18n en/zh-TW parity intact. Only 2 LOW pre-existing cosmetic items (not on this branch).
+- **Verification**: vitest **1276 passed / 53 files** (+ moodFeedGate, statusBubbleDedup, agentSeparationInvariants over -04b), build clean (414.80 KB JS / 31.05 KB CSS), `validate.sh` **0 fail**. Behavioral logic test-authoritative; **pixel/visual still pending owner confirm** (screenshots broken; eval can't reach the app store).
+- **Deferred**: AVO-144 — sustained free-movement (in-transit) per-frame separation still has no agent-vs-agent push (lower-severity transient pass-through; the visible pile-up/disappear is fixed). AVO-141/142/143 unchanged.
+- **Remaining for human**: protected-remote push / PR-close; visual confirm + v1.2.0 screenshot/GIF re-capture.
 
 ### feat-ux-vibe-rebalance-2026-06-04b (responsive fill + living-office-events honest liveliness)
 
