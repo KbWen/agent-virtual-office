@@ -5,6 +5,41 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.2.0 — 2026-06-05 — Honest living office + responsive fill (UX Vibe Rebalance wave)
+
+Shipped on branch `feat/ux-vibe-rebalance` (pending human PR review + merge). The office
+became a fluid, honest, alive companion — and stopped breaking on resize.
+
+### Added
+
+- **Living-office events** — the office now *honestly* reflects real work. A derived
+  **team-affect layer**: `teamPulse` makes the room "lean in" as real-signal density rises;
+  `focusAnchor` orients idle agents toward the live desk. **Honesty gating** — the 5 work-claim
+  events (deploy/review/eureka/etc.) fire only on a recent real signal; social/world events stay
+  free. **Reluctant participant** — a busy agent torn by a team event shows a sub-dominant ⏳
+  (pure overlay, never hides its real status). **Real-seeded triggers** — a real deploy / block /
+  subagent *causally* fires the matching team moment (globally rate-limited for calm-tech).
+  Iron rule: per-agent real status is never hidden, frozen, or faked.
+- Earlier in the wave: **POINT-2 readable in-scene labels**, **COMMS living presence rail + feed**,
+  **subagent helper huddle**.
+
+### Changed / Fixed
+
+- **Responsive office** — fills the full browser **width** at every window shape (no left/right
+  whitespace; agent sides never cropped). Top-row speech bubbles flip *below* the head when they
+  would clip the top edge. The ☰ roster fills width.
+- **Readability** — enlarged too-small decorative labels (kanban headers, wall signs); the cryptic
+  red **"OT"** night badge spelled out to **"OVERTIME"**.
+- **Stability** — fixed agents piling on top of each other during `standup`; **every event gather
+  target is now clamped to a walkable floor cell** (no agent can stand in a wall); real-seed events
+  globally cooldown-gated to stay rare.
+
+### Notes
+
+- 1263 tests / 50 files pass; build clean. Behavioral logic is test-verified; **pixel/visual
+  appearance pending owner confirm** (preview screenshots unavailable in this build env). Not yet
+  merged to `main` (human PR).
+
 ## v1.1.0 — 2026-05-29 — Classifier + observability wave
 
 The biggest single-session push since v0.10. Eight new features + two

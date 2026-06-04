@@ -299,6 +299,17 @@ facing-bias; reluctant-participant render branch) · `officeLife.js`
   falls within the 6–10 min target band — i.e. the suppressed floor does NOT make working quieter
   than idle/demo (measured over a scripted session).
 
+## Domain Decisions
+
+- Liveliness is carried by the organic per-agent layer (~92%); big events serve **team narrative**, not motion.
+- Honesty is a property of the **claim × tracked/untracked**; the status truth layer is never written by the event system.
+- The missing "middle tier" (L2 `teamPulse` + `focusAnchor`) is derived from real signals in `moodEngine.updateStoreMood`; applies to UNTRACKED agents only (a tracked desk is never modulated — R1).
+- Work-claim events fire only on a recent real signal (`WORK_CLAIM_SIGNAL_WINDOW`); social/world events stay timer-driven and honest for untracked agents.
+- Real-seeded triggers are GLOBAL-cooldown-gated (calm-tech) and never seed all-gather events off frequent signals (SubagentStart).
+- Reluctant participant + L2 are pure overlays — never touch status/behavior/bubble/position.
+- Every event gather target passes `clampToFloor` in the store (no agent can be placed off-floor).
+- Verification: behavioral = vitest (real modules, no dup); pixel = owner (preview screenshots broken).
+
 ## Out of scope / non-goals
 
 - No fabricated per-agent work; no freezing tracked agents; no full-bleed event banner (demote to a

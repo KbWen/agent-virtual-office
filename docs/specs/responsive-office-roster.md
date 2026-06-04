@@ -74,6 +74,15 @@ Verify over a sweep of NORMAL sizes — widths {360, 480, 640, 900, 1280} × hei
 - **AC-6 (no regression):** `movementSystem` + agent sprites byte-unchanged; the office's own scene rendering unchanged; wide full-window office still looks right.
 - **AC-7 (existing contract holds):** blocked pins top + only-blocked reorders; feed = real events only; team-status strip (blocked › workflow › active); times real/"now" never "0s"; reducedMotion + a11y intact.
 
+## Domain Decisions
+
+- The office is a fixed **landscape** (800×560); it fills the pane **WIDTH** via `aspect-ratio: 800/560` + center + clip — no left/right whitespace, sides never cropped.
+- The "Hybrid" (office band + roster panel stacked) was **rejected by the owner**; the roster is a manual ☰ toggle, not an auto-switch.
+- Agent labels counter-scale via `labelScale` (`LABEL_SCALE_MAX=1.5`) to hold ~12px on-screen down to office-scale 0.667; the cap is kept to avoid name-tag collision (POINT-2).
+- Top-row agents' speech bubbles flip BELOW when they would clip the office top edge.
+- Accepted limits: extreme wide-short ratios (≳1.8:1) clip top/bottom (~38% at 1280×560); very narrow docks shrink labels below AC-4's 14px floor.
+- Verification: `getBoundingClientRect` measurement across sizes (preview screenshots broken) + owner visual confirm.
+
 ## Out of scope / non-goals
 - No cropping/zoom of the office (owner-rejected). No faking per-agent data / decorative-events-as-team-state.
 - No new motion beyond the calm contract. Genuinely extreme ratios (e.g. < 200px wide, or > 4:1) may degrade — only NORMAL sizes are guaranteed.

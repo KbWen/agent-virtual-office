@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-06-03
+last_updated: 2026-06-05
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -57,6 +57,10 @@ last_updated: 2026-06-03
 | AVO-136 | Event juice pass (reaction beats / shake / confetti) | product | game-feel | P2 | — | feature | Pending | AVO-112 |
 | AVO-137 | Density-layer foundation (glance-L1 default + zen far-view) | product | vibe-rebalance | P1 | — | architecture-change | Pending | AVO-126, AVO-127, AVO-128 |
 | AVO-138 | Subagent helper huddle (desk-side capped figures + heavy-load cue) | product | game-feel | P1 | docs/specs/subagent-helper-huddle.md | feature | Done | AVO-106 |
+| AVO-139 | Responsive office width-fill + readable labels (no whitespace/crop) | product | vibe-rebalance | P0 | docs/specs/responsive-office-roster.md | feature | Done | — |
+| AVO-140 | Living-office honest events (L2 team-affect + honesty gating + reluctant + real-seed) | product | real-ai-behavior | P1 | docs/specs/living-office-events.md | feature | Done | AVO-138 |
+| AVO-141 | Comms / vertical (☰ roster) deeper optimization — "still lots of room" | product | vibe-rebalance | P2 | docs/specs/living-office-events.md | feature | Pending | AVO-140 |
+| AVO-142 | Drag-to-move agents (manual reposition for realer interaction) | product | game-feel | P2 | — | feature | Pending | — |
 | #20 | Hook read-modify-write atomic | chore | tech-debt | P3 | — | quick-win | Deferred | — |
 
 ## Status Key

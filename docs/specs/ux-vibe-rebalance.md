@@ -39,6 +39,13 @@ glance-L1; exact technical detail stays reachable on-demand (click-to-inspect / 
    folded into the working glow ring's intensity (opacity + stroke width), so a sprite never shows two
    concentric rings.
 
+## Domain Decisions
+- The cure is **deletion/demotion**, not addition: default density is glance-L1, detail on-demand (the office is a companion, not a dashboard).
+- Name tags **reveal-on-active**; the token meter and done/blocked KPIs are off the persistent bar (surfaced on demand).
+- Identity rides **sprite + color + desk**; the exact tool shows only in the click-inspector, not an in-scene pill.
+- Effort folds into the single working **glow ring** intensity (no separate thinking aura).
+- Bubbles speak office nouns (測試/建置/…), never raw shell strings or paths.
+
 ## Non-goals
 - The L0/L1/L2 density dial / zen far-view mode (AVO-137) — deferred.
 - Additive animation juice: posture-blocked, micro-telegraphs, ring breathe/flash, event confetti

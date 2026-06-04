@@ -37,6 +37,12 @@ Make in-session subagent fan-out visible & charming, gracefully handling HIGH vo
 6. **No overlap, ever (#4)** — helpers clamp to the open side + cap at 3; two adjacent roles both
    huddling must not collide (offset away from each other). Worktree clones stay in the hallway as-is.
 
+## Domain Decisions
+- `SubagentStart`/`SubagentStop` hook events drive ephemeral **helper sprites at the parent (lead) agent's desk** — not independent movable agents.
+- Capped count with a "+N" overflow glyph; 60s TTL self-heal so a missed Stop can't strand helpers.
+- Represents Task-tool / sub-agent dispatch — **orthogonal to per-agent work status** (must NOT be repurposed for blocked/help semantics).
+- A heavy-load cue (💦) signals many concurrent helpers.
+
 ## Non-goals
 - Pixel-level taste (fade/scale/fan-out timing, exact +N styling, cozy-vs-cramped) → human visual session.
 - A structural DAG/minimap view of the subagent tree (that is AVO-118, separate).
