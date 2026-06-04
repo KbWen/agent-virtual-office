@@ -5,7 +5,7 @@ import { charName, behaviorLabel, t, useLocale, eventName } from '../i18n'
 import { CharacterPixelSprite } from './AgentCharacter'
 import { agentLineLabel, taskChipLabel, formatTokens } from './ControlPanel'
 import { formatTimeAgo } from '../utils/formatTime'
-import { comparePresence, isIdleStatus, feedEntries } from '../systems/rosterModel'
+import { comparePresence, isIdleStatus } from '../systems/rosterModel'
 
 // ─── Vertical office: presence rail (COMMS rebuild — Phase 1: the honest, lively spine) ─────────
 // The optional ☰ lens on the office. Instead of a flat declaration-ordered list, this is a PRESENCE
@@ -169,7 +169,10 @@ export default function NarrowRoster() {
   const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
   const tokens = useOfficeStore((s) => s.tokens)
   const effort = useOfficeStore((s) => s.effort)
-  const activityLog = useOfficeStore(useShallow((s) => s.activityLog))
+  // The feed reads the dedicated eventFeed buffer (real events only, filled at write time) — NOT a
+  // read-time filter of activityLog, whose 50-cap shares space with organic theater and would evict
+  // real events before they showed (the cap-before-filter bug).
+  const eventFeed = useOfficeStore(useShallow((s) => s.eventFeed))
   const health = useOfficeStore((s) => s.integrationHealth?.state || 'idle')
 
   const [expandedId, setExpandedId] = useState(null)
@@ -215,12 +218,11 @@ export default function NarrowRoster() {
   // Phase 3: when a row is expanded, FOCUS the feed on that agent (their events only). Tapping
   // the row again clears it (expandedId toggles). Otherwise the feed shows the whole team.
   const feed = useMemo(() => {
-    const all = feedEntries(activityLog)
     const scoped = expandedId
-      ? all.filter((e) => e.agentId === expandedId || e.from === expandedId || e.to === expandedId)
-      : all
+      ? eventFeed.filter((e) => e.agentId === expandedId || e.from === expandedId || e.to === expandedId)
+      : eventFeed
     return scoped.slice(0, 12)
-  }, [activityLog, expandedId])
+  }, [eventFeed, expandedId])
   const now = Date.now()
 
   const subagentCount = (roleId) => helpers.reduce((n, h) => (h.parentRole === roleId ? n + 1 : n), 0)
@@ -304,7 +306,9 @@ export default function NarrowRoster() {
         </div>
       ) : (!quiet && (
         <div className="[grid-column:1/-1] text-[10px] text-center text-gray-400 dark:text-gray-500 mt-1 pt-1.5 border-t border-gray-200 dark:border-gray-700" data-roster-feed="empty">
-          {t('chat.feedEmpty', 'No activity yet — waiting for the team…')}
+          {expandedId
+            ? `${charName(expandedId)} — ${t('chat.feedEmptyFocused', 'no recent activity')}`
+            : t('chat.feedEmpty', 'No activity yet — waiting for the team…')}
         </div>
       ))}
     </div>

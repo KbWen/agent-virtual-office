@@ -307,9 +307,9 @@
     "quiet": "現在很安靜 — 團隊休息中",
     "activity": "動態",
     "feedEmpty": "目前還沒有動態 — 等待團隊…",
+    "feedEmptyFocused": "暫無動態",
     "enableNotify": "卡住時通知我",
-    "offline": "已斷線",
-    "handoff": "交棒給"
+    "offline": "已斷線"
   },
   "notify": {
     "blockedTitle": "Agent 卡住了",

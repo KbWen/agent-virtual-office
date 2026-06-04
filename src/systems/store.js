@@ -227,6 +227,13 @@ let _activityId = 0
 function mkActivity(entry) {
   return { id: ++_activityId, timestamp: Date.now(), origin: 'organic', ...entry }
 }
+// Origins that belong in the activity FEED (real signal, not organic officeLife theater). The feed
+// reads a SEPARATE `eventFeed` buffer filled at WRITE time — filtering the shared activityLog only
+// at read time let organic events (8-50/min) evict real ones from the 50-slot ring before the feed
+// ever saw them (the cap-before-filter bug). Keep this in sync with rosterModel.FEED_ORIGINS.
+const FEED_WORTHY_ORIGINS = new Set(['hook', 'event', 'inferred'])
+const pushFeed = (eventFeed, entry) =>
+  FEED_WORTHY_ORIGINS.has(entry.origin) ? [entry, ...eventFeed].slice(0, 30) : eventFeed
 
 // Monotonic id for handoff animations. MUST NOT be Date.now(): two handoffs added
 // in the same millisecond (multiple agents picking 'pass-document' on the same tick,
@@ -534,7 +541,7 @@ export const useOfficeStore = create((set) => ({
   setActiveEvent: (event) => set((s) => {
     if (!event) return { activeEvent: event }
     const entry = mkActivity({ type: 'event', agentId: null, message: event.id || event.name || 'event', origin: 'event' })
-    return { activeEvent: event, activityLog: [entry, ...s.activityLog].slice(0, 50) }
+    return { activeEvent: event, activityLog: [entry, ...s.activityLog].slice(0, 50), eventFeed: pushFeed(s.eventFeed, entry) }
   }),
   // Guard against a no-op clear — clearActiveEvent is called on every officeLife
   // teardown/HMR (releaseAllGroupEvents) and after every event-cleanup timer, often
@@ -824,6 +831,11 @@ export const useOfficeStore = create((set) => ({
       const log = activities.length > 0
         ? [...activities, ...s.activityLog].slice(0, 50)
         : s.activityLog
+      // Feed buffer: status activities are all hook/inferred origin (feed-worthy) → keep them in the
+      // separate eventFeed where organic theater can't evict them.
+      const feedLog = activities.length > 0
+        ? [...activities.filter((a) => FEED_WORTHY_ORIGINS.has(a.origin)), ...s.eventFeed].slice(0, 30)
+        : s.eventFeed
       // Coalesce the integration-channel field writes into THIS single set().
       // applyMessage previously called applyExternalStatus + setStatusSource +
       // setIntegrationSource + setActiveWorkflow as four separate store writes,
@@ -852,7 +864,7 @@ export const useOfficeStore = create((set) => ({
         integrationPatch.activeWorkflow = meta.workflow ?? null
       }
       return {
-        externalStatus: ext, agents, activityLog: log, dailyDoneLedger, dailyBlockedLedger,
+        externalStatus: ext, agents, activityLog: log, eventFeed: feedLog, dailyDoneLedger, dailyBlockedLedger,
         hasEverReceivedStatus: meta.skipHintDismiss ? s.hasEverReceivedStatus : true,
         ...(evictedSelected ? { selectedAgent: null } : {}),
         ...integrationPatch,
@@ -1007,6 +1019,7 @@ export const useOfficeStore = create((set) => ({
       return {
         handoffs: next.length > 20 ? next.slice(-20) : next,
         activityLog: [act, ...s.activityLog].slice(0, 50),
+        eventFeed: pushFeed(s.eventFeed, act),
       }
     }),
   removeHandoff: (id) =>
@@ -1015,7 +1028,10 @@ export const useOfficeStore = create((set) => ({
     })),
 
   // ─── Activity Log (for Activity Feed) ───
-  activityLog: [],  // [{ id, timestamp, type, agentId, message }]
+  activityLog: [],  // [{ id, timestamp, type, agentId, message, origin }] — ALL events (incl. organic)
+  // Separate bounded buffer of FEED-WORTHY events only (hook/event/inferred). The roster feed reads
+  // THIS, so the organic theater flooding activityLog can never evict a real event before it shows.
+  eventFeed: [],
 
   // ─── Selected agent for inspect popover ───
   selectedAgent: null,

@@ -58,3 +58,35 @@ describe('activity-log origin tagging (feed trust)', () => {
     expect(after[after.length - 1]).toMatchObject({ from: 'res', to: 'gate', subtle: true })
   })
 })
+
+describe('eventFeed — real events survive the organic flood (HIGH-1 regression)', () => {
+  beforeEach(() => useOfficeStore.setState({ activityLog: [], eventFeed: [] }))
+
+  it('a real (hook) event is NOT evicted by 60 organic behavior writes', () => {
+    useOfficeStore.getState().applyExternalStatus([{ agentId: 'dev', status: 'blocked', label: 'npm test failed' }])
+    // Flood organic theater — these write to activityLog (50-cap) but must NEVER touch eventFeed.
+    for (let i = 0; i < 60; i++) {
+      useOfficeStore.getState().setAgentBehavior('pm', i % 2 ? 'typing' : 'reading-screen', 'normal', null)
+    }
+    const ef = useOfficeStore.getState().eventFeed
+    const survived = ef.find((e) => e.type === 'status' && e.agentId === 'dev' && e.message === 'npm test failed')
+    expect(survived).toBeTruthy()                       // real event still present after the flood
+    expect(ef.every((e) => e.origin !== 'organic')).toBe(true) // feed buffer holds zero organic
+  })
+
+  it('eventFeed is bounded (≤30) and newest-first', () => {
+    for (let i = 0; i < 40; i++) useOfficeStore.getState().setActiveEvent({ id: 'e' + i, name: 'E' + i })
+    const ef = useOfficeStore.getState().eventFeed
+    expect(ef.length).toBeLessThanOrEqual(30)
+    expect(ef[0].message).toBe('e39') // newest first
+  })
+
+  it('organic handoffs stay out of the feed; workflow handoffs enter it', () => {
+    useOfficeStore.setState({ eventFeed: [] })
+    useOfficeStore.getState().addHandoff('arch', 'qa')               // organic
+    useOfficeStore.getState().addHandoff('pm', 'dev', { subtle: true }) // workflow
+    const ef = useOfficeStore.getState().eventFeed
+    expect(ef.some((e) => e.type === 'handoff' && e.from === 'pm')).toBe(true)
+    expect(ef.some((e) => e.type === 'handoff' && e.from === 'arch')).toBe(false)
+  })
+})

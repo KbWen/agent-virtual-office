@@ -307,9 +307,9 @@
     "quiet": "Quiet right now — the team is resting",
     "activity": "Activity",
     "feedEmpty": "No activity yet — waiting for the team…",
+    "feedEmptyFocused": "no recent activity",
     "enableNotify": "Notify me when blocked",
-    "offline": "Disconnected",
-    "handoff": "handed off to"
+    "offline": "Disconnected"
   },
   "notify": {
     "blockedTitle": "Agent stuck",
