@@ -2,22 +2,21 @@
 
 # Agent Virtual Office
 
+[![tests](https://img.shields.io/badge/tests-1263%20passing-brightgreen.svg)](#)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
 [![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev)
-[![Vite 6](https://img.shields.io/badge/vite-6-646cff.svg)](https://vitejs.dev)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/KbWen/agent-virtual-office/pulls)
 
-**你的 AI Agent 團隊不只是在跑 code — 他們在上班。**
+**一個讓你的 coding agent 活過來的迷你像素辦公室。**
 
-![Virtual Office Screenshot](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.png)
+![Virtual Office Screenshot](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.png)
 
-一個像素風的虛擬辦公室，AI agent 小人在裡面工作、偷喝咖啡、為了 code review 吵架、開站立會議。
-他們不知道你在看，但你看了會嘴角上揚。
+當 Claude Code 在你的 codebase 裡埋頭苦幹，一個像素版的它正坐在桌前做一樣的事 —— 打字、卡關、氣呼呼地跑去跟 QA 吵那到底算不算 bug。把它接上你的 Claude Code / Codex / CI session，你的 agent 就真的來上班了：`working`、`blocked`、出貨、鬥嘴，即時上演。
 
-*這不是監控面板，是氛圍工具。*
+它不是儀表板。對工作毫無幫助，但你就是會一整天開著它。
 
-[快速開始](#快速開始) · [狀態 API](#狀態-api) · [English](README.md)
+[快速開始](#快速開始) · [他們在幹嘛](#他們在幹嘛) · [English](README.md)
 
 </div>
 
@@ -25,33 +24,35 @@
 
 ## 他們在幹嘛？
 
-| 小人 | 個性 | 你可能會看到他... |
+| 小人 | 個性 | 通常會看到他… |
 |------|------|-----------------|
-| **PM** | 愛開會、桌上整齊 | 在甘特圖前沈思人生 |
-| **建築師** | 戴貝雷帽的哲學家 | 突然衝到白板大喊「有了！」 |
-| **開發者** | 雙馬尾、咖啡成癮 | 桌上 5 杯咖啡，還在倒第 6 杯 |
-| **QA** | 拿放大鏡的完美主義者 | 跟 Dev 面對面爭論 bug 存不存在 |
-| **DevOps** | 戴安全帽的行動派 | 深呼吸，然後按下那個大紅按鈕 |
-| **研究員** | 長髮書蟲 | 書堆越疊越高，偶爾恍然大悟 |
-| **門神** | 刺蝟頭守門員 | 舉著盾牌說「前置條件不夠」 |
-| **設計師** | 粉紅頭髮的創意人、設計角落 | 排列色票、在 iPad 上塗鴉 |
+| **PM** | 開會是一種愛的語言 | 把根本不用調的甘特圖再調一次 |
+| **建築師** | 貝雷帽。意見很多。 | 講到一半突然衝去白板大喊「有了！」 |
+| **開發者** | 雙馬尾、咖啡續命 | 桌上五個空杯，正在沖第六杯 |
+| **QA** | 什麼都不信、放大鏡隨身 | 跟 Dev 說這 bug 是真的。它就是真的。 |
+| **DevOps** | 安全帽一戴、天不怕地不怕 | 深吸一口氣，然後按下那顆大紅按鈕 |
+| **研究員** | 住在書堆後面 | 一直疊書，疊到某個瞬間突然懂了 |
+| **門神** | 你 pipeline 的保鑣 | 盾牌一舉：「前置條件不夠。」重來。 |
+| **設計師** | 粉紅頭髮、對 padding 很有意見 | 把一個色票往左移 2px，這是第三次了 |
 
 ---
 
 ## 辦公室日常
 
-每隔 1-3 分鐘，辦公室會隨機發生群體事件：
+開著放著，事情就自己發生了。有些事件由你 session 的**真實訊號**觸發 —— 真的部署成功才放煙火、卡關連續發生才開吵；社交橋段（茶歇、外送、辦公室的狗）則照計時器出現，而且 live session 忙碌時會自動降頻，不會蓋過真實工作。像是：
 
-- **茶歇時間** — 幾個人溜去咖啡機旁聊八卦
-- **站立會議** — 全員被 PM 拉到白板前報告進度
-- **外送到了** — 有人舉著紙袋進場，全場歡呼
-- **打翻咖啡** — 桌上冒驚嘆號，鄰座英勇救援
-- **Review 爭論** — Dev 和 QA 的經典三幕劇：「沒 bug！」→「你看這裡」→「好吧修了」
-- **部署成功** — Ops 按下按鈕，全場放煙火慶祝
-- **靈感時刻** — 建築師突然頓悟，衝去白板畫架構
-- **小組會議** — 幾個人走進會議室，開始「嗯嗯同意」
+- **茶歇時間** — 幾個人溜去咖啡機旁，聊其他人的八卦
+- **站立會議** — PM 把所有人趕到白板前。沒人逃得掉。
+- **外送到了** — 有人舉著紙袋進來。生產力結束。
+- **打翻咖啡** — 桌上警報，鄰座衝過來救援（順便看戲）
+- **Review 開吵** — Dev：「沒 bug。」QA：「你看這裡。」Dev：「…好啦。」
+- **部署成功** — Ops 一巴掌拍下按鈕，全場炸開
+- **靈感時刻** — 建築師定格三秒，然後衝去白板
+- **又要開會** — 幾個人魚貫進場，開始互相點頭
 
-偶爾還會出現稀有事件：有人帶狗來上班、空調壞了全場搧風、老闆巡視所有人假裝認真...
+…還有稀有的：有人帶狗來上班、冷氣掛了全場搧風、老闆來巡視、全辦公室*瞬間看起來超忙*。
+
+> **不怕縮放。** 辦公室會填滿你停靠的任何寬度 —— IDE 側欄、半螢幕、全視窗，左右不留死白。按 **☰** 切換直式名冊：誰在工作、誰卡關，還有一條「剛剛發生了什麼」的即時動態。
 
 ---
 
@@ -451,86 +452,30 @@ node node_modules/agent-virtual-office/public/hooks/generic-llm-bridge.js --port
 
 ---
 
-## 技術亮點
+## 亮點
 
-| 特色 | 細節 |
-|---------|--------|
-| **純 SVG 像素藝術** | 16×20 手繪角色，7 種髮型 + 7 種表情 + 2 種性別 |
-| **標準對齊的分類器** | W3C Activity Streams 2.0 動詞 + MCP namespace + 角色/workflow 優先序解析器（`src/systems/classify.js`） |
-| **角色感知動畫** | `qa+Bash`→放大鏡、`ops+Bash`→部署按鈕、`gate+Bash`→盾牌驗證、`designer+Edit`→白板 — 同一工具、不同角色、不同視覺 |
-| **情緒驅動天氣** | `frustrated`→下雨、`stuck`→雷雨、`rushing`→多雲，透過 12 扇牆面窗戶顯示；CSP-safe 打包 keyframes |
-| **閒置推論** | `working+45s`→`thinking`、`blocked+90s`→`awaiting-approval`（補上 Pixel Agents 自承的啟發式缺口） |
-| **桌面通知** | blocked ≥30s + 分頁隱藏 + 已授權時發瀏覽器通知；同一段事件去重 |
-| **自我改進分類器** | `unknownLog` 聚合 Tier 5 fallback（LangSmith 模式）；production 透過 `import.meta.env.PROD` gate 零成本 |
-| **今日 done/blocked 指標** | 底部列 `✓N / ✗M` 指標，含 i18n + sr-only 鏡像；跨日原子重置 |
-| **RAF 移動 + 走廊路由** | requestAnimationFrame 驅動 80px/s 走路，小人會穿過門口和走廊不卡牆 |
-| **行為引擎** | 權重隨機：工作 65% / 日常 12% / 社交 13% / 離席 10% — 依角色、情緒、時段調整 |
-| **狀態感知對話** | working 說「衝衝衝！」、blocked 說「救命...」，情緒著色的對話泡 |
-| **真實時鐘 + 日夜循環** | 中午午休，天氣/光線隨時間變化，只有 Dev 留到很晚還亮著一盞燈 |
-| **永不卡死保證** | try/catch + 看門狗計時器，行為鏈永遠不會斷 |
-| **減少動態 + a11y** | 尊重 `prefers-reduced-motion`，每個視覺指標都有 sr-only 標籤，支援暗色模式 |
+- **純 SVG 像素藝術** — 8 個手繪 16×20 角色。不用 canvas、不吃 GPU、bundle 不肥。
+- **角色感知動畫** — 同一工具、不同角色、不同場景：`qa + Bash` → 放大鏡、`ops + Bash` → 部署按鈕、`designer + Edit` → 白板。
+- **誠實、由訊號驅動的生命力** — 事件由你的*真實* session 觸發；4 層分類器（W3C 動詞 + MCP namespace）把工具對映成辦公室動作，而且角色的真實狀態永遠不造假。
+- **以「安靜」為設計** — 情緒驅動天氣、閒置推論（`working+45s` → thinking）、減少動態 + a11y，以及永不卡死的行為看門狗。
+
+→ 完整內部機制（分類器層級、移動/路徑、行為引擎、天氣、推論）在 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**。
 
 ---
 
-## 架構
+## 專案結構
 
 ```
-.
-├── bin/
-│   └── cli.js                       # npx 進入點
-├── src/
-│   ├── components/
-│   │   ├── AgentCharacter.jsx       # 角色 sprite + 行為排程 + RAF 移動
-│   │   ├── PixelOffice.jsx          # 主場景（SVG 辦公室 + 家具 + 天氣覆蓋）
-│   │   ├── AgentInspector.jsx       # 單一 agent 詳情面板（點小人 → 詳情）
-│   │   ├── BehaviorBubble.jsx       # 對話泡
-│   │   ├── TopDownFurniture.jsx     # 桌子/家具 SVG + WallWindow + WeatherOverlay
-│   │   └── ControlPanel.jsx         # 底部狀態面板 + ✓N/✗M 指標 + 🔔 通知
-│   ├── systems/
-│   │   ├── classify.js              # 4 層分類器（built-in / W3C 動詞 / MCP / 角色+workflow）
-│   │   ├── unknownLog.js            # Dev 模式 Tier 5 聚合器（LangSmith 模式，prod no-op）
-│   │   ├── behaviorEngine.js        # 權重隨機行為引擎
-│   │   ├── moodEngine.js            # 滑動視窗情緒（rushing/frustrated/stuck/...）
-│   │   ├── movementSystem.js        # 地板區域 + 障礙物 + 路徑尋找
-│   │   ├── officeLife.js            # 群體事件系統（eureka/meeting/deploy-success/...）
-│   │   ├── contextBubble.js         # 狀態 × 情緒 × 角色感知的對話生成
-│   │   ├── constants.js             # 共用 enum（VALID_STATUSES / VALID_MOODS / STATUS_COLORS）
-│   │   ├── store.js                 # Zustand state + dailyDoneLedger + dailyBlockedLedger
-│   │   └── platformDetect.js        # 瀏覽器 / CLI / 桌面平台偵測
-│   ├── inference/
-│   │   ├── inferStatus.js           # 外部狀態整合（hook 事件 + SSE/poll）
-│   │   ├── desktopNotifier.js       # blocked ≥30s + 分頁隱藏時發瀏覽器通知
-│   │   ├── idleGapInfer.js          # 推論 'thinking'（45s gap）/ 'awaiting-approval'（90s gap）
-│   │   ├── agentRouter.js           # Agent 路由邏輯
-│   │   └── workflowHandoff.js       # Workflow 階段轉換的交接箭頭
-│   ├── utils/
-│   │   ├── normalizePost.js         # POST /api/status payload 清理
-│   │   └── formatTime.js            # 時間/日期格式化
-│   ├── server/
-│   │   └── scanSessions.mjs         # 多 worktree session 掃描器
-│   ├── i18n.js                      # 輕量 i18n（~90 行）
-│   ├── locales/
-│   │   ├── en.json                  # 英文字串（含 notify.* + ui.todayMetrics*）
-│   │   └── zh-TW.json               # 繁體中文字串
-│   ├── index.css                    # 打包 keyframes（CSP-safe）+ Tailwind import
-│   ├── App.jsx                      # 根元件（辦公室場景 + 控制面板）
-│   ├── main.jsx                     # React root + error boundary
-│   └── config/
-│       ├── characters.json          # 角色定義（8 個角色 + 3 個輕量）
-│       └── officeEvents.json        # 事件池 + 訊息庫
-├── public/
-│   ├── bridge.html                  # iframe 嵌入用的狀態橋
-│   └── hooks/                       # 範例 hook 設定（PreToolUse/PostToolUse/Stop/...）
-├── server.mjs                       # Production 獨立伺服器（只用 Node 內建模組）
-├── docs/                            # Specs、ADR、架構文件
-│   ├── specs/                       # 功能 spec + product backlog + shipped log
-│   ├── adr/                         # 架構決策紀錄
-│   ├── architecture/                # 各領域決策 log
-│   └── deployment/                  # Docker / nginx / pm2 / systemd 設定
-├── tests/                           # vitest — 1025 個測試涵蓋分類器、推論、store、ledger
-├── vite.config.js                   # Vite + 狀態 API middleware（/api/status, /api/event, /api/lang）
-└── package.json
+src/         React app —— components（辦公室場景、角色、對話泡）、
+             systems（分類器、行為、情緒、移動、事件）、
+             inference（狀態整合 + 閒置推論 + 通知）
+server.mjs   獨立 production 伺服器（只用 Node 內建模組）
+public/      Hook 設定 + 狀態橋
+docs/        Specs、ADR、架構與設計文件、部署設定
+tests/       vitest —— 1263 個測試（分類器、推論、store、移動、事件誠實性）
 ```
+
+完整標註檔案樹 + 模組職責 → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**。
 
 ---
 

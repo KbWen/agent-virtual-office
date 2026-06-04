@@ -2,22 +2,24 @@
 
 # Agent Virtual Office
 
+[![tests](https://img.shields.io/badge/tests-1263%20passing-brightgreen.svg)](#)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
 [![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev)
-[![Vite 6](https://img.shields.io/badge/vite-6-646cff.svg)](https://vitejs.dev)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/KbWen/agent-virtual-office/pulls)
 
-**Your AI agents aren't just running code — they're at the office.**
+**A tiny pixel office where your coding agents come to life.**
 
 ![Virtual Office Screenshot](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.png)
 
-A pixel-art virtual office where AI agent characters work, grab coffee, argue about code reviews, and hold stand-ups.
-They don't know you're watching, but you'll smile anyway.
+While Claude Code grinds through your codebase, a pixel version of it sits at a desk doing
+the same thing — typing, getting blocked, stomping off to argue with QA about whether that's
+*really* a bug. Point it at your Claude Code / Codex / CI session and your agents clock in for
+real: `working`, `blocked`, shipping, bickering — live.
 
-*This isn't a monitoring dashboard — it's a vibe tool.*
+It's not a dashboard. It's useful for approximately nothing, and you'll leave it open all day anyway.
 
-[Quick Start](#quick-start) · [Status API](#status-api) · [中文版](README.zh-TW.md)
+[Quick Start](#quick-start) · [Meet the Team](#meet-the-team) · [中文版](README.zh-TW.md)
 
 </div>
 
@@ -25,33 +27,38 @@ They don't know you're watching, but you'll smile anyway.
 
 ## Meet the Team
 
-| Character | Personality | You might catch them... |
+| Character | Personality | Usually spotted... |
 |-----------|------------|------------------------|
-| **PM** | Meeting-lover, tidy desk | Staring at a Gantt chart, pondering life |
-| **Architect** | Beret-wearing philosopher | Sprinting to the whiteboard yelling "Eureka!" |
-| **Developer** | Twin-tails, coffee addict | 5 cups on desk, pouring #6 |
-| **QA** | Magnifying-glass perfectionist | Arguing with Dev about whether a bug exists |
-| **DevOps** | Hard-hat action hero | Taking a deep breath, then pressing the big red button |
-| **Researcher** | Long-haired bookworm | Book pile growing taller, occasional epiphany |
-| **Gatekeeper** | Spiky-haired bouncer | Holding up a shield: "Prerequisites not met" |
-| **Designer** | Pink-haired creative, design corner | Arranging color swatches, sketching on her iPad |
+| **PM** | Meetings are a love language | Realigning a Gantt chart that needed no realigning |
+| **Architect** | Beret. Opinions. | Bolting to the whiteboard mid-thought yelling "Eureka!" |
+| **Developer** | Twin-tails, running on caffeine | Five empty cups deep, brewing number six |
+| **QA** | Trusts nothing, magnifying glass ready | Telling Dev the bug is real. It's real. |
+| **DevOps** | Hard hat, no fear | One deep breath, then hitting the big red button |
+| **Researcher** | Lives behind a book fort | Adding to the pile until something clicks |
+| **Gatekeeper** | The bouncer of your pipeline | Shield up: "Prerequisites not met." Try again. |
+| **Designer** | Pink hair, strong opinions on padding | Nudging a swatch 2px left, for the third time |
 
 ---
 
 ## Office Life
 
-Every 1–3 minutes, a random group event fires:
+Leave it running and stuff just… happens. Some events fire on **real signals** from your session —
+a real deploy sets off the celebration, a blocked streak kicks off the argument — while the social
+stuff drifts in on a timer and quietly backs off when a live session is busy, so the office never
+talks over real work. Events like:
 
-- **Tea Break** — A few people sneak to the coffee machine to gossip
-- **Stand-up Meeting** — PM drags everyone to the whiteboard for status
-- **Food Delivery** — Someone walks in with a bag, everyone cheers
-- **Coffee Spill** — Desk alarm! Neighbor rushes to help
-- **Review Debate** — Dev vs QA classic: "No bug!" → "Look here" → "Fine, fixed"
-- **Deploy Success** — Ops hits the button, office erupts in celebration
-- **Eureka Moment** — Architect has a flash of insight, bolts to the whiteboard
-- **Meeting Room** — A few people file in, start nodding "mm-hmm, agreed"
+- **Tea Break** — a few sneak off to the coffee machine to talk about the others
+- **Stand-up** — PM herds everyone to the whiteboard. Nobody escapes.
+- **Food's Here** — someone walks in with a bag. Productivity ends.
+- **Coffee Spill** — desk alarm; the neighbor rushes over to help (and judge)
+- **Review Beef** — Dev: "no bug." QA: "look here." Dev: "…fine."
+- **It Deployed** — Ops slaps the button, the whole room loses it
+- **Eureka** — Architect freezes, then sprints to the whiteboard
+- **Another Meeting** — a few file in and start nodding at each other
 
-Rare events include: someone brings a dog, AC breaks and everyone fans themselves, boss walkthrough where everyone pretends to be busy...
+…and the rare stuff: someone brings a dog, the AC dies and everyone fans themselves, the boss does a walkthrough and the whole office *suddenly looks very busy*.
+
+> **Resize-proof.** The office fills the width of whatever you dock it in — IDE sidebar, half-screen, full window — with no dead gutters. Hit **☰** for a vertical roster: who's working, who's blocked, and a live feed of what just happened.
 
 ---
 
@@ -451,86 +458,30 @@ This watches for file changes and automatically updates the office.
 
 ---
 
-## Tech Highlights
+## Highlights
 
-| Feature | Detail |
-|---------|--------|
-| **Pure SVG pixel art** | 16×20 hand-drawn characters, 7 hairstyles + 7 expressions + 2 genders |
-| **Standards-aligned classifier** | W3C Activity Streams 2.0 verbs + MCP namespace + role/workflow priority resolver (`src/systems/classify.js`) |
-| **Role-aware animations** | `qa+Bash`→magnifier, `ops+Bash`→deploy-button, `gate+Bash`→shield-verify, `designer+Edit`→whiteboard — same tool, different role, different visual |
-| **Mood-driven weather** | `frustrated`→rain, `stuck`→thunderstorm, `rushing`→cloudy through 12 wall windows; CSP-safe bundled keyframes |
-| **Idle-gap inference** | `working+45s`→`thinking`, `blocked+90s`→`awaiting-approval` (closes Pixel Agents' admitted heuristic gap) |
-| **Desktop notifications** | Browser Notification when blocked ≥30s + tab hidden + permission granted; per-episode dedupe |
-| **Self-improving classifier** | `unknownLog` aggregates Tier 5 fallbacks (LangSmith pattern); zero-cost in production via `import.meta.env.PROD` gate |
-| **Today done/blocked chip** | `✓N / ✗M` bottom-bar metric with i18n + sr-only mirror; atomic day rollover |
-| **RAF movement + corridor routing** | requestAnimationFrame-driven walking at 80px/s, characters walk through doorways and corridors without clipping |
-| **Behavior engine** | Weighted random: work 65% / daily 12% / social 13% / away 10% — modulated by role, mood, time of day |
-| **Status-aware speech** | "Let's go!" when working, "Help..." when blocked, mood-tinted bubbles |
-| **Real-time clock + day-night cycle** | Nap at noon, weather/lighting shift through the day, only Dev stays late with one lamp on |
-| **Never-stuck guarantee** | try/catch + watchdog timer, behavior chain never breaks |
-| **Reduced-motion + a11y** | Honors `prefers-reduced-motion`, sr-only labels on every visual indicator, dark mode |
+- **Pure SVG pixel art** — 8 hand-drawn 16×20 characters. No canvas, no GPU, no GB-sized bundle.
+- **Role-aware animations** — same tool, different role, different scene: `qa + Bash` → magnifier, `ops + Bash` → deploy button, `designer + Edit` → whiteboard.
+- **Honest, signal-driven life** — events fire from your *real* session; a 4-tier classifier (W3C verbs + MCP namespace) maps tools → office actions, and an agent's real status is never faked.
+- **Calm by design** — mood-driven weather, idle-gap inference (`working+45s` → thinking), reduced-motion + a11y, and a never-stuck behavior watchdog.
+
+→ Full internals — classifier tiers, movement/pathing, behavior engine, weather, inference — live in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ---
 
-## Architecture
+## Project Layout
 
 ```
-.
-├── bin/
-│   └── cli.js                       # npx entry point
-├── src/
-│   ├── components/
-│   │   ├── AgentCharacter.jsx       # Character sprite + behavior scheduler + RAF movement
-│   │   ├── PixelOffice.jsx          # Main scene (SVG office + furniture + weather overlay)
-│   │   ├── AgentInspector.jsx       # Per-agent detail panel (clickable agent → details)
-│   │   ├── BehaviorBubble.jsx       # Speech bubbles
-│   │   ├── TopDownFurniture.jsx     # Desk/furniture SVG + WallWindow + WeatherOverlay
-│   │   └── ControlPanel.jsx         # Bottom status panel + ✓N/✗M chip + 🔔 notifications
-│   ├── systems/
-│   │   ├── classify.js              # 4-tier classifier (built-in / W3C verb / MCP / role+workflow)
-│   │   ├── unknownLog.js            # Dev-mode Tier 5 aggregator (LangSmith pattern, prod no-op)
-│   │   ├── behaviorEngine.js        # Weighted random behavior engine
-│   │   ├── moodEngine.js            # Sliding-window mood (rushing/frustrated/stuck/...)
-│   │   ├── movementSystem.js        # Floor areas + obstacles + pathfinding
-│   │   ├── officeLife.js            # Group event system (eureka/meeting/deploy-success/...)
-│   │   ├── contextBubble.js         # Status × mood × role-aware speech generation
-│   │   ├── constants.js             # Shared enums (VALID_STATUSES / VALID_MOODS / STATUS_COLORS)
-│   │   ├── store.js                 # Zustand state + dailyDoneLedger + dailyBlockedLedger
-│   │   └── platformDetect.js        # Browser / CLI / desktop platform detection
-│   ├── inference/
-│   │   ├── inferStatus.js           # External status integration (hook events + SSE/poll)
-│   │   ├── desktopNotifier.js       # Browser Notification when blocked ≥30s + tab hidden
-│   │   ├── idleGapInfer.js          # Infer 'thinking' (45s gap) / 'awaiting-approval' (90s gap)
-│   │   ├── agentRouter.js           # Agent routing logic
-│   │   └── workflowHandoff.js       # Workflow phase-transition handoff arrows
-│   ├── utils/
-│   │   ├── normalizePost.js         # POST /api/status payload sanitization
-│   │   └── formatTime.js            # Time/date formatting helpers
-│   ├── server/
-│   │   └── scanSessions.mjs         # Multi-worktree session scanner
-│   ├── i18n.js                      # Lightweight i18n (~90 lines)
-│   ├── locales/
-│   │   ├── en.json                  # English strings (incl. notify.* + ui.todayMetrics*)
-│   │   └── zh-TW.json               # Traditional Chinese strings
-│   ├── index.css                    # Bundled keyframes (CSP-safe) + Tailwind import
-│   ├── App.jsx                      # Root component (office scene + control panel)
-│   ├── main.jsx                     # React root + error boundaries
-│   └── config/
-│       ├── characters.json          # Character definitions (8 roles + 3 lightweight)
-│       └── officeEvents.json        # Event pool + message library
-├── public/
-│   ├── bridge.html                  # Status bridge for iframe embedding
-│   └── hooks/                       # Example hook configs (PreToolUse/PostToolUse/Stop/...)
-├── server.mjs                       # Production standalone server (Node built-ins only)
-├── docs/                            # Specs, ADRs, architecture docs
-│   ├── specs/                       # Feature specs + product backlog + shipped log
-│   ├── adr/                         # Architecture decision records
-│   ├── architecture/                # Domain decision logs (per area)
-│   └── deployment/                  # Docker / nginx / pm2 / systemd configs
-├── tests/                           # vitest — 1025 tests covering classifier, inference, store, ledgers
-├── vite.config.js                   # Vite + status API middleware (/api/status, /api/event, /api/lang)
-└── package.json
+src/         React app — components (office scene, characters, bubbles),
+             systems (classifier, behavior, mood, movement, events),
+             inference (status integration + idle-gap + notifications)
+server.mjs   Standalone production server (Node built-ins only)
+public/      Hook configs + status bridge
+docs/        Specs, ADRs, architecture & design docs, deployment configs
+tests/       vitest — 1263 tests (classifier, inference, store, movement, event honesty)
 ```
+
+Full annotated file tree + module responsibilities → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ---
 
