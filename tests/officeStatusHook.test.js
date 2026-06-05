@@ -350,7 +350,9 @@ describe('extractContext (hook)', () => {
   })
 
   it('maps Bash input to an office-vibe noun, never the raw command (AVO-126)', () => {
-    const result = extractContext('Bash', { command: 'npm test' })
+    // Pin lang so the assertion is portable — extractContext otherwise localizes via the
+    // machine's ~/.claude/office-lang (this was failing on zh-TW hosts; CI happens to run en).
+    const result = extractContext('Bash', { command: 'npm test' }, 'en')
     expect(result).toBe('tests')
   })
 
