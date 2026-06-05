@@ -296,6 +296,24 @@
     "minutesAgo": "{0}分鐘前",
     "hoursAgo": "{0}小時前"
   },
+  "chat": {
+    "tool": "任務",
+    "doneToday": "完成",
+    "blockedToday": "阻塞",
+    "subagents": "子代理",
+    "online": "在線",
+    "done": "完成",
+    "effort": "強度",
+    "quiet": "現在很安靜 — 團隊休息中",
+    "activity": "動態",
+    "feedEmpty": "目前還沒有動態 — 等待團隊…",
+    "feedEmptyFocused": "暫無動態",
+    "enableNotify": "卡住時通知我",
+    "offline": "已斷線",
+    "teamNow": "現在",
+    "teamBlocked": "等你處理",
+    "justNow": "剛剛"
+  },
   "notify": {
     "blockedTitle": "Agent 卡住了",
     "blockedBody": "{0} 已經被擋住 30 秒以上",

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildHashStatusMessage, normalizeStatusMessage } from '../src/inference/inferStatus.js'
+import { buildHashStatusMessage, normalizeStatusMessage, sanitizeHelpers } from '../src/inference/inferStatus.js'
 
 describe('normalizeStatusMessage', () => {
   it('returns null for null input', () => {
@@ -385,6 +385,127 @@ describe('normalizeStatusMessage', () => {
       // which routeExternalAgents then resolves via its own fallback order.
       const result = normalizeStatusMessage({ type: 'office-vibe', agent: 'feat-x~hacker' })
       expect(result.agents[0].role).toBeNull()
+    })
+  })
+
+  describe('helpers field validation (sanitizeHelpers)', () => {
+    it('returns undefined when helpers field is absent', () => {
+      expect(sanitizeHelpers(undefined)).toBeUndefined()
+    })
+
+    it('returns undefined for non-array helpers (rejects malformed payloads)', () => {
+      expect(sanitizeHelpers('not-an-array')).toBeUndefined()
+      expect(sanitizeHelpers(42)).toBeUndefined()
+      expect(sanitizeHelpers({ id: 'x', parentRole: 'dev' })).toBeUndefined()
+    })
+
+    it('accepts a valid helpers array with all 8 base roles', () => {
+      const roles = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
+      for (const role of roles) {
+        const result = sanitizeHelpers([{ id: `${role}#abc`, parentRole: role, label: 'Subagent' }])
+        expect(result).toHaveLength(1)
+        expect(result[0].parentRole).toBe(role)
+      }
+    })
+
+    it('passes through valid helpers with optional label', () => {
+      const result = sanitizeHelpers([
+        { id: 'dev#abc123', parentRole: 'dev', label: 'Coder' },
+        { id: 'qa#def456', parentRole: 'qa' },
+      ])
+      expect(result).toHaveLength(2)
+      expect(result[0]).toMatchObject({ id: 'dev#abc123', parentRole: 'dev', label: 'Coder' })
+      expect(result[1]).toMatchObject({ id: 'qa#def456', parentRole: 'qa' })
+      expect(result[1].label).toBeUndefined()
+    })
+
+    it('rejects entries whose parentRole is not in the 8 base roles', () => {
+      const result = sanitizeHelpers([
+        { id: 'hacker#abc', parentRole: 'hacker' },
+        { id: 'dev#abc', parentRole: 'dev' },
+        { id: 'slug~dev#abc', parentRole: 'slug~dev' },  // composite is not a base role
+      ])
+      expect(result).toHaveLength(1)
+      expect(result[0].parentRole).toBe('dev')
+    })
+
+    it('rejects entries with missing or non-string id', () => {
+      const result = sanitizeHelpers([
+        { id: 123, parentRole: 'dev' },
+        { parentRole: 'dev' },
+        { id: '', parentRole: 'dev' },          // empty string is rejected
+        { id: 'valid#abc', parentRole: 'dev' }, // kept
+      ])
+      expect(result).toHaveLength(1)
+      expect(result[0].id).toBe('valid#abc')
+    })
+
+    it('caps helpers array at 64 entries', () => {
+      const many = Array.from({ length: 100 }, (_, i) => ({ id: `dev#${i}`, parentRole: 'dev' }))
+      const result = sanitizeHelpers(many)
+      expect(result).toHaveLength(64)
+    })
+
+    it('caps id and label strings at 200 chars', () => {
+      const big = 'x'.repeat(500)
+      const result = sanitizeHelpers([{ id: big, parentRole: 'dev', label: big }])
+      expect(result[0].id.length).toBe(200)
+      expect(result[0].label.length).toBe(200)
+    })
+
+    it('returns empty array (not undefined) for an explicit helpers:[] — clears helpers slice', () => {
+      const result = sanitizeHelpers([])
+      expect(Array.isArray(result)).toBe(true)
+      expect(result).toHaveLength(0)
+    })
+
+    it('normalizeStatusMessage: valid helpers array passes through to the message', () => {
+      const msg = normalizeStatusMessage({
+        type: 'office-status',
+        agents: [{ role: 'dev', status: 'working' }],
+        helpers: [{ id: 'dev#abc', parentRole: 'dev', label: 'Helper' }],
+      })
+      expect(msg.helpers).toEqual([{ id: 'dev#abc', parentRole: 'dev', label: 'Helper' }])
+    })
+
+    it('normalizeStatusMessage: malformed helpers array is dropped (field absent in output)', () => {
+      const msg = normalizeStatusMessage({
+        type: 'office-status',
+        agents: [{ role: 'dev', status: 'working' }],
+        helpers: 'not-an-array',
+      })
+      expect(msg.helpers).toBeUndefined()
+      expect('helpers' in msg).toBe(false)
+    })
+
+    it('normalizeStatusMessage: helpers absent in payload → field absent in output (no-clear semantics)', () => {
+      const msg = normalizeStatusMessage({
+        type: 'office-status',
+        agents: [{ role: 'dev', status: 'working' }],
+      })
+      expect('helpers' in msg).toBe(false)
+    })
+
+    it('normalizeStatusMessage: explicit helpers:[] passes as empty array (clear semantics)', () => {
+      const msg = normalizeStatusMessage({
+        type: 'office-status',
+        agents: [{ role: 'dev', status: 'working' }],
+        helpers: [],
+      })
+      expect(msg.helpers).toEqual([])
+    })
+
+    it('normalizeStatusMessage: entry with invalid parentRole is filtered out', () => {
+      const msg = normalizeStatusMessage({
+        type: 'office-status',
+        agents: [{ role: 'dev', status: 'working' }],
+        helpers: [
+          { id: 'bad#1', parentRole: 'admin' },
+          { id: 'good#1', parentRole: 'qa' },
+        ],
+      })
+      expect(msg.helpers).toHaveLength(1)
+      expect(msg.helpers[0].parentRole).toBe('qa')
     })
   })
 })

@@ -1,4 +1,4 @@
-# 技術架構 — AgentCortex Virtual Office（精簡版）
+# 技術架構 — Agent Virtual Office（精簡版）
 
 ---
 

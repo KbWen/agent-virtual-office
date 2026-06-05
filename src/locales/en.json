@@ -296,6 +296,24 @@
     "minutesAgo": "{0}m ago",
     "hoursAgo": "{0}h ago"
   },
+  "chat": {
+    "tool": "task",
+    "doneToday": "done",
+    "blockedToday": "blocked",
+    "subagents": "subagents",
+    "online": "active",
+    "done": "done",
+    "effort": "effort",
+    "quiet": "Quiet right now — the team is resting",
+    "activity": "Activity",
+    "feedEmpty": "No activity yet — waiting for the team…",
+    "feedEmptyFocused": "no recent activity",
+    "enableNotify": "Notify me when blocked",
+    "offline": "Disconnected",
+    "teamNow": "Now",
+    "teamBlocked": "Waiting on you",
+    "justNow": "now"
+  },
   "notify": {
     "blockedTitle": "Agent stuck",
     "blockedBody": "{0} has been blocked for 30+ seconds",

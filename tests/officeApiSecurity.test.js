@@ -6,6 +6,47 @@ import {
   isAuthorizedOfficeRequest,
 } from '../vite.config.js'
 
+// ---------------------------------------------------------------------------
+// Pathname guard (reproduces the vite middleware routing logic inline)
+// After connect strips the /api/status mount prefix, req.url values are:
+//   plain GET            → '/'
+//   GET with query       → '/?t=1' or '/?foo=bar'
+//   sub-path /stream     → '/stream'
+// The guard MUST route '/' and '/?...' to this handler and sub-paths to next().
+// ---------------------------------------------------------------------------
+function shouldHandleLocally(reqUrl) {
+  const pathname = reqUrl ? reqUrl.split('?')[0] : '/'
+  return pathname === '/'
+}
+
+describe('middleware pathname routing guard (AVO /api/status?query fix)', () => {
+  it('handles plain GET /', () => {
+    expect(shouldHandleLocally('/')).toBe(true)
+  })
+
+  it('handles GET with query string /?t=1 (was broken — returned HTML before fix)', () => {
+    expect(shouldHandleLocally('/?t=1')).toBe(true)
+  })
+
+  it('handles GET with multiple query params /?foo=bar&baz=1', () => {
+    expect(shouldHandleLocally('/?foo=bar&baz=1')).toBe(true)
+  })
+
+  it('passes /stream sub-path to next() handler', () => {
+    expect(shouldHandleLocally('/stream')).toBe(false)
+  })
+
+  it('passes /stream?param sub-path with query to next()', () => {
+    expect(shouldHandleLocally('/stream?heartbeat=1')).toBe(false)
+  })
+
+  it('handles null/undefined req.url gracefully', () => {
+    expect(shouldHandleLocally(null)).toBe(true)
+    expect(shouldHandleLocally(undefined)).toBe(true)
+    expect(shouldHandleLocally('')).toBe(true)
+  })
+})
+
 describe('office API security helpers', () => {
   it('allows only loopback browser origins by default', () => {
     expect(isAllowedOrigin('http://localhost:5173')).toBe(true)

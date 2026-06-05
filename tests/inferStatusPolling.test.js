@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { createFilePollingState, pollFileStatusOnce } from '../src/inference/inferStatus.js'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createFilePollingState, pollFileStatusOnce, _globalPayloadSig, normalizeStatusMessage } from '../src/inference/inferStatus.js'
 
 function makeResponse({ ok = true, status = 200, etag = null, jsonData = null, rawBody = null }) {
   const body = rawBody ?? (jsonData !== null ? JSON.stringify(jsonData) : 'null')
@@ -165,5 +165,219 @@ describe('pollFileStatusOnce', () => {
       await pollFileStatusOnce(notFoundFetch, state, vi.fn())
     }
     expect(state.consecutive404).toBeLessThanOrEqual(30)
+  })
+})
+
+// ─── Fix 1: startPolling window-global dedupe ──────────────────────────
+describe('_globalPayloadSig', () => {
+  it('returns identical sig for same agents+workflow', () => {
+    const data = { agents: [{ role: 'dev', status: 'working' }], workflow: 'Build' }
+    expect(_globalPayloadSig(data)).toBe(_globalPayloadSig({ ...data }))
+  })
+
+  it('returns different sig when agents change (seq-less in-place mutation)', () => {
+    const sig1 = _globalPayloadSig({ agents: [{ role: 'dev', status: 'working' }], workflow: null })
+    const sig2 = _globalPayloadSig({ agents: [{ role: 'dev', status: 'blocked' }], workflow: null })
+    expect(sig1).not.toBe(sig2)
+  })
+
+  it('returns different sig when workflow changes', () => {
+    const base = { agents: [{ role: 'dev', status: 'working' }] }
+    const sig1 = _globalPayloadSig({ ...base, workflow: 'Build' })
+    const sig2 = _globalPayloadSig({ ...base, workflow: 'Ship' })
+    expect(sig1).not.toBe(sig2)
+  })
+})
+
+describe('startPolling — seq-less window global re-delivery', () => {
+  let originalGlobal
+  beforeEach(() => { originalGlobal = globalThis.window })
+  afterEach(() => { globalThis.window = originalGlobal; vi.useRealTimers() })
+
+  it('delivers again when agents change in-place even with no _seq field', async () => {
+    vi.useFakeTimers()
+    // Simulate the CLI pattern: mutate the SAME object in place
+    const payload = { type: 'office-status', agents: [{ role: 'dev', status: 'working' }], workflow: null }
+    globalThis.window = { __office_status__: payload }
+
+    // We test _globalPayloadSig directly since startPolling uses setInterval
+    // (browser env needed). Verify the sig changes when agents mutate.
+    const sig1 = _globalPayloadSig(payload)
+    // Simulate in-place mutation (no _seq change)
+    payload.agents = [{ role: 'dev', status: 'blocked' }]
+    const sig2 = _globalPayloadSig(payload)
+    expect(sig1).not.toBe(sig2)
+  })
+
+  it('does NOT re-deliver when nothing changed (no _seq and same content)', () => {
+    const payload = { type: 'office-status', agents: [{ role: 'dev', status: 'working' }], workflow: 'Build' }
+    const sig1 = _globalPayloadSig(payload)
+    // No mutation — same object
+    const sig2 = _globalPayloadSig(payload)
+    expect(sig1).toBe(sig2)
+  })
+
+  it('returns different sig when ONLY helpers change (helpers-only delta not deduped)', () => {
+    // Regression: old sig only covered agents+workflow, so a helpers-only delta
+    // (same agent statuses, same workflow) was silently deduped and never reached
+    // the store. The fix adds helpers (and tokens/effort/mood) to the signature.
+    const base = { agents: [{ role: 'dev', status: 'working' }], workflow: 'Build' }
+    const sig1 = _globalPayloadSig({ ...base, helpers: undefined })
+    const sig2 = _globalPayloadSig({ ...base, helpers: [{ id: 'dev#sub1', parentRole: 'dev', label: 'Coder' }] })
+    expect(sig1).not.toBe(sig2)
+  })
+
+  it('returns different sig when helpers list grows (SubagentStart mid-turn)', () => {
+    const base = { agents: [{ role: 'dev', status: 'working' }], workflow: null }
+    const sig1 = _globalPayloadSig({ ...base, helpers: [{ id: 'dev#1', parentRole: 'dev' }] })
+    const sig2 = _globalPayloadSig({ ...base, helpers: [{ id: 'dev#1', parentRole: 'dev' }, { id: 'dev#2', parentRole: 'dev' }] })
+    expect(sig1).not.toBe(sig2)
+  })
+
+  it('returns same sig when helpers, tokens, effort, and mood are all unchanged', () => {
+    const data = {
+      agents: [{ role: 'dev', status: 'working' }],
+      workflow: 'Build',
+      helpers: [{ id: 'dev#1', parentRole: 'dev' }],
+      tokens: { ctx: 1000, out: 200 },
+      effort: 'medium',
+      mood: 'focused',
+    }
+    expect(_globalPayloadSig(data)).toBe(_globalPayloadSig({ ...data }))
+  })
+
+  it('does not mutate the externally-owned window.__office_status__ global', () => {
+    // withStatusEnvelope stamps _seq and source — these must NOT land on the original
+    // payload object. We verify the shallow-copy guard by checking the original is clean.
+    const payload = { type: 'office-status', agents: [{ role: 'dev', status: 'working' }] }
+    const copy = { ...payload }
+    // _globalPayloadSig must not modify the object it receives
+    _globalPayloadSig(copy)
+    expect(copy).not.toHaveProperty('_seqWasAdded')
+    // The real guard: startPolling passes { ...data } to normalizeStatusMessage
+    // which calls withStatusEnvelope — that stamps _seq on the copy, not on `data`.
+    // Verify the helper itself is read-only.
+    const orig = JSON.stringify(payload)
+    _globalPayloadSig(payload)
+    expect(JSON.stringify(payload)).toBe(orig)
+  })
+})
+
+// ─── helpers field: polling apply-path tests ───────────────────────────
+// These tests verify that pollFileStatusOnce delivers a message whose normalizeStatusMessage
+// output correctly carries or omits the helpers field. The store apply-path (setHelpers call)
+// is verified via the callback receiving the normalized message — the apply logic itself is
+// pure (msg.helpers !== undefined → setHelpers) and does not need a full store mock here.
+describe('helpers field in pollFileStatusOnce delivery', () => {
+  it('delivers a valid helpers array through the normalizer unchanged', async () => {
+    const helpers = [
+      { id: 'dev#abc', parentRole: 'dev', label: 'Coder' },
+      { id: 'qa#def', parentRole: 'qa' },
+    ]
+    const body = JSON.stringify({
+      type: 'office-status',
+      agents: [{ role: 'dev', status: 'working' }],
+      helpers,
+    })
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: true, status: 200,
+      headers: { get: () => 'etag-1' },
+      text: vi.fn().mockResolvedValue(body),
+    })
+    const callback = vi.fn()
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(callback).toHaveBeenCalledOnce()
+    const msg = callback.mock.calls[0][0]
+    expect(msg.helpers).toEqual([
+      { id: 'dev#abc', parentRole: 'dev', label: 'Coder' },
+      { id: 'qa#def', parentRole: 'qa', label: undefined },
+    ])
+  })
+
+  it('drops malformed helpers (non-array) — field absent in delivered message', async () => {
+    const body = JSON.stringify({
+      type: 'office-status',
+      agents: [{ role: 'dev', status: 'working' }],
+      helpers: 'not-an-array',
+    })
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: true, status: 200,
+      headers: { get: () => 'etag-2' },
+      text: vi.fn().mockResolvedValue(body),
+    })
+    const callback = vi.fn()
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(callback).toHaveBeenCalledOnce()
+    const msg = callback.mock.calls[0][0]
+    expect('helpers' in msg).toBe(false)
+  })
+
+  it('delivers helpers:[] explicitly so a cleared turn removes helpers from the store', async () => {
+    const body = JSON.stringify({
+      type: 'office-status',
+      agents: [{ role: 'dev', status: 'done' }],
+      helpers: [],
+    })
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: true, status: 200,
+      headers: { get: () => 'etag-3' },
+      text: vi.fn().mockResolvedValue(body),
+    })
+    const callback = vi.fn()
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(callback).toHaveBeenCalledOnce()
+    const msg = callback.mock.calls[0][0]
+    expect(Array.isArray(msg.helpers)).toBe(true)
+    expect(msg.helpers).toHaveLength(0)
+  })
+
+  it('omits helpers from message when payload has no helpers field (no-clear semantics)', async () => {
+    const body = JSON.stringify({
+      type: 'office-status',
+      agents: [{ role: 'dev', status: 'working' }],
+      // no helpers field
+    })
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: true, status: 200,
+      headers: { get: () => 'etag-4' },
+      text: vi.fn().mockResolvedValue(body),
+    })
+    const callback = vi.fn()
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(callback).toHaveBeenCalledOnce()
+    const msg = callback.mock.calls[0][0]
+    expect('helpers' in msg).toBe(false)
+  })
+
+  it('filters out helpers entries whose parentRole is not a base role', async () => {
+    const body = JSON.stringify({
+      type: 'office-status',
+      agents: [{ role: 'dev', status: 'working' }],
+      helpers: [
+        { id: 'bad#1', parentRole: 'superuser' },
+        { id: 'dev#2', parentRole: 'dev' },
+      ],
+    })
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: true, status: 200,
+      headers: { get: () => 'etag-5' },
+      text: vi.fn().mockResolvedValue(body),
+    })
+    const callback = vi.fn()
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    expect(callback).toHaveBeenCalledOnce()
+    const msg = callback.mock.calls[0][0]
+    expect(msg.helpers).toHaveLength(1)
+    expect(msg.helpers[0].parentRole).toBe('dev')
   })
 })

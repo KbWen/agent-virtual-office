@@ -1,12 +1,13 @@
 import eventsData from '../config/officeEvents.json'
 import { WAYPOINTS, MEETING_CHAIRS, HOME_POSITIONS } from './movementSystem.js'
 import { eventBubble } from '../i18n'
-import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL } from './constants.js'
+import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL, WORK_CLAIM_SIGNAL_WINDOW, LIVE_FLOOR_FIRE_CHANCE, SEED_COOLDOWN_MS } from './constants.js'
 
 let dailyTimer = null
 let rareTimer = null
 let timeInterval = null
 let timeEventInterval = null
+let seedUnsub = null   // living-office P4: store subscription for real-seeded event triggers
 // Module-level cancellation flag so a double-init can fully cancel the PRIOR instance.
 // startOfficeLife's closures all read activeCancelled by reference, so reassigning it
 // here both starts a fresh flag and lets the double-init guard flip the old one true.
@@ -37,6 +38,50 @@ function randomInterval(range) {
   return range[0] + Math.random() * (range[1] - range[0])
 }
 
+// ─── living-office-events Phase 2: honesty gating ───────────────────────────────
+// Event Decision Framework (spec docs/specs/living-office-events.md):
+//   WORK-CLAIM events assert a specific REAL work outcome → may fire ONLY when a matching real
+//   signal fired within WORK_CLAIM_SIGNAL_WINDOW (R2). No signal → ineligible (a SOCIAL/WORLD
+//   event is drawn instead). SOCIAL/WORLD events make no work-claim → always eligible (honest for
+//   the untracked agents pickParticipants already selects). To classify a FUTURE event: if it
+//   asserts/implies a real outcome, add it here with its gate; otherwise leave it out.
+const recentSignal = (es, now) => !!(es && es.changedAt && (now - es.changedAt) < WORK_CLAIM_SIGNAL_WINDOW)
+const WORK_CLAIM_GATES = {
+  // deploy claims → Ops had a real recent signal (working→done on a ship)
+  'deploy-success':       (s, now) => recentSignal(s.externalStatus?.ops, now),
+  'ops-dev-deploy-check': (s, now) => recentSignal(s.externalStatus?.ops, now),
+  // design friction → a real block-streak (moodEngine distils this from real signals)
+  'dev-arch-disagree':    (s)      => s.mood === 'frustrated' || s.mood === 'stuck',
+  // breakthrough → a real done-streak / smooth momentum
+  'eureka':               (s)      => s.mood === 'smooth',
+  // review friction → QA/Gatekeeper had a real recent signal (no distinct "review subagent" on wire)
+  'review-debate':        (s, now) => recentSignal(s.externalStatus?.qa, now) || recentSignal(s.externalStatus?.gate, now),
+}
+
+// Exported for tests. true if the event may HONESTLY fire given the current real-signal state.
+export function eventEligible(event, state, now = Date.now()) {
+  if (!event) return false
+  const gate = WORK_CLAIM_GATES[event.id]
+  return gate ? !!gate(state, now) : true
+}
+
+// Pick a random event from `pool` that is currently eligible (work-claims gated). null if none.
+function pickEligibleEvent(pool, state) {
+  const now = Date.now()
+  const eligible = (pool || []).filter((e) => eventEligible(e, state, now))
+  if (eligible.length === 0) return null
+  return eligible[Math.floor(Math.random() * eligible.length)]
+}
+
+// When a real session is live, scale the ambient floor DOWN (not mute) so working never feels
+// quieter than idle/demo (AC-7). Returns true if this tick should be allowed to fire.
+export function floorTickAllowed(state) {
+  // 'fallback' = a count-only live session (#count=N, no role keys) — still real activity that
+  // pushes teamPulse, so it must scale the floor too (AC-7), not just 'external'.
+  const live = (state.statusSource === 'external' || state.statusSource === 'fallback') && (state.teamPulse || 0) > 0.2
+  return !live || Math.random() < LIVE_FLOOR_FIRE_CHANCE
+}
+
 // Release EVERY agent currently locked in a group event back to organic scheduling.
 // Group-event cleanup normally happens in executeEvent's per-event setTimeout, but that
 // timer early-returns when `cancelled` is flipped (teardown / HMR / StrictMode remount /
@@ -55,6 +100,7 @@ function releaseAllGroupEvents(store) {
         s.clearBubble(id)
       }
     }
+    if (s.clearReluctant) s.clearReluctant()  // P3: don't strand reluctant tells on teardown/HMR
     s.clearActiveEvent()
   } catch { /* store may be torn down — best effort */ }
 }
@@ -68,10 +114,13 @@ function jitter(pos, amount = 20) {
 
 function pickParticipants(event, agents, externalStatus) {
   const ext = externalStatus || {}
-  // Exclude agents that are externally busy (working/blocked)
+  // Exclude agents that are externally busy (working/blocked) OR already in a group event.
+  // Without the inGroupEvent guard a second concurrent event re-locks an already-locked
+  // agent: pickParticipants only inspected externalStatus, so an agent locked by the first
+  // event was still "available" to the second event's picker.
   const isAvailable = (id) => {
     const es = ext[id]
-    return !es || es.status === 'done' || es.status === 'idle'
+    return (!es || es.status === 'done' || es.status === 'idle') && !agents[id]?.inGroupEvent
   }
   const agentIds = Object.keys(agents)
   const available = agentIds.filter(isAvailable)
@@ -87,8 +136,12 @@ function pickParticipants(event, agents, externalStatus) {
   }
   if (event.participants === 'random-1-neighbor') {
     const pool = available.length >= 2 ? available : agentIds
+    // Guard empty pool: if no agents exist, return [] rather than [undefined].
+    // An empty/single-element pool produced [undefined] which triggerInteractiveEvent
+    // then used to create a phantom activeEvent — blocking all subsequent events.
+    if (pool.length === 0) return []
     const idx = Math.floor(Math.random() * pool.length)
-    const result = [pool[idx]]
+    const result = [pool[idx]].filter(Boolean)
     if (idx + 1 < pool.length) result.push(pool[idx + 1])
     return result
   }
@@ -119,11 +172,14 @@ const EVENT_HANDLERS = {
   },
 
   'standup': (store, participants, cancelled) => {
-    // Everyone gathers at whiteboard area
+    // Everyone gathers in front of the whiteboard — 8 SPACED spots (was a 40×30 pile that made the
+    // whole team visually overlap; spread ~90×55 in two rows so each agent reads as distinct).
+    // 8 spots IN FRONT OF the whiteboard, all verified on the mainOffice floor (x15-593, y168-394)
+    // and clear of the whiteboard (x525-590,y278-342) + desks (y≤360): row1 right of opsDesk just
+    // below the board, row2 below the desk row. (Earlier spread put 4 spots in walls/furniture.)
     const whiteboardSpots = [
-      { x: 530, y: 355 }, { x: 550, y: 370 }, { x: 570, y: 355 },
-      { x: 530, y: 385 }, { x: 550, y: 385 }, { x: 570, y: 370 },
-      { x: 540, y: 365 },
+      { x: 500, y: 350 }, { x: 525, y: 348 }, { x: 550, y: 350 }, { x: 578, y: 354 },
+      { x: 445, y: 382 }, { x: 490, y: 384 }, { x: 535, y: 382 }, { x: 578, y: 380 },
     ]
     store.getState().setMultipleAgentGroupEvents(
       participants.map((id, i) => ({
@@ -131,7 +187,7 @@ const EVENT_HANDLERS = {
         behavior: i === 0 ? 'whiteboard' : 'meeting',
         expression: 'normal',
         bubble: i < 2 ? eventBubble('standup') : null,
-        groupTarget: jitter(whiteboardSpots[i % whiteboardSpots.length], 8),
+        groupTarget: jitter(whiteboardSpots[i % whiteboardSpots.length], 7),
       }))
     )
     setTimeout(() => {
@@ -166,6 +222,11 @@ const EVENT_HANDLERS = {
 
   'coffee-spill': (store, participants, cancelled) => {
     const spiller = participants[0]
+    // Guard empty pool: pickParticipants returns [] when no agents are available,
+    // so participants[0] may be undefined. Without this guard, setAgentGroupEvent
+    // receives undefined as the id — producing a phantom group-event slot and
+    // a stuck activeEvent that blocks all subsequent events.
+    if (!spiller) return
     store.getState().setAgentGroupEvent(spiller, {
       behavior: 'scratch-head',
       expression: 'confused',
@@ -462,7 +523,21 @@ function executeEvent(store, event, participants, cancelled) {
   if (handler) {
     handler(store, participants, cancelled)
 
-    // Clean up after event duration — release all participants
+    // living-office P3 (reluctant participants): TRACKED (working/blocked) agents NOT in the scene
+    // get a brief, sub-dominant "torn" tell — the team's life happens AROUND them while they stay
+    // heads-down. PURE OVERLAY (setReluctant never touches status/behavior/position; it self-guards
+    // to only working/blocked non-group agents), so it cannot freeze or falsify a real desk (R1).
+    const s0 = store.getState()
+    const pset = new Set(participants)
+    const reluctantIds = Object.keys(s0.agents).filter((id) => {
+      const es = s0.externalStatus[id]
+      return !pset.has(id) && es && (es.status === 'working' || es.status === 'blocked')
+    })
+    if (reluctantIds.length && s0.setReluctant) {
+      s0.setReluctant(reluctantIds, Date.now() + Math.min(event.duration || 8000, 6000))
+    }
+
+    // Clean up after event duration — release all participants + clear reluctant tells
     setTimeout(() => {
       if (cancelled.value) return
       const s = store.getState()
@@ -472,6 +547,7 @@ function executeEvent(store, event, participants, cancelled) {
           s.clearBubble(id)
         }
       })
+      if (s.clearReluctant) s.clearReluctant()
       s.clearActiveEvent()
     }, event.duration)
   }
@@ -510,12 +586,13 @@ export function startOfficeLife(store) {
   // and its cancellation flag. Previously only dailyTimer/rareTimer were module-level,
   // so a re-init without cleanup leaked the two setInterval loops and left the prior
   // instance's stale event callbacks firing (its `cancelled` flag never flipped).
-  if (dailyTimer || rareTimer || timeInterval || timeEventInterval) {
+  if (dailyTimer || rareTimer || timeInterval || timeEventInterval || seedUnsub) {
     if (activeCancelled) activeCancelled.value = true
     clearTimeout(dailyTimer)
     clearTimeout(rareTimer)
     clearInterval(timeInterval)
     clearInterval(timeEventInterval)
+    if (seedUnsub) { seedUnsub(); seedUnsub = null }
     dailyTimer = rareTimer = timeInterval = timeEventInterval = null
     // Cancel any in-flight interactive events from the prior instance.
     for (const c of interactiveCancellers) c.value = true
@@ -546,13 +623,14 @@ export function startOfficeLife(store) {
     dailyTimer = setTimeout(() => {
       if (cancelled.value) return
       const state = store.getState()
-      if (!state.isPaused && !state.activeEvent) {
-        const pool = eventsData.daily
-        const event = pool[Math.floor(Math.random() * pool.length)]
-        const participants = pickParticipants(event, state.agents, state.externalStatus)
-
-        store.getState().setActiveEvent(event)
-        executeEvent(store, event, participants, cancelled)
+      if (!state.isPaused && !state.activeEvent && floorTickAllowed(state)) {
+        // Honesty gate: skip ungated work-claim events; draw an eligible SOCIAL/WORLD one instead.
+        const event = pickEligibleEvent(eventsData.daily, state)
+        if (event) {
+          const participants = pickParticipants(event, state.agents, state.externalStatus)
+          store.getState().setActiveEvent(event)
+          executeEvent(store, event, participants, cancelled)
+        }
       }
       scheduleDaily()
     }, randomInterval(DAILY_EVENT_INTERVAL))
@@ -563,13 +641,13 @@ export function startOfficeLife(store) {
     rareTimer = setTimeout(() => {
       if (cancelled.value) return
       const state = store.getState()
-      if (!state.isPaused && !state.activeEvent) {
-        const pool = eventsData.rare
-        const event = pool[Math.floor(Math.random() * pool.length)]
-        const participants = pickParticipants(event, state.agents, state.externalStatus)
-
-        store.getState().setActiveEvent(event)
-        executeEvent(store, event, participants, cancelled)
+      if (!state.isPaused && !state.activeEvent && floorTickAllowed(state)) {
+        const event = pickEligibleEvent(eventsData.rare, state)
+        if (event) {
+          const participants = pickParticipants(event, state.agents, state.externalStatus)
+          store.getState().setActiveEvent(event)
+          executeEvent(store, event, participants, cancelled)
+        }
       }
       scheduleRare()
     }, randomInterval(RARE_EVENT_INTERVAL))
@@ -577,6 +655,46 @@ export function startOfficeLife(store) {
 
   scheduleDaily()
   scheduleRare()
+
+  // ─── Real-seeded triggers (living-office Phase 4) ───────────────────────────────
+  // The causal real→event link the owner asked for ("沒有驅動任何一件事情"): a REAL signal
+  // EDGE fires the matching coordinated event IMMEDIATELY (instead of only making it eligible for
+  // the next random tick). Honesty-gated (same eventEligible), mutex'd (skip if activeEvent),
+  // per-event cooldown'd (SEED_COOLDOWN_MS — a flapping signal can't spam, R4). Edge-detected on
+  // the cheap tracked fields only; high-frequency position churn early-returns.
+  const seedCooldown = {}
+  let lastSeedAt = 0   // GLOBAL real-seed cooldown — keeps the causal layer RARE (calm-tech). A busy
+                       // session fires many signal edges; without a global gate the office would be in
+                       // perpetual event-mode (agents stuck gathering). At most one real-seed / window.
+  const fireSeed = (state, eventId) => {
+    if (state.isPaused || state.activeEvent) return
+    const ev = EVENT_BY_ID[eventId]
+    if (!ev || !eventEligible(ev, state)) return // signal must really be present (honesty double-check)
+    const now = Date.now()
+    if (now - lastSeedAt < SEED_COOLDOWN_MS) return                       // GLOBAL gate (anti event-spam)
+    if (seedCooldown[eventId] && now - seedCooldown[eventId] < SEED_COOLDOWN_MS * 3) return // per-event
+    seedCooldown[eventId] = now
+    lastSeedAt = now
+    const participants = pickParticipants(ev, state.agents, state.externalStatus)
+    store.getState().setActiveEvent(ev)
+    executeEvent(store, ev, participants, cancelled)
+  }
+  seedUnsub = typeof store.subscribe === 'function' ? store.subscribe((state, prev) => {
+    if (cancelled.value || !prev || state.isPaused || state.activeEvent) return
+    // mood edge → real block-streak / done-streak coordinated moment (cadence source #2). Mood is a
+    // slow-moving distillation of real signals, so these are naturally infrequent.
+    if (state.mood !== prev.mood) {
+      if (state.mood === 'frustrated' || state.mood === 'stuck') fireSeed(state, 'dev-arch-disagree')
+      else if (state.mood === 'smooth') fireSeed(state, 'eureka')
+    }
+    // real deploy: Ops just transitioned to done (cadence source #1)
+    if (state.externalStatus?.ops?.status === 'done' && prev.externalStatus?.ops?.status !== 'done') {
+      fireSeed(state, 'deploy-success')
+    }
+    // NOTE: the former `helpers-rise → standup` real-seed was REMOVED — SubagentStart fires often, and
+    // `standup` gathers ALL agents, so it made the office perpetually clustered/frozen in a busy
+    // session (regression). SubagentStart liveliness already shows via the helper-huddle sprites.
+  }) : null
 
   // Update time every minute
   timeInterval = setInterval(() => {
@@ -596,9 +714,15 @@ export function startOfficeLife(store) {
 
     const agentIds = Object.keys(state.agents)
 
-    // 12:00-13:00 — Lunch nap: half the agents nap at desk
+    // 12:00-13:00 — Lunch nap: half the agents nap at desk.
+    // Participates in the event mutex via setActiveEvent so a concurrent scheduled
+    // event cannot re-lock the same agents while the nap is active. Without this,
+    // the daily/rare schedulers could fire between the nap's setMultipleAgentGroupEvents
+    // and its 45 s release, re-picking the already-locked nappers.
     if (hour === 12) {
-      const nappers = agentIds.filter(() => Math.random() < 0.5)
+      const lunchNapEvent = { id: 'lunch-nap', duration: 45000 }
+      store.getState().setActiveEvent(lunchNapEvent)
+      const nappers = agentIds.filter((id) => !state.agents[id]?.inGroupEvent && Math.random() < 0.5)
       store.getState().setMultipleAgentGroupEvents(
         nappers.map((id) => ({
           id,
@@ -623,6 +747,7 @@ export function startOfficeLife(store) {
             s.clearBubble(id)
           }
         })
+        s.clearActiveEvent()
       }, 45000)
     }
 
@@ -687,6 +812,7 @@ export function startOfficeLife(store) {
     clearTimeout(rareTimer)
     clearInterval(timeInterval)
     clearInterval(timeEventInterval)
+    if (seedUnsub) { seedUnsub(); seedUnsub = null }
     dailyTimer = rareTimer = timeInterval = timeEventInterval = null
     // Cancel any in-flight interactive events so their deferred callbacks don't
     // fire against a torn-down store.

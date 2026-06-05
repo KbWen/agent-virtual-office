@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
-import { HOME_POSITIONS, OVERFLOW_POSITIONS, OVERFLOW_SLOT_BY_XY } from './movementSystem.js'
+import { HOME_POSITIONS, OVERFLOW_POSITIONS, OVERFLOW_SLOT_BY_XY, clampToFloor, avoidOverlap } from './movementSystem.js'
 import { randomBubble, setNameResolver, behaviorLabel } from '../i18n'
 import { generateContextBubble } from './contextBubble'
 import { detectProjectMode } from './platformDetect'
 import { STATUS_COLORS } from './constants.js'
 import { classifyTask, familyToBehavior, decideBehavior } from './classify.js'
+import { FEED_ORIGINS } from './rosterModel.js'
 
 export { STATUS_COLORS }
 
@@ -64,6 +65,13 @@ export function createPersistedState(state) {
     dailyBlockedLedger: ensureCurrentDailyBlockedLedger(state.dailyBlockedLedger),
   }
   for (const [id, a] of Object.entries(state.agents)) {
+    // Skip session-carrying dynamic worktree agents ('slug~role'). They are
+    // ephemeral — created per-session by applyExternalStatus, not present in
+    // the static roster, and never restored by initAgents. Persisting them
+    // bloats the localStorage snapshot and leaves orphaned entries after short
+    // sessions end. The discriminator mirrors applyExternalStatus: a non-null
+    // `session` field is ONLY ever set by the dynamic-creation branch.
+    if (a.session) continue
     data.agents[id] = {
       // Don't persist status — it's transient, driven only by external hooks
       behavior: a.behavior,
@@ -214,9 +222,18 @@ const _customProfiles = (() => {
 
 // ─── Activity log helpers ───
 let _activityId = 0
+// `origin` separates REAL hook/workflow events from organic officeLife theater so the activity
+// feed can filter out the 8–50 fake behavior entries/min that would otherwise drown (and evict,
+// via the 50-cap) the genuine ones. Default 'organic'; real callers override (see call sites).
 function mkActivity(entry) {
-  return { id: ++_activityId, timestamp: Date.now(), ...entry }
+  return { id: ++_activityId, timestamp: Date.now(), origin: 'organic', ...entry }
 }
+// The feed reads a SEPARATE `eventFeed` buffer filled at WRITE time with FEED_ORIGINS-only entries
+// (the single source of truth, shared with rosterModel) — filtering the shared activityLog only at
+// read time let organic events (8-50/min) evict real ones from the 50-slot ring before the feed
+// ever saw them (the cap-before-filter bug).
+const pushFeed = (eventFeed, entry) =>
+  FEED_ORIGINS.has(entry.origin) ? [entry, ...eventFeed].slice(0, 30) : eventFeed
 
 // Monotonic id for handoff animations. MUST NOT be Date.now(): two handoffs added
 // in the same millisecond (multiple agents picking 'pass-document' on the same tick,
@@ -231,6 +248,10 @@ const LOGGABLE_BEHAVIORS = new Set([
   'deploy-button', 'shield-verify', 'meeting', 'chat', 'pass-document',
   'goto-coffee-machine', 'nap', 'scratch-head', 'desk-slam',
 ])
+
+// Valid base roles — used by setHelpers to reject unknown parentRole values.
+// Inline here to avoid a circular import with movementSystem (which imports store).
+const VALID_ROLES = new Set(['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer'])
 
 // Static lookup tables for applyExternalStatus — hoisted to module scope so they
 // are NOT reallocated on every update inside the per-update loop. behaviorMap maps
@@ -284,6 +305,12 @@ export const useOfficeStore = create((set) => ({
   minute: new Date().getMinutes(),
   activeEvent: null,
   isPaused: typeof window !== 'undefined' && (() => { try { return localStorage.getItem('office-paused') === 'true' } catch { return false } })(),
+  // View mode: the OFFICE scene is the primary view at every size; the roster is an OPTIONAL
+  // manual toggle (a glanceable list), never an automatic size-based switch. Persisted per user.
+  rosterMode: typeof window !== 'undefined' && (() => { try { return localStorage.getItem('office-view') === 'roster' } catch { return false } })(),
+  // Subagent helper-huddle: ephemeral helper figures clustered at a parent role's desk when
+  // it dispatches subagents. Kept OUT of `agents` (no eviction / overflow / name tag / ring).
+  helpers: [],  // [{ id: 'role#hash', parentRole, label, expiresAt }]
   reducedMotion: typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || false,
   showWorkflow: false,
   // Diagnostic counter: how many times the AgentCharacter RAF watchdog had to restart a
@@ -291,6 +318,12 @@ export const useOfficeStore = create((set) => ({
   // dev builds notice if frames are being dropped (tab throttling, HMR, etc.). Transient —
   // never persisted.
   watchdogRestarts: 0,
+
+  // POINT 2: live on-screen scale of the office SVG (the `meet` fit ratio = min(w/800, h/560)).
+  // PixelOffice measures it on resize; AgentCharacter reads it to counter-scale name/status
+  // labels so glance-text stays readable while the office shrinks. Transient — never persisted
+  // (savePersistedState whitelists fields and this is not one), same as watchdogRestarts.
+  sceneScale: 1,
 
   setAgentBehavior: (id, behavior, expression, bubble) =>
     set((s) => {
@@ -326,6 +359,18 @@ export const useOfficeStore = create((set) => ({
   setAgentGroupEvent: (id, { behavior, expression, bubble, groupTarget }) =>
     set((s) => {
       if (!s.agents[id]) return s
+      let gt = null
+      if (groupTarget) {
+        // clamp to floor, then push off OTHER in-group agents so single-agent event actors
+        // (coffee-spill, food bringer, dog) don't land on a participant already gathered.
+        const occupied = []
+        for (const oid of Object.keys(s.agents)) {
+          if (oid === id) continue
+          const a = s.agents[oid]
+          if (a.inGroupEvent && (a.groupTarget || a.position)) occupied.push(a.groupTarget || a.position)
+        }
+        gt = avoidOverlap(clampToFloor(groupTarget), occupied)
+      }
       return {
         agents: {
           ...s.agents,
@@ -333,7 +378,7 @@ export const useOfficeStore = create((set) => ({
             ...s.agents[id],
             behavior, expression, bubble: bubble || null,
             inGroupEvent: true,
-            groupTarget: groupTarget || null,
+            groupTarget: gt,
           },
         },
       }
@@ -361,17 +406,63 @@ export const useOfficeStore = create((set) => ({
 
   recordWatchdogRestart: () => set((s) => ({ watchdogRestarts: s.watchdogRestarts + 1 })),
 
+  // POINT 2: store the measured office `meet` scale. No-op when unchanged so resize ticks that
+  // re-measure the same value don't wake subscribers (AgentCharacter) for nothing.
+  setSceneScale: (scale) => set((s) => (s.sceneScale === scale ? s : { sceneScale: scale })),
+
+  // ─── Subagent helper-huddle ───
+  // HELPER_TTL = 60s safety window: a missed SubagentStop self-heals via pruneHelpers, so a
+  // desk never accumulates stale helpers. The authoritative list is re-sent by the hook each
+  // poll (refreshing TTL), so a live SubagentStop removes the helper next tick regardless.
+  setHelpers: (list, now = Date.now()) =>
+    set(() => {
+      // (a) reject entries with an invalid parentRole; (b) de-dupe by id (last wins)
+      // so a doubled id never renders twice; (c) cap at 64 after dedup.
+      const seen = new Map()
+      for (const h of (Array.isArray(list) ? list : [])) {
+        if (!h || typeof h.id !== 'string' || typeof h.parentRole !== 'string') continue
+        if (!VALID_ROLES.has(h.parentRole)) continue
+        seen.set(h.id, h)  // last entry for a given id wins
+      }
+      const helpers = [...seen.values()]
+        .slice(0, 64)  // hard bound — never let a runaway payload balloon the slice
+        .map(h => ({
+          id: h.id,
+          parentRole: h.parentRole,
+          label: typeof h.label === 'string' ? h.label : null,
+          expiresAt: now + 60_000,
+        }))
+      return { helpers }
+    }),
+  pruneHelpers: (now = Date.now()) =>
+    set((s) => {
+      const kept = s.helpers.filter(h => h.expiresAt > now)
+      return kept.length === s.helpers.length ? s : { helpers: kept }
+    }),
+  clearHelpers: () => set((s) => (s.helpers.length ? { helpers: [] } : s)),
+
   // Batch version: apply group events to multiple agents in one state update
   setMultipleAgentGroupEvents: (updates) =>
     set((s) => {
       const agents = { ...s.agents }
+      // Deconflict gather targets so participants never stack on one cell (the reported "4 agents
+      // piled up, one disappeared" — SVG paints opaque sprites in y-order, so an exact overlap fully
+      // hides the lower agent). Clamp to floor, then push each target ≥ MIN_AGENT_DIST off the ones
+      // already assigned in THIS batch (avoidOverlap re-clamps to floor too). One chokepoint covers
+      // every gather event (standup / meetings / tea-break / deploy / boss-visit …).
+      const assigned = []
       for (const { id, behavior, expression, bubble, groupTarget } of updates) {
         if (!agents[id]) continue
+        let gt = null
+        if (groupTarget) {
+          gt = avoidOverlap(clampToFloor(groupTarget), assigned)
+          assigned.push(gt)
+        }
         agents[id] = {
           ...agents[id],
           behavior, expression, bubble: bubble || null,
           inGroupEvent: true,
-          groupTarget: groupTarget || null,
+          groupTarget: gt,
         }
       }
       return { agents }
@@ -472,8 +563,8 @@ export const useOfficeStore = create((set) => ({
 
   setActiveEvent: (event) => set((s) => {
     if (!event) return { activeEvent: event }
-    const entry = mkActivity({ type: 'event', agentId: null, message: event.id || event.name || 'event' })
-    return { activeEvent: event, activityLog: [entry, ...s.activityLog].slice(0, 50) }
+    const entry = mkActivity({ type: 'event', agentId: null, message: event.id || event.name || 'event', origin: 'event' })
+    return { activeEvent: event, activityLog: [entry, ...s.activityLog].slice(0, 50), eventFeed: pushFeed(s.eventFeed, entry) }
   }),
   // Guard against a no-op clear — clearActiveEvent is called on every officeLife
   // teardown/HMR (releaseAllGroupEvents) and after every event-cleanup timer, often
@@ -485,6 +576,11 @@ export const useOfficeStore = create((set) => ({
     const next = !s.isPaused
     try { if (typeof window !== 'undefined') localStorage.setItem('office-paused', String(next)) } catch {}
     return { isPaused: next }
+  }),
+  toggleRosterMode: () => set((s) => {
+    const next = !s.rosterMode
+    try { if (typeof window !== 'undefined') localStorage.setItem('office-view', next ? 'roster' : 'office') } catch {}
+    return { rosterMode: next }
   }),
   triggerWorkflow: () => set({ showWorkflow: true }),
   endWorkflow: () => set({ showWorkflow: false }),
@@ -624,6 +720,13 @@ export const useOfficeStore = create((set) => ({
             groupTarget: null,
           }
         }
+        // `changedAt` = when this agent's status/task last MEANINGFULLY changed. Stamped only on a
+        // real signature change — NOT on every poll refresh (expiresAt moves each tick, so deriving
+        // "since" from it always read ~now → the "0s everywhere" bug). Carry the prior stamp forward
+        // on a same-signature refresh so the roster shows "since last change". Transient (rides in
+        // externalStatus, which is never persisted). label/hint excluded — cosmetic, they flap.
+        const prevExt = ext[u.agentId]
+        const sigChanged = !prevExt || prevExt.status !== u.status || (prevExt.task || '') !== (u.task || '')
         ext[u.agentId] = {
           status: u.status,
           task: u.task,
@@ -634,6 +737,7 @@ export const useOfficeStore = create((set) => ({
           // expiry caused the workflow banner to flicker off mid-run and then self-heal.
           // done: 10s expiry (brief celebration then back to idle)
           expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
+          changedAt: sigChanged ? now : (Number.isFinite(prevExt.changedAt) ? prevExt.changedAt : now),
         }
         // Immediately set behavior + expression to match work status. Behavior/
         // expression/bubble are all folded into a SINGLE object spread below —
@@ -656,20 +760,34 @@ export const useOfficeStore = create((set) => ({
         // Don't overwrite behavior/expression during group events (officeLife controls those)
         const prevAgent = agents[u.agentId]
         const inGroup = prevAgent.inGroupEvent
-        // Context-aware bubble > status pool fallback
-        const bubble = generateContextBubble(u.agentId, u, ext)
-          || randomBubble(u.status === 'blocked' ? 'blocked-status' : u.status === 'done' ? 'done-status' : 'working-status')
         const nextAgent = {
           ...prevAgent,
           status: u.status,
           behavior: inGroup ? prevAgent.behavior : (bmBehavior || prevAgent.behavior),
           expression: inGroup ? prevAgent.expression : (bm.expression || prevAgent.expression),
         }
-        if (bubble && !inGroup) nextAgent.bubble = bubble
+        // Bubble fires only on a REAL status/task change (sigChanged) — NOT on every poll re-apply.
+        // A status file re-written each tick (changed timestamp/seq/expiry but SAME status+task) passes
+        // transport dedup and re-runs this; without the guard, every active agent re-popped a fresh
+        // bubble at once → the reported "every character suddenly speaks for no reason / refresh feel".
+        // Same principle as `changedAt` above (cf. the earlier 0s-everywhere fix). An unchanged re-apply
+        // now keeps the prior bubble, which clears on its own doSchedule timer.
+        if (sigChanged && !inGroup) {
+          const bubble = generateContextBubble(u.agentId, u, ext)
+            || randomBubble(u.status === 'blocked' ? 'blocked-status' : u.status === 'done' ? 'done-status' : 'working-status')
+          if (bubble) nextAgent.bubble = bubble
+        }
         agents[u.agentId] = nextAgent
-        // Log activity inline (single loop instead of two)
-        if (u.status === 'done' || u.status === 'blocked' || (u.status === 'working' && u.label)) {
-          activities.push(mkActivity({ type: 'status', agentId: u.agentId, status: u.status, message: u.label || u.status }))
+        // Log activity inline (single loop instead of two). Tag origin so the feed can trust it:
+        // idle-gap-inferred statuses are heuristic (not real hook events) → 'inferred'.
+        // sigChanged guard: only log on a REAL status/task change, not on every poll re-apply — else a
+        // persisting `blocked`/`done` (re-written each tick with a new timestamp) floods the feed with
+        // duplicate entries (the activity→eventFeed path prepends without dedup). Same class as the bubble fix.
+        if (sigChanged && (u.status === 'done' || u.status === 'blocked' || (u.status === 'working' && u.label))) {
+          activities.push(mkActivity({
+            type: 'status', agentId: u.agentId, status: u.status, message: u.label || u.status,
+            origin: meta.source === 'idle-gap-infer' ? 'inferred' : 'hook',
+          }))
         }
         if (u.status === 'done') {
           const eventKey = buildDoneEventKey(u, meta)
@@ -754,6 +872,11 @@ export const useOfficeStore = create((set) => ({
       const log = activities.length > 0
         ? [...activities, ...s.activityLog].slice(0, 50)
         : s.activityLog
+      // Feed buffer: status activities are all hook/inferred origin (feed-worthy) → keep them in the
+      // separate eventFeed where organic theater can't evict them.
+      const feedLog = activities.length > 0
+        ? [...activities.filter((a) => FEED_ORIGINS.has(a.origin)), ...s.eventFeed].slice(0, 30)
+        : s.eventFeed
       // Coalesce the integration-channel field writes into THIS single set().
       // applyMessage previously called applyExternalStatus + setStatusSource +
       // setIntegrationSource + setActiveWorkflow as four separate store writes,
@@ -782,7 +905,7 @@ export const useOfficeStore = create((set) => ({
         integrationPatch.activeWorkflow = meta.workflow ?? null
       }
       return {
-        externalStatus: ext, agents, activityLog: log, dailyDoneLedger, dailyBlockedLedger,
+        externalStatus: ext, agents, activityLog: log, eventFeed: feedLog, dailyDoneLedger, dailyBlockedLedger,
         hasEverReceivedStatus: meta.skipHintDismiss ? s.hasEverReceivedStatus : true,
         ...(evictedSelected ? { selectedAgent: null } : {}),
         ...integrationPatch,
@@ -833,7 +956,9 @@ export const useOfficeStore = create((set) => ({
         }
         const selectionPatch = evictedSelected ? { selectedAgent: null } : {}
         if (Object.keys(ext).length === 0) {
-          return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null, ...selectionPatch }
+          // Office went quiet → reset L2 scalars (updateStoreMood is NOT called on clear, so the
+          // anchor would otherwise stay pinned in an idle office).
+          return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null, teamPulse: 0, focusAnchor: null, reluctant: {}, ...selectionPatch }
         }
         return { externalStatus: ext, agents, ...selectionPatch }
       }
@@ -852,6 +977,7 @@ export const useOfficeStore = create((set) => ({
       }
       return {
         externalStatus: {}, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null,
+        teamPulse: 0, focusAnchor: null, reluctant: {},
         ...(evictedSelected ? { selectedAgent: null } : {}),
       }
     }),
@@ -859,6 +985,47 @@ export const useOfficeStore = create((set) => ({
   // ─── Mood system ───
   mood: 'normal',  // normal | rushing | frustrated | stuck | smooth | intense | idle (transient, not persisted)
   setMood: (mood) => set({ mood }),
+
+  // ─── L2 derived team-affect (spec living-office-events.md; transient, NOT persisted) ───
+  // Set only by moodEngine.updateStoreMood. UNTRACKED agents use these to honestly reflect the
+  // 1-2 lit desks' real activity; a TRACKED agent is never modulated by them (enforced at the
+  // doSchedule call site, R1). Reset to 0/null when the external-status set empties (below).
+  teamPulse: 0,        // 0..1 real-signal density — the room "leans in" proportionally
+  focusAnchor: null,   // agentId of the hottest live desk — idle agents orient toward it
+  setTeamSignals: ({ teamPulse, focusAnchor }) => set((s) =>
+    (s.teamPulse === teamPulse && s.focusAnchor === focusAnchor) ? {} : { teamPulse, focusAnchor }
+  ),
+  // The ONLY path that sets `facing` without a walk (today facing is a walk side-effect only).
+  // Guarded: never fight movement/group events, and no-op when unchanged (idle-only orientation).
+  setAgentFacing: (id, dir) => set((s) => {
+    const a = s.agents[id]
+    if (!a || a.isMoving || a.inGroupEvent || a.facing === dir) return {}
+    return { agents: { ...s.agents, [id]: { ...a, facing: dir } } }
+  }),
+
+  // ─── L3 reluctant participant (spec living-office-events.md Phase 3; transient, NOT persisted) ───
+  // When a set-piece fires, a TRACKED (working/blocked) agent that is NOT in the scene becomes a
+  // brief "reluctant participant": a sub-dominant glance/⏳ tell shows the team's life happening
+  // AROUND it while it stays heads-down. This is a PURE OVERLAY keyed by a per-agent expiry
+  // timestamp — it NEVER touches status/behavior/bubble/position, so it cannot freeze or falsify a
+  // real desk (R1). Map: { [agentId]: untilTs }.
+  reluctant: {},
+  setReluctant: (ids, until) => set((s) => {
+    const next = { ...s.reluctant }
+    let changed = false
+    for (const id of ids) {
+      const a = s.agents[id]
+      const es = s.externalStatus[id]
+      // Only a genuinely-working/blocked, non-group agent can be "reluctant" (it has real work to be
+      // torn from). Never an idle/done/untracked agent (nothing to be reluctant about).
+      if (a && !a.inGroupEvent && es && (es.status === 'working' || es.status === 'blocked')) {
+        next[id] = until
+        changed = true
+      }
+    }
+    return changed ? { reluctant: next } : {}
+  }),
+  clearReluctant: () => set((s) => (Object.keys(s.reluctant).length ? { reluctant: {} } : {})),
 
   // Same-value guards on the integration-channel setters. setActiveWorkflow is
   // still called standalone from applyMessage's workflow-only branch (a workflow-
@@ -926,7 +1093,19 @@ export const useOfficeStore = create((set) => ({
         subtle: !!opts.subtle,
       }
       const next = [...s.handoffs, entry]
-      return { handoffs: next.length > 20 ? next.slice(-20) : next }
+      // Also record the handoff in the activity feed — it's the cross-agent "A→B" moment the
+      // feed otherwise can't show (handoffs were never logged before). Workflow handoffs
+      // (opts.subtle, real phase transitions) are feed-worthy → 'event'; organic pass-document
+      // theater stays 'organic' so it doesn't flood the feed.
+      const act = mkActivity({
+        type: 'handoff', agentId: from, from, to, message: `${from}→${to}`,
+        origin: opts.subtle ? 'event' : 'organic',
+      })
+      return {
+        handoffs: next.length > 20 ? next.slice(-20) : next,
+        activityLog: [act, ...s.activityLog].slice(0, 50),
+        eventFeed: pushFeed(s.eventFeed, act),
+      }
     }),
   removeHandoff: (id) =>
     set((s) => ({
@@ -934,7 +1113,10 @@ export const useOfficeStore = create((set) => ({
     })),
 
   // ─── Activity Log (for Activity Feed) ───
-  activityLog: [],  // [{ id, timestamp, type, agentId, message }]
+  activityLog: [],  // [{ id, timestamp, type, agentId, message, origin }] — ALL events (incl. organic)
+  // Separate bounded buffer of FEED-WORTHY events only (hook/event/inferred). The roster feed reads
+  // THIS, so the organic theater flooding activityLog can never evict a real event before it shows.
+  eventFeed: [],
 
   // ─── Selected agent for inspect popover ───
   selectedAgent: null,
@@ -962,17 +1144,26 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     if (_persistTimer) { clearTimeout(_persistTimer); _persistTimer = null }
     _unsubscribePersist()
+    if (_storageHandler && typeof window !== 'undefined') {
+      window.removeEventListener('storage', _storageHandler)
+      _storageHandler = null
+    }
   })
 }
 
 // ─── Cross-tab pause sync ───
+// Keep a module-scope reference so the HMR dispose path can remove it.
+// Without this, each HMR cycle re-registers a NEW listener while the old
+// one remains live — duplicate listeners accumulate and fire redundantly.
+let _storageHandler = null
 if (typeof window !== 'undefined') {
-  window.addEventListener('storage', (e) => {
+  _storageHandler = (e) => {
     if (e.key === 'office-paused') {
       const paused = e.newValue === 'true'
       if (useOfficeStore.getState().isPaused !== paused) {
         useOfficeStore.setState({ isPaused: paused })
       }
     }
-  })
+  }
+  window.addEventListener('storage', _storageHandler)
 }

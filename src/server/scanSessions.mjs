@@ -241,6 +241,35 @@ export function scanAndMerge(dir, projectRoot) {
     if (tokSession) merged.tokens = tokSession.data.tokens
     const effSession = recentActive.find(s => s.data.effort)
     if (effSession) merged.effort = effSession.data.effort
+    // AVO-helpers: concatenate helpers from all RECENT ACTIVE sessions, filter to well-formed
+    // entries, de-dupe by id, and cap at 64. helpers are hook-produced (not POST-settable);
+    // no restriction to activeSlugs — helpers may be emitted by any non-stale session.
+    const VALID_PARENT_ROLES = new Set(['pm','arch','dev','qa','ops','res','gate','designer'])
+    const seenHelperIds = new Set()
+    const allHelpers = []
+    for (const { data } of sessions) {
+      if (!Array.isArray(data.helpers)) continue
+      for (const h of data.helpers) {
+        if (!h || typeof h !== 'object') continue
+        if (typeof h.id !== 'string' || !h.id) continue
+        if (typeof h.parentRole !== 'string' || !VALID_PARENT_ROLES.has(h.parentRole)) continue
+        if (seenHelperIds.has(h.id)) continue
+        seenHelperIds.add(h.id)
+        const entry = { id: h.id, parentRole: h.parentRole }
+        if (typeof h.label === 'string') entry.label = h.label
+        allHelpers.push(entry)
+        if (allHelpers.length >= 64) break
+      }
+      if (allHelpers.length >= 64) break
+    }
+    // Always assign merged.helpers — even when empty — so an explicit cleared state
+    // (all subagent helpers finished) propagates on the next tick instead of lingering
+    // up to TTL (~60 s). A missing field is treated as "no information" by ingestion;
+    // an explicit [] is treated as "cleared". Asymmetry with single-session (which
+    // passes helpers through via spread, including absence) is intentional: the multi-
+    // session path is the only place that aggregates across subagents and must own the
+    // cleared signal.
+    merged.helpers = allHelpers
   }
 
   // Zero-config signal: all data comes from file-watcher, meaning hooks aren't installed yet.

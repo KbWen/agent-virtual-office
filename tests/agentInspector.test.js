@@ -69,6 +69,7 @@ async function renderInspectorWithMocks(overrides = {}) {
         working: '#00f',
         done: '#0a0',
         blocked: '#f00',
+        planning: '#8B7FD6',
       },
       useOfficeStore: (selector) => selector(mockState),
     }
@@ -447,5 +448,97 @@ describe('store — dailyDoneLedger day rollover via applyExternalStatus', () =>
     // coffee by 1 — so coffee ends at 1 (not 4) and sticky ends at 0 (was 1, reset).
     expect(state.agents.dev.deskItemCount.coffee).toBe(1)  // reset to 0, then +1 for fresh done
     expect(state.agents.dev.deskItemCount.sticky).toBe(0)  // was 1, reset to 0, not incremented
+  })
+})
+
+// ─── STATUS_COLORS planning entry (AVO-132) ──────────────────────────
+describe('STATUS_COLORS — planning entry (AVO-132)', () => {
+  it('has a planning entry in STATUS_COLORS', async () => {
+    const { STATUS_COLORS } = await import('../src/systems/constants.js')
+    expect(STATUS_COLORS.planning).toBeDefined()
+    expect(STATUS_COLORS.planning).toMatch(/^#/)
+  })
+
+  it('planning color is distinct from working, blocked, done, and idle', async () => {
+    const { STATUS_COLORS } = await import('../src/systems/constants.js')
+    const { planning, working, blocked, done, idle } = STATUS_COLORS
+    expect(planning).not.toBe(working)
+    expect(planning).not.toBe(blocked)
+    expect(planning).not.toBe(done)
+    expect(planning).not.toBe(idle)
+  })
+})
+
+// ─── AgentInspector — planning status render (AVO-132) ───────────────
+describe('AgentInspector — planning status', () => {
+  it('renders the planning emoji and violet color when status is planning', async () => {
+    const markup = await renderInspectorWithMocks({
+      agents: {
+        dev: {
+          id: 'dev',
+          color: '#ff66aa',
+          status: 'planning',
+          behavior: 'thinking',
+          isMoving: false,
+          position: { x: 120, y: 180 },
+          targetPosition: { x: 120, y: 180 },
+        },
+      },
+    })
+
+    // Brain emoji for planning
+    expect(markup).toContain('🧠')
+    // Planning color is used (from mocked STATUS_COLORS)
+    expect(markup).toContain('#8B7FD6')
+  })
+
+  it('falls back to agent color when STATUS_COLORS has no entry for status', async () => {
+    vi.resetModules()
+    vi.doMock('../src/utils/formatTime', () => ({ formatTimeAgo: () => '1m' }))
+
+    vi.doMock('../src/systems/store.js', () => {
+      const mockState = {
+        selectedAgent: 'dev',
+        agents: {
+          dev: {
+            id: 'dev',
+            color: '#AABBCC',
+            status: 'unknown_future_status',
+            behavior: 'idle',
+            isMoving: false,
+            position: { x: 0, y: 0 },
+            targetPosition: { x: 0, y: 0 },
+          },
+        },
+        externalStatus: {},
+        activityLog: [],
+        dailyDoneLedger: { dayKey: '2026-04-08', counts: {}, seenEventKeys: [] },
+        mood: 'normal',
+        activeWorkflow: null,
+        clearSelectedAgent: () => {},
+      }
+      return {
+        // Intentionally omit 'unknown_future_status' from STATUS_COLORS to test fallback
+        STATUS_COLORS: { idle: '#999', working: '#00f', done: '#0a0', blocked: '#f00', planning: '#8B7FD6' },
+        useOfficeStore: (selector) => selector(mockState),
+      }
+    })
+
+    vi.doMock('../src/i18n.js', () => ({
+      charName: () => 'Developer',
+      behaviorLabel: () => 'Idle',
+      useLocale: () => 'en',
+      t: (path, fallback) => fallback ?? path,
+    }))
+
+    const { renderToStaticMarkup } = await import('react-dom/server')
+    const { default: AgentInspector } = await import('../src/components/AgentInspector.jsx')
+
+    const markup = renderToStaticMarkup(
+      React.createElement('svg', null, React.createElement(AgentInspector)),
+    )
+
+    // Fallback to agent color (#AABBCC) when status has no STATUS_COLORS entry
+    expect(markup).toContain('#AABBCC')
   })
 })

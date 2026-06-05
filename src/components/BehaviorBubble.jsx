@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react'
 
-function BehaviorBubble({ x, y, message }) {
+function BehaviorBubble({ x, y, message, below = false }) {
   const [visible, setVisible] = useState(false)
   const [currentMsg, setCurrentMsg] = useState(message)
   const fadeTimerRef = useRef(null)
@@ -35,7 +35,12 @@ function BehaviorBubble({ x, y, message }) {
   // bx is always centered on x — bubble renders in character-local coordinates
   // (old Math.max/min clamp assumed absolute SVG coords, broke text alignment)
   const bx = x - boxW / 2
-  const by = y - boxH - 8
+  // `below`: for agents at the very top of the office, the default (above-the-head) bubble draws
+  // past the SVG's top edge and gets clipped. The parent flips it BELOW the agent and the tail
+  // points up instead of down.
+  const by = below ? y + 8 : y - boxH - 8
+  const tailBaseY = below ? by : by + boxH         // edge of the box the tail grows from
+  const tailTipY = below ? by - 6 : by + boxH + 6  // the pointed tip (toward the agent)
 
   return (
     <g
@@ -55,15 +60,15 @@ function BehaviorBubble({ x, y, message }) {
         strokeWidth="1"
         filter="url(#bubble-shadow)"
       />
-      {/* Triangle pointer */}
+      {/* Triangle pointer (points toward the agent — down when above, up when below) */}
       <polygon
-        points={`${x - 5},${by + boxH} ${x + 5},${by + boxH} ${x},${by + boxH + 6}`}
+        points={`${x - 5},${tailBaseY} ${x + 5},${tailBaseY} ${x},${tailTipY}`}
         fill="white"
         stroke="#DDD"
         strokeWidth="0.6"
       />
       {/* Cover the line where triangle meets rect */}
-      <line x1={x - 5} y1={by + boxH} x2={x + 5} y2={by + boxH} stroke="white" strokeWidth="1.5" />
+      <line x1={x - 5} y1={tailBaseY} x2={x + 5} y2={tailBaseY} stroke="white" strokeWidth="1.5" />
       {/* Text */}
       <text
         x={x}

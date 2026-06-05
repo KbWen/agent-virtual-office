@@ -83,6 +83,25 @@ export function sanitizeTokens(t) {
   }
 }
 
+// Subagent helper-huddle: validate a helpers array from untrusted channels.
+// Each entry must have string id + string parentRole (must be one of the 8 VALID_ROLES) +
+// optional string label. Caps at 64 entries. Returns the validated array (may be empty),
+// or undefined when the field is absent (not an array at all).
+export function sanitizeHelpers(raw) {
+  if (raw === undefined) return undefined
+  if (!Array.isArray(raw)) return undefined
+  return raw
+    .filter(h => h && typeof h === 'object'
+      && typeof h.id === 'string' && h.id.length > 0
+      && typeof h.parentRole === 'string' && VALID_ROLES.includes(h.parentRole))
+    .slice(0, 64)
+    .map(h => ({
+      id: h.id.slice(0, CAP),
+      parentRole: h.parentRole,
+      label: typeof h.label === 'string' ? h.label.slice(0, CAP) : undefined,
+    }))
+}
+
 /**
  * Normalize any incoming message to the unified office-status format
  */
@@ -120,11 +139,16 @@ export function normalizeStatusMessage(raw) {
       tokens: sanitizeTokens(raw.tokens),
       // AVO-102: effort level — only the 5 known ordinal values pass.
       effort: EFFORT_LEVELS.includes(raw.effort) ? raw.effort : undefined,
+      // Subagent helper-huddle: validate helpers array — each entry must have string id,
+      // string parentRole (one of the 8 base roles), and optional string label.
+      // Capped at 64 entries; malformed array or wrong parentRole → omit the field entirely.
+      helpers: sanitizeHelpers(raw.helpers),
     }
     if (validated.source === undefined) delete validated.source
     if (validated.mood === undefined) delete validated.mood
     if (validated.tokens === undefined) delete validated.tokens
     if (validated.effort === undefined) delete validated.effort
+    if (validated.helpers === undefined) delete validated.helpers
     return withStatusEnvelope(validated)
   }
 
@@ -169,6 +193,19 @@ const HOOK_ORIGIN = new Set(['claude-cli', 'codex-cli', 'multi-session', 'file-w
 
 export function isHookOrigin(source) {
   return HOOK_ORIGIN.has(source)
+}
+
+// Which of `updates` represent a REAL status/task change vs the prior externalStatus snapshot.
+// Used to gate the moodEngine feed: a poll/heartbeat that re-delivers unchanged statuses (new ETag
+// from a cosmetic re-write) must not push repeated events into the sliding-window mood/teamPulse
+// (false 'rushing'/'intense' + pinned teamPulse → bad weather/lean-in cascade). Mirrors the
+// sigChanged gate in store.applyExternalStatus. Pure → directly testable.
+export function changedUpdates(prevExt, updates) {
+  const prev = prevExt || {}
+  return (updates || []).filter((u) => {
+    const p = prev[u.agentId]
+    return !p || p.status !== u.status || (p.task || '') !== (u.task || '')
+  })
 }
 
 // A 'multi-session' payload is an AUTHORITATIVE full snapshot produced by scanAndMerge from
@@ -273,13 +310,41 @@ function listenBroadcastChannel(callback) {
 
 // ─── Global polling (CLI injects window.__office_status__) ─────────────
 
+// Compute a content signature for the window global payload. The documented
+// window.__office_status__ shape has no _seq field; the CLI mutates the object
+// in place so data._seq never changes and raw-_seq dedup delivers only once.
+// Dedupe on a JSON signature of the fields that actually change: agents,
+// workflow, helpers, tokens, effort, and mood. Agents is the primary signal;
+// the rest are secondary but must also trigger delivery when they change alone
+// (e.g. a helpers-only SubagentStart delta where agents + workflow are the same).
+// We operate on a shallow copy so we never mutate the externally-owned global.
+export function _globalPayloadSig(data) {
+  try {
+    return JSON.stringify({
+      agents: data.agents,
+      workflow: data.workflow ?? null,
+      helpers: data.helpers ?? null,
+      tokens: data.tokens ?? null,
+      effort: data.effort ?? null,
+      mood: data.mood ?? null,
+    })
+  } catch {
+    return String(data._seq ?? '')
+  }
+}
+
 function startPolling(callback, intervalMs = 2000) {
-  let lastSeq = null
+  let lastSig = null
   const timer = setInterval(() => {
     const data = window.__office_status__
-    if (data && data._seq !== lastSeq) {
-      lastSeq = data._seq
-      const msg = normalizeStatusMessage(data)
+    if (!data) return
+    // Work on a shallow copy so normalizeStatusMessage (and withStatusEnvelope)
+    // never mutate the externally-owned global object.
+    const copy = { ...data }
+    const sig = _globalPayloadSig(copy)
+    if (sig !== lastSig) {
+      lastSig = sig
+      const msg = normalizeStatusMessage(copy)
       if (msg) callback(msg)
     }
   }, intervalMs)
@@ -654,6 +719,11 @@ export function startStatusIntegration(store) {
     if (msg.tokens) s.setTokens(msg.tokens)
     // AVO-102: effort level (also session-level) drives the thinking aura.
     if (msg.effort) s.setEffort(msg.effort)
+    // Subagent helper-huddle: helpers is present-or-absent (not presence-semantic like tokens).
+    // Explicit helpers:[] (empty array) must clear the slice — a stopped turn removes helpers.
+    // When the field is absent (undefined after normalizeStatusMessage deleted it), do NOT
+    // clear — the hook re-sends the authoritative list each poll, and store TTL self-heals.
+    if (msg.helpers !== undefined) s.setHelpers(msg.helpers)
 
     // Route agents
     const updates = routeExternalAgents(msg.agents || [])
@@ -669,6 +739,7 @@ export function startStatusIntegration(store) {
     const hasWorkflow = 'workflow' in msg
 
     if (updates.length > 0) {
+      const prevExt = s.externalStatus // pre-apply snapshot (s captured at top, before this set())
       s.applyExternalStatus(updates, {
         source: msg.source || 'external',
         seq: msg._seq || null,
@@ -679,9 +750,17 @@ export function startStatusIntegration(store) {
         workflow: msg.workflow ?? null,
       })
 
-      // Feed mood engine — batch to recompute mood once instead of once per agent
-      pushEventBatch(updates.map(u => ({ role: u.agentId, status: u.status, task: u.task, hint: u.hint || null })))
+      // Feed mood engine ONLY for agents whose status/task ACTUALLY changed. A poll/heartbeat that
+      // re-delivers the same statuses (new ETag from a cosmetic re-write) must NOT push repeated
+      // events into the sliding-window mood/teamPulse — that falsely trips 'rushing'/'intense' and
+      // pins teamPulse high, cascading to weather + the L2 lean-in + real-seed. Same change-gate as
+      // the bubble/feed/changedAt guards in applyExternalStatus.
+      const changed = changedUpdates(prevExt, updates)
+      if (changed.length) {
+        pushEventBatch(changed.map(u => ({ role: u.agentId, status: u.status, task: u.task, hint: u.hint || null })))
+      }
     } else if (msg.activeCount > 0) {
+      const prevExt = s.externalStatus
       const ids = distributeFallbackCount(msg.activeCount)
       const fallbackUpdates = ids.map(id => ({ agentId: id, status: 'working', task: null, label: null }))
       s.applyExternalStatus(fallbackUpdates, {
@@ -696,7 +775,10 @@ export function startStatusIntegration(store) {
       // '#count=8' hash, with no role keys) produces zero routed agents but N active
       // workers — without this the mood engine never sees those events and mood stays
       // permanently 'idle' even while the office shows 8 busy characters.
-      pushEventBatch(fallbackUpdates.map(u => ({ role: u.agentId, status: u.status, task: null, hint: null })))
+      const changedFallback = changedUpdates(prevExt, fallbackUpdates)
+      if (changedFallback.length) {
+        pushEventBatch(changedFallback.map(u => ({ role: u.agentId, status: u.status, task: null, hint: null })))
+      }
     } else if (msg.source === 'multi-session') {
       // Empty multi-session payload — every worktree session's agents are all 'done'
       // (or idle), so scanAndMerge's merge produced zero working/blocked representatives.
@@ -807,10 +889,13 @@ export function startStatusIntegration(store) {
     }, STALENESS_TIMEOUT)
   }
 
-  // Expiry checker — clears 'done' agents after their expiresAt
+  // Expiry checker — clears 'done' agents after their expiresAt + prunes stale helpers
   const expiryInterval = setInterval(() => {
     const s = store.getState()
     const now = Date.now()
+    // Prune helpers whose TTL has expired (60s safety window). A missed SubagentStop
+    // self-heals here rather than accumulating stale helper figures at the desk.
+    s.pruneHelpers()
     // Iterate keys directly — Object.entries() allocates a [id,ext] pairs array
     // on every 5s expiry tick. Both id and ext are read in place below.
     const ext0 = s.externalStatus

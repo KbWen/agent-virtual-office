@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-02
-- **Update Sequence**: 29
+- **Last Updated**: 2026-06-05
+- **Update Sequence**: 32
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -67,6 +67,9 @@
   - [v1.1.0 inference] docs/specs/desktop-notifications.md [Shipped]  *(#8)*
   - [v1.1.0 inference] docs/specs/idle-gap-inference.md [Shipped]  *(#C)*
   - [v1.1.0 compatibility] docs/specs/csp-compatibility.md [Shipped]  *(#27)*
+  - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Frozen]  *(AVO-126/127/128/129/131/132 — branch feat/ux-vibe-rebalance, not yet merged)*
+  - [living-office] docs/specs/living-office-events.md [DRAFT, review-gated]  *(P1-P4 shipped to branch feat/ux-vibe-rebalance, not merged; AC-3 pixel-dominance pending owner visual confirm)*
+  - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -114,7 +117,67 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard][prev: d5689fc7] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 - [Category: packaging][Severity: MEDIUM][Trigger: dependency-presence-check][prev: 9da72f26] An installed package's CLI launcher must detect its own runtime deps via `require.resolve(dep, {paths:[root]})` (honors npm hoisting to a parent node_modules), not `fs.existsSync(root/node_modules/<dep>)` — the latter always misses hoisted deps and re-runs `npm install` on every launch.
 
+## Protected Surfaces (layout/movement/scale-critical — DO NOT casually edit)
+
+> These have caused repeated visual regressions. `preview_screenshot` is BROKEN here and `preview_eval`
+> CANNOT reach the running app's store (module duplication) — so an AI **cannot see pixels**. Before
+> changing ANY of these, verify by `getBoundingClientRect`/computed-font measurement across window
+> sizes AND get OWNER VISUAL CONFIRMATION. Never claim a visual change "works" from code/tests alone.
+
+- **Office viewBox `0 0 800 560` + width-fill layer** (`PixelOffice.jsx` svgElement: `aspect-ratio:800/560`, center, clip) — the responsive proportion. Owner requires fill-width, no L/R whitespace, no crop of agents. Changing risks re-breaking proportions.
+- **`movementSystem.js` agent coordinates / HOME_POSITIONS / MEETING_CHAIRS / event gather spots** (`officeLife.js` EVENT_HANDLERS) — hardcoded. Tight gather spots caused an all-agent pile-up (sprites stack → SVG occlusion hides the lower one). NOW the store (`setMultipleAgentGroupEvents`/`setAgentGroupEvent`) runs every `groupTarget` through `clampToFloor` + `avoidOverlap` (≥`MIN_AGENT_DIST`) so participants can't stack — guarded by `tests/agentSeparationInvariants.test.js`. Keep that deconfliction; don't bypass it by writing `groupTarget`/`position` directly elsewhere. NOTE: there is still NO per-frame separation in free movement (agents pass through each other in transit — AVO-144).
+- **`LABEL_SCALE_MAX = 1.5`** (`AgentCharacter.jsx`) — POINT-2-tuned so active name tags don't collide. Raising it improves small-dock readability but risks label collision — owner's call, verify collisions by measuring label rects at a small window.
+- **`officeLife.js` event cadence** — real-seed triggers are GLOBAL-cooldown-gated to stay rare (calm-tech); do NOT seed all-gather events (e.g. `standup`) off frequent signals (SubagentStart) — that froze the office in perpetual gathering.
+- **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
+
 ## Ship History
+
+### feat-ux-vibe-rebalance-2026-06-05 (final pre-merge hardening + ship closure)
+
+- Branch `feat/ux-vibe-rebalance`, classification feature. Branch closed for merge (owner-directed; main protected → human owns the protected-remote push/PR). Final HEAD `1a708bf`, 59 commits ahead of `main`, clean fast-forward (main behind 0).
+- **Agent-clustering fix ("4 piled, one disappeared")** — root cause: group-event gather (`store.setMultipleAgentGroupEvents` / `setAgentGroupEvent`) wrote `groupTarget` with NO inter-agent separation, so participants stacked on one cell and the y-ordered opaque SVG sprite on top fully occluded the ones beneath. Fix: deconflict every gather target through `clampToFloor` + `avoidOverlap` (push ≥ `MIN_AGENT_DIST`) at the store chokepoint — one fix covers ALL group events; the "disappear" is cured by never fully overlapping.
+- **Test-gap closure** — every prior movement test checked agent-vs-MAP only; NONE checked agent-vs-AGENT (why the suite stayed green while sprites stacked). Added `tests/agentSeparationInvariants.test.js` (+5), incl. the exact-bug case "all participants assigned the SAME cell must fan out" (FAILs pre-fix).
+- **Fresh-eyes pre-merge sweep** — independent full-branch-diff reviewer: **0 HIGH / 0 MED**; no debug leftovers / `.only` / dup exports; i18n en/zh-TW parity intact. Only 2 LOW pre-existing cosmetic items (not on this branch).
+- **Verification**: vitest **1276 passed / 53 files** (+ moodFeedGate, statusBubbleDedup, agentSeparationInvariants over -04b), build clean (414.80 KB JS / 31.05 KB CSS), `validate.sh` **0 fail**. Behavioral logic test-authoritative; **pixel/visual still pending owner confirm** (screenshots broken; eval can't reach the app store).
+- **Deferred**: AVO-144 — sustained free-movement (in-transit) per-frame separation still has no agent-vs-agent push (lower-severity transient pass-through; the visible pile-up/disappear is fixed). AVO-141/142/143 unchanged.
+- **Remaining for human**: protected-remote push / PR-close; visual confirm + v1.2.0 screenshot/GIF re-capture.
+
+### feat-ux-vibe-rebalance-2026-06-04b (responsive fill + living-office-events honest liveliness)
+
+- Branch `feat/ux-vibe-rebalance`, classification feature. **Committed to branch (8 commits), NOT pushed/merged** — for human PR review (main protected). Owner-directed UX follow-on; living-office-events has its own spec `docs/specs/living-office-events.md` (DRAFT, review-gated). Screenshots broken in env → **all verification is test/measurement-based; PIXEL appearance pending owner visual confirm at PR time.**
+- **Responsive fill** — office now spans full browser WIDTH at every pane shape (`PixelOffice` svg width-driven via `aspect-ratio: 800/560` + center + clip; `b61e020`) fixing the left/right-whitespace complaint; roster fills width (drop `max-w` gutters; `ad1db61`); top-row agents' speech bubbles flip BELOW when they'd clip the office top edge (`BehaviorBubble` `below` prop; `52ba139`). Measured via getBoundingClientRect across sizes.
+- **living-office-events** — the office now HONESTLY reflects real work without faking status, via a 3-expert roundtable (game/AI-systems/calm-tech) ×2 + 2 code audits + adversarial review (all R1/R2 honesty rules upheld in code). 4 phases:
+  - **P1 (`a6c6668`)** L2 derived team-affect: transient `teamPulse` (room "leans in" with real-signal density) + `focusAnchor` (idle agents orient toward the live desk via new `setAgentFacing`), UNTRACKED-only (a tracked desk is never modulated — R1). Derived in `moodEngine.updateStoreMood`.
+  - **P2 (`2a5d7c0`)** honesty gating: 5 work-claim events (deploy-success/ops-dev-deploy-check/dev-arch-disagree/eureka/review-debate) fire ONLY with a matching real signal within `WORK_CLAIM_SIGNAL_WINDOW` (90s); random floor scaled-not-muted when live (`floorTickAllowed`, incl. fallback sessions).
+  - **P3 (`5a288b6`)** reluctant participant: a tracked agent torn by a set-piece shows a sub-dominant ⏳ (PURE OVERLAY — `store.reluctant`; never touches status/behavior/bubble/position; real bubbles preempt).
+  - **P4 (`6f...`/real-seed)** the CAUSAL real→event link (closes owner's "沒有驅動任何一件事情"): a real-signal EDGE (mood→smooth/frustrated, Ops→done, SubagentStart) immediately fires the matching event — honesty-gated + mutex'd + 120s per-event cooldown.
+  - **Review + measurement**: 3-lens adversarial /review (correctness PASS, regression PASS w/ 2 fixes applied, honesty surfaced the causal gap → P4 built); extracted pure `resolveFocusFacing` + exported `floorTickAllowed` for AC-4/AC-7 measurement tests.
+- **AC**: AC-1✅ AC-2✅ **AC-3⚠️** (structural dominance enforced+tested — overlay never touches live channels; pixel dominance + keep-out routing design-asserted, needs owner visual confirm) AC-4✅ AC-5✅ AC-6✅ AC-7✅.
+- **Verification**: vitest **1271 passed / 52 files** (+~50: teamAffectL2 ×13, eventHonestyGate ×6, realSeedTriggers ×6, teamAffectMeasure ×7, gatherTargetsOnFloor ×2, statusBubbleDedup ×4, moodFeedGate ×4, +responsive guards), build clean, validate 0 fail. Behavioral logic test-authoritative (vitest = real modules, no dup); live preview_eval CANNOT drive the app store (module-duplication) + screenshots broken → pixel/visual confirm pending owner.
+- **Post-review QA hardening (owner-driven, this session)**: fixed a whole bug CLASS — side-effects firing per-poll instead of per-change. (1) speech bubble, (2) activity-feed push, (3) moodEngine feed (`changedUpdates`) now all gate on a real status/task change → killed the "every character suddenly speaks for no reason / refresh feeling" + false `rushing`/weather inflation. Audit confirmed ledgers/deskItems/notifier/handoff/router/integration-fields already correctly guarded. Adversarial re-review: all fixes correct, no regressions/over-gating, GO. Deferred AVO-143 (no-op agent re-alloc, perf-only). Also: standup gather-spots respread + `clampToFloor` on all groupTargets (no agent in walls); P4 real-seed global-cooldown + no all-gather on SubagentStart; OT→OVERTIME; README EN+zh de-AI'd + slimmed (detail → ARCHITECTURE.md); v1.2.0 + CHANGELOG.
+- **Remaining for human**: PR review + visual confirm (⏳/lean-in/orientation tells, standup no-pile, fonts) + re-capture v1.2.0 screenshots/GIF + push/merge. Optional deferred: AVO-141/142/143, AC-3 keep-out routing, Standby-roster richness, overlay-pull.
+
+### feat-ux-vibe-rebalance-2026-06-04 (POINT 2 readable labels + COMMS vertical living-feed rebuild)
+
+- Branch `feat/ux-vibe-rebalance`, classification feature. **Committed to branch, NOT pushed/merged** — for human review (main protected). Informal owner-directed UX follow-on (beyond the frozen `ux-vibe-rebalance` spec; re-spec if formalizing). Autonomous session (user delegated full completion + stepped out).
+- **POINT 2 (`75038c3`)** — in-scene text stays readable as the office scales below native: `store.sceneScale` (measured `meet` scale, svgRef + ResizeObserver + 600ms self-heal poll for the throttled webview) drives counter-scaling of agent name/status/bubble (cap 1.5, anchor-preserving grow-in-place — overlap guard), the click-inspector popover (cap 2.5), the event banner, desk nameplates + room headers. Faint area-labels + decoration left small. Verified 320–1280px: readable, 0 overlap/clip, desktop ~unchanged.
+- **COMMS vertical living-feed rebuild** — the ☰ roster went from a flat lifeless list to a living **presence rail + activity feed**, per a **5-expert design roundtable** (game-feel · UI/chat-UX · operator · systems-engineer · calm-tech; unanimous REFINE). Commits: **`a01a64c`** P1 rail (2-tier salience — blocked pins top, only blocked reorders; idle dimmed in place; honest quiet state; `rosterModel.js` pure logic + `origin`-tagged activityLog + handoffs logged), **`130649a`** P2 feed (real-events-only, heartbeat/health dot, 🔔 notify), **`1988e74`** P3 juice (feed fade-in, tap-to-focus), **`3c5dc18`** fix review HIGH-1 (separate bounded `eventFeed` — organic theater could otherwise evict real events from activityLog's write-time 50-cap), **`9d20dcb`** review LOW (shared FEED_ORIGINS source).
+- **Key design correction (live testing)**: a 3-tier active/idle sort thrashed under live churn → collapsed to 2 tiers (only blocked reorders). **Key proof technique**: dep-free SSR render tests (react-dom/server) since the live office is wired to the active Claude session whose hook poll races injected statuses.
+- **Verification**: vitest **1222 passed / 45 files** (+32: rosterModel, activityOrigin incl. eventFeed-survival regression, narrowRosterOrder SSR), build clean, 0 console errors, i18n en/zh-TW parity. Live-verified each phase (the feed even showed this session's real events). Independent acx-reviewer: round-1 NOT READY (HIGH-1) → fixed → **round-2 READY**.
+- **Remaining for human**: review + push/merge the branch. Then the deferred additive-juice wave (AVO-133–136) + density dial (AVO-137).
+
+### feat-ux-vibe-rebalance-2026-06-03 (UX Vibe Rebalance — deletion/demotion core)
+
+- Branch `feat/ux-vibe-rebalance`, classification feature. **Committed to branch, NOT merged** — for human review/merge (main is protected). Spec `docs/specs/ux-vibe-rebalance.md` [Frozen].
+- Sourced from a 5-lens expert design panel (game-designer · calm-tech · first-time-user · audience-readability · clutter-auditor). Verdict: "cute engine with a dashboard bolted on" → cure = deletion, default density glance-L1, detail on-demand. Owner approved "do all"; this branch ships the deletion/demotion core (AVO-126/127/128/129/131/132). Additive juice (AVO-133–136) + density dial (AVO-137) deferred.
+- **AVO-126** — `bashVibeLabel` in `public/hooks/office-status-hook.js`: Bash bubbles map to office nouns (測試/建置/檔案/git/…), never a raw command or path, across working/done/error frames. +5 unit tests incl. a path-leak invariant.
+- **AVO-127 / AVO-129** — `ControlPanel.jsx`: 🪙 token meter and ✓/✗ KPI removed from the persistent bar (full + panel); both surfaced on-demand (full = "?" popover; panel = hover tooltip + sr-only mirror). Data paths (tokens, ledgers) untouched.
+- **AVO-128** — `AgentCharacter.jsx`: name tags revealed only when an agent is non-idle OR hovered; hidden at idle rest (identity rides on sprite+color+desk). Session badge + status icon unaffected. Live-verified 8/8 idle→no name, working→name.
+- **AVO-131** — removed the in-scene monospace TaskLabel pill (+ dead `currentTask`/`classifyTask`); the tool now shows only in the AgentInspector (`inspectorTaskLabel`).
+- **AVO-132** — removed the separate violet ThinkingAura; effort (high/xhigh/max) now folds into the single working glow ring's intensity (op+stroke). Live-verified exactly 1 ring/sprite.
+- **Verification**: vitest 1042→1047 (+5), build clean (390.97 KB / 122.62 KB gzip, −1.5 KB), 0 console errors; live DOM/store ground-truth confirmed each AC.
+- **Review**: independent acx-reviewer on the diff — round 1 NOT READY (AVO-129 panel on-demand gap) → fixed → round 2 PASS. Accepted scoped deviation: `planning` status loses its ring (still has gantt+expression+name; no `STATUS_COLORS` entry) — documented in spec `## Review Deviations`.
+- **Remaining for human**: review + merge branch `feat/ux-vibe-rebalance`; then the additive juice wave (AVO-133–136) + density dial (AVO-137), which benefit from owner visual review.
 
 ### Ship-chore-migrate-agentic-os-v1.2.0-2026-06-02 (governance brain migration + SSoT reconciliation)
 

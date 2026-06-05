@@ -333,6 +333,144 @@ describe('multi-session merge', () => {
   })
 })
 
+// ─── helpers concat / de-dupe / bound (multi-session) ────────────────────────
+
+describe('helpers data path (multi-session)', () => {
+  let dir
+  beforeEach(() => { dir = tmpDir() })
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+
+  function writeSlugged(slug, seq, agents, extra = {}) {
+    writeSession(dir, `office-status-${slug}.json`, {
+      type: 'office-status', _seq: String(seq), _cwd: dir, agents, ...extra,
+    })
+  }
+
+  it('concatenates helpers from two sessions', () => {
+    const base = Date.now()
+    writeSlugged('alpha', base + 100,
+      [{ role: 'dev', status: 'working', task: null, label: null }],
+      { helpers: [{ id: 'dev#aaa', parentRole: 'dev', label: 'subdev-A' }] })
+    writeSlugged('beta', base + 200,
+      [{ role: 'qa', status: 'working', task: null, label: null }],
+      { helpers: [{ id: 'qa#bbb', parentRole: 'qa', label: 'sub-QA' }] })
+    const result = scanAndMerge(dir, dir)
+    expect(result.source).toBe('multi-session')
+    expect(Array.isArray(result.helpers)).toBe(true)
+    expect(result.helpers).toHaveLength(2)
+    const ids = result.helpers.map(h => h.id)
+    expect(ids).toContain('dev#aaa')
+    expect(ids).toContain('qa#bbb')
+  })
+
+  it('de-dupes helpers with the same id across sessions', () => {
+    const base = Date.now()
+    const sharedHelper = { id: 'dev#shared', parentRole: 'dev', label: 'dup' }
+    writeSlugged('alpha', base + 100,
+      [{ role: 'dev', status: 'working', task: null, label: null }],
+      { helpers: [sharedHelper] })
+    writeSlugged('beta', base + 200,
+      [{ role: 'qa', status: 'working', task: null, label: null }],
+      { helpers: [sharedHelper, { id: 'qa#unique', parentRole: 'qa' }] })
+    const result = scanAndMerge(dir, dir)
+    const ids = result.helpers.map(h => h.id)
+    // dev#shared appears only once despite being in both sessions
+    expect(ids.filter(id => id === 'dev#shared')).toHaveLength(1)
+    expect(ids).toContain('qa#unique')
+    expect(result.helpers).toHaveLength(2)
+  })
+
+  it('caps helpers at 64 entries', () => {
+    const base = Date.now()
+    const bigHelpers = Array.from({ length: 50 }, (_, i) => ({
+      id: `dev#h${i}`, parentRole: 'dev', label: `helper-${i}`,
+    }))
+    const moreHelpers = Array.from({ length: 30 }, (_, i) => ({
+      id: `qa#h${i}`, parentRole: 'qa',
+    }))
+    writeSlugged('alpha', base + 100,
+      [{ role: 'dev', status: 'working', task: null, label: null }],
+      { helpers: bigHelpers })
+    writeSlugged('beta', base + 200,
+      [{ role: 'qa', status: 'working', task: null, label: null }],
+      { helpers: moreHelpers })
+    const result = scanAndMerge(dir, dir)
+    expect(result.helpers.length).toBeLessThanOrEqual(64)
+  })
+
+  it('drops malformed helpers entries (missing id, bad parentRole, wrong type)', () => {
+    const base = Date.now()
+    writeSlugged('alpha', base + 100,
+      [{ role: 'dev', status: 'working', task: null, label: null }],
+      {
+        helpers: [
+          { id: 'dev#good', parentRole: 'dev', label: 'ok' },   // well-formed
+          { parentRole: 'dev' },                                  // missing id
+          { id: 'qa#bad', parentRole: 'notarole' },              // invalid parentRole
+          null,                                                   // null entry
+          42,                                                     // wrong type
+          { id: '', parentRole: 'dev' },                         // empty id
+        ],
+      })
+    writeSlugged('beta', base + 200,
+      [{ role: 'qa', status: 'working', task: null, label: null }],
+      { helpers: [] })
+    const result = scanAndMerge(dir, dir)
+    // Only the well-formed entry survives
+    expect(result.helpers).toHaveLength(1)
+    expect(result.helpers[0].id).toBe('dev#good')
+    expect(result.helpers[0].parentRole).toBe('dev')
+    expect(result.helpers[0].label).toBe('ok')
+  })
+
+  it('sets helpers:[] (present, empty) when all sessions have empty/absent helpers', () => {
+    // Fix [LOW] AVO helpers clear delay: merged.helpers must ALWAYS be set so an
+    // explicit cleared state propagates on the next tick (not left absent, which
+    // ingestion treats as "no information" → lingering ~60 s TTL).
+    const base = Date.now()
+    writeSlugged('alpha', base + 100, [{ role: 'dev', status: 'working', task: null, label: null }])
+    writeSlugged('beta', base + 200, [{ role: 'qa', status: 'working', task: null, label: null }])
+    const result = scanAndMerge(dir, dir)
+    // helpers must be present (an explicit []) — not absent
+    expect(result.helpers).toBeDefined()
+    expect(Array.isArray(result.helpers)).toBe(true)
+    expect(result.helpers).toHaveLength(0)
+  })
+
+  it('all-empty multi-session helpers:[] clears promptly (not lingering via TTL)', () => {
+    // Regression: previously `if (allHelpers.length > 0) merged.helpers = allHelpers`
+    // omitted helpers entirely when all sessions had no helpers, so ingestion saw
+    // "absent = no information" and kept a finished subagent's helper visible for up
+    // to the TTL (~60 s) instead of clearing on the next tick.
+    const base = Date.now()
+    // Session A: had a helper before, now explicitly cleared (helpers: [])
+    writeSlugged('alpha', base + 100,
+      [{ role: 'dev', status: 'working', task: null, label: null }],
+      { helpers: [] })
+    // Session B: never had helpers (key absent)
+    writeSlugged('beta', base + 200,
+      [{ role: 'qa', status: 'working', task: null, label: null }])
+    const result = scanAndMerge(dir, dir)
+    expect(result.source).toBe('multi-session')
+    // The field must be present and empty so ingestion clears the stale helper
+    expect(Object.prototype.hasOwnProperty.call(result, 'helpers')).toBe(true)
+    expect(result.helpers).toEqual([])
+  })
+
+  it('passes through helpers in single-session path via spread', () => {
+    const seq = freshSeq()
+    writeSession(dir, 'office-status.json', {
+      type: 'office-status', _seq: seq, _cwd: dir,
+      agents: [{ role: 'dev', status: 'working', task: null, label: null }],
+      helpers: [{ id: 'dev#x', parentRole: 'dev', label: 'single' }],
+    })
+    const result = scanAndMerge(dir, dir)
+    // Single session → spread includes helpers as-is
+    expect(Array.isArray(result.helpers)).toBe(true)
+    expect(result.helpers[0].id).toBe('dev#x')
+  })
+})
+
 // ─── getSessionStats ───────────────────────────────────────────────────────────
 
 describe('getSessionStats', () => {

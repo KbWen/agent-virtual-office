@@ -209,6 +209,52 @@ function shortCommand(cmd) {
   return last.length > 30 ? last.slice(0, 27) + '...' : last
 }
 
+// AVO-126: a Bash bubble must read like office life, never like a terminal. Map the
+// command to a friendly noun (no raw command, no filesystem path EVER) so the working
+// ("⚡ tests"), done ("✅ tests done") and error ("❌ tests failed") frames all stay
+// in-character. Unknown commands fall back to a generic noun, never the raw string.
+function bashVibeLabel(cmd, lang = LANG) {
+  const zh = lang === 'zh-TW'
+  const fallback = zh ? '指令' : 'a command'
+  if (!cmd || typeof cmd !== 'string') return fallback
+  // Split the command into sub-commands on &&, ||, ;, |, and newlines, then classify each.
+  // The Claude Code harness often wraps a command as `cd "<dir>" && <real cmd>` or
+  // `bash -c "<real cmd>"`, so the meaningful program is rarely the WHOLE string and not
+  // always the LAST segment. Scan every segment and return the FIRST meaningful office
+  // noun, skipping trivial glue (cd/echo/sleep/pwd). Never returns a raw command or path.
+  const classifySeg = (segRaw) => {
+    let s = segRaw
+    // Strip surrounding quotes + shell-wrapper prefixes (bash -c, sh -c, pwsh -Command, eval), iteratively.
+    for (let i = 0; i < 3; i++) {
+      s = s.replace(/^(['"])([\s\S]*)\1$/, '$2').trim()
+      s = s.replace(/^(?:eval|bash|sh|zsh|dash|ksh|pwsh|powershell|cmd(?:\.exe)?)\b(?:\s+(?:-{1,2}[a-z]+|\/[a-z]+))*\s+/i, '').trim()
+    }
+    const prog = s.toLowerCase()
+    if (!prog) return null
+    // Program-anchored checks MUST run first so that compound commands like
+    // 'git checkout build-fix' or 'git commit -m "add test"' match 'git' (^git anchor)
+    // rather than the unanchored 'build'/'test' keyword checks below.
+    // Invariant: no case below may match before a more-specific ^anchor case above it.
+    if (/^git\b/.test(prog)) return 'git'
+    if (/^(curl|wget|http|ping|ssh|scp|rsync)\b/.test(prog)) return zh ? '連線' : 'a fetch'
+    if (/^(docker|kubectl|helm|terraform|pm2|systemctl|nginx|serve)\b/.test(prog)) return zh ? '部署' : 'ops'
+    if (/^(python|python3|node|deno|bun|go|cargo|ruby|php|java|dotnet)\b/.test(prog)) return zh ? '程式' : 'a script'
+    if (/^(ls|dir|find|cat|head|tail|grep|rg|less|more|tree|stat|wc|file)\b/.test(prog)) return zh ? '檔案' : 'files'
+    if (/^(mkdir|rm|mv|cp|touch|chmod|chown|ln|tar|zip|unzip)\b/.test(prog)) return zh ? '檔案' : 'files'
+    // Unanchored keyword checks — only reached when the program is not one of the above
+    if (/(vitest|jest|pytest|mocha|\btest\b)/.test(prog)) return zh ? '測試' : 'tests'
+    if (/(npm run build|vite build|\btsc\b|webpack|rollup|\bcompile\b|\bmake\b|\bbuild\b)/.test(prog)) return zh ? '建置' : 'the build'
+    if (/(npm i\b|npm ci\b|npm install|yarn add|pnpm i\b|pnpm add|pip install|\binstall\b)/.test(prog)) return zh ? '套件' : 'deps'
+    if (/(npm run|npm start|yarn |pnpm |npx )/.test(prog)) return zh ? '腳本' : 'a script'
+    return null  // trivial glue (cd/echo/sleep/pwd/which) or unknown — skip
+  }
+  for (const seg of cmd.split(/&&|\|\||;|\n|\|/).map(s => s.trim()).filter(Boolean)) {
+    const m = classifySeg(seg)
+    if (m) return m
+  }
+  return fallback
+}
+
 function extractContext(tool, toolInput) {
   if (!toolInput) return null
   try {
@@ -219,14 +265,35 @@ function extractContext(tool, toolInput) {
       case 'Read':
         return shortFile(input.file_path || input.path)
       case 'Bash':
-        return shortCommand(input.command || input.cmd)
-      case 'Grep':
-        return input.pattern ? `"${input.pattern.slice(0, 20)}"` : null
-      case 'Glob':
-        return input.pattern ? input.pattern : null
-      case 'Agent':
-        return input.description || input.prompt?.slice(0, 20) || null
+        // AVO-126: never surface a raw shell command/path in a bubble — use an office-vibe noun.
+        return bashVibeLabel(input.command || input.cmd)
+      case 'Grep': {
+        // Strip leading path components from the pattern so absolute paths don't leak into
+        // bubbles: "/home/user/src/**/*.js" → "*.js"; "useLocale" stays "useLocale"
+        const pat = input.pattern ? path.basename(input.pattern.replace(/\\/g, '/')).slice(0, 20) : null
+        return pat ? `"${pat}"` : null
+      }
+      case 'Glob': {
+        // Basename-ize glob patterns — an absolute path like /home/user/src/**/*.test.js
+        // is reduced to *.test.js so the bubble never leaks a filesystem path.
+        const gPat = input.pattern || null
+        if (!gPat) return null
+        // If the pattern contains a slash, extract only the final path component / glob segment
+        const gBase = gPat.replace(/\\/g, '/').split('/').pop() || gPat
+        return gBase.slice(0, 30)
+      }
+      case 'Agent': {
+        // Strip leading absolute path components from descriptions so a long description
+        // like "/home/user/proj: review the auth module" becomes "review the auth module".
+        const desc = input.description || input.prompt?.slice(0, 40) || null
+        if (!desc) return null
+        // Remove any leading path segment (starts with / or drive letter + colon)
+        const stripped = desc.replace(/^(?:[A-Za-z]:)?\/[^\s:]*[:\s]+/, '').trim()
+        return stripped.slice(0, 30)
+      }
       case 'WebFetch':
+        // Use only the hostname (no path) to avoid leaking absolute URLs into bubbles
+        return input.query || (input.url ? (() => { try { return new URL(input.url).hostname.slice(0, 25) } catch { return input.url.replace(/^https?:\/\//, '').split('/')[0].slice(0, 25) } })() : null)
       case 'WebSearch':
         return input.query || input.url?.replace(/^https?:\/\//, '').slice(0, 25) || null
       case 'TodoWrite':
@@ -249,10 +316,19 @@ function extractContext(tool, toolInput) {
 function toolLabel(tool, context, isDone) {
   if (isDone) {
     const ctx = context ? ` ${context}` : ''
-    const doneLabels = LANG === 'en'
-      ? [`✅${ctx} done`, `✅${ctx} ready`, `✅ Done!`, `✅ Next`]
-      : [`✅${ctx} 好了`, `✅${ctx} 搞定`, `✅ 完成！`, `✅ 下一個`]
-    return context ? doneLabels[Math.floor(Math.random() * 2)] : pick(doneLabels)
+    // When context is present: use only the two context-bearing variants (indices 0 and 1)
+    // so the context string is always visible in the bubble.
+    // When context is absent: pick from all four labels (indices 0-3 are generic anyway).
+    // The "* 2" multiplier on random was dead code that made labels 2 and 3 unreachable
+    // when context was present — removed in favour of this explicit two-array pattern.
+    if (context) {
+      return pick(LANG === 'en'
+        ? [`✅${ctx} done`, `✅${ctx} ready`]
+        : [`✅${ctx} 好了`, `✅${ctx} 搞定`])
+    }
+    return pick(LANG === 'en'
+      ? ['✅ Done!', '✅ Next', '✅ All good', '✅ Complete']
+      : ['✅ 完成！', '✅ 下一個', '✅ 搞定了', '✅ OK'])
   }
 
   if (context) {
@@ -457,6 +533,68 @@ function effortLevel(event) {
   return HOOK_EFFORT_LEVELS.includes(lvl) ? lvl : null
 }
 
+// ─── Helper-huddle: subagent helper list ops ───
+// Produces a stable 4-char hex hash of a string, using the existing crypto module.
+// Stability contract: same agentId → same hash across calls within a process run.
+function helperHash(str) {
+  if (!str) return (Math.random().toString(16) + '0000').slice(2, 6)
+  try {
+    return require('crypto').createHash('md5').update(str).digest('hex').slice(0, 4)
+  } catch {
+    // Fallback: simple djb2 truncated to 4 hex chars (no crypto dep required)
+    let h = 5381
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i)
+    return ((h >>> 0).toString(16) + '0000').slice(0, 4)
+  }
+}
+
+// Returns a new helpers array with one helper appended for the given subagent.
+// De-duplicates by id: if a helper with the same id already exists, it is replaced
+// in-place (preserving position) rather than appended — prevents duplicate entries
+// when SubagentStart re-fires for the same agent_id.
+// Capped at 64 entries (oldest first-in is evicted when the cap is exceeded).
+function helperAdd(helpers, role, agentId, agentType) {
+  try {
+    const safeHelpers = Array.isArray(helpers) ? helpers : []
+    const id = role + '#' + helperHash(agentId || agentType || String(safeHelpers.length))
+    const record = {
+      id,
+      parentRole: typeof role === 'string' ? role : 'dev',
+      label: typeof agentType === 'string' ? agentType.slice(0, 200) : '',
+    }
+    // De-duplicate: replace existing record with same id rather than appending a second copy.
+    const existingIdx = safeHelpers.findIndex(h => h && h.id === id)
+    let next
+    if (existingIdx !== -1) {
+      next = [...safeHelpers.slice(0, existingIdx), record, ...safeHelpers.slice(existingIdx + 1)]
+    } else {
+      next = [...safeHelpers, record]
+    }
+    return next.length > 64 ? next.slice(next.length - 64) : next
+  } catch { return Array.isArray(helpers) ? helpers : [] }
+}
+
+// Returns a new helpers array with the matching helper removed.
+// Matches by id (role + '#' + hash(agentId)). When agentId is missing, removes the
+// oldest helper for that role (best-effort, per contract).
+function helperRemove(helpers, role, agentId) {
+  try {
+    const safeHelpers = Array.isArray(helpers) ? helpers : []
+    if (!safeHelpers.length) return safeHelpers
+    if (agentId) {
+      // Known agent_id: remove exact match; if no match found, return unchanged.
+      const targetId = role + '#' + helperHash(agentId)
+      const idx = safeHelpers.findIndex(h => h && h.id === targetId)
+      if (idx !== -1) return [...safeHelpers.slice(0, idx), ...safeHelpers.slice(idx + 1)]
+      return safeHelpers
+    }
+    // No agent_id: best-effort — remove oldest helper for this role
+    const idx = safeHelpers.findIndex(h => h && h.parentRole === role)
+    if (idx !== -1) return [...safeHelpers.slice(0, idx), ...safeHelpers.slice(idx + 1)]
+    return safeHelpers
+  } catch { return Array.isArray(helpers) ? helpers : [] }
+}
+
 // ─── Main ───
 
 function processEvent(event) {
@@ -476,6 +614,8 @@ function processEvent(event) {
   let workflowOverride = null  // only SubagentStart sets this; PreToolUse/PostToolUse must not clobber workflow
   let capturedPromptId = null  // PreToolUse captures current _promptId for straggler detection
   let newPromptId = null       // UserPromptSubmit sets a fresh _promptId each turn
+  // Helper-huddle: 'add' or 'remove' or null; resolved after merge-read using existingHelpers.
+  let helperAction = null  // { op: 'add'|'remove', role, agentId, agentType }
 
   switch (hookEvent) {
     case 'UserPromptSubmit': {
@@ -536,7 +676,14 @@ function processEvent(event) {
       // Detect errors from tool result
       let toolResult = event.tool_result || ''
       if (typeof toolResult === 'object') toolResult = JSON.stringify(toolResult)
-      const isError = event.is_error || (typeof toolResult === 'string' && /^(Error:|Exit code [1-9]|ENOENT|EPERM|EACCES|Command failed|fatal:)/im.test(toolResult.slice(0, 300)))
+      // Trust event.is_error as primary source of truth.
+      // Apply the heuristic ONLY when is_error is undefined (older hook payloads that omit the field).
+      // Test only the FIRST line of output so "Error:" or "fatal:" appearing in body prose does not
+      // fire a false positive (e.g. a successful grep result that mentions an error keyword).
+      // Word-boundary anchors (\b) prevent substring matches like "ENOENT means…" in prose.
+      const isError = event.is_error !== undefined
+        ? Boolean(event.is_error)
+        : (typeof toolResult === 'string' && /^(Error:|Exit code [1-9]|ENOENT\b|EPERM\b|EACCES\b|Command failed|fatal:)/.test(toolResult.split('\n')[0]))
       status = isError ? 'blocked' : 'done'
       hint = isError ? 'error' : null
       const ctx = extractContext(tool, toolInput)
@@ -551,6 +698,7 @@ function processEvent(event) {
       workflowOverride = agentType  // set workflow to the subagent type on start
       // Persist skill context so tool calls within this subagent stay on the right role
       if (agentId) saveSkillContext(agentId, role, agentType)
+      helperAction = { op: 'add', role, agentId, agentType }
       break
     }
     case 'SubagentStop': {
@@ -572,6 +720,7 @@ function processEvent(event) {
       label = skillLabel(agentType, true)
       clearWorkflow = true  // subagent workflow ends; reset so it doesn't stick forever
       if (agentId) clearSkillContext(agentId)
+      helperAction = { op: 'remove', role, agentId, agentType }
       break
     }
     case 'Stop': {
@@ -613,6 +762,7 @@ function processEvent(event) {
           source: 'claude-cli',
           _promptId: data._promptId || null,
           _preToolPromptId: data._preToolPromptId || null,
+          helpers: [],  // turn over — clear all helpers
         }
         const dir = path.dirname(STATUS_FILE)
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
@@ -639,6 +789,7 @@ function processEvent(event) {
           _seq: nextSeq(),
           _stopped: true,
           _stoppedAt: Date.now(),
+          helpers: [],  // turn over — clear all helpers
         }
         const dir = path.dirname(STATUS_FILE)
         try {
@@ -669,6 +820,7 @@ function processEvent(event) {
   let existingPreToolPromptId = null
   let existingStopped = false
   let existingStoppedAt = null
+  let existingHelpers = []
   try {
     const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
     existing = Array.isArray(data.agents)
@@ -689,6 +841,7 @@ function processEvent(event) {
     existingPreToolPromptId = data._preToolPromptId || null
     existingStopped = Boolean(data._stopped)
     existingStoppedAt = typeof data._stoppedAt === 'number' ? data._stoppedAt : null
+    existingHelpers = Array.isArray(data.helpers) ? data.helpers.filter(h => h && typeof h.id === 'string') : []
   } catch {}
 
   // Detect stale workflow from a previous turn. Two conditions that independently indicate
@@ -801,6 +954,19 @@ function processEvent(event) {
   const outWorkflowPromptId = effectiveClearWorkflow ? null
     : (workflowOverride ? existingPromptId : existingWorkflowPromptId)
 
+  // Compute outHelpers: apply add/remove action on top of carried-over existingHelpers.
+  // Helpers are NOT roster agents — never filtered through VALID_HOOK_ROLES.
+  let outHelpers
+  try {
+    if (helperAction && helperAction.op === 'add') {
+      outHelpers = helperAdd(existingHelpers, helperAction.role, helperAction.agentId, helperAction.agentType)
+    } else if (helperAction && helperAction.op === 'remove') {
+      outHelpers = helperRemove(existingHelpers, helperAction.role, helperAction.agentId)
+    } else {
+      outHelpers = existingHelpers
+    }
+  } catch { outHelpers = existingHelpers }
+
   const output = {
     _seq: nextSeq(),
     _cwd: process.cwd(),
@@ -811,6 +977,7 @@ function processEvent(event) {
     _workflowAgentId: outWorkflowAgentId,
     _workflowPromptId: outWorkflowPromptId,
     source: 'claude-cli',
+    helpers: outHelpers,
     // AVO-108: session token usage (context size + last output). Omitted when null so the
     // store keeps its last value (presence semantics) — Stop and failed reads don't blank it.
     ...(tokens ? { tokens } : {}),
@@ -886,8 +1053,9 @@ function processEvent(event) {
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)
 if (typeof module !== 'undefined') {
   module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
-    shortFile, shortCommand, extractContext, sanitizeId,
+    shortFile, shortCommand, bashVibeLabel, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
     shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse,
-    readLatestTokenUsage, effortLevel }
+    readLatestTokenUsage, effortLevel,
+    helperHash, helperAdd, helperRemove }
 }

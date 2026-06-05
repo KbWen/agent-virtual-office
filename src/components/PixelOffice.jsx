@@ -8,6 +8,8 @@ import { startIdleGapInference } from '../inference/idleGapInfer'
 import { startWorkflowHandoffs } from '../inference/workflowHandoff'
 import { eventName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
+import HelperHuddles from './HelperHuddle'
+import NarrowRoster from './NarrowRoster'
 import AgentInspector from './AgentInspector'
 import {
   Bookshelf, Plant, Couch, RoundTable, MeetingTable,
@@ -38,15 +40,15 @@ const SprintKanban = React.memo(function SprintKanban({ x, y, doneCount = 0 }) {
       <rect x={x} y={y} width={W} height={H} rx={2} fill="#F8F4E8" stroke="#C8C0A8" strokeWidth="0.8" />
       {/* Header bar */}
       <rect x={x} y={y} width={W} height={10} rx={2} fill="#7070A0" opacity="0.9" />
-      <text x={x + 28} y={y + 7} textAnchor="middle" fontSize="5" fill="white" fontFamily="monospace" fontWeight="bold">SPRINT</text>
-      <text x={x + W - 4} y={y + 7} textAnchor="end" fontSize="4.5" fill="#FFE08A" fontFamily="monospace" fontWeight="bold">{doneCount}</text>
+      <text x={x + 28} y={y + 7.5} textAnchor="middle" fontSize="6" fill="white" fontFamily="monospace" fontWeight="bold">SPRINT</text>
+      <text x={x + W - 4} y={y + 7.5} textAnchor="end" fontSize="6" fill="#FFE08A" fontFamily="monospace" fontWeight="bold">{doneCount}</text>
       {/* Column dividers */}
       <line x1={x + 26} y1={y + 10} x2={x + 26} y2={y + H} stroke="#D8D0C0" strokeWidth="0.6" />
       <line x1={x + 52} y1={y + 10} x2={x + 52} y2={y + H} stroke="#D8D0C0" strokeWidth="0.6" />
       {/* Column headers */}
-      <text x={x + 13} y={y + 17} textAnchor="middle" fontSize="3.5" fill="#999" fontFamily="monospace">TODO</text>
-      <text x={x + 39} y={y + 17} textAnchor="middle" fontSize="3.5" fill="#999" fontFamily="monospace">DOING</text>
-      <text x={x + 65} y={y + 17} textAnchor="middle" fontSize="3.5" fill={filled > 0 ? '#2E7D32' : '#999'} fontFamily="monospace" fontWeight={filled > 0 ? 'bold' : 'normal'}>DONE</text>
+      <text x={x + 13} y={y + 17} textAnchor="middle" fontSize="5.5" fill="#888" fontFamily="monospace">TODO</text>
+      <text x={x + 39} y={y + 17} textAnchor="middle" fontSize="5.5" fill="#888" fontFamily="monospace">DOING</text>
+      <text x={x + 65} y={y + 17} textAnchor="middle" fontSize="5.5" fill={filled > 0 ? '#2E7D32' : '#888'} fontFamily="monospace" fontWeight={filled > 0 ? 'bold' : 'normal'}>DONE</text>
       {/* TODO column: static colored task cards */}
       {todoCards.map((color, i) => (
         <rect key={i} x={x + 3} y={y + 20 + i * 8} width={20} height={6} rx={1} fill={color} opacity="0.25" />
@@ -404,12 +406,13 @@ function growthLevel(count) {
 // walking), none of which alter a desk's props. Without memo all 7 desks
 // re-execute on every such render. The ops desk's onDeployClick is stabilized
 // with useCallback in PixelOffice so its identity stays constant across renders.
-const PersonalDesk = React.memo(function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0, stickyCount = 0, booksCount = 0, onDeployClick }) {
+const PersonalDesk = React.memo(function PersonalDesk({ x, y, label, color, variant, coffeeCount = 0, stickyCount = 0, booksCount = 0, onDeployClick, labelScale = 1 }) {
   const W = 60, H = 38
   return (
     <g>
-      {/* Desk label (character name) */}
-      <text x={x} y={y - H / 2 - 4} textAnchor="middle" fontSize="6" fill={color} fontFamily="monospace" fontWeight="bold" opacity="0.7">{label}</text>
+      {/* Desk label (character name) — POINT 2: counter-scaled so "whose desk" stays legible
+          when shrunk (esp. at idle, when the floating name tag is hidden). */}
+      <ScaledText x={x} y={y - H / 2 - 4} scale={labelScale} textAnchor="middle" fontSize="6" fill={color} fontFamily="monospace" fontWeight="bold" opacity="0.7">{label}</ScaledText>
 
       {/* Chair */}
       <rect x={x - 10} y={y + H / 2 + 2} width={20} height={14} rx={7} fill="#444" opacity="0.6" />
@@ -644,6 +647,35 @@ const GRID_LINES = (() => {
   return lines
 })()
 
+// The office scene is authored at a FIXED 800×560 (every desk/home/waypoint is a hardcoded
+// movementSystem coordinate, so it can't be reflowed to portrait). The office is the PRIMARY view
+// at EVERY size — scaled to fit via SVG `meet`. The roster is an OPTIONAL manual toggle
+// (store.rosterMode), never an automatic size-based switch, so the office always leads and the
+// list is just an extra glanceable lens the user can opt into.
+export const SCENE_W = 800
+export const SCENE_H = 560
+
+// POINT 2: the office renders with preserveAspectRatio="xMidYMid meet", so its on-screen scale
+// is the SMALLER of the width/height fit ratios — that is what shrinks every in-scene label when
+// the office is docked small. AgentCharacter counter-scales labels by 1/this. Pure for unit test.
+// A zero/NaN box (pre-layout) returns 1 → no counter-scaling until a real measurement lands.
+export function computeSceneScale(rectW, rectH) {
+  if (!(rectW > 0) || !(rectH > 0)) return 1
+  return Math.min(rectW / SCENE_W, rectH / SCENE_H)
+}
+
+// POINT 2: render a <text> counter-scaled around its OWN anchor (x,y), so secondary in-scene
+// labels (zone names, desk nameplates) stay legible as the office shrinks. Scaling around the
+// text's own anchor keeps it positioned exactly where the plain <text> sat. At scale 1 it is
+// byte-identical to a plain <text x y>. Pure presentation; never intercepts pointer events.
+function ScaledText({ x, y, scale, children, ...rest }) {
+  return (
+    <g transform={`translate(${x}, ${y}) scale(${scale}) translate(${-x}, ${-y})`} pointerEvents="none">
+      <text x={x} y={y} {...rest}>{children}</text>
+    </g>
+  )
+}
+
 export default function PixelOffice({ animationQuality = 'full', mode = 'full' }) {
   // Only re-render PixelOffice when agent IDs change, not on every property update.
   // AgentCharacter subscribes to its own agent state independently.
@@ -755,59 +787,105 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   // Panel mode: auto-adapt viewBox to container shape
   const isPanel = mode === 'panel'
   const containerRef = useRef(null)
+  const svgRef = useRef(null)
   const [panelViewBox, setPanelViewBox] = useState('60 155 540 260')
+  // Office is the primary view at every size; the roster is an opt-in MANUAL toggle (not size-based).
+  const rosterMode = useOfficeStore((s) => s.rosterMode)
+  // POINT 2: publish the office's live `meet` scale so AgentCharacter can counter-scale labels.
+  const setSceneScale = useOfficeStore((s) => s.setSceneScale)
+  // POINT 2: read it back too, to counter-scale the top event/workflow banner (its text is tiny).
+  const sceneScale = useOfficeStore((s) => s.sceneScale)
+  // Keep the top event/workflow banner (a single fontSize-9 pill) at a constant readable on-screen
+  // size (~1.4× native) as the office shrinks. No overlap concern (one banner at the top edge), so
+  // a simple target/clamp; it scales around its top-centre so it grows downward.
+  const bannerScale = Math.min(2, Math.max(1, 1.4 / (sceneScale > 0 ? sceneScale : 1)))
+  // Secondary labels (zone names, desk nameplates) — keep legible at a constant ~1.6× native on
+  // screen as the office shrinks (capped so a tiny office doesn't blow them up). At desktop the
+  // scale is ~1, so the wide view is essentially unchanged.
+  const labelTextScale = Math.min(2.4, Math.max(1, 1.6 / (sceneScale > 0 ? sceneScale : 1)))
 
-  const updatePanelViewBox = useCallback(() => {
-    if (!isPanel || !containerRef.current) return
-    const { clientWidth: w, clientHeight: h } = containerRef.current
+  const updateViewBox = useCallback(() => {
+    if (!isPanel) return
+    const el = containerRef.current
+    if (!el) return
+    const { clientWidth: w, clientHeight: h } = el
     if (w === 0 || h === 0) return
     const ratio = w / h
-    // Add margin (M) to prevent edge clipping of agents
-    const M = 20
-    if (ratio < 1) {
-      // Portrait (sidebar): show taller crop centered on desks
-      setPanelViewBox(`${100 - M} ${130 - M} ${400 + M * 2} ${400 + M * 2}`)
-    } else if (ratio < 1.6) {
-      // Squarish: balanced crop
-      setPanelViewBox(`${60 - M} ${140 - M} ${540 + M * 2} ${340 + M * 2}`)
-    } else {
-      // Landscape (bottom panel): wide, short crop
-      setPanelViewBox(`${60 - M} ${155 - M} ${540 + M * 2} ${260 + M * 2}`)
-    }
+    // Panel (compact embed): its own intentional crops per container shape.
+    const M = 20  // margin to prevent edge clipping of agents
+    if (ratio < 1) setPanelViewBox(`${100 - M} ${130 - M} ${400 + M * 2} ${400 + M * 2}`)
+    else if (ratio < 1.6) setPanelViewBox(`${60 - M} ${140 - M} ${540 + M * 2} ${340 + M * 2}`)
+    else setPanelViewBox(`${60 - M} ${155 - M} ${540 + M * 2} ${260 + M * 2}`)
   }, [isPanel])
 
-  // rAF-coalesce the resize handler. ResizeObserver and the window 'resize' backup
-  // can both fire for a single drag-resize frame — each invocation reads clientWidth/
-  // clientHeight (a forced layout flush) and runs the ratio math. Collapsing bursts to
-  // one call per frame dedupes that double-work; the pending handle is cancelled on
-  // cleanup so a queued frame can't fire updatePanelViewBox against an unmounted panel.
+  // Only PANEL mode adapts its viewBox to the embed shape. The default office does NOT measure or
+  // auto-switch — its view is a manual toggle (rosterMode) — which also means there is no resize-
+  // driven state that could get stuck when the embedded preview throttles rAF/ResizeObserver.
   useEffect(() => {
-    if (!isPanel || !containerRef.current) return
-    let rafId = null
-    const schedule = () => {
-      if (rafId != null) return
-      rafId = requestAnimationFrame(() => { rafId = null; updatePanelViewBox() })
-    }
-    updatePanelViewBox()
-    const ro = new ResizeObserver(schedule)
-    ro.observe(containerRef.current)
-    // Backup: window resize for iframe/webview embedding
-    window.addEventListener('resize', schedule)
+    if (!isPanel) return
+    const el = containerRef.current
+    if (!el) return
+    updateViewBox()
+    const ro = new ResizeObserver(() => updateViewBox())
+    ro.observe(el)
+    const onWinResize = () => updateViewBox()
+    window.addEventListener('resize', onWinResize)
     return () => {
-      if (rafId != null) cancelAnimationFrame(rafId)
       ro.disconnect()
-      window.removeEventListener('resize', schedule)
+      window.removeEventListener('resize', onWinResize)
     }
-  }, [isPanel, updatePanelViewBox])
+  }, [updateViewBox, isPanel])
+
+  // POINT 2: measure the default office's live on-screen scale (rendered svg box vs native
+  // 800×560) and publish it so agent labels can counter-scale and stay readable as the office
+  // shrinks. Direct measure (NO rAF wrapper) — the responsive saga showed rAF-driven measuring
+  // sticks under the embedded webview's throttle. Panel mode keeps its own crops, so it does not
+  // measure (labels there render native, unchanged). Depends on rosterMode because the svg is
+  // unmounted while the roster widget shows — re-running re-attaches the observer on toggle-back.
+  useEffect(() => {
+    if (isPanel || rosterMode) return
+    const el = svgRef.current
+    if (!el) return
+    const measure = () => {
+      const r = el.getBoundingClientRect()
+      setSceneScale(computeSceneScale(r.width, r.height))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    window.addEventListener('resize', measure)
+    // Self-heal poll: this embedded webview (Antigravity preview) throttles ResizeObserver and
+    // the window 'resize' event on a LIVE pane drag — the initial observe fires, but a later
+    // resize can leave sceneScale stale, so labels render at the wrong (often tiny) size. A
+    // setInterval is clamped but never suspended like rAF/RO, so it re-measures and the scale
+    // can't stay wrong for more than ~0.6s. setSceneScale no-ops when the value is unchanged,
+    // so this poll is free except on an actual size change.
+    const poll = setInterval(measure, 600)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+      clearInterval(poll)
+      // NOTE: deliberately do NOT reset sceneScale to 1 here. On a roster↔office toggle the
+      // fresh effect's measure() overwrites it on remount, and the roster view ignores it — a
+      // reset would only flash labels to native size for one frame before re-measuring.
+    }
+  }, [isPanel, rosterMode, setSceneScale])
 
   const viewBox = isPanel ? panelViewBox : '0 0 800 560'
+  // Office (non-panel) FILLS THE WIDTH at every pane shape: the svg is width-driven via aspect-ratio
+  // (800/560), so the scene ALWAYS spans the full browser width — no left/right whitespace, ever.
+  // Its height follows the ratio; the wrapper centers + clips, so a wide-short pane trims the empty
+  // ceiling/floor symmetrically (no side gaps) while a tall pane just gets vertical breathing room.
+  // Panel mode keeps its own crop+fit (w-full h-full + meet).
+  const svgStyle = isPanel ? {} : { aspectRatio: '800 / 560' }
 
   const svgElement = (
     <svg
+      ref={svgRef}
       viewBox={viewBox}
       xmlns="http://www.w3.org/2000/svg"
-      className="w-full h-full"
-      style={isPanel ? {} : { maxHeight: 'calc(100vh - 44px)', minWidth: '480px' }}
+      className={isPanel ? 'w-full h-full' : 'w-full'}
+      style={svgStyle}
       preserveAspectRatio="xMidYMid meet"
     >
       <defs>
@@ -912,7 +990,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <Plant x={170} y={100} />
       <Plant x={170} y={50} />
       <rect x={65} y={120} width={70} height={12} rx={2} fill="#9B8B6B" opacity="0.7" />
-      <text x={100} y={129} textAnchor="middle" fontSize="5" fill="#C8A878" fontFamily="monospace" opacity="0.8">WELCOME</text>
+      <text x={100} y={129} textAnchor="middle" fontSize="6.5" fill="#C8A878" fontFamily="monospace" opacity="0.85">WELCOME</text>
 
       {/* ═══ HALLWAY (connecting entrance to meeting room) ═══ */}
       <WallWindow x={250} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={reducedMotion} />
@@ -925,7 +1003,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <rect x={236} y={58} width={10} height={7} fill="#FF9E9E" />
       <rect x={223} y={68} width={10} height={7} fill="#A8E6CF" />
       <rect x={236} y={68} width={10} height={7} fill="#87CEEB" />
-      <text x={245} y={87} textAnchor="middle" fontSize="4" fill="#8B7355" fontFamily="monospace" opacity="0.6">NOTICE</text>
+      <text x={245} y={87} textAnchor="middle" fontSize="6" fill="#8B7355" fontFamily="monospace" opacity="0.7">NOTICE</text>
       {/* Coat rack */}
       <line x1={400} y1={50} x2={400} y2={80} stroke="#6B5335" strokeWidth="2" />
       <circle cx={400} cy={47} r={3} fill="#6B5335" />
@@ -939,13 +1017,15 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {/* ═══ MAIN OFFICE ═══ */}
       {/* SHIP IT poster on north wall interior */}
       <rect x={15} y={170} width={50} height={28} rx={2} fill="#F5F0E0" stroke="#CCC" strokeWidth="0.8" />
-      <text x={40} y={184} textAnchor="middle" fontSize="5.5" fill="#7F77DD" fontFamily="monospace">SHIP IT</text>
-      <text x={40} y={193} textAnchor="middle" fontSize="4.5" fill="#888" fontFamily="monospace">everyday</text>
+      <text x={40} y={184} textAnchor="middle" fontSize="7" fill="#7F77DD" fontFamily="monospace">SHIP IT</text>
+      <text x={40} y={194} textAnchor="middle" fontSize="6" fill="#888" fontFamily="monospace">everyday</text>
 
       {/* Sprint Kanban board on north wall, planning area (clear of door at x=88-140) */}
       <SprintKanban x={160} y={165} doneCount={totalDoneToday} />
 
-      {/* Team area labels */}
+      {/* Team area labels — faint opacity-0.4 BACKGROUND text that sits among the desks. Left at
+          native size (NOT counter-scaled): enlarging them collides with the desk nameplates in the
+          dense desk cluster (跑版). The desk nameplates below carry the readable "who sits here". */}
       <text x={200} y={200} textAnchor="middle" fontSize="7" fill="#378ADD" fontFamily="monospace" opacity="0.4">PLANNING</text>
       <text x={460} y={200} textAnchor="middle" fontSize="7" fill="#BA7517" fontFamily="monospace" opacity="0.4">REVIEW</text>
       <text x={400} y={310} textAnchor="middle" fontSize="7" fill="#1D9E75" fontFamily="monospace" opacity="0.4">ENGINEERING</text>
@@ -962,6 +1042,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           stickyCount={stickyCountMap[d.id] || 0}
           booksCount={booksCountMap[d.id] || 0}
           onDeployClick={d.id === 'ops' ? handleDeployClick : undefined}
+          labelScale={labelTextScale}
         />
       ))}
 
@@ -974,7 +1055,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <Plant x={22} y={290} />
 
       {/* ═══ MEETING ROOM ═══ */}
-      <text x={705} y={26} textAnchor="middle" fontSize="8" fill="#7070A0" fontFamily="monospace" opacity="0.7">MEETING</text>
+      <ScaledText x={705} y={26} scale={labelTextScale} textAnchor="middle" fontSize="8" fill="#7070A0" fontFamily="monospace" opacity="0.7">MEETING</ScaledText>
       <Rug x={633} y={70} w={148} h={120} color="#7070A0" />
       <MeetingTable x={705} y={162} w={100} h={60} />
       <Plant x={630} y={55} />
@@ -983,7 +1064,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <WallWindow x={696} y={14} w={44} h={26} hour={hour} weather={weather} reducedMotion={reducedMotion} />
 
       {/* ═══ RESEARCH ═══ */}
-      <text x={700} y={432} textAnchor="middle" fontSize="7" fill="#6060A0" fontFamily="monospace" opacity="0.7">RESEARCH</text>
+      <ScaledText x={700} y={432} scale={labelTextScale} textAnchor="middle" fontSize="7" fill="#6060A0" fontFamily="monospace" opacity="0.7">RESEARCH</ScaledText>
       {/* Bookshelves along south outer wall, away from door */}
       <Bookshelf x={470} y={440} width={65} rows={2} />
       <Bookshelf x={625} y={440} width={65} rows={2} />
@@ -992,7 +1073,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <Plant x={788} y={540} />
 
       {/* ═══ LOUNGE ═══ */}
-      <text x={120} y={432} textAnchor="middle" fontSize="7" fill="#507050" fontFamily="monospace" opacity="0.7">LOUNGE</text>
+      <ScaledText x={120} y={432} scale={labelTextScale} textAnchor="middle" fontSize="7" fill="#507050" fontFamily="monospace" opacity="0.7">LOUNGE</ScaledText>
       <Rug x={50} y={440} w={180} h={95} color="#507050" />
       <Couch x={55} y={450} width={90} color="#7B8FA1" />
       <RoundTable x={175} y={490} r={22} />
@@ -1046,6 +1127,10 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
         </g>
       )}
 
+      {/* ═══ SUBAGENT HELPER HUDDLES ═══ (capped helper figures — painted BEHIND the agents
+          so the full-size lead is never clipped by its own helpers; they trail the lead's live pos) */}
+      <HelperHuddles />
+
       {/* ═══ AGENTS ═══ */}
       {agentList.map((agent) => (
         <AgentCharacter key={agent.id} agent={agent} />
@@ -1083,14 +1168,15 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           <ellipse cx={705} cy={162} rx={60} ry={45} fill="url(#mtg-light)" />
           {/* Lounge ambient warm light */}
           <ellipse cx={120} cy={480} rx={80} ry={50} fill="url(#lounge-light)" />
-          {/* Late night overtime indicator */}
+          {/* Late-night OVERTIME indicator (shown when the office clock hour ≥ 22). Spelled out (was
+              the cryptic "OT") + larger so it reads clearly; width kept so it never overlaps the clock. */}
           {hour >= 22 && (
             <g>
-              <rect x={485} y={143} width={45} height={12} rx={6} fill="#E24B4A" opacity="0.85">
-                <animate attributeName="opacity" values="0.85;0.5;0.85" dur="2s" repeatCount="indefinite" />
+              <rect x={485} y={142} width={45} height={14} rx={7} fill="#E24B4A" opacity="0.9">
+                <animate attributeName="opacity" values="0.9;0.55;0.9" dur="2s" repeatCount="indefinite" />
               </rect>
-              <text x={508} y={152} textAnchor="middle" fontSize="6" fill="white" fontFamily="monospace" fontWeight="bold">
-                OT
+              <text x={507} y={149} textAnchor="middle" dominantBaseline="middle" fontSize="6.5" fill="white" fontFamily="monospace" fontWeight="bold">
+                OVERTIME
               </text>
             </g>
           )}
@@ -1099,7 +1185,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* ═══ EVENT / WORKFLOW BANNER ═══ */}
       {(activeEvent || activeWorkflow) && (
-        <g pointerEvents="none">
+        <g pointerEvents="none" transform={`translate(400, 2) scale(${bannerScale}) translate(-400, -2)`}>
           <rect x={250} y={2} width={300} height={26} rx={13}
             fill={activeWorkflow ? '#E8F5E9' : '#FFF8E1'}
             stroke={activeWorkflow ? '#4CAF50' : '#F5C842'}
@@ -1144,8 +1230,17 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     )
   }
 
-  return (
-    <div className="w-full flex-1 overflow-auto min-h-0">
+  // Office-primary: the full scene by default at every size. The roster is shown ONLY when the user
+  // manually toggles it (store.rosterMode) — an optional lens, never an automatic size-based switch.
+  // Office branch CENTERS + CLIPS: the width-driven svg spans the full width, so vertical overflow on
+  // a wide-short pane is clipped symmetrically (no left/right whitespace) and vertical slack on a tall
+  // pane is centered. Roster branch keeps its own internal scroll.
+  return rosterMode ? (
+    <div ref={containerRef} className="w-full flex-1 overflow-hidden min-h-0">
+      <NarrowRoster />
+    </div>
+  ) : (
+    <div ref={containerRef} className="w-full flex-1 overflow-hidden min-h-0 flex items-center justify-center">
       {svgElement}
     </div>
   )

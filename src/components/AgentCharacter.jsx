@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
-import { classifyTask } from '../systems/classify'
-import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS } from '../systems/movementSystem'
+import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveFocusFacing } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale } from '../i18n'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
@@ -321,7 +320,7 @@ function PixelSprite({ grid, flipX = false, scale = 1 }) {
 // stable. Memo elides the component invocation (and its baseRole string-split +
 // CHAR_STYLES lookup) on the ~28-of-30 frames per second where no prop changed; the
 // inner useMemos only guarded the sprite-grid generation, not the function body itself.
-const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing }) {
+export const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing }) {
   // Strip session prefix for style lookup: "feat-x~dev" → use dev's style
   const baseRole = charId.includes('~') ? charId.split('~').pop() : charId
   const style = CHAR_STYLES[charId] || CHAR_STYLES[baseRole] || CHAR_STYLES.pm
@@ -587,53 +586,36 @@ function estimateTextWidth(str) {
   return w
 }
 
-// ─── ThinkingAura — AVO-102 extended-thinking halo ──────────────────────
-// A subtle violet ring whose radius + opacity scale with the model's effort level. Only
-// elevated effort (high / xhigh / max) shows it, so normal work stays uncluttered — per the
-// "畫面清楚好懂、不過分花俏" brief. Renders behind the character; reducedMotion drops the pulse.
-const EFFORT_AURA = { high: { r: 28, op: 0.16 }, xhigh: { r: 31, op: 0.22 }, max: { r: 34, op: 0.30 } }
-function ThinkingAura({ effort, reducedMotion }) {
-  const a = EFFORT_AURA[effort]
-  if (!a) return null
-  return (
-    <circle cx={0} cy={-18} r={a.r} fill="none" stroke="#8B7FD6" strokeWidth="2" opacity={a.op}>
-      {!reducedMotion && <animate attributeName="opacity" values={`${a.op * 0.5};${a.op};${a.op * 0.5}`} dur="2.4s" repeatCount="indefinite" />}
-      {!reducedMotion && <animate attributeName="r" values={`${a.r - 2};${a.r + 2};${a.r - 2}`} dur="2.4s" repeatCount="indefinite" />}
-    </circle>
-  )
-}
+// ─── AVO-132: effort folded into the single working glow ring ───────────
+// The old AVO-102 ThinkingAura was a SECOND concentric violet ring stacked on the working
+// glow — ring-on-ring clutter on a 32px sprite. Instead, elevated effort (high/xhigh/max)
+// now intensifies the ONE working glow ring (stronger peak opacity + thicker stroke), so a
+// sprite never shows two rings. Normal/absent effort leaves the ring at its base intensity.
+const EFFORT_GLOW = { high: { op: 0.7, sw: 2.5 }, xhigh: { op: 0.85, sw: 3 }, max: { op: 1, sw: 3.5 } }
+const BASE_GLOW = { op: 0.5, sw: 2 }
+// AVO-131: the in-scene TaskLabel tool pill (AVO-103) was removed — the exact tool now
+// shows only in the AgentInspector (click-to-inspect). The classifier still backs the
+// inspector's `inspectorTaskLabel`; nothing in the office scene renders the raw tool string.
 
-// ─── TaskLabel — small monospace pill showing the current tool (AVO-103) ──
-// Tiny, low-contrast, never animated. The brief was "clear and not flashy",
-// so this is intentionally unobtrusive — just a 7px monospace label in a
-// rounded rect, placed below the name tag. Shows the classifier's
-// `visualLabel` so MCP tools collapse to `notion::create` instead of
-// `mcp__notion__create_page` (Tier 4 inner-verb bubble-up from the recent
-// classifier fix carries this for us). Returns null when no task is set,
-// so idle agents stay clean.
-function TaskLabel({ task }) {
-  if (!task) return null
-  const c = classifyTask(task)
-  const label = c.visualLabel
-  // Conservative width estimate: ~5.4px per char at 7px monospace.
-  const charW = 5.4
-  const labelW = Math.min(72, Math.max(20, label.length * charW + 6))
-  const halfW = labelW / 2
-  return (
-    <g transform="translate(0, -29)" aria-hidden="true">
-      <rect
-        x={-halfW} y={-5} width={labelW} height={10} rx={5}
-        fill="#1a1a1a" opacity="0.55"
-      />
-      <text
-        x={0} y={1.5}
-        textAnchor="middle" dominantBaseline="middle"
-        fontSize="7" fontFamily="monospace" fill="#E8E8E8" opacity="0.95"
-      >
-        {label}
-      </text>
-    </g>
-  )
+// ─── POINT 2: counter-scale glance-text so it stays readable as the office shrinks ──────
+// The office renders with `meet`, so when its on-screen scale (sceneScale) drops below 1 every
+// label would shrink with it. The label group cancels the office shrink (×1/sceneScale) to hold
+// a ~constant on-screen text size. sceneScale ≥ 1 (office at/above native) → factor 1 (labels
+// ride the office up, already big enough; wide desktop is byte-identical).
+//
+// CAP = 1.5 is an overlap guard, NOT arbitrary. Desks are fixed coordinates (dev/ops are 120
+// units apart; pm/designer too). On-screen agent separation AND pill size both scale with
+// sceneScale, so in the capped region their ratio is constant: a name pill (~80 units for the
+// widest name) stays narrower than the 120-unit gap as long as cap < 120/80 ≈ 1.5 → adjacent
+// active agents' name tags never collide. At the threshold sceneScale = 1/1.5 ≈ 0.667 the net
+// on-screen text reaches full size (1.0) right where the office is already spread enough to clear;
+// below that the cap lets text shrink gently (still far larger than with no counter-scale at all).
+// Empirically verified overlap-free with all 8 agents active across a 320–1280px sweep.
+// Pure for unit testing.
+export const LABEL_SCALE_MAX = 1.5
+export function computeLabelScale(sceneScale, max = LABEL_SCALE_MAX) {
+  if (!(sceneScale > 0)) return 1
+  return Math.min(max, 1 / Math.min(sceneScale, 1))
 }
 
 // ═══ AGENT CHARACTER WITH RAF-BASED MOVEMENT ═══
@@ -644,12 +626,21 @@ function AgentCharacter({ agent }) {
   const name = charName(id)
   const agentState = useOfficeStore((s) => s.agents[id])
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
-  // AVO-103: per-agent task signal for the tool-inventory label. Subscribe to
-  // just the `task` string so we re-render only when the tool changes — not on
-  // every other externalStatus tick (label, expiresAt, etc.).
-  const currentTask = useOfficeStore((s) => s.externalStatus[id]?.task ?? null)
-  // AVO-102: session effort level drives a subtle thinking aura on active agents.
+  // AVO-132: session effort level intensifies the working glow ring (folded in from the
+  // removed ThinkingAura). Subscribe to just `effort` so we re-render only when it changes.
   const effort = useOfficeStore((s) => s.effort)
+  // AVO-138: is THIS role currently supervising active subagent helpers? Role-scoped boolean →
+  // referentially stable, re-renders only on a false<->true transition. When true, the lead
+  // shows a calm 'supervising' state (steady halo + 👀) and the pulsing working ring is
+  // suppressed — the helper huddle carries the live "work is happening" motion instead.
+  const hasActiveHelper = useOfficeStore((s) => s.helpers.some((h) => h.parentRole === id))
+  // POINT 2: counter-scale name/status/bubble labels by the office's live shrink factor so
+  // glance-text stays readable when the office is docked small. Primitive subscription →
+  // re-renders only when the scale actually changes (PixelOffice no-ops equal writes).
+  const sceneScale = useOfficeStore((s) => s.sceneScale)
+  const labelScale = computeLabelScale(sceneScale)
+  // L3 reluctant-participant tell (transient expiry ts). Pure overlay — never affects behavior.
+  const reluctantUntil = useOfficeStore((s) => s.reluctant?.[id])
 
   const timerRef = useRef(null)
   const pathRef = useRef([])
@@ -657,6 +648,10 @@ function AgentCharacter({ agent }) {
   const movingStuckRef = useRef(0)
   const pendingBehaviorRef = useRef(null) // deferred behavior for location-based actions
   const [walkFrame, setWalkFrame] = useState(0)
+  // AVO-128: name tags are revealed only when an agent is active (working/blocked/
+  // planning/done) or hovered, and hidden at rest — at idle, identity rides on the
+  // sprite + color + desk position. `hovered` lets a desktop user pull up any name.
+  const [hovered, setHovered] = useState(false)
   // Tracks every fire-and-forget setTimeout (bubble clears, handoff steps) so the
   // unmount cleanup can cancel them. Without this, a deferred clearBubble/handoff
   // callback fires up to ~4s after the component unmounts and mutates the store
@@ -794,6 +789,9 @@ function AgentCharacter({ agent }) {
   useEffect(() => {
     if (!isWalking) return
     const watchdog = setInterval(() => {
+      // A backgrounded tab pauses RAF; skip the watchdog while hidden to avoid
+      // false-positive stall diagnostics and spurious RAF re-queues.
+      if (document.visibilityState !== 'visible') return
       if (Date.now() - lastFrameWallTimeRef.current < 1500) return
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
@@ -935,7 +933,11 @@ function AgentCharacter({ agent }) {
       }
       movingStuckRef.current = 0
 
-      const next = getNextBehavior(id, agent.status || 'idle', new Date().getHours(), store.mood || 'normal')
+      // L2: an UNTRACKED agent (no live real signal) leans in with teamPulse; a TRACKED agent is
+      // never modulated (R1) → pass teamPulse 0. `tracked` is reused for the focusAnchor bias below.
+      const tracked = !!store.externalStatus[id]
+      const teamPulse = tracked ? 0 : (store.teamPulse || 0)
+      const next = getNextBehavior(id, agent.status || 'idle', new Date().getHours(), store.mood || 'normal', teamPulse)
       // Guard the re-schedule delay: a non-finite or non-positive duration would make
       // setTimeout(doSchedule, nextDelay) fire on the next tick, spinning the behavior
       // chain in a tight CPU loop. Fall back to the 8s default if the value is unusable.
@@ -971,6 +973,14 @@ function AgentCharacter({ agent }) {
         // Clear bubble after a while
         if (next.bubble) {
           scheduleDeferred(() => useOfficeStore.getState().clearBubble(id), Math.min(next.duration * 0.5, 4000))
+        }
+        // L2 focusAnchor (spec living-office-events.md): a STATIONARY, UNTRACKED agent orients toward
+        // the hottest live desk — the room "turns toward where the real work is" (honest; orientation
+        // ≠ work-claim). All honesty guards (tracked→skip per R1, stale/idle/self bail, slug~role
+        // fallback) live in the pure resolveFocusFacing helper so AC-4 is unit-testable without this loop.
+        if (!willWalk && visualPosRef.current) {
+          const dir = resolveFocusFacing(store, id, visualPosRef.current.x, visualPosRef.current.y)
+          if (dir) store.setAgentFacing(id, dir)
         }
       }
 
@@ -1089,31 +1099,64 @@ function AgentCharacter({ agent }) {
     return { tagW: w, tagHalfW: w / 2 }
   }, [name])
   const tagFill = state.status !== 'idle' ? (STATUS_COLORS[state.status] || color) : color
-  const statusIcon = state.status === 'working' ? '⚡' : state.status === 'blocked' ? '✕' : state.status === 'done' ? '✓' : null
+  // '◷' is a monochrome Unicode clock glyph — tints with tagFill like the other status icons,
+  // consistent with the 8×8 white badge. Replaces the colour emoji '🧠' which clipped and
+  // ignored tagFill at fontSize 7.
+  const statusIcon = state.status === 'working' ? '⚡' : state.status === 'blocked' ? '✕' : state.status === 'done' ? '✓' : state.status === 'planning' ? '◷' : null
   const glowColor = STATUS_COLORS[state.status]
+  // AVO-128: show the name only when the agent is doing something or is being inspected.
+  const showName = hovered || (state.status && state.status !== 'idle')
 
   return (
     <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}
       style={{ cursor: 'pointer' }} onClick={handleClick}
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       data-agent-id={id}
       data-agent-status={state.status || 'idle'}
       data-agent-behavior={state.behavior || 'idle'}
+      data-supervising={hasActiveHelper ? '1' : '0'}
       role="button" aria-label={name} tabIndex={0}
       onKeyDown={handleKeyDown}>
-      {/* AVO-102: thinking aura — only on active agents at elevated effort, behind the glow */}
-      {(state.status === 'working' || state.status === 'planning') && (
-        <ThinkingAura effort={effort} reducedMotion={reducedMotion} />
-      )}
-      {/* Working glow ring */}
-      {state.status === 'working' && (
-        <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.5">
-          <animate attributeName="opacity" values="0.2;0.6;0.2" dur="1.5s" repeatCount="indefinite" />
-          <animate attributeName="r" values="20;24;20" dur="1.5s" repeatCount="indefinite" />
+      {/* AVO-132: single working/planning glow ring; effort (high/xhigh/max) intensifies it
+          (peak opacity + stroke width) instead of stacking a second concentric aura.
+          Planning uses a calm violet ring at BASE_GLOW intensity (effort does not apply). */}
+      {(state.status === 'working' || state.status === 'planning') && !hasActiveHelper && (() => {
+        const g = state.status === 'working' ? (EFFORT_GLOW[effort] || BASE_GLOW) : BASE_GLOW
+        return (
+          <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth={g.sw} opacity={g.op}>
+            {!reducedMotion && <animate attributeName="opacity" values={`${(g.op * 0.4).toFixed(2)};${g.op};${(g.op * 0.4).toFixed(2)}`} dur="1.5s" repeatCount="indefinite" />}
+            {!reducedMotion && <animate attributeName="r" values="20;24;20" dur="1.5s" repeatCount="indefinite" />}
+          </circle>
+        )
+      })()}
+      {/* AVO-138: calm SUPERVISING halo — a gently-breathing (very slow, low-amplitude) role-tinted
+          ring while the lead oversees its subagent helpers. The 3s breathe is intentionally slower
+          and lower-amplitude than the own-work 1.5s pulse so the supervising vs working distinction
+          is preserved. reducedMotion → static ring (no animation). The fast pulse above is RESERVED
+          for the lead's OWN direct work (no active helpers). Status visibility preserved by name tag
+          + this halo + the 👀 chip. */}
+      {(state.status === 'working' || state.status === 'planning') && hasActiveHelper && (
+        <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth={BASE_GLOW.sw}
+          opacity={(BASE_GLOW.op * 0.6).toFixed(2)} data-supervise-halo="1">
+          {!reducedMotion && (
+            <animate attributeName="opacity"
+              values={`${(BASE_GLOW.op * 0.3).toFixed(2)};${(BASE_GLOW.op * 0.6).toFixed(2)};${(BASE_GLOW.op * 0.3).toFixed(2)}`}
+              dur="3s" repeatCount="indefinite" />
+          )}
         </circle>
       )}
       {state.status === 'blocked' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.4">
-          <animate attributeName="opacity" values="0.2;0.5;0.2" dur="1s" repeatCount="indefinite" />
+          {!reducedMotion && <animate attributeName="opacity" values="0.2;0.5;0.2" dur="1s" repeatCount="indefinite" />}
+        </circle>
+      )}
+      {/* AVO-135: 'done' is a ONE-SHOT celebratory flash, not a standing ring — removes the
+          last "status board" tell (a permanent done state). Expands + fades once, then gone;
+          the ✓ status icon + green name carry the done state after. reducedMotion → no flash. */}
+      {state.status === 'done' && !reducedMotion && (
+        <circle cx={0} cy={-18} r={16} fill="none" stroke={glowColor} strokeWidth="2.5" opacity="0.6">
+          <animate attributeName="r" values="16;30" dur="0.7s" repeatCount="1" fill="freeze" />
+          <animate attributeName="opacity" values="0.6;0" dur="0.7s" repeatCount="1" fill="freeze" />
         </circle>
       )}
 
@@ -1126,11 +1169,26 @@ function AgentCharacter({ agent }) {
       />
 
       {/* Behavior-specific indicator icon */}
-      {!isWalking && <BehaviorIndicator behavior={state.behavior} />}
+      {/* AVO-134: a one-shot pop-in (scale + slight squash) when the behavior CHANGES.
+          Keyed on the behavior so React remounts (replays the pop) on a real change, but a
+          same-behavior re-render reuses the element → no re-fire. reducedMotion → static. */}
+      {!isWalking && (
+        <g key={state.behavior}>
+          {!reducedMotion && (
+            <animateTransform attributeName="transform" type="scale"
+              values="0 0;1.15 0.9;1 1" keyTimes="0;0.6;1" dur="0.3s" repeatCount="1" fill="freeze" />
+          )}
+          <BehaviorIndicator behavior={state.behavior} />
+        </g>
+      )}
 
-      {/* Name tag + bubble: inverse-scale to keep text at original size despite character scale */}
-      <g transform={`scale(${1/1.35})`}>
-        <g transform="translate(0, -48)">
+      {/* Name tag + bubble: undo the 1.35 character scale, then grow each block IN PLACE by
+          labelScale around its own anchor (POINT 2). Anchor-preserving (translate THEN scale, not
+          scale-the-whole-group) so a counter-scaled label gets bigger without floating upward into
+          the agent above it — that float was what made adjacent active agents' tags collide. At
+          labelScale 1 (office ≥ native) this is byte-identical to the prior `scale(1/1.35)`. */}
+      <g transform={`scale(${1 / 1.35})`}>
+        <g transform={`translate(0, -48) scale(${labelScale})`}>
           {/* Session branch badge — shown above name tag for worktree agents */}
           {session && (
             <g transform="translate(0, -16)">
@@ -1142,24 +1200,60 @@ function AgentCharacter({ agent }) {
               </text>
             </g>
           )}
-          <rect x={-tagHalfW} y={-11} width={tagW} height={20} rx={10}
-            fill={tagFill} opacity="0.92" />
-          <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"
-            fontSize="12" fontFamily="monospace" fontWeight="bold" fill="white">
-            {name}
-          </text>
+          {/* AVO-128: name tag only when active or hovered; hidden at idle rest. */}
+          {showName && (
+            <>
+              <rect x={-tagHalfW} y={-11} width={tagW} height={20} rx={10}
+                fill={tagFill} opacity="0.92" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle"
+                fontSize="12" fontFamily="monospace" fontWeight="bold" fill="white">
+                {name}
+              </text>
+            </>
+          )}
           {statusIcon && (
             <g transform={`translate(${tagHalfW - 2}, -2)`}>
               <rect x={-4} y={-4} width={8} height={8} rx={2} fill="white" opacity="0.9" />
               <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="7" fill={tagFill}>{statusIcon}</text>
             </g>
           )}
+          {/* AVO-138: steady 👀 overseer chip on the opposite shoulder while supervising helpers. */}
+          {hasActiveHelper && (
+            <g transform={`translate(${-(tagHalfW - 2)}, -2)`} data-supervise-cue="1">
+              <rect x={-5} y={-5} width={10} height={10} rx={3} fill="white" opacity="0.9" />
+              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="8">👀</text>
+            </g>
+          )}
         </g>
 
-        <BehaviorBubble x={0} y={-68} message={state.bubble} />
-        {/* AVO-103: tool inventory label between the name tag and the head.
-            Only renders when externalStatus carries a task. */}
-        <TaskLabel task={currentTask} />
+        {/* Bubble grows in place too (anchored at its -68 origin). At labelScale 1 this is
+            identical to the prior `<BehaviorBubble x={0} y={-68}/>` directly under scale(1/1.35).
+            FLIP-BELOW: an agent near the office top (e.g. the Gatekeeper at the top wall) would draw
+            its above-the-head bubble past the SVG's y=0 edge and get clipped. The bubble's projected
+            top is pos.y − 68 − 34·labelScale; when that crosses the top edge we anchor it just below
+            the agent (+6) and flip the tail up so the whole bubble stays inside the scene. */}
+        {(() => {
+          const bubbleTopAbove = pos.y - 68 - 34 * labelScale
+          const below = bubbleTopAbove < 6
+          return (
+            <g transform={`translate(0, ${below ? 6 : -68}) scale(${labelScale})`}>
+              <BehaviorBubble x={0} y={0} below={below} message={state.bubble} />
+            </g>
+          )
+        })()}
+
+        {/* L3 reluctant-participant tell (spec living-office-events.md): a tracked agent torn by a
+            set-piece nearby shows a sub-dominant ⏳ — "knows it has work but the event is happening".
+            Real-context bubbles PREEMPT it (only shown when no bubble); never moves the body / never
+            touches status. Sits to the upper-right of the head so it doesn't fight the name tag. */}
+        {!state.bubble && reluctantUntil && reluctantUntil > Date.now() && (
+          <g transform={`translate(10, -34) scale(${labelScale})`} data-reluctant="1" opacity="0.7" pointerEvents="none">
+            <text x={0} y={0} textAnchor="middle" dominantBaseline="middle" fontSize="9">⏳</text>
+          </g>
+        )}
+        {/* AVO-131: the monospace tool pill was removed from the glance layer — the
+            prop-icon + bubble carry the action in-world; the exact tool is shown in the
+            AgentInspector (click-to-inspect) instead. */}
       </g>
     </g>
   )

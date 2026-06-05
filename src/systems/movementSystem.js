@@ -57,11 +57,11 @@ const MEETING_TABLE = OBSTACLE_RECTS[7]
 
 // ─── Walkability functions ──────────────────────────────────────────
 
-function isOnFloor(x, y) {
+export function isOnFloor(x, y) {
   return FLOOR_ZONES.some(z => x >= z.x1 && x <= z.x2 && y >= z.y1 && y <= z.y2)
 }
 
-function isOnObstacle(x, y) {
+export function isOnObstacle(x, y) {
   return OBSTACLE_RECTS.some(r => x >= r.x1 && x <= r.x2 && y >= r.y1 && y <= r.y2)
 }
 
@@ -83,7 +83,7 @@ function pushOutOfObstacle(x, y) {
 }
 
 // Master clamping function: snap to nearest floor, push off obstacles
-function clampToFloor(pos) {
+export function clampToFloor(pos) {
   let { x, y } = pos
 
   // Step 1: If not on any floor zone, snap to nearest one
@@ -170,6 +170,37 @@ export const HOME_POSITIONS = {
   gate: WAYPOINTS.gate,
   designer: { x: 140, y: 384 },
   planner: { x: 200, y: 274 }, worker: { x: 400, y: 304 }, checker: { x: 500, y: 254 },
+}
+
+// ─── Subagent helper-huddle placement ───────────────────────────────
+// Small downward fan around the parent's chair. HARD-CAP at 3 visible + a tight ±15px clamp,
+// so helpers never overlap an adjacent desk (desks are ≥80px apart) or pile on each other;
+// any surplus collapses into a single "+N" glyph. Heavy fan-out (Claude firing 10+ subagents)
+// renders 3 sprites + "+N", never N bodies.
+export const HELPER_MAX_VISIBLE = 3
+export const HELPER_OFFSETS = [
+  { dx: -15, dy: 16 },
+  { dx: 15, dy: 16 },
+  { dx: 0, dy: 27 },
+]
+export const HELPER_BADGE_OFFSET = { dx: 25, dy: 25 }
+// Lightweight roster colors (planner / worker / checker), cycled across helper figures.
+export const HELPER_COLORS = ['#378ADD', '#1D9E75', '#BA7517']
+// A parent with this many active helpers shows a "swamped / heavy load" cue.
+export const HELPER_HEAVY_THRESHOLD = 4
+
+// Pure resolver: up to HELPER_MAX_VISIBLE helper screen positions for a parent role + the
+// overflow count + whether the load is "heavy". Easy to unit-test; the render is a thin shell.
+export function resolveHelperLayout(parentRole, count, anchor = HOME_POSITIONS[parentRole]) {
+  const n = Math.max(0, count | 0)
+  if (!anchor || n === 0) return { sprites: [], overflow: 0, heavy: false, anchor: null }
+  const visible = Math.min(n, HELPER_MAX_VISIBLE)
+  const sprites = []
+  for (let i = 0; i < visible; i++) {
+    const off = HELPER_OFFSETS[i]
+    sprites.push({ x: anchor.x + off.dx, y: anchor.y + off.dy })
+  }
+  return { sprites, overflow: Math.max(0, n - HELPER_MAX_VISIBLE), heavy: n >= HELPER_HEAVY_THRESHOLD, anchor }
 }
 
 // ─── Zones (for pathfinding — which room is a point in?) ────────────
@@ -474,7 +505,7 @@ function getOccupiedPositions(agentId, allAgents) {
 }
 
 // Push a position away from all occupied positions
-function avoidOverlap(pos, occupied, maxAttempts = 8) {
+export function avoidOverlap(pos, occupied, maxAttempts = 8) {
   let { x, y } = pos
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     let tooClose = false
@@ -571,5 +602,23 @@ export function calcFacing(fromX, fromY, toX, toY) {
   const dx = toX - fromX, dy = toY - fromY
   if (Math.abs(dx) < 2 && Math.abs(dy) < 2) return 'down'
   return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')
+}
+
+// living-office L2 (focusAnchor): the facing an UNTRACKED, stationary agent should adopt to orient
+// toward the hottest live desk — or null if it must NOT orient. Pure + exported so AC-4 is testable
+// without the doSchedule component loop. Honesty guards baked in:
+//   - tracked agent (has a live externalStatus entry) → null (R1: never modulate a real desk)
+//   - no anchor / self / stale anchor (missing or idle) → null (stale-pointer bail)
+//   - slug~role worktree anchor falls back to its base-role rendered agent
+export function resolveFocusFacing(state, id, fromX, fromY) {
+  if (!state || !id) return null
+  if (state.externalStatus && state.externalStatus[id]) return null // tracked → never (R1)
+  const anchorId = state.focusAnchor
+  if (!anchorId || anchorId === id) return null
+  const agents = state.agents || {}
+  let anchor = agents[anchorId]
+  if (!anchor && anchorId.includes('~')) anchor = agents[anchorId.slice(anchorId.lastIndexOf('~') + 1)]
+  if (!anchor || !anchor.position || anchor.status === 'idle') return null // stale/missing/idle bail
+  return calcFacing(fromX, fromY, anchor.position.x, anchor.position.y)
 }
 
