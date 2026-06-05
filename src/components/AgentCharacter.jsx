@@ -1049,6 +1049,15 @@ function AgentCharacter({ agent }) {
         lastBehaviorRef.since = Date.now()
         return
       }
+      // Don't fire when agent has an active session — long-running commands
+      // (compilations, test suites, installs) legitimately keep the same
+      // behavior for extended periods without signaling a stalled chain.
+      const ACTIVE_SESSION_STATUSES = new Set(['working', 'thinking', 'blocked', 'awaiting-approval'])
+      if (ACTIVE_SESSION_STATUSES.has(agent.status)) {
+        lastBehaviorRef.behavior = agent.behavior
+        lastBehaviorRef.since = Date.now()
+        return
+      }
       if (agent.behavior !== lastBehaviorRef.behavior) {
         lastBehaviorRef.behavior = agent.behavior
         lastBehaviorRef.since = Date.now()
