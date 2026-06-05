@@ -1,36 +1,18 @@
+---
+title: "ADR-001 — vNext Self-Managed AI Architecture (pointer)"
+date: 2026-04-02
+status: accepted
+canonical: docs/adr/ADR-001-vnext-self-managed-architecture.md
+---
+
 # ADR-001: vNext Self-Managed AI Architecture
 
-## Context
-
-The project needs a scalable, self-regulating AI development environment that works across Google Antigravity, Codex Web, and Codex App. Previous architectures relied too much on human memory and conversation history, leading to context loss and inefficiency.
-
-## Decision
-
-We implement the "vNext" architecture, characterized by:
-
-1. **Self-Managed Agent lifecycle**: AI classifies tasks and applies "Lazy Governance" gates automatically.
-2. **Parallel-Safe State**: Separation of Read-Only global state (`current_state.md`) and Write-Isolated task state (`.agentcortex/context/work/`).
-3. **Handoff as a Hard Gate**: Mandatory context reconstruction for all tasks except `tiny-fix`.
-4. **Token Optimization**: Fast-paths for small fixes and minimized state documentation.
-
-## Classification Escalation Rules
-
-- Change to public API/Signature -> `behavior-change`
-- Multiple modules involved -> `feature`
-- New directories -> `feature`
-- System boundary changes -> `architecture-change`
-
-## Mandatory Gates
-
-- `tiny-fix`: Classify + Inline Plan + Evidence
-- `behavior-change`: Bootstrap + Spec + Plan + Review + Regression + Handoff
-- `feature`: Bootstrap + Spec + Plan + Review + Test + Handoff
-- `architecture-change`: Bootstrap + ADR + Spec + Plan + Migration + Handoff
-- `hotfix`: Systematic Debug + Evidence + Retro + Handoff
-
-## Consequences
-
-- AI handles governance overhead autonomously.
-- Token consumption is optimized based on task risk.
-- Cross-agent collaboration is safer due to explicit task logs.
-
+> **This is a framework-scaffold pointer, not the source of truth.**
+> The canonical ADR (downstream-visible, full content) lives at
+> [`docs/adr/ADR-001-vnext-self-managed-architecture.md`](../../docs/adr/ADR-001-vnext-self-managed-architecture.md).
+>
+> Rationale: per the `[path-separation]` Global Lesson, downstream-facing
+> artifacts (specs, ADRs) stay in project-visible `docs/` paths, not hidden
+> framework directories. This stub is retained only so the framework scaffold
+> keeps a discoverable ADR-001 reference; do not edit decision content here —
+> edit the canonical copy.

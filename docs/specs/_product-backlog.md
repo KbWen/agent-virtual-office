@@ -13,6 +13,9 @@ last_updated: 2026-06-05
 > classifier + observability wave brought the prior backlog (#1–#73) to ~100% Done.
 > This file tracks the next wave (AVO-101+).
 
+> [!NOTE]
+> **Branch hygiene (2026-06-05):** the ux-vibe-rebalance / living-office / responsive wave is already MERGED to `main` via squash PR #44 (`012d0f2`, v1.2.0) — `main` is the canonical, current product state. The `origin/feat/ux-vibe-rebalance` branch (60 un-squashed dev commits) is git-verified superseded: its `src/` is byte-identical to `main`, which is 3 commits ahead (also carries PR #53 hero refresh + #54 hook fix). That branch has already been deleted from origin (the 2026-06-05 drift sweep pruned 5 stale local remote-tracking refs; origin now has only `main`). The wave's lasting decisions are routed to `docs/architecture/{ui-rendering,office-runtime}.log.md`.
+
 ---
 
 ## Feature Inventory
@@ -26,9 +29,9 @@ last_updated: 2026-06-05
 | AVO-105 | Handoff arrows | product | multi-agent | P0 | — | feature | Done | — |
 | AVO-106 | Pair-programming huddle | product | multi-agent | P1 | — | feature | Pending | — |
 | AVO-107 | Review-gate queue | product | multi-agent | P1 | — | feature | Pending | — |
-| AVO-108 | Token & cost meter | product | info-density | P0 | — | feature | In Progress | — |
+| AVO-108 | Token & cost meter | product | info-density | P0 | — | feature | Done | — |
 | AVO-109 | Recent-files heatmap | product | info-density | P2 | — | feature | Pending | — |
-| AVO-110 | Blocked-reason tags | product | info-density | P1 | — | feature | Pending | — |
+| AVO-110 | Blocked-reason tags | product | info-density | P1 | — | feature | In Progress | — |
 | AVO-111 | Time-of-day lighting | product | game-feel | P2 | — | feature | Pending | — |
 | AVO-112 | Eureka cascade | product | game-feel | P3 | — | feature | Pending | — |
 | AVO-113 | OpenTelemetry GenAI export | infra | observability | P1 | — | feature | Pending | — |

@@ -1,3 +1,15 @@
+---
+title: "ADR-002 — Multi-Worktree Session Design"
+date: 2026-04-02
+status: accepted
+lifecycle:
+  owner: KbWen
+  review_cadence: on-event
+  review_trigger: "session-file naming, _cwd isolation, or representative-selection change"
+  supersedes: none
+  superseded_by: none
+---
+
 # ADR-002 — Multi-Worktree Session Design
 
 **Status:** Accepted

@@ -55,3 +55,14 @@ INDEPENDENT from `docs/specs/_product-backlog.md`.
 - [CONSTRAINT] 已交付的多 worktree、routing、designer、webhook 行為屬於相容性邊界，不得在沒有明確 bug 證據時改變契約。
 - [TRADEOFF] 優先接受局部、保守、可驗證的改善，而不是追求理想化的系統性清理，以降低回歸風險。
 - [CONSTRAINT] 效能改善必須附帶可重現的 before/after 證據，不能只憑主觀感受宣稱變快。
+
+## 2026-06-05 Documentation Baseline Consolidation
+
+Routed from `docs/reviews/2026-06-05-audit.md` (read-only audit → `都處理` directive). Doc-only, reversible, no source/test change. validate.sh: 0 fail.
+
+- **F1 — SSoT readability.** `.agentcortex/context/current_state.md` was 347 lines / >25k tokens (over the single-read cap). Rotated Ship History older than 2026-06-02 (142 lines) into `docs/specs/_ship-history-archive.md`; SSoT now 206 lines. Guarded CAS write.
+- **F4 — ARCHITECTURE.md model drift.** The headline diagram describes the superseded Level-A/B + `inferStatus.sh` concept; the shipped model (`classify.js` 4-tier + `decideBehavior` + zustand) is the v1.1.0 section 540 lines down. Added a top-of-doc banner flagging this + the stale `docs/context/` → `.agentcortex/context/` path note. (Full re-draw deferred — would be an unauthorized large refactor.)
+- **F5 — ADR-001 duplication.** `docs/adr/ADR-001` made canonical (fixed stale `docs/context/work/` → `.agentcortex/context/work/`); `.agentcortex/adr/ADR-001` reduced to a pointer stub per the `[path-separation]` Global Lesson.
+- **F6 — ADR lifecycle.** Added YAML frontmatter + `lifecycle:` block (owner/cadence/trigger/supersedes/superseded_by) to ADR-001/002/003 — clears the grandfathered validator WARNs.
+- F2/F3 (domain decision logs) and F7 (backlog baseline note) routed to their own canonical targets; see the audit snapshot.
+- **F7 — branch hygiene (corrected in /review):** the ux-vibe-rebalance wave is ALREADY merged to `main` via squash PR #44 (`012d0f2`, v1.2.0). Git-verified: `main`↔`feat/ux-vibe-rebalance` `src/` byte-identical, `main` 3 commits ahead. The original "unmerged baseline divergence" claim was a stale-SSoT propagation error caught by an adversarial documentation-accuracy reviewer. No merge needed; `feat/ux-vibe-rebalance` is superseded dev history and has already been pruned from origin (2026-06-05 drift sweep — origin has only `main`).
