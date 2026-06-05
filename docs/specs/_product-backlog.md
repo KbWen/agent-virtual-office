@@ -13,6 +13,9 @@ last_updated: 2026-06-05
 > classifier + observability wave brought the prior backlog (#1–#73) to ~100% Done.
 > This file tracks the next wave (AVO-101+).
 
+> [!NOTE]
+> **Branch hygiene (2026-06-05):** the ux-vibe-rebalance / living-office / responsive wave is already MERGED to `main` via squash PR #44 (`012d0f2`, v1.2.0) — `main` is the canonical, current product state. The `origin/feat/ux-vibe-rebalance` branch (60 un-squashed dev commits) is git-verified superseded: its `src/` is byte-identical to `main`, which is 3 commits ahead (also carries PR #53 hero refresh + #54 hook fix). That branch is safe for a human to delete. The wave's lasting decisions are routed to `docs/architecture/{ui-rendering,office-runtime}.log.md`.
+
 ---
 
 ## Feature Inventory

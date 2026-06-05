@@ -1,5 +1,11 @@
 # 技術架構 — Agent Virtual Office（精簡版）
 
+> [!IMPORTANT]
+> **目前的行為模型請看本文件下方的 [`v1.1.0 — Classifier + Inference Layer`](#v110--classifier--inference-layer-2026-05-29) section。**
+> 緊接在下面的「核心原則 / 系統架構」頂部圖描述的是**最初的概念模型**（Level A/B 權重 + `inferStatus.sh`），保留作為設計沿革。
+> 實際出貨的狀態→行為決策由 `src/systems/classify.js` 的四層分類器 + `decideBehavior({task, role, status, workflow})`（優先序 `status > workflow > role > family-default`）+ zustand store 驅動，**不是**頂部圖的權重隨機 `BehaviorEngine`。
+> 另注意：頂部圖與部分 Level B 段落仍寫舊路徑 `docs/context/`；SSoT 現位於 `.agentcortex/context/`（`current_state.md` + `work/<key>.md`）。
+
 ---
 
 ## 核心原則

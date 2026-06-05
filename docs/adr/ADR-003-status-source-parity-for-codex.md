@@ -1,3 +1,15 @@
+---
+title: "ADR-003 — Status Source Parity for Codex"
+date: 2026-04-08
+status: accepted
+lifecycle:
+  owner: KbWen
+  review_cadence: on-event
+  review_trigger: "new status producer/platform or change to the normalized office-status contract"
+  supersedes: none
+  superseded_by: none
+---
+
 # ADR-003 — Status Source Parity for Codex
 
 **Status:** Accepted
