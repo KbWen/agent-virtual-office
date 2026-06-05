@@ -153,7 +153,7 @@ http://localhost:5174?lang=zh-TW     # 強制繁體中文
 ## 技術選型
 
 React 19 + Vite 6 · SVG（不用 canvas、不吃 GPU）· Zustand · Tailwind CSS v4 · `requestAnimationFrame` · 零後端。
-1263 個測試（分類器、推論、store、移動、事件誠實性）。深入細節 → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**。
+1276 個測試（分類器、推論、store、移動、事件誠實性）。深入細節 → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**。
 
 ## 貢獻
 

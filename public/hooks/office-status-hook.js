@@ -255,7 +255,7 @@ function bashVibeLabel(cmd, lang = LANG) {
   return fallback
 }
 
-function extractContext(tool, toolInput) {
+function extractContext(tool, toolInput, lang = LANG) {
   if (!toolInput) return null
   try {
     const input = typeof toolInput === 'string' ? JSON.parse(toolInput) : toolInput
@@ -266,7 +266,7 @@ function extractContext(tool, toolInput) {
         return shortFile(input.file_path || input.path)
       case 'Bash':
         // AVO-126: never surface a raw shell command/path in a bubble — use an office-vibe noun.
-        return bashVibeLabel(input.command || input.cmd)
+        return bashVibeLabel(input.command || input.cmd, lang)
       case 'Grep': {
         // Strip leading path components from the pattern so absolute paths don't leak into
         // bubbles: "/home/user/src/**/*.js" → "*.js"; "useLocale" stays "useLocale"
@@ -297,7 +297,7 @@ function extractContext(tool, toolInput) {
       case 'WebSearch':
         return input.query || input.url?.replace(/^https?:\/\//, '').slice(0, 25) || null
       case 'TodoWrite':
-        return input.todos?.length ? (LANG === 'zh-TW' ? `${input.todos.length} 個任務` : `${input.todos.length} tasks`) : null
+        return input.todos?.length ? (lang === 'zh-TW' ? `${input.todos.length} 個任務` : `${input.todos.length} tasks`) : null
       case 'EnterPlanMode':
       case 'ExitPlanMode':
         return null

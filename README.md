@@ -161,7 +161,7 @@ Full notes in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ## Tech stack
 
 React 19 + Vite 6 · SVG (no canvas, no GPU) · Zustand · Tailwind CSS v4 · `requestAnimationFrame` · zero backend.
-1263 tests (classifier, inference, store, movement, event honesty). Deep dive → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+1276 tests (classifier, inference, store, movement, event honesty). Deep dive → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Contributing
 
