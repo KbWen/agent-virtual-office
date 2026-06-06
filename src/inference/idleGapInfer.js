@@ -19,8 +19,9 @@
  *
  * Reversibility: any real hook event flows through `applyExternalStatus`
  * which simply overwrites the status; the inferred state has no marker
- * to clean up. To prevent thrashing while inferred, we skip re-inferring
- * agents already in 'thinking' / 'awaiting-approval'.
+ * to clean up. Thrashing is prevented structurally: inference only fires
+ * for 'working'/'blocked', so once a tick flips the status to 'thinking'/
+ * 'awaiting-approval' neither branch matches again (no guard needed).
  *
  * lastUpdatedAt tracking: zustand subscribe captures every state change
  * to `agents`. We stamp the current time whenever an agent's status or
@@ -37,10 +38,6 @@ const POLL_INTERVAL_MS = 10_000
 // Map of agentId → last meaningful update timestamp. Survives across
 // reactivity because the polling loop keeps a stable reference.
 const lastUpdatedAt = new Map()
-
-// Status values produced by inference. We skip re-inferring when the
-// current status is already one of these to prevent thrashing.
-const INFERRED_STATUSES = new Set(['thinking', 'awaiting-approval'])
 
 function tick(store, opts, now = Date.now) {
   const t0 = now()
