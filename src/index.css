@@ -1,4 +1,7 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+
+@source "./";
+@source "../index.html";
 
 html, body, #root {
   margin: 0;
