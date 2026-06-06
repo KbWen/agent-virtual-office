@@ -15,6 +15,27 @@ export const WATCHDOG_INTERVAL = 10000     // ms between watchdog checks
 // 20s here truncated >half the work/away behaviors mid-action.
 export const WATCHDOG_TIMEOUT = 90000      // ms before watchdog force-restarts behavior chain
 
+// Statuses that mean the agent has an active session. During these, the
+// behavior legitimately stays constant for long stretches (a long-running
+// bash command, extended thinking, an unanswered permission prompt — see #50),
+// so a frozen behavior value is NOT evidence of a dead scheduling chain.
+// 'thinking' / 'awaiting-approval' are the idle-gap-inferred counterparts of
+// 'working' / 'blocked'; 'planning' is plan mode (AVO-101).
+export const ACTIVE_SESSION_STATUSES = new Set([
+  'working', 'thinking', 'blocked', 'awaiting-approval', 'planning',
+])
+
+// The behavior watchdog (AgentCharacter) restarts the scheduling chain when a
+// behavior value sits unchanged past WATCHDOG_TIMEOUT, treating it as a dead
+// chain. Skip that restart when behavior is being driven/held externally:
+//   - a group event (officeLife owns behavior + duration), or
+//   - an active session status (a stable behavior is expected, not a stall).
+// Pure so it is unit-testable without mounting the component.
+export function shouldSkipBehaviorWatchdog(agent) {
+  if (!agent) return false
+  return Boolean(agent.inGroupEvent) || ACTIVE_SESSION_STATUSES.has(agent.status)
+}
+
 // Movement
 export const MIN_AGENT_DIST = 35        // minimum px between any two agents
 export const OBSTACLE_PUSH_PX = 6       // px to push character past obstacle edge

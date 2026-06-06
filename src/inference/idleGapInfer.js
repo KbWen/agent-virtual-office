@@ -19,8 +19,9 @@
  *
  * Reversibility: any real hook event flows through `applyExternalStatus`
  * which simply overwrites the status; the inferred state has no marker
- * to clean up. To prevent thrashing while inferred, we skip re-inferring
- * agents already in 'thinking' / 'awaiting-approval'.
+ * to clean up. Thrashing is prevented structurally: inference only fires
+ * for 'working'/'blocked', so once a tick flips the status to 'thinking'/
+ * 'awaiting-approval' neither branch matches again (no guard needed).
  *
  * lastUpdatedAt tracking: zustand subscribe captures every state change
  * to `agents`. We stamp the current time whenever an agent's status or
@@ -38,10 +39,6 @@ const POLL_INTERVAL_MS = 10_000
 // reactivity because the polling loop keeps a stable reference.
 const lastUpdatedAt = new Map()
 
-// Status values produced by inference. We skip re-inferring when the
-// current status is already one of these to prevent thrashing.
-const INFERRED_STATUSES = new Set(['thinking', 'awaiting-approval'])
-
 function tick(store, opts, now = Date.now) {
   const t0 = now()
   const state = store.getState()
@@ -57,13 +54,14 @@ function tick(store, opts, now = Date.now) {
     }
     const elapsed = t0 - lastUpdatedAt.get(id)
     if (a.status === 'working' && elapsed >= opts.workingGapMs) {
-      // Skip if already inferred to avoid thrashing.
-      if (INFERRED_STATUSES.has(a.status)) continue
       updates.push({ agentId: id, status: 'thinking' })
     } else if (a.status === 'blocked' && elapsed >= opts.blockedGapMs) {
-      if (INFERRED_STATUSES.has(a.status)) continue
       updates.push({ agentId: id, status: 'awaiting-approval' })
     }
+    // Note: we don't need an explicit INFERRED_STATUSES guard here because
+    // the outer conditions already restrict to 'working' and 'blocked'.
+    // Once applyExternalStatus changes the status to 'thinking' or
+    // 'awaiting-approval', neither branch matches on the next tick.
   }
   if (updates.length > 0) {
     // Route through applyExternalStatus so the inferred state passes through

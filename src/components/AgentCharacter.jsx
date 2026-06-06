@@ -3,7 +3,7 @@ import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
 import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveFocusFacing } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale } from '../i18n'
-import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT } from '../systems/constants.js'
+import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
 
 // ═══ PIXEL ART SPRITE SYSTEM ═══
@@ -1043,8 +1043,10 @@ function AgentCharacter({ agent }) {
     const watchdog = setInterval(() => {
       const agent = useOfficeStore.getState().agents[id]
       if (!agent) return
-      // Don't fire during group events — officeLife controls behavior and duration
-      if (agent.inGroupEvent) {
+      // Behavior is held externally (group event or active session) — a frozen
+      // behavior value is expected here, not a dead chain. Refresh the clock so
+      // the watchdog resumes cleanly once the agent returns to an ambient state.
+      if (shouldSkipBehaviorWatchdog(agent)) {
         lastBehaviorRef.behavior = agent.behavior
         lastBehaviorRef.since = Date.now()
         return
