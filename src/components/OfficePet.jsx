@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useOfficeStore } from '../systems/store.js'
 import { clampToFloor } from '../systems/movementSystem.js'
-import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, PET_MODES } from '../systems/petState.js'
+import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, runTarget, PET_MODES } from '../systems/petState.js'
 import PetSprite from './petSprites.jsx'
 
 // ─── Office pet — a signal-driven barometer (#39 / AVO-121) ─────────────────────────────────────
@@ -35,6 +35,14 @@ export default function OfficePet() {
   // live blocked count — primitive, so the pet re-renders only when it actually changes.
   const blockedCount = useOfficeStore((s) =>
     Object.values(s.externalStatus).filter((e) => e && e.status === 'blocked').length)
+  // #39: the position of a currently-blocked agent (so the pet can trot over and "point at" it). A
+  // PRIMITIVE "x,y" string → stable re-render; reads the store's already-published agent.position
+  // (read-only — never HOME_POSITIONS / movement internals).
+  const blockedAgentPos = useOfficeStore((s) => {
+    const id = Object.keys(s.externalStatus).find((k) => s.externalStatus[k]?.status === 'blocked')
+    const p = id && s.agents[id]?.position
+    return p && Number.isFinite(p.x) ? `${Math.round(p.x)},${Math.round(p.y)}` : null
+  })
   const activeEventId = useOfficeStore((s) => s.activeEvent?.id || null)
   const sceneScale = useOfficeStore((s) => s.sceneScale)
   const petType = useOfficeStore((s) => s.petType)
@@ -70,6 +78,9 @@ export default function OfficePet() {
     const t = setTimeout(() => setAlert(false), 2500)
     return () => clearTimeout(t)
   }, [alert])
+  // keep the latest blocked-agent position handy for the run-to-desk effect (below, after pos exists)
+  const blockedPosRef = useRef(blockedAgentPos)
+  useEffect(() => { blockedPosRef.current = blockedAgentPos }, [blockedAgentPos])
 
   const baseMode = derivePetState({ mood, blockedCount })
   const mode = resolvePetMode({ base: baseMode, alert, celebrate })
@@ -99,6 +110,22 @@ export default function OfficePet() {
     }, interval)
     return () => clearInterval(id)
   }, [mobile, mode, grammar.cadenceMul])
+
+  // #39: on a new blocker (alert turns true), trot over and stand just below that agent's desk so the
+  // pet POINTS AT the real blocker (motion = information; the honest beat made legible). Reads the
+  // store's published agent.position only — no movement-system / HOME_POSITIONS coupling.
+  useEffect(() => {
+    if (!alert || !officePet) return
+    const raw = blockedPosRef.current
+    if (!raw) return
+    const [bx, by] = raw.split(',').map(Number)
+    const rt = runTarget({ x: bx, y: by })
+    if (!rt) return
+    const dest = clampToFloor(rt)
+    setFacing(dest.x >= posRef.current.x ? 1 : -1)
+    posRef.current = dest
+    setPos(dest)
+  }, [alert, officePet])
 
   if (!officePet) return null
 

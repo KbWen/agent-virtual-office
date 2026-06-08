@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
-import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, nextPetType, PET_TYPES, PET_MODES } from '../src/systems/petState.js'
+import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, nextPetType, runTarget, PET_TYPES, PET_MODES } from '../src/systems/petState.js'
 // Static import (hoisted above the window shim below) so the store + i18n initialize while `window`
 // is still undefined — matching the repo's node test env. The shim then provides localStorage so the
 // toggle's persistence path runs. (Same approach as weatherEffectsToggle.test.js.)
@@ -83,6 +83,18 @@ describe('petReadabilityScale (#39 v2 — legible when docked small, never fakes
     expect(petReadabilityScale(0)).toBe(1)
     expect(petReadabilityScale(-1)).toBe(1)
     expect(petReadabilityScale(NaN)).toBe(1)
+  })
+})
+
+describe('runTarget (#39 — pet points at the blocked desk)', () => {
+  it('returns a floor point just below the blocked agent', () => {
+    expect(runTarget({ x: 300, y: 200 })).toEqual({ x: 300, y: 218 })
+  })
+  it('returns null when no position is known / invalid', () => {
+    expect(runTarget(null)).toBeNull()
+    expect(runTarget(undefined)).toBeNull()
+    expect(runTarget({ x: NaN, y: 1 })).toBeNull()
+    expect(runTarget({ x: 1 })).toBeNull()
   })
 })
 
