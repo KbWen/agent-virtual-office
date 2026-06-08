@@ -1,6 +1,6 @@
 ---
 title: Recurring failure-mode detection (AVO-117)
-status: frozen
+status: shipped
 date: 2026-06-08
 backlog_id: AVO-117
 classification: feature
