@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T08:40:00Z
-- **Update Sequence**: 39
+- **Last Updated**: 2026-06-08T09:20:00Z
+- **Update Sequence**: 40
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -132,6 +132,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-office-pet-run-vacuum-2026-06-08 (#39 — run-to-blocked-desk + distinct vacuum silhouettes)
+
+- PR #66 (branch `feat/office-pet-run-vacuum`), feature (extends #39). Two panel-recommended honest-signal upgrades.
+- **Run-to-blocked-desk**: on a new-blocker edge the pet trots to stand just below a blocked agent's desk → POINTS AT a real blocker (motion = information). Pure `runTarget(pos)` + a primitive `blockedAgentPos` selector reading the store's already-published `agent.position` **read-only** — NO HOME_POSITIONS / movementSystem coupling (Protected Surfaces untouched; `clampToFloor` was already imported). Honesty held (alert still settles to hide; always a REAL blocker — first-found with ≥2).
+- **Vacuum silhouettes**: the robot-vacuum's near-identical LED-only modes now have distinct STATIC silhouettes — nap dock+dim, wander sweep trail, excited dust puff, hide tilt+dim (calm; reduced-motion safe).
+- **Review**: 1 acx-reviewer → PASS (read-only discipline intact, honesty preserved, no loop/race/stale-chase, vacuum RM-safe); 2 LOW advisories (multi-blocker targets first real blocker — comment corrected; RM snap intentional). **Tests**: +2 (`runTarget`); suite **1330 passed**; build clean. DEV live-verified: pet targets the blocked dev desk EXACTLY (240,386 → 240,404 = y+18, dist 0); vacuum node counts differ per mode.
 
 ### Ship-feat-office-pet-delight-2026-06-08 (#39 — delight pack: bigger · deploy spotlight · click-to-pet · mode pop)
 

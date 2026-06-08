@@ -101,14 +101,36 @@ function VacuumSprite({ mode, reducedMotion }) {
     : '#1D9E75'
   const docked = mode === PET_MODES.NAP
   const blink = (mode === PET_MODES.ALERT) && !reducedMotion
+  // Machine grammar for legible per-mode SILHOUETTES (not LED-only): nap docks + dims; wander shows a
+  // sweep trail; excited adds a dust puff; hide tilts + dims (backed off). All static (calm).
+  const tilt = mode === PET_MODES.HIDE ? -12 : 0
+  const dim = (mode === PET_MODES.NAP || mode === PET_MODES.HIDE) ? 0.72 : 1
+  const sweeping = mode === PET_MODES.WANDER || mode === PET_MODES.EXCITED
+  const puffing = mode === PET_MODES.EXCITED
   return (
     <g aria-hidden="true">
       {docked && /* charging dock */ <rect x={-7} y={3} width={14} height={2.4} rx={1} fill="#555" opacity="0.8" />}
-      {/* disc body (flatter ellipse = top-down) */}
-      <ellipse cx={0} cy={1} rx={8} ry={5.4} fill={body} stroke={rim} strokeWidth="0.8" />
-      <ellipse cx={0} cy={0.2} rx={5.4} ry={3.4} fill={top} />
-      {/* front bumper (faces +x; parent flips via scale for direction) */}
-      <path d="M 6 -2 a 6 5.4 0 0 1 0 6" stroke={rim} strokeWidth="1.2" fill="none" opacity="0.7" />
+      {/* motion sweep lines trailing behind (disc faces +x, so the trail is to the left) */}
+      {sweeping && (
+        <g stroke="#9aa1a8" strokeWidth="0.7" opacity="0.5" strokeLinecap="round">
+          <line x1={-9} y1={-1.6} x2={-12.5} y2={-1.6} />
+          <line x1={-9} y1={1.6} x2={-13} y2={1.6} />
+        </g>
+      )}
+      {/* dust puff kicked up when zipping (excited) */}
+      {puffing && (
+        <g fill="#BCB3A8" opacity="0.5">
+          <circle cx={-11} cy={2.6} r={1.4} />
+          <circle cx={-13.2} cy={1.6} r={1} />
+        </g>
+      )}
+      {/* disc body — tilts + dims when hiding (retreating) */}
+      <g transform={tilt ? `rotate(${tilt})` : undefined} opacity={dim}>
+        <ellipse cx={0} cy={1} rx={8} ry={5.4} fill={body} stroke={rim} strokeWidth="0.8" />
+        <ellipse cx={0} cy={0.2} rx={5.4} ry={3.4} fill={top} />
+        {/* front bumper (faces +x; parent flips via scale for direction) */}
+        <path d="M 6 -2 a 6 5.4 0 0 1 0 6" stroke={rim} strokeWidth="1.2" fill="none" opacity="0.7" />
+      </g>
       {/* status LED */}
       <circle cx={0} cy={0} r={1.5} fill={led} opacity={mode === PET_MODES.HIDE ? 0.6 : 0.95}
         style={blink ? { animation: 'pet-snooze 0.8s steps(2,end) infinite' } : undefined} />

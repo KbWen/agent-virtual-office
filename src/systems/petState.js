@@ -75,6 +75,16 @@ export function petMotionGrammar(type) {
   return MOTION[type] || MOTION.cat
 }
 
+// runTarget — where the pet should trot to "point at" a blocked agent: just below its desk, on the
+// floor. Makes a real blocker MORE legible (motion = information). Pure → unit-testable; returns null
+// when no position is known. It consumes a position the store ALREADY publishes (agent.position) —
+// the caller must read that read-only, never HOME_POSITIONS / movementSystem internals, and must
+// clampToFloor the result (kept out of here so this stays a pure, dependency-free picker).
+export function runTarget(pos) {
+  if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return null
+  return { x: pos.x, y: pos.y + 18 }
+}
+
 // petReadabilityScale — keep the pet legible when the office is docked small WITHOUT lying about
 // size. Partial (√) counter-scale of the live sceneScale, floored at 1 and capped at 1.6, so the
 // pet shrinks WITH the room (stays a believable inhabitant, not a HUD sticker) but never becomes an
