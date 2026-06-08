@@ -51,6 +51,30 @@ export function resolvePetMode({ base, alert = false, celebrate = false }) {
   return base
 }
 
+// ─── Pet types (cosmetic skins) ────────────────────────────────────────────────────────────────
+// COSMETIC ONLY. A type changes the sprite + motion GRAMMAR (how it moves), NEVER the state logic —
+// every type derives its mode from the same `derivePetState`/`resolvePetMode` and obeys the same
+// hide-on-blocker honesty guarantee. Capped at 3 (calm-tech guardrail: personalization, not a zoo).
+export const PET_TYPES = Object.freeze(['cat', 'vacuum', 'dog'])
+
+export function nextPetType(type) {
+  const i = PET_TYPES.indexOf(type)
+  return PET_TYPES[(i + 1) % PET_TYPES.length] // unknown → index -1 → wraps to PET_TYPES[0]
+}
+
+// petMotionGrammar — per-type movement feel so types aren't just reskins (a Roomba moves like a
+// machine, a dog like a dog). Pure → unit-testable. `cadenceMul` scales the wander interval
+// (smaller = more often), `bob`/`bobAmp` the idle hop, `easing` the glide, `turnInPlace` reserved
+// for the vacuum's mechanical pivot.
+const MOTION = Object.freeze({
+  cat:    { cadenceMul: 1.0, bob: true,  bobAmp: 1.5, easing: 'ease-in-out', turnInPlace: false },
+  dog:    { cadenceMul: 0.7, bob: true,  bobAmp: 2.5, easing: 'ease-in-out', turnInPlace: false },
+  vacuum: { cadenceMul: 1.1, bob: false, bobAmp: 0,   easing: 'linear',      turnInPlace: true  },
+})
+export function petMotionGrammar(type) {
+  return MOTION[type] || MOTION.cat
+}
+
 // petReadabilityScale — keep the pet legible when the office is docked small WITHOUT lying about
 // size. Partial (√) counter-scale of the live sceneScale, floored at 1 and capped at 1.6, so the
 // pet shrinks WITH the room (stays a believable inhabitant, not a HUD sticker) but never becomes an

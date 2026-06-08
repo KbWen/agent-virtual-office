@@ -7,6 +7,7 @@ import { detectProjectMode } from './platformDetect'
 import { STATUS_COLORS } from './constants.js'
 import { classifyTask, familyToBehavior, decideBehavior } from './classify.js'
 import { FEED_ORIGINS } from './rosterModel.js'
+import { PET_TYPES, nextPetType } from './petState.js'
 
 export { STATUS_COLORS }
 
@@ -322,6 +323,10 @@ export const useOfficeStore = create((set) => ({
   // #39: ambient office pet (signal-driven barometer). Default ON; persisted via a dedicated
   // localStorage key (same lightweight pattern as weatherEffects). OFF → no pet rendered (zero cost).
   officePet: typeof window === 'undefined' ? true : (() => { try { return localStorage.getItem('office-pet') !== 'off' } catch { return true } })(),
+  // #39 types: cosmetic pet skin ('cat' | 'vacuum' | 'dog'). Persisted; cosmetic only (never changes
+  // the honest mode logic). Validated against PET_TYPES on read so a junk localStorage value can't
+  // select a missing sprite.
+  petType: typeof window === 'undefined' ? 'cat' : (() => { try { const v = localStorage.getItem('office-pet-type'); return PET_TYPES.includes(v) ? v : 'cat' } catch { return 'cat' } })(),
   showWorkflow: false,
   // Diagnostic counter: how many times the AgentCharacter RAF watchdog had to restart a
   // stalled walk loop. A silent restart hides the underlying stall; surfacing a count lets
@@ -614,6 +619,12 @@ export const useOfficeStore = create((set) => ({
     const next = !s.officePet
     try { if (typeof window !== 'undefined') localStorage.setItem('office-pet', next ? 'on' : 'off') } catch {}
     return { officePet: next }
+  }),
+  // #39 types: cycle cat → vacuum → dog → cat (cosmetic), persisted.
+  cyclePetType: () => set((s) => {
+    const next = nextPetType(s.petType)
+    try { if (typeof window !== 'undefined') localStorage.setItem('office-pet-type', next) } catch {}
+    return { petType: next }
   }),
   triggerWorkflow: () => set({ showWorkflow: true }),
   endWorkflow: () => set({ showWorkflow: false }),

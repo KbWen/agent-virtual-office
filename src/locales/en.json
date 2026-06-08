@@ -292,6 +292,7 @@
     "weatherOn": "Enable weather animations",
     "petOff": "Hide office pet",
     "petOn": "Show office pet",
+    "petType": "Change pet",
     "info": "Info"
   },
   "time": {

@@ -56,6 +56,11 @@ html, body, #root {
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-1.5px); }
 }
+/* Larger bob for the dog's livelier motion grammar (#39 types). */
+@keyframes pet-bob-lg {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2.5px); }
+}
 /* Office pet (v2): a 220ms fade-in on each mode change (keyed remount) so poses cross-fade instead of
    snapping. reducedMotion skips it (instant swap). */
 @keyframes pet-fade-in {
