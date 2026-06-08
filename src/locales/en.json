@@ -306,7 +306,7 @@
     "off": "Off",
     "blocked": "Blocked",
     "enable": "Enable",
-    "skin": { "cat": "Cat", "vacuum": "Robot vacuum", "dog": "Dog" }
+    "skin": { "cat": "Cat", "vacuum": "Robot vacuum", "dog": "Dog", "rabbit": "Rabbit", "bird": "Bird", "hamster": "Hamster" }
   },
   "time": {
     "now": "now",

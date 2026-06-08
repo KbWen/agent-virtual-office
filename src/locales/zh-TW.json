@@ -306,7 +306,7 @@
     "off": "關",
     "blocked": "已封鎖",
     "enable": "啟用",
-    "skin": { "cat": "貓", "vacuum": "掃地機器人", "dog": "狗" }
+    "skin": { "cat": "貓", "vacuum": "掃地機器人", "dog": "狗", "rabbit": "兔子", "bird": "鳥", "hamster": "倉鼠" }
   },
   "time": {
     "now": "剛剛",

@@ -16,7 +16,7 @@ import { taskChipLabel, blockedReasonLabel, formatTokens, agentLineLabel, should
 export { taskChipLabel, blockedReasonLabel, formatTokens, agentLineLabel, shouldShowWatchdogDiag }
 
 // #39 types: emoji shown on the "change pet" button per current skin.
-const PET_TYPE_EMOJI = { cat: '🐈', vacuum: '🤖', dog: '🐕' }
+const PET_TYPE_EMOJI = { cat: '🐈', vacuum: '🤖', dog: '🐕', rabbit: '🐇', bird: '🐦', hamster: '🐹' }
 
 export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   // Return full agent objects so useShallow can compare by reference. Mapping to

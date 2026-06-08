@@ -117,19 +117,21 @@ describe('modeEmote (#39 — type-independent legibility glyph)', () => {
 })
 
 describe('pet types (#39 — cosmetic skins, behavior-identical)', () => {
-  it('PET_TYPES is a capped set of 3', () => {
-    expect(PET_TYPES).toEqual(['cat', 'vacuum', 'dog'])
+  it('PET_TYPES is the cosmetic skin set (cat/vacuum/dog/rabbit/bird/hamster)', () => {
+    expect(PET_TYPES).toEqual(['cat', 'vacuum', 'dog', 'rabbit', 'bird', 'hamster'])
   })
-  it('nextPetType cycles cat → vacuum → dog → cat (unknown → cat)', () => {
+  it('nextPetType cycles through all types and wraps to cat (unknown → cat)', () => {
     expect(nextPetType('cat')).toBe('vacuum')
     expect(nextPetType('vacuum')).toBe('dog')
-    expect(nextPetType('dog')).toBe('cat')
+    expect(nextPetType('dog')).toBe('rabbit')
+    expect(nextPetType('hamster')).toBe('cat') // last wraps to first
     expect(nextPetType('bogus')).toBe('cat')
   })
   it('petMotionGrammar gives each type a distinct feel; unknown → cat grammar', () => {
     expect(petMotionGrammar('vacuum').bob).toBe(false)       // a Roomba does not bob
     expect(petMotionGrammar('vacuum').easing).toBe('linear') // machines move linearly
     expect(petMotionGrammar('dog').bobAmp).toBeGreaterThan(petMotionGrammar('cat').bobAmp)
+    expect(petMotionGrammar('rabbit').bobKeyframe).toBe('pet-bob-lg') // rabbit hops big
     expect(petMotionGrammar('bogus')).toEqual(petMotionGrammar('cat'))
   })
   it('type changes FEEL only — mode logic is type-independent (honesty unaffected)', () => {
@@ -167,16 +169,16 @@ describe('store — officePet toggle (#39)', () => {
     expect(useOfficeStore.getState().petType).toBe('dog')
   })
 
-  it('cyclePetType cycles + persists the skin (#39 types)', () => {
+  it('cyclePetType advances through all skins, wraps to cat, and persists (#39 types)', () => {
     localStorage.removeItem('office-pet-type')
     useOfficeStore.setState({ petType: 'cat' })
-    useOfficeStore.getState().cyclePetType()
-    expect(useOfficeStore.getState().petType).toBe('vacuum')
-    expect(localStorage.getItem('office-pet-type')).toBe('vacuum')
-    useOfficeStore.getState().cyclePetType()
-    expect(useOfficeStore.getState().petType).toBe('dog')
-    useOfficeStore.getState().cyclePetType()
-    expect(useOfficeStore.getState().petType).toBe('cat')
+    const seen = ['cat']
+    for (let i = 0; i < PET_TYPES.length; i++) {
+      useOfficeStore.getState().cyclePetType()
+      seen.push(useOfficeStore.getState().petType)
+    }
+    // cat → …all types… → back to cat
+    expect(seen).toEqual(['cat', 'vacuum', 'dog', 'rabbit', 'bird', 'hamster', 'cat'])
     expect(localStorage.getItem('office-pet-type')).toBe('cat')
   })
 })
