@@ -48,6 +48,14 @@ export function agentLineLabel(ext, t) {
     || t(`statusLabels.${ext.status}`, ext.status)
 }
 
+// #28 — DEV-only diagnostics gate for the RAF-watchdog restart counter. Shown only in dev builds AND
+// only once a stall has actually happened (count > 0), so it's invisible at rest and zero-cost in
+// production (`import.meta.env.DEV` is a compile-time constant → the render branch is dead-code-
+// eliminated from the prod bundle). Pure so it can be unit-tested without a DOM.
+export function shouldShowWatchdogDiag(count, isDev = import.meta.env.DEV) {
+  return !!isDev && typeof count === 'number' && count > 0
+}
+
 export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   // Return full agent objects so useShallow can compare by reference. Mapping to
   // new projected objects {id,color,behavior,status} on every call means the inner
@@ -60,6 +68,9 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const toggleRosterMode = useOfficeStore((s) => s.toggleRosterMode)
   const weatherEffects = useOfficeStore((s) => s.weatherEffects)
   const toggleWeatherEffects = useOfficeStore((s) => s.toggleWeatherEffects)
+  // #28: RAF-watchdog stall counter — surfaced as a DEV-only diagnostic chip (see render). Cheap
+  // primitive subscription; re-renders only when a stall actually bumps the count (rare).
+  const watchdogRestarts = useOfficeStore((s) => s.watchdogRestarts)
   const triggerWorkflow = useOfficeStore((s) => s.triggerWorkflow)
   const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
   const hour = useOfficeStore((s) => s.hour)
@@ -350,6 +361,20 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
           </button>
         </div>
       </div>
+
+      {/* #28: DEV-only RAF-watchdog diagnostic. Invisible until a stall bumps the counter. The gate
+          LEADS with the literal `import.meta.env.DEV` so esbuild statically evaluates `false && …` in
+          prod and dead-code-eliminates this whole branch (JSX + strings) — true zero prod cost. The
+          pure `shouldShowWatchdogDiag` mirror is kept for unit testing the count>0 logic. */}
+      {import.meta.env.DEV && shouldShowWatchdogDiag(watchdogRestarts) && (
+        <div
+          className="mt-1 text-[10px] text-amber-600 dark:text-amber-400"
+          data-watchdog-diag={watchdogRestarts}
+          title="AgentCharacter RAF walk-loop watchdog restarts — a rising count means dropped frames (tab throttling, HMR, or an exception in animate()). DEV-only diagnostic."
+        >
+          ⚠ {watchdogRestarts} RAF watchdog restart{watchdogRestarts === 1 ? '' : 's'} (dev)
+        </div>
+      )}
 
       {showTest && (
         <div className="mt-1.5 pt-1.5 border-t border-gray-200 dark:border-gray-700">
