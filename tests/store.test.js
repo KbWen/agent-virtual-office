@@ -209,3 +209,26 @@ describe('store — recordWatchdogRestart', () => {
     expect(persisted.watchdogRestarts).toBeUndefined() // but it is never written to disk
   })
 })
+
+// #47 — sceneBounds publishes the active viewBox x-range so BehaviorBubble clamps speech bubbles to
+// the VISIBLE edges (default 0..800 OR the panel crop). Default office bounds = {minX:0, w:800}.
+describe('store — sceneBounds (#47 bubble edge clamp bounds)', () => {
+  beforeEach(() => {
+    useOfficeStore.setState({ sceneBounds: { minX: 0, w: 800 } })
+  })
+
+  it('defaults to the full default-office viewBox {minX:0, w:800}', () => {
+    expect(useOfficeStore.getState().sceneBounds).toEqual({ minX: 0, w: 800 })
+  })
+
+  it('setSceneBounds updates to the panel crop bounds', () => {
+    useOfficeStore.getState().setSceneBounds(80, 440)
+    expect(useOfficeStore.getState().sceneBounds).toEqual({ minX: 80, w: 440 })
+  })
+
+  it('setSceneBounds preserves object identity when unchanged (no needless re-render)', () => {
+    const before = useOfficeStore.getState().sceneBounds
+    useOfficeStore.getState().setSceneBounds(0, 800) // same values
+    expect(useOfficeStore.getState().sceneBounds).toBe(before) // same reference
+  })
+})

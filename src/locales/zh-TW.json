@@ -288,6 +288,8 @@
     "switchLang": "切換語言",
     "runWorkflow": "播放工作流動畫",
     "toggleTest": "切換測試面板",
+    "weatherOff": "關閉天氣動畫",
+    "weatherOn": "開啟天氣動畫",
     "info": "資訊"
   },
   "time": {

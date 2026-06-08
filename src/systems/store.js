@@ -312,6 +312,13 @@ export const useOfficeStore = create((set) => ({
   // it dispatches subagents. Kept OUT of `agents` (no eviction / overflow / name tag / ring).
   helpers: [],  // [{ id: 'role#hash', parentRole, label, expiresAt }]
   reducedMotion: typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || false,
+  // #45: user toggle to disable the heavy weather animations (rain/cloud drift/lightning) that
+  // spike CPU on low-end devices / IDE webviews. Defaults ON; persisted per user via a dedicated
+  // localStorage key (same lightweight pattern as isPaused/rosterMode — NOT the main snapshot).
+  // When OFF, PixelOffice feeds WallWindow reducedMotion=true so weather degrades to static
+  // decoration (the mood signal stays; the per-frame animation stops). prefers-reduced-motion
+  // already forces static regardless of this toggle.
+  weatherEffects: typeof window === 'undefined' ? true : (() => { try { return localStorage.getItem('office-weather') !== 'off' } catch { return true } })(),
   showWorkflow: false,
   // Diagnostic counter: how many times the AgentCharacter RAF watchdog had to restart a
   // stalled walk loop. A silent restart hides the underlying stall; surfacing a count lets
@@ -324,6 +331,12 @@ export const useOfficeStore = create((set) => ({
   // labels so glance-text stays readable while the office shrinks. Transient — never persisted
   // (savePersistedState whitelists fields and this is not one), same as watchdogRestarts.
   sceneScale: 1,
+  // #47: the ACTIVE office svg viewBox x-bounds in scene units, so BehaviorBubble can clamp speech
+  // bubbles to the *visible* edges. Default office = `0 0 800 560` → {minX:0, w:800}; PANEL mode
+  // crops to a sub-window (e.g. `80 110 440 440` → {minX:80, w:440}), where a 0..800 clamp would
+  // target the wrong edges and let bubbles clip the panel crop. PixelOffice publishes the live
+  // bounds; AgentCharacter reads + forwards them. Transient — never persisted.
+  sceneBounds: { minX: 0, w: 800 },
 
   setAgentBehavior: (id, behavior, expression, bubble) =>
     set((s) => {
@@ -409,6 +422,10 @@ export const useOfficeStore = create((set) => ({
   // POINT 2: store the measured office `meet` scale. No-op when unchanged so resize ticks that
   // re-measure the same value don't wake subscribers (AgentCharacter) for nothing.
   setSceneScale: (scale) => set((s) => (s.sceneScale === scale ? s : { sceneScale: scale })),
+  // #47: publish the active viewBox x-bounds; no-op (preserve object identity) when unchanged so
+  // subscribers don't re-render on every poll.
+  setSceneBounds: (minX, w) => set((s) =>
+    (s.sceneBounds.minX === minX && s.sceneBounds.w === w) ? s : { sceneBounds: { minX, w } }),
 
   // ─── Subagent helper-huddle ───
   // HELPER_TTL = 60s safety window: a missed SubagentStop self-heals via pruneHelpers, so a
@@ -581,6 +598,13 @@ export const useOfficeStore = create((set) => ({
     const next = !s.rosterMode
     try { if (typeof window !== 'undefined') localStorage.setItem('office-view', next ? 'roster' : 'office') } catch {}
     return { rosterMode: next }
+  }),
+  // #45: flip the weather-animation preference and persist it. 'off' is stored explicitly so the
+  // default (no key) reads as ON.
+  toggleWeatherEffects: () => set((s) => {
+    const next = !s.weatherEffects
+    try { if (typeof window !== 'undefined') localStorage.setItem('office-weather', next ? 'on' : 'off') } catch {}
+    return { weatherEffects: next }
   }),
   triggerWorkflow: () => set({ showWorkflow: true }),
   endWorkflow: () => set({ showWorkflow: false }),

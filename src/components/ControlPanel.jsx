@@ -58,6 +58,8 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const togglePause = useOfficeStore((s) => s.togglePause)
   const rosterMode = useOfficeStore((s) => s.rosterMode)
   const toggleRosterMode = useOfficeStore((s) => s.toggleRosterMode)
+  const weatherEffects = useOfficeStore((s) => s.weatherEffects)
+  const toggleWeatherEffects = useOfficeStore((s) => s.toggleWeatherEffects)
   const triggerWorkflow = useOfficeStore((s) => s.triggerWorkflow)
   const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
   const hour = useOfficeStore((s) => s.hour)
@@ -317,6 +319,17 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             aria-pressed={rosterMode}
           >
             ☰
+          </button>
+          {/* #45: weather-animation toggle. ON = animated rain/clouds; OFF = static weather
+              (CPU-friendly for low-end devices / IDE webviews). Persisted per user. */}
+          <button
+            onClick={toggleWeatherEffects}
+            className={`px-2 py-1 rounded border transition-colors ${weatherEffects ? 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800' : 'bg-amber-100 border-amber-400 text-amber-700 dark:bg-amber-900 dark:text-amber-300'}`}
+            title={weatherEffects ? t('aria.weatherOff', 'Disable weather animations') : t('aria.weatherOn', 'Enable weather animations')}
+            aria-label={weatherEffects ? t('aria.weatherOff', 'Disable weather animations') : t('aria.weatherOn', 'Enable weather animations')}
+            aria-pressed={!weatherEffects}
+          >
+            {weatherEffects ? '🌧' : '🌤'}
           </button>
           <button onClick={triggerWorkflow} className="px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors" title={t('aria.runWorkflow', 'Run workflow animation')}>
             {t('ui.run')}

@@ -91,13 +91,63 @@ describe('normalizePost', () => {
       expect(result.agents[0].role).toBe('dev')
     })
 
-    it('filters out invalid statuses', () => {
+    // #52 — an agent with a VALID role but an invalid/missing status is kept and degraded to
+    // 'idle' (not dropped), so it still renders in the roster/office. Identity (role) is required;
+    // status degrades safely. (Old behavior dropped the whole agent, blanking it from the UI.)
+    it('coerces invalid status to idle instead of dropping the agent (#52)', () => {
       const body = {
         type: 'office-status',
         agents: [{ role: 'dev', status: 'working' }, { role: 'qa', status: 'sleeping' }],
       }
       const result = normalizePost(body)
+      expect(result.agents).toHaveLength(2)
+      expect(result.agents[1]).toEqual({ role: 'qa', status: 'idle', task: null, label: null, hint: null })
+    })
+
+    it('coerces null / undefined / missing status to idle (#52)', () => {
+      const body = {
+        type: 'office-status',
+        agents: [
+          { role: 'dev', status: null },
+          { role: 'qa', status: undefined },
+          { role: 'ops' }, // status field absent entirely
+        ],
+      }
+      const result = normalizePost(body)
+      expect(result.agents).toHaveLength(3)
+      expect(result.agents.map(a => a.status)).toEqual(['idle', 'idle', 'idle'])
+    })
+
+    it('coerces non-string status (number/object/array) to idle (#52)', () => {
+      const body = {
+        type: 'office-status',
+        agents: [
+          { role: 'dev', status: 42 },
+          { role: 'qa', status: { evil: true } },
+          { role: 'ops', status: ['working'] },
+        ],
+      }
+      const result = normalizePost(body)
+      expect(result.agents.map(a => a.status)).toEqual(['idle', 'idle', 'idle'])
+    })
+
+    it('an idle-coerced agent is not counted as active (#52)', () => {
+      const body = {
+        type: 'office-status',
+        agents: [{ role: 'dev', status: 'working' }, { role: 'qa', status: null }],
+      }
+      const result = normalizePost(body)
+      expect(result.activeCount).toBe(1) // only dev; the null→idle qa is not active
+    })
+
+    it('still drops agents with an invalid/unknown role — role has no safe fallback (#52)', () => {
+      const body = {
+        type: 'office-status',
+        agents: [{ role: 'hacker', status: null }, { role: 'dev', status: 'working' }],
+      }
+      const result = normalizePost(body)
       expect(result.agents).toHaveLength(1)
+      expect(result.agents[0].role).toBe('dev')
     })
 
     it('normalizes hint to null if missing', () => {
