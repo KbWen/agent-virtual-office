@@ -92,3 +92,28 @@ gated by the toggle.
 - Pixel/visual = owner confirm per Protected-Surfaces policy + `getBoundingClientRect`
   measurement (pet stays on floor; absent when toggled off / blocked-state pose). The
   `preview_screenshot` transport is broken in this environment.
+
+## v2 — expert-vetted optimizations (2026-06-08, PR #63)
+
+A 4-expert research panel (game-design · game-feel · calm-tech guardian · feasibility) scoped four
+axes. Shipped increments (all honesty-preserving, Protected Surfaces untouched):
+
+- **AC-v2-1 sceneScale readability** — pure `petReadabilityScale(sceneScale)` = `clamp(1/√sceneScale,
+  1, 1.6)`; the pet stays legible when the office docks small WITHOUT encoding meaning in size
+  (size-as-signal was vetoed as dishonest/illegible). sceneScale ≥ 1 → factor 1 (unchanged).
+- **AC-v2-2 two transient states** — `alert` (a NEW-blocker EDGE: `blockedCount` rose → ears-up
+  "noticing" beat, then settles back into `hide`) and `celebrate` (real `eureka`/`deploy-success`
+  event). Both folded onto the base mode by the pure `resolvePetMode({base, alert, celebrate})`:
+  `alert` wins; `celebrate` shows ONLY when base ≠ hide. **The honesty guarantee is preserved — neither
+  can make the pet look happy during a real blocker.** Total modes now 6 (at the guardian's cap).
+- **AC-v2-3 mode cross-fade** — a 220ms `pet-fade-in` on every mode change (keyed remount) so poses
+  cross instead of snapping; reduced-motion → instant swap.
+- **Guardrails honored**: hide-on-blocker stays the first branch; reduced-motion suppresses all
+  motion (wander, hop, fade); transient overlays are timer-owned so a rapidly-oscillating signal
+  can't leave a state stuck on (alert uses a two-effect pattern keyed on `alert` itself).
+- **Deferred to a follow-up** (panel "nice/cosmetic"): multiple pet types (cat / robot-vacuum / dog,
+  cosmetic-only, behavior-identical, own motion grammar).
+- Tests: `tests/petState.test.js` +6 (`resolvePetMode` precedence/honesty, `petReadabilityScale`).
+  DEV live-verified: alert fires on new-blocker edge + auto-clears (no stuck state); petScale wiring
+  (0.25→1.6, 0.64→1.25). Honesty precedence is unit-proven (live env can't hold a blocker — the hook
+  poll overwrites injected status).

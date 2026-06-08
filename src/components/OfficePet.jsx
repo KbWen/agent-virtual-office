@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useOfficeStore } from '../systems/store.js'
 import { clampToFloor } from '../systems/movementSystem.js'
-import { derivePetState, petIsMobile, PET_MODES } from '../systems/petState.js'
+import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, PET_MODES } from '../systems/petState.js'
 
 // ─── Office pet — a signal-driven barometer (#39 / AVO-121) ─────────────────────────────────────
 // A small ambient cat whose MODE is an honest readout of real aggregate office state (see
@@ -59,6 +59,46 @@ function CatSprite({ mode, reducedMotion }) {
       </g>
     )
   }
+  if (mode === PET_MODES.ALERT) {
+    // sitting upright, ears UP, head turned, wide eyes — "noticing a new blocker" (settles to hide)
+    return (
+      <g aria-hidden="true">
+        <path d="M -7 1 q -4 2 -3 4" stroke={fur} strokeWidth="2.2" fill="none" strokeLinecap="round" />
+        {/* upright body */}
+        <ellipse cx={0} cy={1} rx={5.5} ry={5} fill={fur} />
+        <ellipse cx={0} cy={2.5} rx={3} ry={2.4} fill={belly} opacity="0.55" />
+        {/* raised head */}
+        <circle cx={2} cy={-4} r={3.8} fill={fur} />
+        {/* tall alert ears */}
+        <path d="M -0.6 -6.4 l -0.4 -3.4 l 2.2 1.8 Z" fill={fur} />
+        <path d="M 4.6 -6.4 l 0.4 -3.4 l -2.2 1.8 Z" fill={fur} />
+        {/* wide eyes */}
+        <circle cx={0.6} cy={-4.2} r={1} fill={dark} />
+        <circle cx={3.4} cy={-4.2} r={1} fill={dark} />
+        {/* small alert mark */}
+        <text x={7} y={-6} fontSize="6" fill="#D98324" opacity="0.9">!</text>
+      </g>
+    )
+  }
+  if (mode === PET_MODES.CELEBRATE) {
+    // happy: tail straight up, perked, a tiny spark — fires on a real eureka/deploy-success
+    return (
+      <g aria-hidden="true">
+        <path d="M -7 0 q -3 -3 -1 -8" stroke={fur} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        <ellipse cx={-1} cy={1} rx={7} ry={4.2} fill={fur} />
+        <ellipse cx={-1} cy={2.6} rx={4} ry={2} fill={belly} opacity="0.55" />
+        <rect x={-4} y={4} width={1.6} height={3} rx={0.8} fill={dark} />
+        <rect x={2} y={4} width={1.6} height={3} rx={0.8} fill={dark} />
+        <circle cx={6} cy={-2} r={4} fill={fur} />
+        <path d="M 3.2 -5 l -0.6 -3 l 2.4 1.6 Z" fill={fur} />
+        <path d="M 8.8 -5 l 0.6 -3 l -2.4 1.6 Z" fill={fur} />
+        {/* happy closed-arc eyes */}
+        <path d="M 4 -2.4 q 0.8 0.7 1.6 0" stroke={dark} strokeWidth="0.6" fill="none" />
+        <path d="M 6.8 -2.4 q 0.8 0.7 1.6 0" stroke={dark} strokeWidth="0.6" fill="none" />
+        <text x={9} y={-6} fontSize="6" fill="#E0A800" opacity="0.95">✦</text>
+      </g>
+    )
+  }
   // wander / excited — standing cat (tail up when excited)
   const excited = mode === PET_MODES.EXCITED
   return (
@@ -95,23 +135,39 @@ export default function OfficePet() {
   const blockedCount = useOfficeStore((s) =>
     Object.values(s.externalStatus).filter((e) => e && e.status === 'blocked').length)
   const activeEventId = useOfficeStore((s) => s.activeEvent?.id || null)
+  const sceneScale = useOfficeStore((s) => s.sceneScale)
 
-  // Transient "perk" on a real positive event (reuses officeLife's existing event surface — never a
-  // synthetic timer). Never overrides a real blocker (hide stays honest).
-  const [perk, setPerk] = useState(false)
+  // ── Two transient event-edge overlays (v2), each a short pose beat over the honest base mode ──
+  // celebrate: a real positive event (eureka/deploy-success) — reuses officeLife's event surface.
+  const [celebrate, setCelebrate] = useState(false)
   useEffect(() => {
     if (activeEventId === 'eureka' || activeEventId === 'deploy-success') {
-      setPerk(true)
-      const t = setTimeout(() => setPerk(false), 2500)
+      setCelebrate(true)
+      const t = setTimeout(() => setCelebrate(false), 2500)
       return () => clearTimeout(t)
     }
-    // Event cleared before the 2.5s window elapsed → drop the perk now, so it can't get stuck
-    // 'true' (the cleanup above cancels the pending reset on the trigger→non-trigger transition).
-    setPerk(false)
+    setCelebrate(false) // event cleared early → drop it so it can't stick (cleanup cancels the reset)
   }, [activeEventId])
 
+  // alert: a NEW blocker just appeared (blockedCount rose) — ears-up "noticing" beat, then it settles
+  // back into hide (base is already hide while blocked). Marks a real new-blocker EDGE, not a feeling.
+  // Two effects so the auto-clear timer is owned by `alert` itself (NOT by blockedCount): a rapidly
+  // oscillating blockedCount would otherwise keep cancelling the reset and leave alert stuck on.
+  const [alert, setAlert] = useState(false)
+  const prevBlockedRef = useRef(blockedCount)
+  useEffect(() => {
+    const rose = blockedCount > prevBlockedRef.current
+    prevBlockedRef.current = blockedCount
+    if (rose) setAlert(true)
+  }, [blockedCount])
+  useEffect(() => {
+    if (!alert) return
+    const t = setTimeout(() => setAlert(false), 2500)
+    return () => clearTimeout(t)
+  }, [alert])
+
   const baseMode = derivePetState({ mood, blockedCount })
-  const mode = perk && baseMode !== PET_MODES.HIDE ? PET_MODES.EXCITED : baseMode
+  const mode = resolvePetMode({ base: baseMode, alert, celebrate })
 
   const [pos, setPos] = useState(START)
   const [facing, setFacing] = useState(1)
@@ -133,7 +189,13 @@ export default function OfficePet() {
   if (!officePet) return null
 
   const glideMs = mode === PET_MODES.EXCITED ? 1400 : 2800
-  const bob = mode === PET_MODES.EXCITED && !reducedMotion ? { animation: 'pet-bob 0.6s ease-in-out infinite' } : undefined
+  // a calm hop on excited momentum and on the celebrate beat (≤1.5px, reduced-motion off)
+  const hop = (mode === PET_MODES.EXCITED || mode === PET_MODES.CELEBRATE) && !reducedMotion
+    ? { animation: 'pet-bob 0.6s ease-in-out infinite' } : undefined
+  // v2: keep the pet legible when the office docks small without faking size (partial √ counter-scale)
+  const petScale = petReadabilityScale(sceneScale)
+  // v2: a gentle 220ms fade-in on every mode change (keyed remount) so poses cross instead of snapping
+  const fadeIn = reducedMotion ? undefined : { animation: 'pet-fade-in 0.22s ease-out' }
 
   return (
     <g
@@ -142,8 +204,10 @@ export default function OfficePet() {
       style={reducedMotion ? undefined : { transition: `transform ${glideMs}ms ease-in-out` }}
       pointerEvents="none"
     >
-      <g transform={`scale(${facing}, 1)`} style={bob}>
-        <CatSprite mode={mode} reducedMotion={reducedMotion} />
+      <g transform={`scale(${facing * petScale}, ${petScale})`} style={hop}>
+        <g key={mode} style={fadeIn}>
+          <CatSprite mode={mode} reducedMotion={reducedMotion} />
+        </g>
       </g>
     </g>
   )
