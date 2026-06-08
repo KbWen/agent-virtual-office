@@ -312,6 +312,13 @@ export const useOfficeStore = create((set) => ({
   // it dispatches subagents. Kept OUT of `agents` (no eviction / overflow / name tag / ring).
   helpers: [],  // [{ id: 'role#hash', parentRole, label, expiresAt }]
   reducedMotion: typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || false,
+  // #45: user toggle to disable the heavy weather animations (rain/cloud drift/lightning) that
+  // spike CPU on low-end devices / IDE webviews. Defaults ON; persisted per user via a dedicated
+  // localStorage key (same lightweight pattern as isPaused/rosterMode — NOT the main snapshot).
+  // When OFF, PixelOffice feeds WallWindow reducedMotion=true so weather degrades to static
+  // decoration (the mood signal stays; the per-frame animation stops). prefers-reduced-motion
+  // already forces static regardless of this toggle.
+  weatherEffects: typeof window === 'undefined' ? true : (() => { try { return localStorage.getItem('office-weather') !== 'off' } catch { return true } })(),
   showWorkflow: false,
   // Diagnostic counter: how many times the AgentCharacter RAF watchdog had to restart a
   // stalled walk loop. A silent restart hides the underlying stall; surfacing a count lets
@@ -581,6 +588,13 @@ export const useOfficeStore = create((set) => ({
     const next = !s.rosterMode
     try { if (typeof window !== 'undefined') localStorage.setItem('office-view', next ? 'roster' : 'office') } catch {}
     return { rosterMode: next }
+  }),
+  // #45: flip the weather-animation preference and persist it. 'off' is stored explicitly so the
+  // default (no key) reads as ON.
+  toggleWeatherEffects: () => set((s) => {
+    const next = !s.weatherEffects
+    try { if (typeof window !== 'undefined') localStorage.setItem('office-weather', next ? 'on' : 'off') } catch {}
+    return { weatherEffects: next }
   }),
   triggerWorkflow: () => set({ showWorkflow: true }),
   endWorkflow: () => set({ showWorkflow: false }),

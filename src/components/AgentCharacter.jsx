@@ -1239,7 +1239,10 @@ function AgentCharacter({ agent }) {
           const below = bubbleTopAbove < 6
           return (
             <g transform={`translate(0, ${below ? 6 : -68}) scale(${labelScale})`}>
-              <BehaviorBubble x={0} y={0} below={below} message={state.bubble} />
+              {/* #47: pass the agent's absolute scene x + net local→scene scale (labelScale, since
+                  the char's 1.35 scale is undone above) so the bubble self-clamps horizontally and
+                  far-left/right desks no longer clip the bubble at the office edge. */}
+              <BehaviorBubble x={0} y={0} below={below} message={state.bubble} absX={pos.x} scale={labelScale} />
             </g>
           )
         })()}

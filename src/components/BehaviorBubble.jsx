@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react'
 
-function BehaviorBubble({ x, y, message, below = false }) {
+function BehaviorBubble({ x, y, message, below = false, absX = null, scale = 1, sceneW = 800, edgePad = 4 }) {
   const [visible, setVisible] = useState(false)
   const [currentMsg, setCurrentMsg] = useState(message)
   const fadeTimerRef = useRef(null)
@@ -32,9 +32,18 @@ function BehaviorBubble({ x, y, message, below = false }) {
 
   const { displayMsg, boxW } = derived
   const boxH = 26
-  // bx is always centered on x — bubble renders in character-local coordinates
-  // (old Math.max/min clamp assumed absolute SVG coords, broke text alignment)
-  const bx = x - boxW / 2
+  // #47 — horizontal edge clamp. The bubble renders in character-local coords centered on x, but
+  // an agent at a far-left/right desk would draw a wide bubble PAST the scene's x-edge (the office
+  // svg clips its viewBox), cutting the bubble off. When the parent supplies the agent's absolute
+  // scene x (`absX`) + the net local→scene scale, we shift the box horizontally so it stays inside
+  // [edgePad, sceneW−edgePad] while the TAIL stays anchored on the agent (see tailAnchor below).
+  // absX===null (back-compat / no scene context) → shift 0, byte-identical to the old centered box.
+  const shift = computeEdgeShift({ boxW, absX, scale, sceneW, edgePad })
+  const bx = x - boxW / 2 + shift
+  const textX = x + shift
+  // Tail tip points at the agent (x); its base attaches to the shifted box, clamped 6px inside the
+  // box edges so a large shift slants the tail back to the speaker instead of detaching from it.
+  const tailAnchor = Math.max(bx + 6, Math.min(x, bx + boxW - 6))
   // `below`: for agents at the very top of the office, the default (above-the-head) bubble draws
   // past the SVG's top edge and gets clipped. The parent flips it BELOW the agent and the tail
   // points up instead of down.
@@ -60,18 +69,18 @@ function BehaviorBubble({ x, y, message, below = false }) {
         strokeWidth="1"
         filter="url(#bubble-shadow)"
       />
-      {/* Triangle pointer (points toward the agent — down when above, up when below) */}
+      {/* Triangle pointer: base on the (possibly shifted) box, tip at the agent (x) */}
       <polygon
-        points={`${x - 5},${tailBaseY} ${x + 5},${tailBaseY} ${x},${tailTipY}`}
+        points={`${tailAnchor - 5},${tailBaseY} ${tailAnchor + 5},${tailBaseY} ${x},${tailTipY}`}
         fill="white"
         stroke="#DDD"
         strokeWidth="0.6"
       />
       {/* Cover the line where triangle meets rect */}
-      <line x1={x - 5} y1={tailBaseY} x2={x + 5} y2={tailBaseY} stroke="white" strokeWidth="1.5" />
+      <line x1={tailAnchor - 5} y1={tailBaseY} x2={tailAnchor + 5} y2={tailBaseY} stroke="white" strokeWidth="1.5" />
       {/* Text */}
       <text
-        x={x}
+        x={textX}
         y={by + boxH / 2 + 1}
         textAnchor="middle"
         dominantBaseline="middle"
@@ -115,4 +124,21 @@ function computeBubbleLayout(currentMsg) {
     estWidth += ch.codePointAt(0) > 0x2E7F ? 11 : 6.5
   }
   return { displayMsg, boxW: Math.max(Math.ceil(estWidth) + 18, 48) }
+}
+
+// #47 — pure horizontal-edge shift (local units) so a bubble centered on an agent at absolute scene
+// x `absX` stays inside [edgePad, sceneW − edgePad]. `scale` is the net local→scene factor (so a
+// local shift of `s` moves the box `s·scale` in scene units). Returns 0 when no scene context is
+// given (absX null / non-finite scale) — the bubble then renders centered as before.
+//   box scene span = absX + (localX ± boxW/2 + shift)·scale, with localX = 0 (bubble is centered on
+//   the agent). Solve each edge for shift, then pick the value closest to 0 (no shift) that satisfies
+//   both — pushing right when it would clip the left edge, left when it would clip the right.
+export function computeEdgeShift({ boxW, absX, scale = 1, sceneW = 800, edgePad = 4 }) {
+  if (absX == null || !Number.isFinite(absX) || !Number.isFinite(scale) || scale <= 0) return 0
+  const half = boxW / 2
+  const leftBound = (edgePad - absX) / scale + half          // minimum shift to clear the left edge
+  const rightBound = (sceneW - edgePad - absX) / scale - half // maximum shift before clipping right
+  // closest-to-zero shift within [leftBound, rightBound]. If the box is wider than the available
+  // span (leftBound > rightBound) this yields rightBound — best effort that keeps the right edge in.
+  return Math.min(Math.max(0, leftBound), rightBound)
 }

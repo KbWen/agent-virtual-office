@@ -288,6 +288,8 @@
     "switchLang": "Switch language",
     "runWorkflow": "Run workflow animation",
     "toggleTest": "Toggle test controls",
+    "weatherOff": "Disable weather animations",
+    "weatherOn": "Enable weather animations",
     "info": "Info"
   },
   "time": {
