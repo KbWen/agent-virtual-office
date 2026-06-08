@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T07:10:00Z
-- **Update Sequence**: 37
+- **Last Updated**: 2026-06-08T07:55:00Z
+- **Update Sequence**: 38
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -132,6 +132,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-office-pet-types-2026-06-08 (#39 — multiple pet types: cat / robot-vacuum / dog)
+
+- PR #64 (branch `feat/office-pet-types`), classification feature (extends #39). Cosmetic personalization, panel-capped at 3 types.
+- **Shipped**: `src/components/petSprites.jsx` — `PetSprite({type,mode})` (extracted `CatSprite` byte-faithfully + new `VacuumSprite` (disc + mode-coloured LED) + `DogSprite` (floppy ears/snout/wag)). `petState.js` adds `PET_TYPES`/`nextPetType`/pure `petMotionGrammar` (Roomba=linear easing/no bob, dog=bigger bob, explicit `bobKeyframe`). `petType` store field (default cat, `office-pet-type` key, validated vs PET_TYPES) + `cyclePetType`. ControlPanel 🐾 on/off + change-pet button + en/zh-TW aria. `pet-bob-lg` keyframe.
+- **HONESTY INVARIANT**: a type changes ONLY the sprite + motion grammar — `derivePetState`/`resolvePetMode` take no `type` arg, so a real blocker → hide for EVERY skin (red-team-confirmed: no skin can paint a happy state while an agent is blocked; vacuum LED is red on hide/alert).
+- **Review**: 1 acx-reviewer → PASS (cat extraction byte-faithful, no circular import store↔petState, SSR+localStorage validated, protected surfaces untouched, i18n parity); 2 LOW advisories fixed (explicit bobKeyframe, dropped unused turnInPlace). **Tests**: +5 (PET_TYPES/nextPetType/petMotionGrammar + cyclePetType persistence + type-independence honesty); suite **1328 passed**; build clean. DEV live-verified: cycle cat→vacuum→dog→cat persists; each skin renders; dog+blocker → alert/hide.
 
 ### Ship-feat-office-pet-v2-2026-06-08 (#39 v2 — pet optimizations: scaling · alert/celebrate · cross-fade)
 
