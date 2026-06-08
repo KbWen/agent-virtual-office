@@ -626,6 +626,12 @@ export const useOfficeStore = create((set) => ({
     try { if (typeof window !== 'undefined') localStorage.setItem('office-pet-type', next) } catch {}
     return { petType: next }
   }),
+  // #39 types: select a specific skin (settings popover radiogroup). Validated vs PET_TYPES; persisted.
+  setPetType: (type) => set((s) => {
+    if (!PET_TYPES.includes(type) || type === s.petType) return s
+    try { if (typeof window !== 'undefined') localStorage.setItem('office-pet-type', type) } catch {}
+    return { petType: type }
+  }),
   triggerWorkflow: () => set({ showWorkflow: true }),
   endWorkflow: () => set({ showWorkflow: false }),
 
