@@ -204,8 +204,130 @@ function DogSprite({ mode, reducedMotion }) {
   )
 }
 
+// ── Rabbit. Tall upright ears (the read); hops (motion grammar). ──
+function RabbitSprite({ mode }) {
+  const fur = '#E3DED6', dark = '#BEB6AB', belly = '#F4F0EA', pink = '#E59AA8'
+  if (mode === PET_MODES.NAP) {
+    return (
+      <g aria-hidden="true">
+        <ellipse cx={0} cy={1} rx={8.5} ry={5} fill={fur} />
+        <ellipse cx={0} cy={2} rx={5} ry={2.6} fill={belly} opacity="0.55" />
+        <circle cx={-6} cy={-0.5} r={3.4} fill={fur} />
+        <path d="M -7.6 -0.6 q 1 0.7 1.9 0" stroke={dark} strokeWidth="0.5" fill="none" />
+        <ellipse cx={-7.5} cy={-3.5} rx={1} ry={2.6} transform="rotate(-20 -7.5 -3.5)" fill={fur} />{/* folded ear */}
+        <circle cx={8} cy={0} r={1.6} fill={belly} />{/* puff tail */}
+      </g>
+    )
+  }
+  if (mode === PET_MODES.HIDE) {
+    return (
+      <g aria-hidden="true">
+        <ellipse cx={0} cy={2} rx={7.5} ry={3.4} fill={fur} />
+        <circle cx={5.5} cy={0.6} r={3.2} fill={fur} />
+        <ellipse cx={4} cy={-2.4} rx={0.9} ry={2.2} transform="rotate(18 4 -2.4)" fill={fur} />{/* ears back */}
+        <ellipse cx={6.8} cy={-2.4} rx={0.9} ry={2.2} transform="rotate(28 6.8 -2.4)" fill={fur} />
+        <circle cx={4.6} cy={0.4} r={0.7} fill={dark} /><circle cx={6.6} cy={0.4} r={0.7} fill={dark} />
+      </g>
+    )
+  }
+  // upright (wander/excited/alert/celebrate)
+  return (
+    <g aria-hidden="true">
+      <circle cx={8} cy={1} r={1.8} fill={belly} />{/* tail */}
+      <ellipse cx={0} cy={2} rx={5.5} ry={4.5} fill={fur} />
+      <ellipse cx={0} cy={3.2} rx={3} ry={2.4} fill={belly} opacity="0.6" />
+      <circle cx={2} cy={-2.5} r={3.6} fill={fur} />
+      {/* tall ears */}
+      <ellipse cx={0.4} cy={-7} rx={1.1} ry={3.6} transform="rotate(-8 0.4 -7)" fill={fur} />
+      <ellipse cx={0.4} cy={-7} rx={0.5} ry={2.6} transform="rotate(-8 0.4 -7)" fill={pink} opacity="0.6" />
+      <ellipse cx={3.8} cy={-7} rx={1.1} ry={3.6} transform="rotate(8 3.8 -7)" fill={fur} />
+      <ellipse cx={3.8} cy={-7} rx={0.5} ry={2.6} transform="rotate(8 3.8 -7)" fill={pink} opacity="0.6" />
+      <circle cx={0.8} cy={-2.6} r={0.8} fill={dark} /><circle cx={3.4} cy={-2.6} r={0.8} fill={dark} />
+      <circle cx={2.1} cy={-1.2} r={0.6} fill={pink} />
+    </g>
+  )
+}
+
+// ── Bird. Small round body, beak + wing; quick flits. ──
+function BirdSprite({ mode }) {
+  const body = '#5BA3D0', dark = '#3A7BA8', belly = '#CDE6F4', beak = '#E8A23C'
+  if (mode === PET_MODES.NAP) {
+    return (
+      <g aria-hidden="true">
+        <ellipse cx={0} cy={0} rx={6} ry={5} fill={body} />{/* puffed up */}
+        <ellipse cx={0} cy={1.5} rx={3.6} ry={2.6} fill={belly} opacity="0.6" />
+        <path d="M -5.5 0.5 q 1 1 2.2 0" stroke={dark} strokeWidth="0.5" fill="none" />{/* tucked head, closed eye */}
+      </g>
+    )
+  }
+  if (mode === PET_MODES.HIDE) {
+    return (
+      <g aria-hidden="true">
+        <ellipse cx={0} cy={2} rx={6} ry={3.4} fill={body} />
+        <circle cx={4} cy={0.6} r={2.6} fill={body} />
+        <circle cx={4.4} cy={0.2} r={0.7} fill={dark} />
+        <path d="M 6.4 0.6 l 2 -0.4 l -2 1 Z" fill={beak} />
+      </g>
+    )
+  }
+  return (
+    <g aria-hidden="true">
+      <path d="M -6 -1 l -4 1 l 4 1 Z" fill={dark} />{/* tail */}
+      <ellipse cx={0} cy={0} rx={5.2} ry={4.4} fill={body} />
+      <ellipse cx={0.5} cy={1.4} rx={3} ry={2.4} fill={belly} opacity="0.7" />
+      <path d="M -1 -1 q 4 1.5 3 4" stroke={dark} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.5" />{/* wing */}
+      <circle cx={4} cy={-1.5} r={3} fill={body} />
+      <circle cx={4.4} cy={-1.8} r={0.9} fill="#fff" /><circle cx={4.6} cy={-1.8} r={0.5} fill={dark} />
+      <path d="M 6.6 -1.4 l 2.6 -0.6 l -2.4 1.4 Z" fill={beak} />
+      <line x1={-1} y1={4.2} x2={-1} y2={5.6} stroke={beak} strokeWidth="0.8" />
+      <line x1={1.6} y1={4.2} x2={1.6} y2={5.6} stroke={beak} strokeWidth="0.8" />
+    </g>
+  )
+}
+
+// ── Hamster. Round chubby body, tiny ears, cheeks; scurries. ──
+function HamsterSprite({ mode }) {
+  const fur = '#D9A86B', dark = '#A8753E', belly = '#F2E4CE'
+  if (mode === PET_MODES.NAP) {
+    return (
+      <g aria-hidden="true">
+        <ellipse cx={0} cy={1} rx={7.5} ry={5} fill={fur} />
+        <ellipse cx={0} cy={2.2} rx={4.6} ry={2.8} fill={belly} opacity="0.6" />
+        <path d="M -5.8 0.6 q 1 0.9 2 0" stroke={dark} strokeWidth="0.5" fill="none" />
+      </g>
+    )
+  }
+  if (mode === PET_MODES.HIDE) {
+    return (
+      <g aria-hidden="true">
+        <ellipse cx={0} cy={2} rx={7} ry={3.6} fill={fur} />
+        <circle cx={5} cy={0.8} r={3} fill={fur} />
+        <circle cx={4.6} cy={0.4} r={0.7} fill={dark} /><circle cx={6.6} cy={0.4} r={0.7} fill={dark} />
+      </g>
+    )
+  }
+  return (
+    <g aria-hidden="true">
+      <ellipse cx={0} cy={1} rx={6.5} ry={5.5} fill={fur} />
+      <ellipse cx={0.5} cy={2.5} rx={4} ry={3} fill={belly} opacity="0.7" />
+      {/* tiny ears */}
+      <circle cx={-2} cy={-4.4} r={1.6} fill={fur} /><circle cx={3} cy={-4.4} r={1.6} fill={fur} />
+      <circle cx={-2} cy={-4.4} r={0.8} fill={dark} opacity="0.5" /><circle cx={3} cy={-4.4} r={0.8} fill={dark} opacity="0.5" />
+      <circle cx={-1.4} cy={-1.4} r={0.9} fill={dark} /><circle cx={2.4} cy={-1.4} r={0.9} fill={dark} />
+      {/* cheek puffs */}
+      <circle cx={-3.6} cy={0.6} r={1.8} fill={belly} opacity="0.8" /><circle cx={4.4} cy={0.6} r={1.8} fill={belly} opacity="0.8" />
+      <circle cx={0.5} cy={-0.2} r={0.5} fill={dark} />
+      {/* little hands */}
+      <circle cx={-1} cy={4.6} r={1} fill={belly} /><circle cx={2} cy={4.6} r={1} fill={belly} />
+    </g>
+  )
+}
+
 export default function PetSprite({ type, mode, reducedMotion }) {
   if (type === 'vacuum') return <VacuumSprite mode={mode} reducedMotion={reducedMotion} />
   if (type === 'dog') return <DogSprite mode={mode} reducedMotion={reducedMotion} />
+  if (type === 'rabbit') return <RabbitSprite mode={mode} />
+  if (type === 'bird') return <BirdSprite mode={mode} />
+  if (type === 'hamster') return <HamsterSprite mode={mode} />
   return <CatSprite mode={mode} reducedMotion={reducedMotion} />
 }

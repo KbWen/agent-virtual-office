@@ -70,7 +70,7 @@ export function resolvePetMode({ base, alert = false, celebrate = false }) {
 // COSMETIC ONLY. A type changes the sprite + motion GRAMMAR (how it moves), NEVER the state logic —
 // every type derives its mode from the same `derivePetState`/`resolvePetMode` and obeys the same
 // hide-on-blocker honesty guarantee. Capped at 3 (calm-tech guardrail: personalization, not a zoo).
-export const PET_TYPES = Object.freeze(['cat', 'vacuum', 'dog'])
+export const PET_TYPES = Object.freeze(['cat', 'vacuum', 'dog', 'rabbit', 'bird', 'hamster'])
 
 export function nextPetType(type) {
   const i = PET_TYPES.indexOf(type)
@@ -82,9 +82,12 @@ export function nextPetType(type) {
 // (smaller = more often), `bob`/`bobAmp` the idle hop (`bobKeyframe` names the CSS animation so the
 // choice is explicit, not a numeric guess), `easing` the glide.
 const MOTION = Object.freeze({
-  cat:    { cadenceMul: 1.0, bob: true,  bobAmp: 1.5, bobKeyframe: 'pet-bob',    easing: 'ease-in-out' },
-  dog:    { cadenceMul: 0.7, bob: true,  bobAmp: 2.5, bobKeyframe: 'pet-bob-lg', easing: 'ease-in-out' },
-  vacuum: { cadenceMul: 1.1, bob: false, bobAmp: 0,   bobKeyframe: 'pet-bob',    easing: 'linear' },
+  cat:     { cadenceMul: 1.0, bob: true,  bobAmp: 1.5, bobKeyframe: 'pet-bob',    easing: 'ease-in-out' },
+  dog:     { cadenceMul: 0.7, bob: true,  bobAmp: 2.5, bobKeyframe: 'pet-bob-lg', easing: 'ease-in-out' },
+  vacuum:  { cadenceMul: 1.1, bob: false, bobAmp: 0,   bobKeyframe: 'pet-bob',    easing: 'linear' },
+  rabbit:  { cadenceMul: 0.6, bob: true,  bobAmp: 2.5, bobKeyframe: 'pet-bob-lg', easing: 'ease-out' },     // hops, often
+  bird:    { cadenceMul: 0.5, bob: true,  bobAmp: 1.5, bobKeyframe: 'pet-bob',    easing: 'ease-out' },     // quick little flits
+  hamster: { cadenceMul: 0.55, bob: true, bobAmp: 1.5, bobKeyframe: 'pet-bob',    easing: 'ease-in-out' },  // scurries
 })
 export function petMotionGrammar(type) {
   return MOTION[type] || MOTION.cat
