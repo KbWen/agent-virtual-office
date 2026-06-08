@@ -293,7 +293,20 @@
     "petOff": "隱藏辦公室寵物",
     "petOn": "顯示辦公室寵物",
     "petType": "更換寵物",
+    "settings": "設定",
     "info": "資訊"
+  },
+  "settings": {
+    "weather": "天氣動畫",
+    "pet": "辦公室寵物",
+    "petSkin": "寵物造型",
+    "notifications": "桌面通知",
+    "testPanel": "測試面板",
+    "on": "開",
+    "off": "關",
+    "blocked": "已封鎖",
+    "enable": "啟用",
+    "skin": { "cat": "貓", "vacuum": "掃地機器人", "dog": "狗" }
   },
   "time": {
     "now": "剛剛",

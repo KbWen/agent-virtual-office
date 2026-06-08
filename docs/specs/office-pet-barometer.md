@@ -133,7 +133,11 @@ store's published `agent.position` read-only — no HOME_POSITIONS / movement co
 alert still settles to hide). The robot-vacuum's near-identical modes got distinct static silhouettes
 (nap dock+dim · wander sweep trail · excited dust puff · hide tilt+dim).
 
-> **Deferred to a follow-up** (panel, still open): ControlPanel button consolidation (⚙ settings popover).
+**ControlPanel ⚙ consolidation (PR #67, shipped)** — the bottom bar (~10 buttons) was decluttered: the
+cosmetic toggles (weather, pet, pet-skin), notifications, and the dev Test panel moved into a new ⚙
+settings popover (role=menu/switch/radiogroup; Esc + click-outside; en/zh-TW). Bar now: language ·
+pause · roster · Run · ⚙ · info. New store `setPetType` for the skin radiogroup. All panel-recommended
+pet/UX optimizations are now shipped.
 
 - **Multiple pet types** (PR #64, shipped) — cosmetic skins cat / robot-vacuum / dog via
   `PetSprite({type,mode})` + pure `petMotionGrammar(type)` (own motion grammar per skin) +

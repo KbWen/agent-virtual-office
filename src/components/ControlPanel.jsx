@@ -4,6 +4,7 @@ import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { classifyTask } from '../systems/classify'
 import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName } from '../i18n'
 import { requestNotificationPermission, getNotificationState } from '../inference/desktopNotifier'
+import { PET_TYPES } from '../systems/petState.js'
 
 const statusOptions = ['idle', 'working', 'blocked', 'done']
 
@@ -74,7 +75,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const officePet = useOfficeStore((s) => s.officePet)
   const toggleOfficePet = useOfficeStore((s) => s.toggleOfficePet)
   const petType = useOfficeStore((s) => s.petType)
-  const cyclePetType = useOfficeStore((s) => s.cyclePetType)
+  const setPetType = useOfficeStore((s) => s.setPetType)
   // #28: RAF-watchdog stall counter — surfaced as a DEV-only diagnostic chip (see render). Cheap
   // primitive subscription; re-renders only when a stall actually bumps the count (rare).
   const watchdogRestarts = useOfficeStore((s) => s.watchdogRestarts)
@@ -101,6 +102,18 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   )
 
   const [showTest, setShowTest] = useState(false)
+  // #39 consolidation: a ⚙ settings popover holds the cosmetic toggles + notify + dev test, so the
+  // bottom bar stays lean (pause · view · lang · run · ⚙).
+  const [showSettings, setShowSettings] = useState(false)
+  const settingsRef = React.useRef(null)
+  useEffect(() => {
+    if (!showSettings) return
+    const onKey = (e) => { if (e.key === 'Escape') setShowSettings(false) }
+    const onDown = (e) => { if (settingsRef.current && !settingsRef.current.contains(e.target)) setShowSettings(false) }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDown)
+    return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onDown) }
+  }, [showSettings])
   const [showInfo, setShowInfo] = useState(() => {
     if (typeof window === 'undefined') return false
     return !localStorage.getItem('office-onboarded')
@@ -231,6 +244,65 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         </div>
       )}
 
+      {/* #39 consolidation: ⚙ settings popover — cosmetic toggles + notifications + dev test, grouped
+          off the bar. Esc / click-outside close (see effect). */}
+      {showSettings && (
+        <div
+          ref={settingsRef}
+          role="menu"
+          aria-label={t('aria.settings', 'Settings')}
+          className="absolute bottom-full right-2 mb-2 w-60 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 text-xs z-50"
+        >
+          {/* Weather */}
+          <button role="switch" aria-checked={weatherEffects} onClick={toggleWeatherEffects}
+            className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-200">
+            <span>{t('settings.weather', 'Weather animations')}</span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${weatherEffects ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>{weatherEffects ? t('settings.on', 'On') : t('settings.off', 'Off')}</span>
+          </button>
+          {/* Office pet */}
+          <button role="switch" aria-checked={officePet} onClick={toggleOfficePet}
+            className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-200">
+            <span>{t('settings.pet', 'Office pet')}</span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${officePet ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>{officePet ? t('settings.on', 'On') : t('settings.off', 'Off')}</span>
+          </button>
+          {/* Pet skin — only meaningful while the pet is shown */}
+          {officePet && (
+            <div className="px-2 py-1.5 flex items-center justify-between">
+              <span className="text-gray-700 dark:text-gray-200">{t('settings.petSkin', 'Pet skin')}</span>
+              <div role="radiogroup" aria-label={t('settings.petSkin', 'Pet skin')} className="flex gap-1">
+                {PET_TYPES.map((tp) => (
+                  <button key={tp} role="radio" aria-checked={petType === tp} onClick={() => setPetType(tp)}
+                    title={t(`settings.skin.${tp}`, tp)} aria-label={t(`settings.skin.${tp}`, tp)}
+                    className={`px-1.5 py-0.5 rounded border text-[12px] ${petType === tp ? 'bg-amber-100 border-amber-400 dark:bg-amber-900 dark:border-amber-500' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                    {PET_TYPE_EMOJI[tp]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+          {/* Desktop notifications */}
+          {notifyState !== 'unsupported' && (
+            <div className="w-full flex items-center justify-between px-2 py-1.5 text-gray-700 dark:text-gray-200">
+              <span>{t('settings.notifications', 'Desktop notifications')}</span>
+              {notifyState === 'granted'
+                ? <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{t('settings.on', 'On')}</span>
+                : notifyState === 'denied'
+                  ? <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">{t('settings.blocked', 'Blocked')}</span>
+                  : <button onClick={handleRequestNotify} className="px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-[10px] hover:bg-gray-100 dark:hover:bg-gray-700">{t('settings.enable', 'Enable')}</button>}
+            </div>
+          )}
+          {/* Dev test panel toggle */}
+          <button role="switch" aria-checked={showTest} onClick={() => setShowTest((v) => !v)}
+            className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-200">
+            <span>{t('settings.testPanel', 'Test panel')}</span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${showTest ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>{showTest ? t('settings.on', 'On') : t('settings.off', 'Off')}</span>
+          </button>
+          {/* Triangle pointer (right-anchored) */}
+          <div className="absolute top-full right-3 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-white dark:border-t-gray-800" />
+        </div>
+      )}
+
       <div className="flex items-center gap-3">
         <div className="text-gray-500 dark:text-gray-400 font-mono min-w-[42px]">
           {String(hour).padStart(2, '0')}:{String(minute).padStart(2, '0')}
@@ -301,28 +373,6 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Notification permission toggle (#8). 'default' = ask, 'granted' = on,
-              'denied' = blocked, 'unsupported' = no API. Clicking when 'default'
-              triggers requestPermission within a user-gesture (modern browsers
-              require this). After 'granted' / 'denied', the button is a non-action
-              status indicator. */}
-          {notifyState !== 'unsupported' && (
-            <button
-              onClick={handleRequestNotify}
-              disabled={notifyState === 'granted' || notifyState === 'denied'}
-              className={`px-2 py-1 rounded border transition-colors text-[10px] ${
-                notifyState === 'granted'
-                  ? 'border-emerald-400 text-emerald-600 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 cursor-default'
-                  : notifyState === 'denied'
-                    ? 'border-red-400 text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/30 cursor-default'
-                    : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-              title={t(`notify.tooltip.${notifyState}`, notifyState === 'granted' ? 'Notifications on' : notifyState === 'denied' ? 'Notifications blocked' : 'Enable notifications')}
-              aria-label={t(`notify.aria.${notifyState}`, notifyState === 'granted' ? 'Notifications enabled' : notifyState === 'denied' ? 'Notifications denied' : 'Enable desktop notifications')}
-            >
-              {notifyState === 'granted' ? '🔔' : notifyState === 'denied' ? '🔕' : '🔔'}
-            </button>
-          )}
           <button onClick={cycleLang} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 text-[10px]" title={`${t('aria.switchLang', 'Switch language')} (L)`} aria-label={t('aria.switchLang', 'Switch language')}>
             {nextLangLabel}
           </button>
@@ -338,47 +388,20 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
           >
             ☰
           </button>
-          {/* #45: weather-animation toggle. ON = animated rain/clouds; OFF = static weather
-              (CPU-friendly for low-end devices / IDE webviews). Persisted per user. */}
-          <button
-            onClick={toggleWeatherEffects}
-            className={`px-2 py-1 rounded border transition-colors ${weatherEffects ? 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800' : 'bg-amber-100 border-amber-400 text-amber-700 dark:bg-amber-900 dark:text-amber-300'}`}
-            title={weatherEffects ? t('aria.weatherOff', 'Disable weather animations') : t('aria.weatherOn', 'Enable weather animations')}
-            aria-label={weatherEffects ? t('aria.weatherOff', 'Disable weather animations') : t('aria.weatherOn', 'Enable weather animations')}
-            aria-pressed={!weatherEffects}
-          >
-            {weatherEffects ? '🌧' : '🌤'}
-          </button>
-          {/* #39: office-pet toggle. Persisted; OFF removes the pet entirely. */}
-          <button
-            onClick={toggleOfficePet}
-            className={`px-2 py-1 rounded border transition-colors ${officePet ? 'bg-amber-100 border-amber-400 text-amber-700 dark:bg-amber-900 dark:text-amber-300' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-            title={officePet ? t('aria.petOff', 'Hide office pet') : t('aria.petOn', 'Show office pet')}
-            aria-label={officePet ? t('aria.petOff', 'Hide office pet') : t('aria.petOn', 'Show office pet')}
-            aria-pressed={officePet}
-          >
-            🐾
-          </button>
-          {/* #39 types: cycle the pet skin (cosmetic). Only meaningful while the pet is shown. */}
-          {officePet && (
-            <button
-              onClick={cyclePetType}
-              className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              title={t('aria.petType', 'Change pet')}
-              aria-label={t('aria.petType', 'Change pet')}
-            >
-              {PET_TYPE_EMOJI[petType] || PET_TYPE_EMOJI.cat}
-            </button>
-          )}
           <button onClick={triggerWorkflow} className="px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors" title={t('aria.runWorkflow', 'Run workflow animation')}>
             {t('ui.run')}
           </button>
+          {/* #39 consolidation: ⚙ settings — cosmetic toggles + notifications + dev test live here so
+              the bar stays lean. */}
           <button
-            onClick={() => setShowTest(!showTest)}
-            className={`px-2 py-1 rounded border transition-colors ${showTest ? 'bg-orange-100 border-orange-400 text-orange-700 dark:bg-orange-900 dark:text-orange-300' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-            title={t('aria.toggleTest', 'Toggle test controls')}
+            onClick={() => setShowSettings((v) => !v)}
+            className={`px-2 py-1 rounded border transition-colors ${showSettings ? 'bg-gray-200 border-gray-400 text-gray-700 dark:bg-gray-700 dark:text-gray-200' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+            title={t('aria.settings', 'Settings')}
+            aria-label={t('aria.settings', 'Settings')}
+            aria-haspopup="menu"
+            aria-expanded={showSettings}
           >
-            {t('ui.test')}
+            ⚙
           </button>
           <button
             onClick={() => setShowInfo(!showInfo)}

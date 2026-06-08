@@ -293,7 +293,20 @@
     "petOff": "Hide office pet",
     "petOn": "Show office pet",
     "petType": "Change pet",
+    "settings": "Settings",
     "info": "Info"
+  },
+  "settings": {
+    "weather": "Weather animations",
+    "pet": "Office pet",
+    "petSkin": "Pet skin",
+    "notifications": "Desktop notifications",
+    "testPanel": "Test panel",
+    "on": "On",
+    "off": "Off",
+    "blocked": "Blocked",
+    "enable": "Enable",
+    "skin": { "cat": "Cat", "vacuum": "Robot vacuum", "dog": "Dog" }
   },
   "time": {
     "now": "now",

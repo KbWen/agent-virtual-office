@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T09:20:00Z
-- **Update Sequence**: 40
+- **Last Updated**: 2026-06-08T10:05:00Z
+- **Update Sequence**: 41
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -132,6 +132,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-controlpanel-settings-popover-2026-06-08 (UX — ⚙ settings popover consolidates the control bar)
+
+- PR #67 (branch `feat/controlpanel-settings-popover`), feature. UX-panel proposal: the bottom bar had grown to ~10 buttons mixing run-state / cosmetics / dev / help.
+- **Shipped**: a ⚙ settings popover holds weather + office-pet (role=switch), pet-skin (role=radiogroup, new store `setPetType`), notifications, and the Test toggle. Bar now lean: language · pause · roster · Run · ⚙ · info. a11y: aria-haspopup/expanded, role=menu/switch/radiogroup, Esc + click-outside close. i18n: `aria.settings` + `settings.*` in en + zh-TW. No data-path change (same actions + localStorage keys; showTest panel still renders, toggled from the popover).
+- **Review**: 1 acx-reviewer → PASS (no functional regression — every moved control keeps its handler+selector+persistence; no orphaned `cyclePetType` ref; panel mode untouched; i18n parity). LOW advisories: orphaned old aria/notify i18n keys (harmless), focus-management deferred (v1). **Tests**: +1 (`setPetType`); suite **1331 passed**; build clean. DEV live-verified: ⚙ opens/closes (Esc), weather/pet bar buttons gone, popover toggles + skin radio work.
+- This completes ALL panel-recommended pet + UX optimizations (#39 delight pack, run-to-desk, vacuum silhouettes, button consolidation).
 
 ### Ship-feat-office-pet-run-vacuum-2026-06-08 (#39 — run-to-blocked-desk + distinct vacuum silhouettes)
 

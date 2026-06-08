@@ -139,6 +139,16 @@ describe('store — officePet toggle (#39)', () => {
     expect(localStorage.getItem('office-pet')).toBe('on')
   })
 
+  it('setPetType selects a specific skin + persists; ignores invalid (#39 settings)', () => {
+    localStorage.removeItem('office-pet-type')
+    useOfficeStore.setState({ petType: 'cat' })
+    useOfficeStore.getState().setPetType('dog')
+    expect(useOfficeStore.getState().petType).toBe('dog')
+    expect(localStorage.getItem('office-pet-type')).toBe('dog')
+    useOfficeStore.getState().setPetType('bogus') // ignored
+    expect(useOfficeStore.getState().petType).toBe('dog')
+  })
+
   it('cyclePetType cycles + persists the skin (#39 types)', () => {
     localStorage.removeItem('office-pet-type')
     useOfficeStore.setState({ petType: 'cat' })
