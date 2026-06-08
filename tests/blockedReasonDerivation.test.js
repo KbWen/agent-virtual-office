@@ -3,7 +3,7 @@
 // every ambiguous / launch-failure / compound / heuristic case → 'blocked-unknown'.
 import { describe, it, expect } from 'vitest'
 
-const { deriveBlockedReason } = await import('../public/hooks/office-status-hook.js')
+const { deriveBlockedReason, pickReason } = await import('../public/hooks/office-status-hook.js')
 
 // convenience: a trusted error event for a given bash command + optional first output line
 const ev = (command, toolResultFirstLine = '') =>
@@ -79,6 +79,22 @@ describe('AVO-110 deriveBlockedReason — honesty firewall', () => {
     it('tsconfig → blocked-unknown (not tsc)', () => {
       expect(ev('tsconfig --show')).toBe('blocked-unknown')
     })
+    it('colon-suffixed npm scripts → blocked-unknown (arbitrary scripts, not the bucket they name)', () => {
+      // `:` is the dominant npm-script separator; `npm run test:lint` may actually run a linter.
+      expect(ev('npm test:ci')).toBe('blocked-unknown')
+      expect(ev('npm run test:watch')).toBe('blocked-unknown')
+      expect(ev('pnpm test:e2e')).toBe('blocked-unknown')
+      expect(ev('npm install:all')).toBe('blocked-unknown')
+      expect(ev('vite build:ci')).toBe('blocked-unknown')
+    })
+    it('dot-suffixed programs → blocked-unknown (tsc.cmd, pip install.foo)', () => {
+      expect(ev('tsc.cmd')).toBe('blocked-unknown')
+    })
+    it('an allowlisted program WITH args still matches (boundary is whitespace, not just EOL)', () => {
+      expect(ev('vitest run --reporter dot')).toBe('test-run-failed')
+      expect(ev('tsc --noEmit')).toBe('build-failed')
+      expect(ev('npm install react')).toBe('deps-failed')
+    })
   })
 
   describe('RUNNER-PRESENT (launch-vs-run)', () => {
@@ -107,6 +123,23 @@ describe('AVO-110 deriveBlockedReason — honesty firewall', () => {
       const b = deriveBlockedReason({ isErrorExplicit: true, command: 'vitest', toolResultFirstLine: '' })
       expect(a).toBe('test-run-failed')
       expect(b).toBe('test-run-failed')
+    })
+  })
+
+  describe('pickReason — EPHEMERAL per-agent gate (both hook write sites)', () => {
+    it('retains the reason ONLY while blocked', () => {
+      expect(pickReason('blocked', 'test-run-failed')).toBe('test-run-failed')
+      expect(pickReason('blocked', 'blocked-unknown')).toBe('blocked-unknown')
+    })
+    it('any non-blocked status clears it (no stale reason survives a transition / cross-agent rebuild)', () => {
+      expect(pickReason('done', 'test-run-failed')).toBeNull()
+      expect(pickReason('working', 'test-run-failed')).toBeNull()
+      expect(pickReason('idle', 'test-run-failed')).toBeNull()
+      expect(pickReason('awaiting-approval', 'test-run-failed')).toBeNull()
+    })
+    it('blocked with no reason → null (never undefined-leaks)', () => {
+      expect(pickReason('blocked', null)).toBeNull()
+      expect(pickReason('blocked', undefined)).toBeNull()
     })
   })
 

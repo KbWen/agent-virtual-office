@@ -29,6 +29,8 @@ const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer'
 const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
 const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
 const MAX_MOOD_DURATION = 3_600_000
+// AVO-110: inlined mirror of classify.js BLOCKED_REASONS (server.mjs keeps zero src/ runtime deps).
+const BLOCKED_REASONS = ['test-run-failed', 'build-failed', 'deps-failed', 'blocked-unknown']
 
 function clampMoodDuration(raw) {
   if (raw == null) return null
@@ -62,6 +64,8 @@ function normalizePost(body) {
         task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
         label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
         hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
+        // AVO-110: parity with src/utils/normalizePost.js — carry the enum-validated blocked-reason.
+        reasonCode: BLOCKED_REASONS.includes(a.reasonCode) ? a.reasonCode : null,
       }))
     const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
     return {

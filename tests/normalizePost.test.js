@@ -67,9 +67,9 @@ describe('normalizePost', () => {
   })
 
   describe('full format (type: office-status)', () => {
-    it('full-format agent shape is exactly {role,status,task,label,hint}', () => {
+    it('full-format agent shape is exactly {role,status,task,label,hint,reasonCode}', () => {
       const result = normalizePost({ type: 'office-status', agents: [{ role: 'dev', status: 'working' }] })
-      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: null, label: null, hint: null })
+      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: null, label: null, hint: null, reasonCode: null })
     })
 
     it('passes through valid agents', () => {
@@ -101,7 +101,7 @@ describe('normalizePost', () => {
       }
       const result = normalizePost(body)
       expect(result.agents).toHaveLength(2)
-      expect(result.agents[1]).toEqual({ role: 'qa', status: 'idle', task: null, label: null, hint: null })
+      expect(result.agents[1]).toEqual({ role: 'qa', status: 'idle', task: null, label: null, hint: null, reasonCode: null })
     })
 
     it('coerces null / undefined / missing status to idle (#52)', () => {
@@ -318,5 +318,22 @@ describe('constants', () => {
 
   it('MAX_MOOD_DURATION is 1 hour', () => {
     expect(MAX_MOOD_DURATION).toBe(3_600_000)
+  })
+})
+
+// AVO-110 — the POST /api/status ingest must carry the enum-validated blocked-reason too
+// (the 4th transport whitelist the spec review caught).
+describe('normalizePost — blocked-reason (AVO-110)', () => {
+  it('carries a valid reasonCode on an office-status agent', () => {
+    const r = normalizePost({ type: 'office-status', agents: [{ role: 'dev', status: 'blocked', reasonCode: 'test-run-failed' }] })
+    expect(r.agents[0].reasonCode).toBe('test-run-failed')
+  })
+  it('rejects a non-enum reasonCode → null (trust boundary)', () => {
+    const r = normalizePost({ type: 'office-status', agents: [{ role: 'dev', status: 'blocked', reasonCode: 'evil' }] })
+    expect(r.agents[0].reasonCode).toBeNull()
+  })
+  it('absent reasonCode → null', () => {
+    const r = normalizePost({ type: 'office-status', agents: [{ role: 'dev', status: 'blocked' }] })
+    expect(r.agents[0].reasonCode).toBeNull()
   })
 })

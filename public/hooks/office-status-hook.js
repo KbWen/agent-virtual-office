@@ -284,10 +284,17 @@ function deriveBlockedReason({ isErrorExplicit, command, toolResultFirstLine } =
   const cmd = command.trim().replace(/^cd\s+(?:"[^"]*"|'[^']*'|\S+)\s+&&\s+/, '')
   if (/&&|\|\||;|\||\n|&/.test(cmd)) return UNKNOWN
   const c = cmd.trim().toLowerCase()
-  if (/^(vitest|jest|pytest|mocha|npm (run )?test|yarn test|pnpm test)(?![\w-])/.test(c)) return 'test-run-failed'
-  if (/^(npm run build|vite build|tsc|webpack|rollup)(?![\w-])/.test(c)) return 'build-failed'
-  if (/^(npm (i|ci|install)|yarn add|pnpm (i|add)|pip install)(?![\w-])/.test(c)) return 'deps-failed'
+  if (/^(vitest|jest|pytest|mocha|npm (run )?test|yarn test|pnpm test)(?=$|\s)/.test(c)) return 'test-run-failed'
+  if (/^(npm run build|vite build|tsc|webpack|rollup)(?=$|\s)/.test(c)) return 'build-failed'
+  if (/^(npm (i|ci|install)|yarn add|pnpm (i|add)|pip install)(?=$|\s)/.test(c)) return 'deps-failed'
   return UNKNOWN
+}
+
+// AVO-110 EPHEMERAL gate (single source for both the fresh-write and the carry-forward sites):
+// a reasonCode is retained ONLY while the agent is blocked. A non-blocked status (done/idle/…)
+// returns null so no stale reason survives — even when another agent's event rebuilds this record.
+function pickReason(status, reasonCode) {
+  return status === 'blocked' && typeof reasonCode === 'string' ? reasonCode : null
 }
 
 function extractContext(tool, toolInput, lang = LANG) {
@@ -888,7 +895,7 @@ function processEvent(event) {
             hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
             // AVO-110: carry a still-blocked agent's reason forward so another agent's event
             // can't stale-clear it (EPHEMERAL cross-agent path); non-blocked → no reason.
-            reasonCode: a.status === 'blocked' && typeof a.reasonCode === 'string' ? a.reasonCode : null,
+            reasonCode: pickReason(a.status, a.reasonCode),
           }))
       : []
     existingWorkflow = typeof data.workflow === 'string' ? data.workflow.slice(0, 200) : null
@@ -931,7 +938,7 @@ function processEvent(event) {
       label: typeof label === 'string' ? label.slice(0, 200) : null,
       hint: typeof hint === 'string' ? hint.slice(0, 200) : null,
       // AVO-110: a blocked agent carries its reason; any other status clears it (EPHEMERAL).
-      reasonCode: status === 'blocked' && typeof reasonCode === 'string' ? reasonCode : null,
+      reasonCode: pickReason(status, reasonCode),
     },
   ]
 
@@ -1112,7 +1119,7 @@ function processEvent(event) {
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)
 if (typeof module !== 'undefined') {
   module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
-    shortFile, shortCommand, bashVibeLabel, deriveBlockedReason, extractContext, sanitizeId,
+    shortFile, shortCommand, bashVibeLabel, deriveBlockedReason, pickReason, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
     shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse,
     readLatestTokenUsage, effortLevel,
