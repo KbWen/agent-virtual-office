@@ -1,6 +1,6 @@
 ---
 title: Blocked-reason tags (AVO-110 / #29)
-status: frozen
+status: shipped
 date: 2026-06-08
 backlog_id: AVO-110
 classification: feature
