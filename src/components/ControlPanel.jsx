@@ -68,6 +68,8 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const toggleRosterMode = useOfficeStore((s) => s.toggleRosterMode)
   const weatherEffects = useOfficeStore((s) => s.weatherEffects)
   const toggleWeatherEffects = useOfficeStore((s) => s.toggleWeatherEffects)
+  const officePet = useOfficeStore((s) => s.officePet)
+  const toggleOfficePet = useOfficeStore((s) => s.toggleOfficePet)
   // #28: RAF-watchdog stall counter — surfaced as a DEV-only diagnostic chip (see render). Cheap
   // primitive subscription; re-renders only when a stall actually bumps the count (rare).
   const watchdogRestarts = useOfficeStore((s) => s.watchdogRestarts)
@@ -341,6 +343,16 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             aria-pressed={!weatherEffects}
           >
             {weatherEffects ? '🌧' : '🌤'}
+          </button>
+          {/* #39: office-pet toggle. Persisted; OFF removes the pet entirely. */}
+          <button
+            onClick={toggleOfficePet}
+            className={`px-2 py-1 rounded border transition-colors ${officePet ? 'bg-amber-100 border-amber-400 text-amber-700 dark:bg-amber-900 dark:text-amber-300' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+            title={officePet ? t('aria.petOff', 'Hide office pet') : t('aria.petOn', 'Show office pet')}
+            aria-label={officePet ? t('aria.petOff', 'Hide office pet') : t('aria.petOn', 'Show office pet')}
+            aria-pressed={officePet}
+          >
+            🐈
           </button>
           <button onClick={triggerWorkflow} className="px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors" title={t('aria.runWorkflow', 'Run workflow animation')}>
             {t('ui.run')}

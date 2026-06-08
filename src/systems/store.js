@@ -319,6 +319,9 @@ export const useOfficeStore = create((set) => ({
   // decoration (the mood signal stays; the per-frame animation stops). prefers-reduced-motion
   // already forces static regardless of this toggle.
   weatherEffects: typeof window === 'undefined' ? true : (() => { try { return localStorage.getItem('office-weather') !== 'off' } catch { return true } })(),
+  // #39: ambient office pet (signal-driven barometer). Default ON; persisted via a dedicated
+  // localStorage key (same lightweight pattern as weatherEffects). OFF → no pet rendered (zero cost).
+  officePet: typeof window === 'undefined' ? true : (() => { try { return localStorage.getItem('office-pet') !== 'off' } catch { return true } })(),
   showWorkflow: false,
   // Diagnostic counter: how many times the AgentCharacter RAF watchdog had to restart a
   // stalled walk loop. A silent restart hides the underlying stall; surfacing a count lets
@@ -605,6 +608,12 @@ export const useOfficeStore = create((set) => ({
     const next = !s.weatherEffects
     try { if (typeof window !== 'undefined') localStorage.setItem('office-weather', next ? 'on' : 'off') } catch {}
     return { weatherEffects: next }
+  }),
+  // #39: flip the office-pet preference and persist it ('off' stored explicitly so default reads ON).
+  toggleOfficePet: () => set((s) => {
+    const next = !s.officePet
+    try { if (typeof window !== 'undefined') localStorage.setItem('office-pet', next ? 'on' : 'off') } catch {}
+    return { officePet: next }
   }),
   triggerWorkflow: () => set({ showWorkflow: true }),
   endWorkflow: () => set({ showWorkflow: false }),

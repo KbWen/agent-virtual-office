@@ -290,6 +290,8 @@
     "toggleTest": "切換測試面板",
     "weatherOff": "關閉天氣動畫",
     "weatherOn": "開啟天氣動畫",
+    "petOff": "隱藏辦公室寵物",
+    "petOn": "顯示辦公室寵物",
     "info": "資訊"
   },
   "time": {

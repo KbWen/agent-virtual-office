@@ -9,6 +9,7 @@ import { startWorkflowHandoffs } from '../inference/workflowHandoff'
 import { eventName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import HelperHuddles from './HelperHuddle'
+import OfficePet from './OfficePet'
 import NarrowRoster from './NarrowRoster'
 import AgentInspector from './AgentInspector'
 import {
@@ -1141,6 +1142,10 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           </text>
         </g>
       )}
+
+      {/* ═══ OFFICE PET ═══ (#39 — ambient cat; signal-driven barometer. Painted behind agents so
+          they naturally occlude it when overlapping. Renders nothing when toggled off.) */}
+      <OfficePet />
 
       {/* ═══ SUBAGENT HELPER HUDDLES ═══ (capped helper figures — painted BEHIND the agents
           so the full-size lead is never clipped by its own helpers; they trail the lead's live pos) */}
