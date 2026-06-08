@@ -12,8 +12,8 @@ const statusOptions = ['idle', 'working', 'blocked', 'done']
 // existing importers (NarrowRoster, tests). NOTE: `export { x } from './m'` alone re-exports without
 // binding x into THIS module's scope — the component's internal calls would then crash with
 // "x is not defined" (regression caught only by actually loading the page).
-import { taskChipLabel, blockedReasonLabel, formatTokens, agentLineLabel, shouldShowWatchdogDiag } from './controlPanelLabels.js'
-export { taskChipLabel, blockedReasonLabel, formatTokens, agentLineLabel, shouldShowWatchdogDiag }
+import { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, shouldShowWatchdogDiag } from './controlPanelLabels.js'
+export { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, shouldShowWatchdogDiag }
 
 // #39 types: emoji shown on the "change pet" button per current skin.
 const PET_TYPE_EMOJI = { cat: '🐈', vacuum: '🤖', dog: '🐕', rabbit: '🐇', bird: '🐦', hamster: '🐹' }
@@ -276,6 +276,9 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
                 <span className="inline-block w-2.5 h-2.5 rounded-full border border-white/50" style={{ backgroundColor: agent.color }} />
                 <span className="text-gray-700 dark:text-gray-200 font-medium">{name}</span>
                 <span className="text-gray-400 dark:text-gray-500">·</span>
+                {ext && blockedReasonGlyph(ext) && (
+                  <span aria-hidden="true" title={blockedReasonLabel(ext) || ''}>{blockedReasonGlyph(ext)}</span>
+                )}
                 <span className={ext ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-gray-500 dark:text-gray-400'}>{label}</span>
                 <span className="inline-block w-1.5 h-1.5 rounded-full ml-0.5" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} aria-hidden="true" />
                 <span className="sr-only">{agent.status}</span>

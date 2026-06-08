@@ -3,6 +3,7 @@ import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
 import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveFocusFacing } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale } from '../i18n'
+import { BlockedReasonBadge } from './blockedReasonBadge'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
 
@@ -645,6 +646,9 @@ function AgentCharacter({ agent }) {
   const sceneW = useOfficeStore((s) => s.sceneBounds.w)
   // L3 reluctant-participant tell (transient expiry ts). Pure overlay — never affects behavior.
   const reluctantUntil = useOfficeStore((s) => s.reluctant?.[id])
+  // AVO-110: hook-stamped blocked-reason token (primitive subscription → re-render only on change).
+  // When blocked, this drives the over-head reason badge that overrides the BehaviorIndicator glyph.
+  const reasonCode = useOfficeStore((s) => s.externalStatus[id]?.reasonCode || null)
 
   const timerRef = useRef(null)
   const pathRef = useRef([])
@@ -1178,14 +1182,27 @@ function AgentCharacter({ agent }) {
       {/* AVO-134: a one-shot pop-in (scale + slight squash) when the behavior CHANGES.
           Keyed on the behavior so React remounts (replays the pop) on a real change, but a
           same-behavior re-render reuses the element → no re-fire. reducedMotion → static. */}
+      {/* AVO-110: while blocked, the reason badge OVERRIDES the BehaviorIndicator glyph (a block is
+          the dominant state). Keyed on reasonCode so a reason CHANGE replays the entry-pop, but a
+          same-reason re-render reuses the element → no re-fire (ANTI-NAG). reducedMotion → static. */}
       {!isWalking && (
-        <g key={state.behavior}>
-          {!reducedMotion && (
-            <animateTransform attributeName="transform" type="scale"
-              values="0 0;1.15 0.9;1 1" keyTimes="0;0.6;1" dur="0.3s" repeatCount="1" fill="freeze" />
-          )}
-          <BehaviorIndicator behavior={state.behavior} />
-        </g>
+        state.status === 'blocked' ? (
+          <g key={`reason-${reasonCode || 'unknown'}`}>
+            {!reducedMotion && (
+              <animateTransform attributeName="transform" type="scale"
+                values="0.6 0.6;1.1 1.1;1 1" keyTimes="0;0.6;1" dur="0.35s" repeatCount="1" fill="freeze" />
+            )}
+            <BlockedReasonBadge reasonCode={reasonCode} />
+          </g>
+        ) : (
+          <g key={state.behavior}>
+            {!reducedMotion && (
+              <animateTransform attributeName="transform" type="scale"
+                values="0 0;1.15 0.9;1 1" keyTimes="0;0.6;1" dur="0.3s" repeatCount="1" fill="freeze" />
+            )}
+            <BehaviorIndicator behavior={state.behavior} />
+          </g>
+        )
       )}
 
       {/* Name tag + bubble: undo the 1.35 character scale, then grow each block IN PLACE by

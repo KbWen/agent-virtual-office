@@ -345,5 +345,11 @@
       "granted": "Desktop notifications enabled",
       "denied": "Desktop notifications denied"
     }
+  },
+  "blockedReason": {
+    "test-run-failed": { "label": "Test run", "a11y": "Blocked on the test run" },
+    "build-failed": { "label": "Build", "a11y": "Blocked on the build" },
+    "deps-failed": { "label": "Install", "a11y": "Blocked on installing dependencies" },
+    "blocked-unknown": { "label": "Blocked", "a11y": "Blocked, cause unknown" }
   }
 }
