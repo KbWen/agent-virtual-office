@@ -5,6 +5,34 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.3.0 — 2026-06-08 — Blocked-reason tags + recurring-failure detection
+
+The office stopped just saying "stuck" and started saying **stuck on what** — and **stuck again**.
+Two honesty-first observability features built on the real hook signal.
+
+### Added
+
+- **Blocked-reason tags (AVO-110 / #29)** — a blocked agent now shows a small over-head pixel
+  "status-effect" badge: 🧪 the test run failed · 🔨 the build failed · 📦 a dependency install
+  failed · ❔ blocked, cause unknown. The ControlPanel roster row mirrors it as icon + label.
+  **Honest-narrow by design**: a *specific* reason shows only when a single-segment command matches
+  a tight allowlist on a real error and actually launched — anything ambiguous degrades to the
+  neutral ❔ (never a guessed cause). Wording claims only "blocked on the test **run**", never
+  "test failed". Raw error text stays on hover. en + zh-TW.
+- **Recurring-failure detection (AVO-117)** — when the *same kind* of failure recurs across ≥3
+  distinct blocked episodes for one agent within ~10 minutes, the badge gains a quiet ↻ mark and
+  (if notifications are on) fires one desktop notice. It claims only the recurring **pattern**
+  ("tests keep failing"), never a specific root cause; `blocked-unknown` never escalates; and an
+  idle-gap `blocked↔awaiting-approval` flap of a single stuck state can't manufacture a false alarm.
+
+### Notes
+
+- Both reasons flow from the existing Claude Code status hook (`reasonCode` on the event stream),
+  so they light up from your *real* session — a failing `npm test` shows the 🧪 badge live.
+- `permission` / `auth` / `rate-limit` reasons and finer error signatures are intentionally
+  deferred — they need a structured errno/HTTP-status hook field (substring-matching free text
+  would be fabrication). Honesty invariants are covered by the test suite (now 1411 tests).
+
 ## v1.2.0 — 2026-06-05 — Honest living office + responsive fill (UX Vibe Rebalance wave)
 
 Shipped on branch `feat/ux-vibe-rebalance` (pending human PR review + merge). The office
