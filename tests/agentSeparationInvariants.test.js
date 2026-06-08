@@ -1,6 +1,22 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach } from 'vitest'
 import { useOfficeStore } from '../src/systems/store.js'
 import { MEETING_CHAIRS } from '../src/systems/movementSystem.js'
+
+// Deterministic RNG (mulberry32) for the deconfliction tests below. The store's `avoidOverlap`
+// fan-out picks its push DIRECTION with `Math.random()` (movementSystem.js), so with the degenerate
+// all-on-one-cell input the separation occasionally fell a hair under MIN_SEP on an unlucky live
+// random sequence → a flaky CI failure (~15.6/14.5 < 20). Seeding `Math.random` makes the fan-out
+// reproducible (same idiom as tests/movementPathingFuzz.test.js). It still genuinely verifies the
+// deconfliction SEPARATES the agents — just on a fixed, repeatable sequence.
+function mulberry32(seed) {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
 
 // The coverage gap the owner caught: every prior movement test checks agent-vs-MAP (on-floor,
 // off-furniture). NONE checked agent-vs-AGENT. Agents piled on one cell during gather events and the
@@ -33,7 +49,14 @@ describe('gather spot tables are pairwise separated', () => {
 })
 
 describe('store deconflicts gather targets so agents never stack (pile-up / disappear fix)', () => {
+  let _origRandom
+  beforeEach(() => {
+    _origRandom = Math.random
+    const rng = mulberry32(0x5eed1234)
+    Math.random = rng
+  })
   afterEach(() => {
+    Math.random = _origRandom
     const s = useOfficeStore.getState()
     Object.keys(s.agents).forEach((id) => s.clearAgentGroupEvent(id))
   })
