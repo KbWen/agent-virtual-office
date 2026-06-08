@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-06-05
+last_updated: 2026-06-08
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -31,7 +31,7 @@ last_updated: 2026-06-05
 | AVO-107 | Review-gate queue | product | multi-agent | P1 | — | feature | Pending | — |
 | AVO-108 | Token & cost meter | product | info-density | P0 | — | feature | Done | — |
 | AVO-109 | Recent-files heatmap | product | info-density | P2 | — | feature | Pending | — |
-| AVO-110 | Blocked-reason tags | product | info-density | P1 | — | feature | In Progress | — |
+| AVO-110 | Blocked-reason tags | product | info-density | P1 | docs/specs/blocked-reason-tags.md | feature | Done | unblocks AVO-117; Phase-2 (permission/auth/rate-limit) deferred |
 | AVO-111 | Time-of-day lighting | product | game-feel | P2 | — | feature | Pending | — |
 | AVO-112 | Eureka cascade | product | game-feel | P3 | — | feature | Pending | — |
 | AVO-113 | OpenTelemetry GenAI export | infra | observability | P1 | — | feature | Pending | — |

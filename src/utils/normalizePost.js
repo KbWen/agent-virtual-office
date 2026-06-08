@@ -1,4 +1,5 @@
 import { VALID_ROLES, VALID_STATUSES, VALID_MOODS, MAX_MOOD_DURATION } from '../systems/constants.js'
+import { BLOCKED_REASONS } from '../systems/classify.js'
 export { VALID_ROLES, VALID_STATUSES, VALID_MOODS, MAX_MOOD_DURATION }
 
 // Monotonic integer seq — prevents duplicate _seq when called multiple times per ms
@@ -53,6 +54,9 @@ export function normalizePost(body) {
         task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
         label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
         hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
+        // AVO-110: carry the enum-validated blocked-reason through the POST ingest hop too
+        // (parity with sanitizeAgent); anything else → null (render coerces → blocked-unknown).
+        reasonCode: BLOCKED_REASONS.includes(a.reasonCode) ? a.reasonCode : null,
       }))
     const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
     return {

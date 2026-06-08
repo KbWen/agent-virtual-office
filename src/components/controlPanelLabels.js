@@ -1,7 +1,7 @@
 // Pure label/format helpers used by ControlPanel (and NarrowRoster). Extracted out of the
 // ControlPanel.jsx god-component so they're unit-testable WITHOUT importing the React/JSX module
 // (engineering-retro debt cleanup). No React here — plain functions of plain data.
-import { classifyTask } from '../systems/classify'
+import { classifyTask, classifyBlockedReason } from '../systems/classify'
 
 // Collapse a raw tool/task name into the same short chip the character's TaskLabel (AVO-103) shows,
 // so the panel never displays the ugly `mcp__Server__tool` wire form. Built-ins stay short (`Bash`),
@@ -12,14 +12,30 @@ export function taskChipLabel(task) {
   return classifyTask(task).visualLabel
 }
 
-// AVO-110: for a blocked agent the human `label` carries the failure reason the hook detected
-// ("❌ npm test failed"), far more useful at a glance than the bare tool name. Surface it — truncated
-// for the compact status bar. Returns null for any non-blocked / label-less agent.
+// AVO-110: the RAW hook label ("❌ npm test failed") — kept as the HOVER/DECODE layer only (shown in
+// ControlPanel row titles). It is NOT the glance label anymore: the visible glance label now comes
+// from the structured reasonCode token (see agentLineLabel) so the panel never re-parses free text
+// (NO-RENDER-SIDE-DERIVATION). Returns null for any non-blocked / label-less agent.
 const BLOCKED_REASON_CAP = 28
 export function blockedReasonLabel(ext) {
   if (!ext || ext.status !== 'blocked' || !ext.label) return null
   const l = ext.label
   return l.length > BLOCKED_REASON_CAP ? l.slice(0, BLOCKED_REASON_CAP - 1) + '…' : l
+}
+
+// AVO-110: the panel-row "icon" channel — a recognizable glyph per blocked-reason (HTML roster, so
+// an emoji is fine here; the in-scene office badge uses bespoke SVG per AC-7). Derived from the
+// reasonCode token via classifyBlockedReason; null for any non-blocked agent. Pairs with the i18n
+// text from agentLineLabel so the row is icon + text (never icon-only, never colour-only).
+const REASON_GLYPH = Object.freeze({
+  'test-run-failed': '🧪',
+  'build-failed': '🛠️',
+  'deps-failed': '📦',
+  'blocked-unknown': '❔',
+})
+export function blockedReasonGlyph(ext) {
+  if (!ext || ext.status !== 'blocked') return null
+  return REASON_GLYPH[classifyBlockedReason(ext.reasonCode).reason] || REASON_GLYPH['blocked-unknown']
 }
 
 // AVO-108: compact token formatter — 604937 → "605k", 1240000 → "1.2M", 842 → "842".
@@ -30,12 +46,17 @@ export function formatTokens(n) {
   return String(Math.round(n))
 }
 
-// The single label a ControlPanel agent row shows: blocked reason wins, then the collapsed tool
-// chip, then the localized status word. `t` is the i18n lookup.
+// The single label a ControlPanel agent row shows. AVO-110: for a blocked agent it is the localized
+// REASON label derived from the structured reasonCode token (claims only what the signal proves —
+// "Test run" / "卡在測試執行", never "test failed"), NOT a re-parse of the raw ext.label. Otherwise:
+// the collapsed tool chip, then the localized status word. `t` is the i18n lookup.
 export function agentLineLabel(ext, t) {
   if (!ext) return null
-  return blockedReasonLabel(ext)
-    || taskChipLabel(ext.task)
+  if (ext.status === 'blocked') {
+    const { reason } = classifyBlockedReason(ext.reasonCode)
+    return t(`blockedReason.${reason}.label`, t('statusLabels.blocked', 'Blocked'))
+  }
+  return taskChipLabel(ext.task)
     || t(`statusLabels.${ext.status}`, ext.status)
 }
 

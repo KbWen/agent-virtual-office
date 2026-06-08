@@ -104,9 +104,10 @@ describe('ControlPanel — blockedReasonLabel (AVO-110 lightweight)', () => {
 })
 
 describe('ControlPanel — agentLineLabel fallback chain', () => {
-  it('blocked reason wins over the tool chip', () => {
-    expect(agentLineLabel({ status: 'blocked', task: 'Bash', label: '❌ build broke' }, tStub))
-      .toBe('❌ build broke')
+  it('blocked: label derives from the reasonCode TOKEN, NOT the raw ext.label (AVO-110)', () => {
+    const out = agentLineLabel({ status: 'blocked', task: 'Bash', label: '❌ build broke', reasonCode: 'build-failed' }, tStub)
+    expect(out).not.toBe('❌ build broke')           // never re-parses the raw label
+    expect(out).toBe('Blocked')                      // identity-fallback stub → the localized fallback
   })
 
   it('falls back to the collapsed tool chip when not blocked', () => {

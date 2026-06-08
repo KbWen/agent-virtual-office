@@ -34,14 +34,27 @@ describe('blockedReasonLabel (AVO-110)', () => {
   })
 })
 
-describe('agentLineLabel — blocked reason › tool chip › status word', () => {
-  const t = (key, fb) => fb // identity i18n stub
-  it('blocked reason wins', () => {
-    expect(agentLineLabel({ status: 'blocked', label: '❌ failed', task: 'Bash' }, t)).toBe('❌ failed')
+describe('agentLineLabel — AVO-110 reason token › tool chip › status word', () => {
+  // i18n stub mapping the keys this label path requests; falls back to the fallback arg otherwise.
+  const t = (key, fb) => ({
+    'blockedReason.test-run-failed.label': 'Test run',
+    'blockedReason.blocked-unknown.label': 'Blocked',
+    'statusLabels.working': 'Working',
+  }[key] ?? fb)
+  it('blocked: label comes from the reasonCode TOKEN, not the raw ext.label', () => {
+    expect(agentLineLabel({ status: 'blocked', label: '❌ failed', task: 'Bash', reasonCode: 'test-run-failed' }, t))
+      .toBe('Test run')
+  })
+  it('NO-RENDER-SIDE-DERIVATION: misleading ext.label + unknown reasonCode → unknown label (never parsed from label)', () => {
+    expect(agentLineLabel({ status: 'blocked', label: '❌ deploy failed', task: 'Bash', reasonCode: 'blocked-unknown' }, t))
+      .toBe('Blocked')
+  })
+  it('blocked with absent reasonCode → blocked-unknown label', () => {
+    expect(agentLineLabel({ status: 'blocked', label: 'x', task: 'Bash' }, t)).toBe('Blocked')
   })
   it('falls back to the tool chip, then the status word', () => {
     expect(agentLineLabel({ status: 'working', task: 'Bash' }, t)).toBe(taskChipLabel('Bash'))
-    expect(agentLineLabel({ status: 'working', task: null }, t)).toBe('working')
+    expect(agentLineLabel({ status: 'working', task: null }, t)).toBe('Working')
   })
   it('null ext → null', () => {
     expect(agentLineLabel(null, t)).toBeNull()

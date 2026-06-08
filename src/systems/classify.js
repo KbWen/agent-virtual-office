@@ -270,6 +270,35 @@ export function classifyStatus(status) {
   }
 }
 
+// ─── classifyBlockedReason (AVO-110 / #29) ──────────────────────────────────
+// Pure render-side lookup: a language-neutral reasonCode (derived + stamped at the
+// hook — the single source of truth) → its badge metadata. This function inspects
+// ONLY its argument; it NEVER sees command/error text (no second classifier → no
+// drift). `blocked-unknown` is the load-bearing default (mirrors the office pet's
+// hide-on-blocker honesty guarantee): any absent/unrecognized code resolves here,
+// so a specific glyph renders ONLY when the hook proved the reason.
+//
+// Honesty in the labels: a11yKey points at "…test RUN" / "卡在測試執行" strings, NEVER
+// "test failed" — exit-nonzero on a test-bucket command is not an assertion failure.
+// COLOR-NEVER-ONLY: every reason has a UNIQUE iconId + a non-empty a11yKey; `hue` is
+// the 3rd redundant channel only. `blocked-unknown` is the lowest-chroma, neutral
+// glyph (uncertainty), deliberately NOT a red failure mark.
+const BLOCKED_REASON_TABLE = Object.freeze({
+  'test-run-failed': { iconId: 'beaker-crack', hue: '#d98a2b', a11yKey: 'blockedReason.test-run-failed.a11y' },
+  'build-failed':    { iconId: 'hammer-crack', hue: '#c96f3a', a11yKey: 'blockedReason.build-failed.a11y' },
+  'deps-failed':     { iconId: 'box-open-x',   hue: '#d98a2b', a11yKey: 'blockedReason.deps-failed.a11y' },
+  'blocked-unknown': { iconId: 'q-neutral',    hue: '#8a8f99', a11yKey: 'blockedReason.blocked-unknown.a11y' },
+})
+
+export const BLOCKED_REASONS = Object.freeze(Object.keys(BLOCKED_REASON_TABLE))
+
+export function classifyBlockedReason(reasonCode) {
+  const code = (typeof reasonCode === 'string' && BLOCKED_REASON_TABLE[reasonCode])
+    ? reasonCode
+    : 'blocked-unknown'
+  return { family: FAMILIES.BLOCKED, reason: code, ...BLOCKED_REASON_TABLE[code] }
+}
+
 // ═══ #A2.1: Role + Workflow context-aware behavior selection ═══════════════
 //
 // The prior version (`familyToBehavior(classifyTask(task).family)`) treated all

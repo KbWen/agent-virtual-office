@@ -345,5 +345,11 @@
       "granted": "桌面通知已啟用",
       "denied": "桌面通知已拒絕"
     }
+  },
+  "blockedReason": {
+    "test-run-failed": { "label": "測試執行", "a11y": "卡在測試執行" },
+    "build-failed": { "label": "建置", "a11y": "卡在建置" },
+    "deps-failed": { "label": "安裝套件", "a11y": "卡在安裝套件" },
+    "blocked-unknown": { "label": "卡住", "a11y": "卡住，原因未知" }
   }
 }

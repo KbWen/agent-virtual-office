@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T12:30:00Z
-- **Update Sequence**: 45
+- **Last Updated**: 2026-06-08T22:10:00Z
+- **Update Sequence**: 46
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -71,6 +71,7 @@
   - [living-office] docs/specs/living-office-events.md [DRAFT, review-gated]  *(P1-P4 shipped to branch feat/ux-vibe-rebalance, not merged; AC-3 pixel-dominance pending owner visual confirm)*
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
+  - [office-runtime] docs/specs/blocked-reason-tags.md [Shipped]  *(AVO-110 / #29 — honest-narrow blocked-reason badge; reasonCode contract)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -118,6 +119,8 @@
 - [Category: guard-placement][Severity: HIGH][Trigger: write-path-guard][prev: d5689fc7] Place guardrail rules where all relevant classifications read them, not only in documents that some tiers skip.
 - [Category: packaging][Severity: MEDIUM][Trigger: dependency-presence-check][prev: 9da72f26] An installed package's CLI launcher must detect its own runtime deps via `require.resolve(dep, {paths:[root]})` (honors npm hoisting to a parent node_modules), not `fs.existsSync(root/node_modules/<dep>)` — the latter always misses hoisted deps and re-runs `npm install` on every launch.
 
+- [Category: verification][Severity: HIGH][Trigger: green-tests-hide-defects][prev: 0d9a1cd6] A full green suite + clean build can still hide HIGH correctness/honesty defects: a fresh adversarial reviewer (review.md freshness invariant — diff+spec only, no implementer rationale) caught a regex word-boundary that leaked colon/dot-suffixed inputs AND a 4th/5th data-path whitelist silently dropping a new field, both invisible to 1385 passing tests. For truth/data features: a fresh reviewer is mandatory, and 'trace the new field through EVERY normalizer/whitelist' must be an explicit review item.
+- [Category: honesty-design][Severity: MEDIUM][Trigger: adversarial-reason-taxonomy][prev: 6dcab086] When designing a classifier/taxonomy that asserts meaning to users, run an adversarial honesty audit per proposed category BEFORE building — it refuted 6 of 7 candidate reasons here (over-claiming a specific cause from a coincidental signal). Default every category to refuted/unknown until a real observable signal proves it; ship the honest 'unknown' floor as the load-bearing default (mirrors the pet hide-on-blocker guarantee).
 ## Protected Surfaces (layout/movement/scale-critical — DO NOT casually edit)
 
 > These have caused repeated visual regressions. `preview_screenshot` is BROKEN here and `preview_eval`
@@ -132,6 +135,16 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-blocked-reason-tags-2026-06-08 (AVO-110 / #29 — honest-narrow blocked-reason badge)
+
+- Branch `feat/blocked-reason-tags`, feature. Closes AVO-110 (#29). Spec `docs/specs/blocked-reason-tags.md` [shipped]. Upgrades "卡住了" → "卡在什麼": a structured language-neutral `reasonCode` rendered as a per-agent over-head pixel-glyph "status-effect" badge (game surface) that is a 1:1 map of a signal the hook actually observed (real info). PR opened for human merge (main protected); SSoT + work-log archive committed in the SAME PR.
+- **Origin**: 13-agent design panel + adversarial honesty audit **refuted 6 of 7** candidate reasons. Root cause documented: `bashVibeLabel` returns the FIRST segment's noun while `is_error` is one boolean for the WHOLE compound command (wrong-segment attribution); the office-vibe buckets are display-only (AVO-126), not a failure taxonomy. Owner chose **PATH A (honest-narrow)** + bespoke pixel-art glyphs.
+- **Shipped (4-reason MVP)**: `test-run-failed` / `build-failed` / `deps-failed` / `blocked-unknown`. Honesty firewall in `deriveBlockedReason` (`public/hooks/office-status-hook.js`): a specific reason stamps ONLY when explicit `is_error===true` AND single-segment (rejects `&&`/`||`/`;`/`|`/newline/`&`) AND a tight `^`-anchored allowlist (bare `\binstall\b`/`\bbuild\b`/`\bmake\b` dropped) AND no launch-failure first-line (RUNNER-PRESENT: ENOENT/command-not-found → unknown); a leading `cd "<path>" &&` harness wrapper is stripped first. Pure `classifyBlockedReason` (classify.js, `classifyStatus` untouched) maps token→{iconId,hue,a11yKey}; `blocked-unknown` is the load-bearing neutral default (NOT a red ✗). New `blockedReasonBadge.jsx` (4 distinct SVG silhouettes) overrides the BehaviorIndicator glyph while blocked, keyed on reasonCode (entry-pop on change only; reduced-motion static, zero info loss); ControlPanel row shows icon+i18n text from the TOKEN (no ext.label re-parse). en + zh-TW labels claim only "test RUN"/"卡在測試執行".
+- **Review (heavy, truth/data)**: 2 fresh acx-reviewers → NOT READY (2 HIGH honesty defects green tests had hidden: the `(?![\w-])` boundary leaked `:`/`.`-suffixed scripts as specific tags; the POST `/api/status` ingest = a 4th/5th transport whitelist silently dropping `reasonCode`). Both fixed (cf7f7dd) + fresh delta reviewer re-verified PASS (regex tightening to `(?=$|\s)` proven one-directional). Data path confirmed = **FIVE** whitelists, all carry reasonCode (hook ×2 + sanitizeAgent + routeExternalAgents + normalizePost ×2 + store ext).
+- **Tests**: +44 (derivation honesty invariants, classifyBlockedReason, EPHEMERAL clear + cross-agent + transport end-to-end, POST parity, token-driven label, badge render). Full suite **1385 passed / 61 files**; build clean (441 KB). **Load-the-page verified** (headless Playwright `scripts/blocked-reason-shot.mjs` — `preview_screenshot` hangs): 0 console errors, no ErrorBoundary, dev shows 🧪 test-run badge / qa shows ❔ unknown, panel reads "🧪 Test run" / "❔ Blocked".
+- **Deferred (Phase-2, separate ticket)**: `permission-blocked` / `auth-error` / `rate-limit` need a structured errno/HTTP-status payload field (substring regex over free-text is fabrication). Unblocks AVO-117 (recurring failure-mode detection).
+- Tests: Pass
 
 ### Ship-feat-pet-legibility-and-more-types-2026-06-08 (#39 — mode emote + 3 more skins)
 

@@ -782,6 +782,8 @@ export const useOfficeStore = create((set) => ({
           task: u.task,
           label: u.label,
           hint: u.hint || null,
+          // AVO-110: blocked-reason token (render maps it to a badge; null → no/blocked-unknown).
+          reasonCode: u.reasonCode || null,
           // working/blocked: 5 min expiry — long-running tool calls (build, test suite, npm install)
           // can take >30s with no hook event between PreToolUse and PostToolUse; a shorter
           // expiry caused the workflow banner to flicker off mid-run and then self-heal.
