@@ -23,6 +23,30 @@ state** — then the toy and the truth become the same thing. Draggable agents (
 considered alternative) was rejected 4/5: it breaks "position = real status" and fights the
 movement system.
 
+## Complete state & signal reference (the canonical map)
+
+**6 pet modes** — 4 persistent (from the honest base table) + 2 transient event-edge beats.
+**3 cosmetic types** (cat · robot-vacuum · dog) — same modes, different sprite + motion grammar.
+
+| Mode | Kind | Real signal that triggers it | Per-type look |
+|------|------|------------------------------|---------------|
+| `hide` | base | any agent `blocked` **OR** mood `stuck`/`frustrated` | cat: crouched, ears down · vacuum: tilted + dim · dog: crouched |
+| `nap` | base | mood `idle` (and nobody blocked) | cat/dog: curled + rising "z" · vacuum: docked + dim |
+| `wander` | base | mood `normal` (steady, default) | cat/dog: amble · vacuum: glide + sweep trail |
+| `excited` | base | mood `smooth`/`rushing`/`intense` | cat/dog: trot, tail up + hop · vacuum: + dust puff |
+| `alert` | transient (~2.5s) | blockedCount **rose** (a NEW blocker) → also RUNS to that desk; settles into `hide` | ears up + `!` (vacuum: red LED + `!`) |
+| `celebrate` | transient (~2.5s) | real `eureka`/`deploy-success` event **OR** a blocker just cleared (relief) — only when not hiding | hop + ✦ confetti |
+| _(click-♥)_ | cosmetic overlay | user clicks the pet (calm modes only) — NOT a real signal | a ♥ floats up |
+
+### Signal coverage — what maps, and what deliberately does NOT
+
+- **Moods — 7/7 fully mapped** (`MOOD_TO_PET`): normal→wander, idle→nap, smooth/rushing/intense→excited, stuck/frustrated→hide.
+- **Agent statuses (VALID_STATUSES: idle/working/blocked/done/planning)** — only **`blocked` maps DIRECTLY** (→ hide + alert + run-to-desk). `working`/`idle`/`done`/`planning` are covered **INDIRECTLY** via the mood the `moodEngine` aggregates from them; the pet has no per-single-status pose by design (it's an aggregate barometer, not a status mirror).
+- **officeLife events (~15: tea-break/standup/review-debate/dev-arch-disagree/ac-broken/…)** — the pet reacts to **only the 2 positive work-claim events** (`eureka`, `deploy-success`) plus the blocker-clear edge. The other ~13 are decorative "theater" and are **intentionally ignored** — reacting to all of them would make the pet hyperactive and mirror fiction, violating calm-tech + the honesty ethos (negative events still surface via mood→frustrated/stuck→hide).
+- **Honesty guarantee (invariant):** `blockedCount > 0 → hide` is the first branch of `derivePetState`; `celebrate`/click-♥ never show while a real blocker exists. No type/state/interaction can make the pet look happy while an agent is blocked.
+
+> This is the canonical reference. The narrative sections below (Solution / v2 / types / delight / run-vacuum) record how each piece was built and reviewed.
+
 ## Solution
 
 A small ambient pet sprite (cat) rendered once in the office. Its mode is **derived from
