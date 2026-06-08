@@ -12,6 +12,8 @@ import {
   classifyWorkflow,
   decideBehavior,
   familyToBehavior,
+  classifyBlockedReason,
+  BLOCKED_REASONS,
   FAMILIES,
 } from '../src/systems/classify.js'
 
@@ -692,5 +694,45 @@ describe('planning status — AVO-101 plan mode', () => {
     expect(decideBehavior({ status: 'planning', role: 'dev', task: 'Read' })).toBe('gantt-chart')
     // status override wins over role/task/workflow
     expect(decideBehavior({ status: 'planning', role: 'ops', task: 'Bash', workflow: '/ship' })).toBe('gantt-chart')
+  })
+})
+
+// AVO-110 / #29 — classifyBlockedReason (pure render-side mapping; no second classifier)
+describe('classifyBlockedReason (AVO-110)', () => {
+  it('maps each known reason to BLOCKED family + complete badge metadata', () => {
+    for (const code of BLOCKED_REASONS) {
+      const r = classifyBlockedReason(code)
+      expect(r.family).toBe(FAMILIES.BLOCKED)
+      expect(r.reason).toBe(code)
+      expect(typeof r.iconId).toBe('string')
+      expect(r.iconId.length).toBeGreaterThan(0)
+      expect(typeof r.a11yKey).toBe('string')
+      expect(r.a11yKey.length).toBeGreaterThan(0)
+      expect(typeof r.hue).toBe('string')
+    }
+  })
+
+  it('UNKNOWN-ON-UNRECOGNIZED: absent / garbage / non-string → blocked-unknown, never throws', () => {
+    expect(classifyBlockedReason('xyz').reason).toBe('blocked-unknown')
+    expect(classifyBlockedReason(undefined).reason).toBe('blocked-unknown')
+    expect(classifyBlockedReason(null).reason).toBe('blocked-unknown')
+    expect(classifyBlockedReason(42).reason).toBe('blocked-unknown')
+    expect(classifyBlockedReason('').reason).toBe('blocked-unknown')
+  })
+
+  it('COLOR-NEVER-ONLY: every reason has a UNIQUE iconId and a non-empty a11yKey', () => {
+    const iconIds = BLOCKED_REASONS.map(c => classifyBlockedReason(c).iconId)
+    expect(new Set(iconIds).size).toBe(iconIds.length)
+    expect(BLOCKED_REASONS.every(c => classifyBlockedReason(c).a11yKey.length > 0)).toBe(true)
+  })
+
+  it('blocked-unknown is in the enum and is the fallback identity', () => {
+    expect(BLOCKED_REASONS).toContain('blocked-unknown')
+    expect(classifyBlockedReason('blocked-unknown').reason).toBe('blocked-unknown')
+  })
+
+  it('GATE-IS-NOT-FAILURE: awaiting-approval is not the BLOCKED family (gets no failure badge)', () => {
+    expect(classifyStatus('awaiting-approval').family).toBe(FAMILIES.GATE)
+    expect(classifyStatus('awaiting-approval').family).not.toBe(FAMILIES.BLOCKED)
   })
 })

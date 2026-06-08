@@ -690,3 +690,61 @@ describe('addHandoff — unique ids (R65)', () => {
     expect(remaining[0].id).toBe(second.id)
   })
 })
+
+// AVO-110 / #29 — reasonCode survives the full data path + EPHEMERAL clearing.
+describe('blocked-reason data path (AVO-110)', () => {
+  beforeEach(resetStore)
+
+  it('store ext carries u.reasonCode', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([{ agentId: 'dev', status: 'blocked', task: 'Bash', label: '❌ tests failed', reasonCode: 'test-run-failed' }], { source: 'hook' })
+    expect(useOfficeStore.getState().externalStatus['dev'].reasonCode).toBe('test-run-failed')
+  })
+
+  it('EPHEMERAL-CLEARS-ON-TRANSITION: blocked→done omits reasonCode → ext.reasonCode null', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([{ agentId: 'dev', status: 'blocked', task: 'Bash', label: 'x', reasonCode: 'test-run-failed' }], { source: 'hook' })
+    expect(useOfficeStore.getState().externalStatus['dev'].reasonCode).toBe('test-run-failed')
+    applyExternalStatus([{ agentId: 'dev', status: 'done', task: 'Bash', label: 'ok' }], { source: 'hook' }) // no reasonCode
+    expect(useOfficeStore.getState().externalStatus['dev'].reasonCode).toBeNull()
+  })
+
+  it('absent reasonCode coerces to null (never undefined-leaks)', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([{ agentId: 'dev', status: 'blocked', task: 'Bash', label: 'x' }], { source: 'hook' })
+    expect(useOfficeStore.getState().externalStatus['dev'].reasonCode).toBeNull()
+  })
+
+  it('CROSS-AGENT-NO-STALE-CLEAR: B firing an event does not clear A\'s reason (per-agent isolation)', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    // A blocked w/ reason, B working. (The hook carries A forward; the store must keep them independent.)
+    applyExternalStatus([
+      { agentId: 'dev', status: 'blocked', task: 'Bash', label: 'x', reasonCode: 'test-run-failed' },
+      { agentId: 'qa', status: 'working', task: 'Read', label: 'y' },
+    ], { source: 'hook' })
+    // Next tick: A still blocked (carried with its reason), B transitions to done.
+    applyExternalStatus([
+      { agentId: 'dev', status: 'blocked', task: 'Bash', label: 'x', reasonCode: 'test-run-failed' },
+      { agentId: 'qa', status: 'done', task: 'Read', label: 'ok' },
+    ], { source: 'hook' })
+    expect(useOfficeStore.getState().externalStatus['dev'].reasonCode).toBe('test-run-failed')
+    expect(useOfficeStore.getState().externalStatus['qa'].reasonCode).toBeNull()
+  })
+
+  it('transport end-to-end: a raw office-status reasonCode survives sanitizeAgent + routeExternalAgents → store (the review-flagged trap)', async () => {
+    const { normalizeStatusMessage } = await import('../src/inference/inferStatus.js')
+    const { routeExternalAgents } = await import('../src/inference/agentRouter.js')
+    // 1. sanitizeAgent whitelist (inferStatus): reasonCode validated + carried
+    const norm = normalizeStatusMessage({ type: 'office-status', agents: [{ role: 'dev', status: 'blocked', task: 'Bash', label: 'x', reasonCode: 'test-run-failed' }] })
+    expect(norm.agents[0].reasonCode).toBe('test-run-failed')
+    // garbage reasonCode is rejected at the trust boundary
+    const bad = normalizeStatusMessage({ type: 'office-status', agents: [{ role: 'qa', status: 'blocked', reasonCode: 'evil-code' }] })
+    expect(bad.agents[0].reasonCode).toBeNull()
+    // 2. routeExternalAgents whitelist (role→agentId): reasonCode carried
+    const routed = routeExternalAgents(norm.agents)
+    expect(routed[0].reasonCode).toBe('test-run-failed')
+    // 3. store whitelist
+    useOfficeStore.getState().applyExternalStatus(routed, { source: 'hook' })
+    expect(useOfficeStore.getState().externalStatus[routed[0].agentId].reasonCode).toBe('test-run-failed')
+  })
+})

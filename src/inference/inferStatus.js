@@ -14,6 +14,7 @@
 import { routeExternalAgents, distributeFallbackCount, routeTaskToAgent } from './agentRouter.js'
 import { pushEventBatch, setMoodOverride, resetMood } from '../systems/moodEngine.js'
 import { VALID_ROLES, VALID_STATUSES, VALID_MOODS, EFFORT_LEVELS, STATUS_POLL_INTERVAL } from '../systems/constants.js'
+import { BLOCKED_REASONS } from '../systems/classify.js'
 
 // ─── Message normalization ─────────────────────────────────────────────
 
@@ -67,7 +68,10 @@ function sanitizeAgent(a) {
   // and applyExternalStatus / routeExternalAgents both depend on it. Cap it: the
   // slug originates from a filename and is not fully trusted.
   const session = typeof a.session === 'string' ? a.session.slice(0, SLUG_CAP) : null
-  return { role, status: a.status, task: capStr(a.task), label: capStr(a.label), hint: capStr(a.hint), session }
+  // AVO-110: validate the blocked-reason against the enum at the trust boundary (the status
+  // file is not fully trusted); anything else → null (render coerces null → blocked-unknown).
+  const reasonCode = BLOCKED_REASONS.includes(a.reasonCode) ? a.reasonCode : null
+  return { role, status: a.status, task: capStr(a.task), label: capStr(a.label), hint: capStr(a.hint), session, reasonCode }
 }
 
 // AVO-108: validate a token-usage object from any channel. Returns {ctx,out,model} with

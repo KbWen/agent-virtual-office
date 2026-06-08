@@ -128,6 +128,7 @@ export function routeExternalAgents(agents) {
         label: entry.label || null,
         hint: entry.hint || null,
         session: entry.session || null,
+        reasonCode: entry.reasonCode || null,  // AVO-110: carry the validated blocked-reason through routing
       })
     }
   }

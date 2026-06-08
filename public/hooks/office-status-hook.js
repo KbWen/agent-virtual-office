@@ -255,6 +255,41 @@ function bashVibeLabel(cmd, lang = LANG) {
   return fallback
 }
 
+// AVO-110 / #29: derive a language-neutral blocked-reason from ONLY the signals the hook
+// can honestly observe. This is the honesty firewall — a specific reason is returned ONLY
+// when the evidence proves it; every ambiguous case falls back to 'blocked-unknown' (the
+// load-bearing default, mirroring the office pet's hide-on-blocker guarantee). It NEVER
+// guesses: the documented trap is that bashVibeLabel returns the FIRST segment's noun while
+// is_error is one boolean for the WHOLE compound command (wrong-segment attribution), so
+// compound commands are refused outright.
+//   - SAME-EVENT ANCHOR: only the TRUSTED explicit `is_error === true` unlocks a specific
+//     reason; the first-line heuristic path (is_error undefined) → unknown.
+//   - RUNNER-PRESENT: a launch failure (ENOENT/command not found/…) means the program never
+//     ran, so "blocked on the test run" would over-claim → unknown.
+//   - CD-GLUE: strip exactly ONE leading `cd "<path>" && ` wrapper (the Claude Code harness
+//     shape); cd cannot be the failing program, so this is honest.
+//   - SINGLE-SEGMENT GUARD: any remaining shell operator (&&,||,;,|,newline,&) → unknown.
+//   - ANCHORED ALLOWLIST: ^-anchored program match only; the overloaded bare
+//     \binstall\b/\bbuild\b/\bmake\b keywords are intentionally DROPPED.
+function deriveBlockedReason({ isErrorExplicit, command, toolResultFirstLine } = {}) {
+  const UNKNOWN = 'blocked-unknown'
+  if (isErrorExplicit !== true) return UNKNOWN
+  if (typeof command !== 'string' || !command.trim()) return UNKNOWN
+  const firstLine = typeof toolResultFirstLine === 'string' ? toolResultFirstLine.trim() : ''
+  // errno tokens anchored at start (avoid mid-prose false positives); the "command/…: not
+  // found" launch phrase may appear after the program name (`vitest: command not found`).
+  if (/^(ENOENT|EACCES|EPERM|No such file)/i.test(firstLine) || /(command not found|: not found)\b/i.test(firstLine))
+    return UNKNOWN
+  // Strip ONE leading glue-only `cd "<path>" && ` prefix, then guard against any operator.
+  const cmd = command.trim().replace(/^cd\s+(?:"[^"]*"|'[^']*'|\S+)\s+&&\s+/, '')
+  if (/&&|\|\||;|\||\n|&/.test(cmd)) return UNKNOWN
+  const c = cmd.trim().toLowerCase()
+  if (/^(vitest|jest|pytest|mocha|npm (run )?test|yarn test|pnpm test)(?![\w-])/.test(c)) return 'test-run-failed'
+  if (/^(npm run build|vite build|tsc|webpack|rollup)(?![\w-])/.test(c)) return 'build-failed'
+  if (/^(npm (i|ci|install)|yarn add|pnpm (i|add)|pip install)(?![\w-])/.test(c)) return 'deps-failed'
+  return UNKNOWN
+}
+
 function extractContext(tool, toolInput, lang = LANG) {
   if (!toolInput) return null
   try {
@@ -610,6 +645,7 @@ function processEvent(event) {
   const effort = effortLevel(event)
 
   let role, task, status, label, hint = null
+  let reasonCode = null  // AVO-110: language-neutral blocked-reason; stamped only on a trusted error
   let clearWorkflow = false
   let workflowOverride = null  // only SubagentStart sets this; PreToolUse/PostToolUse must not clobber workflow
   let capturedPromptId = null  // PreToolUse captures current _promptId for straggler detection
@@ -688,6 +724,24 @@ function processEvent(event) {
       hint = isError ? 'error' : null
       const ctx = extractContext(tool, toolInput)
       label = isError ? (LANG === 'zh-TW' ? `❌ ${ctx || tool} 失敗` : `❌ ${ctx || tool} failed`) : toolLabel(tool, ctx, true)
+      // AVO-110: on a block, derive the language-neutral reason from the SAME event. A blocked
+      // agent always carries a reasonCode (at minimum 'blocked-unknown' — the honest floor);
+      // a non-error (done) leaves it null. The trusted explicit boolean (event.is_error===true)
+      // is what unlocks a SPECIFIC reason; the heuristic path resolves to blocked-unknown.
+      if (isError) {
+        let bashCmd = null
+        if (tool === 'Bash') {
+          try {
+            const ti = typeof toolInput === 'string' ? JSON.parse(toolInput) : toolInput
+            bashCmd = (ti && (ti.command || ti.cmd)) || null
+          } catch {}
+        }
+        reasonCode = deriveBlockedReason({
+          isErrorExplicit: event.is_error === true,
+          command: bashCmd,
+          toolResultFirstLine: typeof toolResult === 'string' ? toolResult.split('\n')[0] : '',
+        })
+      }
       break
     }
     case 'SubagentStart': {
@@ -832,6 +886,9 @@ function processEvent(event) {
             task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
             label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
             hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
+            // AVO-110: carry a still-blocked agent's reason forward so another agent's event
+            // can't stale-clear it (EPHEMERAL cross-agent path); non-blocked → no reason.
+            reasonCode: a.status === 'blocked' && typeof a.reasonCode === 'string' ? a.reasonCode : null,
           }))
       : []
     existingWorkflow = typeof data.workflow === 'string' ? data.workflow.slice(0, 200) : null
@@ -873,6 +930,8 @@ function processEvent(event) {
       status,
       label: typeof label === 'string' ? label.slice(0, 200) : null,
       hint: typeof hint === 'string' ? hint.slice(0, 200) : null,
+      // AVO-110: a blocked agent carries its reason; any other status clears it (EPHEMERAL).
+      reasonCode: status === 'blocked' && typeof reasonCode === 'string' ? reasonCode : null,
     },
   ]
 
@@ -1053,7 +1112,7 @@ function processEvent(event) {
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)
 if (typeof module !== 'undefined') {
   module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
-    shortFile, shortCommand, bashVibeLabel, extractContext, sanitizeId,
+    shortFile, shortCommand, bashVibeLabel, deriveBlockedReason, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
     shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse,
     readLatestTokenUsage, effortLevel,
