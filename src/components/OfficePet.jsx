@@ -3,6 +3,7 @@ import { useOfficeStore } from '../systems/store.js'
 import { clampToFloor } from '../systems/movementSystem.js'
 import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, runTarget, PET_MODES } from '../systems/petState.js'
 import PetSprite from './petSprites.jsx'
+import { useTransientFlag } from './useTransientFlag.js'
 
 // ─── Office pet — a signal-driven barometer (#39 / AVO-121) ─────────────────────────────────────
 // A small ambient cat whose MODE is an honest readout of real aggregate office state (see
@@ -50,34 +51,26 @@ export default function OfficePet() {
   // logic is type-independent; only the FEEL changes.
   const grammar = petMotionGrammar(petType)
 
-  // ── Two transient event-edge overlays (v2), each a short pose beat over the honest base mode ──
-  // celebrate: a real positive event (eureka/deploy-success) — reuses officeLife's event surface.
-  const [celebrate, setCelebrate] = useState(false)
+  // ── Transient event-edge beats over the honest base mode. All three use useTransientFlag, whose
+  //    auto-clear timer is owned by the flag itself — structurally immune to the "stuck transient"
+  //    bug class these beats hit (and patched locally) three times before. ──
+  // celebrate: a real positive event — a deploy/eureka, OR a blocker just CLEARED (the "relieved"
+  // beat the pet was missing after a run-to-desk). Both are honest positive signals.
+  const [celebrate, fireCelebrate] = useTransientFlag(2500)
   useEffect(() => {
-    if (activeEventId === 'eureka' || activeEventId === 'deploy-success') {
-      setCelebrate(true)
-      const t = setTimeout(() => setCelebrate(false), 2500)
-      return () => clearTimeout(t)
-    }
-    setCelebrate(false) // event cleared early → drop it so it can't stick (cleanup cancels the reset)
-  }, [activeEventId])
+    if (activeEventId === 'eureka' || activeEventId === 'deploy-success') fireCelebrate()
+  }, [activeEventId, fireCelebrate])
 
-  // alert: a NEW blocker just appeared (blockedCount rose) — ears-up "noticing" beat, then it settles
-  // back into hide (base is already hide while blocked). Marks a real new-blocker EDGE, not a feeling.
-  // Two effects so the auto-clear timer is owned by `alert` itself (NOT by blockedCount): a rapidly
-  // oscillating blockedCount would otherwise keep cancelling the reset and leave alert stuck on.
-  const [alert, setAlert] = useState(false)
+  // alert: a NEW blocker appeared (blockedCount rose) — ears-up "noticing" beat that settles back into
+  // hide. A blocker CLEARING (count fell to 0) fires the relief celebrate above.
+  const [alert, fireAlert] = useTransientFlag(2500)
   const prevBlockedRef = useRef(blockedCount)
   useEffect(() => {
-    const rose = blockedCount > prevBlockedRef.current
+    const prev = prevBlockedRef.current
     prevBlockedRef.current = blockedCount
-    if (rose) setAlert(true)
-  }, [blockedCount])
-  useEffect(() => {
-    if (!alert) return
-    const t = setTimeout(() => setAlert(false), 2500)
-    return () => clearTimeout(t)
-  }, [alert])
+    if (blockedCount > prev) fireAlert()
+    else if (blockedCount === 0 && prev > 0) fireCelebrate() // a real blocker cleared → relief
+  }, [blockedCount, fireAlert, fireCelebrate])
   // keep the latest blocked-agent position handy for the run-to-desk effect (below, after pos exists)
   const blockedPosRef = useRef(blockedAgentPos)
   useEffect(() => { blockedPosRef.current = blockedAgentPos }, [blockedAgentPos])
@@ -86,13 +79,8 @@ export default function OfficePet() {
   const mode = resolvePetMode({ base: baseMode, alert, celebrate })
 
   // #39 delight: click-to-pet — a purely cosmetic, user-initiated ♥ beat (no mode/state change, never
-  // affects the honest reading). Auto-clears after 1s.
-  const [petted, setPetted] = useState(false)
-  useEffect(() => {
-    if (!petted) return
-    const t = setTimeout(() => setPetted(false), 1000)
-    return () => clearTimeout(t)
-  }, [petted])
+  // affects the honest reading). Gated in render so it can't co-occur with a real-signal beat.
+  const [petted, firePetted] = useTransientFlag(1000)
 
   const [pos, setPos] = useState(START)
   const [facing, setFacing] = useState(1)
@@ -115,6 +103,9 @@ export default function OfficePet() {
   // agent's desk so the pet POINTS AT a real blocker (motion = information; the honest beat made
   // legible). With multiple blockers it targets the first one found — still always a REAL blocker, so
   // honesty holds. Reads the store's published agent.position only — no movement-system / HOME_POSITIONS coupling.
+  // De-race: this fires only while `alert` is true, and `petIsMobile(ALERT)` is false → the wander
+  // interval effect above has already cleared its timer (its `mobile` guard), so this is the SOLE
+  // writer of `pos`/`posRef` during the beat — no contention with the random-wander setInterval.
   useEffect(() => {
     if (!alert || !officePet) return
     const raw = blockedPosRef.current
@@ -154,7 +145,7 @@ export default function OfficePet() {
       transform={`translate(${pos.x}, ${pos.y})`}
       style={reducedMotion ? { cursor: 'pointer' } : { transition: `transform ${glideMs}ms ${grammar.easing}`, cursor: 'pointer' }}
       pointerEvents="auto"
-      onClick={() => setPetted(true)}
+      onClick={firePetted}
     >
       <g transform={`scale(${facing * petScale}, ${petScale})`} style={hop}>
         <g key={mode} style={pop}>
@@ -168,7 +159,9 @@ export default function OfficePet() {
             ))}
           </g>
         )}
-        {petted && (
+        {/* click-♥ shows ONLY in a calm/neutral base mode so it can never compete with — or visually
+            contradict — a real-signal beat (a ♥ over a hiding/alerting pet would read dishonestly). */}
+        {petted && (mode === PET_MODES.WANDER || mode === PET_MODES.NAP || mode === PET_MODES.EXCITED) && (
           <text x={0} y={-9} fontSize="6" textAnchor="middle" fill="#E2588B" aria-hidden="true"
             style={reducedMotion ? undefined : { animation: 'pet-heart 1s ease-out both' }}>♥</text>
         )}
