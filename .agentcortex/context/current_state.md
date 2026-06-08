@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T10:05:00Z
-- **Update Sequence**: 41
+- **Last Updated**: 2026-06-08T10:50:00Z
+- **Update Sequence**: 42
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -132,6 +132,14 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-retro-cleanup-pet-2026-06-08 (debt cleanup + polish from the 4-perspective retro)
+
+- A 4-perspective retro (engineering · game-design · user · product) reviewed the day's pet work. Acted on the findings (debt + flaw fixes; NO feature cuts, per owner). Two PRs:
+- **PR #68 (deflake)**: seeded the `avoidOverlap` fan-out RNG (mulberry32) in `tests/agentSeparationInvariants.test.js` — kills the intermittent `~15 < 20` CI failure that hit ~3 PRs (`avoidOverlap` uses `Math.random` for push direction). Deterministic 5/5.
+- **PR #69 (refactor/polish)**: new `useTransientFlag(ms)` hook (timer owned by the flag + fire-nonce) STRUCTURALLY kills the recurring "stuck transient" bug class — celebrate/alert/petted migrated onto it. Run-to-desk de-raced (documented invariant: alert is non-mobile → wander interval cleared → sole pos writer). Polish: relief celebrate beat on blocker-clear (honest); confetti deduped to one channel (removed per-sprite ✦); click-♥ gated to calm base modes; vacuum hide tilt deepened.
+- **Review**: acx-reviewer → PASS (honesty/de-race/dedup all hold; hide-on-blocker untouched). Known gap (env limitation): no jsdom → the hook's effect behavior can't be unit-tested here; verified LIVE (alert fires + auto-clears, no stuck). Suite **1331 passed**; build clean.
+- **Retro priority signal (recorded)**: user + product both named **blocked-reason tags (#29)** the highest-user-value next item; the pet is now feature-complete and should be FROZEN.
 
 ### Ship-feat-controlpanel-settings-popover-2026-06-08 (UX — ⚙ settings popover consolidates the control bar)
 

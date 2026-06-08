@@ -65,7 +65,6 @@ function CatSprite({ mode, reducedMotion }) {
         <path d="M 8.8 -5 l 0.6 -3 l -2.4 1.6 Z" fill={fur} />
         <path d="M 4 -2.4 q 0.8 0.7 1.6 0" stroke={dark} strokeWidth="0.6" fill="none" />
         <path d="M 6.8 -2.4 q 0.8 0.7 1.6 0" stroke={dark} strokeWidth="0.6" fill="none" />
-        <text x={9} y={-6} fontSize="6" fill="#E0A800" opacity="0.95">✦</text>
       </g>
     )
   }
@@ -103,8 +102,8 @@ function VacuumSprite({ mode, reducedMotion }) {
   const blink = (mode === PET_MODES.ALERT) && !reducedMotion
   // Machine grammar for legible per-mode SILHOUETTES (not LED-only): nap docks + dims; wander shows a
   // sweep trail; excited adds a dust puff; hide tilts + dims (backed off). All static (calm).
-  const tilt = mode === PET_MODES.HIDE ? -12 : 0
-  const dim = (mode === PET_MODES.NAP || mode === PET_MODES.HIDE) ? 0.72 : 1
+  const tilt = mode === PET_MODES.HIDE ? -18 : 0 // more visible "backed off" lean (game-feel polish)
+  const dim = (mode === PET_MODES.NAP || mode === PET_MODES.HIDE) ? 0.66 : 1
   const sweeping = mode === PET_MODES.WANDER || mode === PET_MODES.EXCITED
   const puffing = mode === PET_MODES.EXCITED
   return (
@@ -135,7 +134,6 @@ function VacuumSprite({ mode, reducedMotion }) {
       <circle cx={0} cy={0} r={1.5} fill={led} opacity={mode === PET_MODES.HIDE ? 0.6 : 0.95}
         style={blink ? { animation: 'pet-snooze 0.8s steps(2,end) infinite' } : undefined} />
       {mode === PET_MODES.ALERT && <text x={6} y={-5} fontSize="6" fill="#D98324" opacity="0.9">!</text>}
-      {mode === PET_MODES.CELEBRATE && <text x={7} y={-5} fontSize="6" fill="#E0A800" opacity="0.95">✦</text>}
     </g>
   )
 }
@@ -196,9 +194,7 @@ function DogSprite({ mode, reducedMotion }) {
         <circle cx={6} cy={-2} r={4.2} fill={fur} />
         <path d="M 3 -3.6 q -2.2 1 -1.2 3.4" stroke={dark} strokeWidth="2" fill="none" strokeLinecap="round" />
         <ellipse cx={8.6} cy={-1.4} rx={1.6} ry={1.1} fill={dark} />
-        <path d="M 8.4 -0.4 l 0 2" stroke="#D9536B" strokeWidth="1" strokeLinecap="round" />{/* tongue */}
-        <text x={9} y={-6} fontSize="6" fill="#E0A800" opacity="0.95">✦</text>
-      </g>
+        <path d="M 8.4 -0.4 l 0 2" stroke="#D9536B" strokeWidth="1" strokeLinecap="round" />{/* tongue */}      </g>
     )
   }
   const excited = mode === PET_MODES.EXCITED
