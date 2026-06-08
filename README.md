@@ -63,6 +63,7 @@ dead gutters. Hit **☰** for a vertical roster: who's working, who's blocked, a
 - **Pure SVG pixel art** — 8 hand-drawn characters. No canvas, no GPU, no GB-sized bundle.
 - **Role-aware animations** — same tool, different role, different scene: `qa + Bash` → magnifier, `ops + Bash` → deploy button, `designer + Edit` → whiteboard.
 - **Honest, signal-driven life** — events fire from your *real* session; an agent's status is never faked.
+- **"Stuck on what?" tells** — a blocked agent shows *why*: 🧪 test run · 🔨 build · 📦 install · ❔ unknown, plus a ↻ mark when the same kind keeps failing. Specific only when the signal proves it — never a guessed cause.
 - **Calm by design** — mood-driven weather, idle-gap inference (`working+45s` → thinking), reduced-motion + a11y, and a never-stuck behavior watchdog.
 
 → Full internals (classifier tiers, movement, behavior engine, weather, inference) live in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
@@ -161,7 +162,7 @@ Full notes in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ## Tech stack
 
 React 19 + Vite 6 · SVG (no canvas, no GPU) · Zustand · Tailwind CSS v4 · `requestAnimationFrame` · zero backend.
-1276 tests (classifier, inference, store, movement, event honesty). Deep dive → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+1411 tests (classifier, inference, store, movement, event honesty, blocked-reason + recurring detection). Deep dive → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Contributing
 
