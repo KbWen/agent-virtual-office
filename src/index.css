@@ -46,3 +46,13 @@ html, body, #root {
   0%   { opacity: 0; transform: translateY(-3px); }
   100% { opacity: 1; transform: translateY(0); }
 }
+/* Office pet (#39): a slow rising "z" while napping, and a tiny excited bob. Both are gated off
+   when reducedMotion is on (the style prop is simply not applied). Calm cadence by design. */
+@keyframes pet-snooze {
+  0%, 100% { opacity: 0.2; transform: translateY(0); }
+  50%      { opacity: 0.8; transform: translateY(-2px); }
+}
+@keyframes pet-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-1.5px); }
+}

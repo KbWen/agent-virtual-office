@@ -290,6 +290,8 @@
     "toggleTest": "Toggle test controls",
     "weatherOff": "Disable weather animations",
     "weatherOn": "Enable weather animations",
+    "petOff": "Hide office pet",
+    "petOn": "Show office pet",
     "info": "Info"
   },
   "time": {
