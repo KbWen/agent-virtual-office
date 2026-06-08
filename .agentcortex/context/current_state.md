@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T05:45:00Z
-- **Update Sequence**: 36
+- **Last Updated**: 2026-06-08T07:10:00Z
+- **Update Sequence**: 37
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -132,6 +132,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-office-pet-v2-2026-06-08 (#39 v2 — pet optimizations: scaling · alert/celebrate · cross-fade)
+
+- PR #63 (branch `feat/office-pet-v2`), classification feature (extends #39). Spec §v2 in `docs/specs/office-pet-barometer.md`. Origin: 4-expert research panel (game-design · game-feel · calm-tech · feasibility).
+- **Shipped**: `petReadabilityScale(sceneScale)=clamp(1/√scene,1,1.6)` (legible when docked small; size-as-signal vetoed as dishonest). Two transient states via pure `resolvePetMode({base,alert,celebrate})` — `alert` on a NEW-blocker edge (settles to hide), `celebrate` on real eureka/deploy-success (only when not hiding). **Honesty guarantee preserved** (neither shows happy during a real blocker). 220ms mode cross-fade (`pet-fade-in`). alert uses a two-effect timer (owned by `alert`) so an oscillating blockedCount can't leave it stuck (same class as the earlier perk fix, caught in live test).
+- **Review**: 1 acx-reviewer → PASS; honesty airtight by construction + unit-proven; both transient effects leak/stuck-free; protected surfaces untouched. **Tests**: +6 (`resolvePetMode`, `petReadabilityScale`); suite **1323 passed**; build clean. DEV live-verified: alert fires+auto-clears, petScale 0.25→1.6 / 0.64→1.25.
+- **Deferred**: multiple pet types (cat/robot-vacuum/dog, cosmetic) → next PR.
 
 ### Ship-feat-office-pet-barometer-2026-06-08 (#39 / AVO-121 — signal-driven office pet)
 
