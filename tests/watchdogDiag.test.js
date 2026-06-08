@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shouldShowWatchdogDiag } from '../src/components/ControlPanel.jsx'
+import { shouldShowWatchdogDiag } from '../src/components/controlPanelLabels.js'
 
 // #28 — the RAF-watchdog restart counter (store.watchdogRestarts) is surfaced as a DEV-only
 // diagnostic chip, shown only once a stall has actually happened (count > 0). Pure gate so it's
