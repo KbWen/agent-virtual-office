@@ -90,7 +90,7 @@ export default function OfficePet() {
   // a calm hop on excited/celebrate, gated by the type's motion grammar (the vacuum doesn't bob; the
   // dog bobs bigger). reduced-motion off.
   const hop = grammar.bob && (mode === PET_MODES.EXCITED || mode === PET_MODES.CELEBRATE) && !reducedMotion
-    ? { animation: `${grammar.bobAmp >= 2 ? 'pet-bob-lg' : 'pet-bob'} 0.6s ease-in-out infinite` } : undefined
+    ? { animation: `${grammar.bobKeyframe} 0.6s ease-in-out infinite` } : undefined
   // v2: keep the pet legible when the office docks small without faking size (partial √ counter-scale)
   const petScale = petReadabilityScale(sceneScale)
   // v2: a gentle 220ms fade-in on every mode change (keyed remount) so poses cross instead of snapping

@@ -64,12 +64,12 @@ export function nextPetType(type) {
 
 // petMotionGrammar — per-type movement feel so types aren't just reskins (a Roomba moves like a
 // machine, a dog like a dog). Pure → unit-testable. `cadenceMul` scales the wander interval
-// (smaller = more often), `bob`/`bobAmp` the idle hop, `easing` the glide, `turnInPlace` reserved
-// for the vacuum's mechanical pivot.
+// (smaller = more often), `bob`/`bobAmp` the idle hop (`bobKeyframe` names the CSS animation so the
+// choice is explicit, not a numeric guess), `easing` the glide.
 const MOTION = Object.freeze({
-  cat:    { cadenceMul: 1.0, bob: true,  bobAmp: 1.5, easing: 'ease-in-out', turnInPlace: false },
-  dog:    { cadenceMul: 0.7, bob: true,  bobAmp: 2.5, easing: 'ease-in-out', turnInPlace: false },
-  vacuum: { cadenceMul: 1.1, bob: false, bobAmp: 0,   easing: 'linear',      turnInPlace: true  },
+  cat:    { cadenceMul: 1.0, bob: true,  bobAmp: 1.5, bobKeyframe: 'pet-bob',    easing: 'ease-in-out' },
+  dog:    { cadenceMul: 0.7, bob: true,  bobAmp: 2.5, bobKeyframe: 'pet-bob-lg', easing: 'ease-in-out' },
+  vacuum: { cadenceMul: 1.1, bob: false, bobAmp: 0,   bobKeyframe: 'pet-bob',    easing: 'linear' },
 })
 export function petMotionGrammar(type) {
   return MOTION[type] || MOTION.cat
