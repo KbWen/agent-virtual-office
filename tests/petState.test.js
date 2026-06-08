@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
-import { derivePetState, petIsMobile, PET_MODES } from '../src/systems/petState.js'
+import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, PET_MODES } from '../src/systems/petState.js'
 // Static import (hoisted above the window shim below) so the store + i18n initialize while `window`
 // is still undefined — matching the repo's node test env. The shim then provides localStorage so the
 // toggle's persistence path runs. (Same approach as weatherEffectsToggle.test.js.)
@@ -45,6 +45,44 @@ describe('derivePetState (#39 — honest barometer)', () => {
     expect(petIsMobile(PET_MODES.EXCITED)).toBe(true)
     expect(petIsMobile(PET_MODES.NAP)).toBe(false)
     expect(petIsMobile(PET_MODES.HIDE)).toBe(false)
+  })
+})
+
+describe('resolvePetMode (#39 v2 — transient overlays never break honesty)', () => {
+  it('returns the base mode when no transient is active', () => {
+    expect(resolvePetMode({ base: PET_MODES.WANDER })).toBe(PET_MODES.WANDER)
+    expect(resolvePetMode({ base: PET_MODES.NAP })).toBe(PET_MODES.NAP)
+    expect(resolvePetMode({ base: PET_MODES.HIDE })).toBe(PET_MODES.HIDE)
+  })
+
+  it('alert overlays any base (it only fires on a new-blocker edge → base is already hide)', () => {
+    expect(resolvePetMode({ base: PET_MODES.HIDE, alert: true })).toBe(PET_MODES.ALERT)
+    // alert wins over a simultaneous celebrate
+    expect(resolvePetMode({ base: PET_MODES.HIDE, alert: true, celebrate: true })).toBe(PET_MODES.ALERT)
+  })
+
+  it('celebrate shows only when NOT hiding — never makes the pet happy during a real blocker', () => {
+    expect(resolvePetMode({ base: PET_MODES.WANDER, celebrate: true })).toBe(PET_MODES.CELEBRATE)
+    expect(resolvePetMode({ base: PET_MODES.HIDE, celebrate: true })).toBe(PET_MODES.HIDE)
+    expect(resolvePetMode({ base: PET_MODES.NAP, celebrate: true })).toBe(PET_MODES.CELEBRATE)
+  })
+})
+
+describe('petReadabilityScale (#39 v2 — legible when docked small, never fakes size)', () => {
+  it('is 1 at or above native (sceneScale >= 1) — unchanged', () => {
+    expect(petReadabilityScale(1)).toBe(1)
+    expect(petReadabilityScale(1.5)).toBe(1)
+  })
+  it('partial-counter-scales as the office shrinks, capped at 1.6', () => {
+    expect(petReadabilityScale(0.64)).toBeCloseTo(1.25, 5)   // 1/sqrt(0.64)=1.25
+    expect(petReadabilityScale(0.25)).toBe(1.6)              // 1/sqrt(0.25)=2 → capped 1.6
+    expect(petReadabilityScale(0.4)).toBeGreaterThan(1)
+    expect(petReadabilityScale(0.4)).toBeLessThanOrEqual(1.6)
+  })
+  it('guards invalid sceneScale → 1', () => {
+    expect(petReadabilityScale(0)).toBe(1)
+    expect(petReadabilityScale(-1)).toBe(1)
+    expect(petReadabilityScale(NaN)).toBe(1)
   })
 })
 
