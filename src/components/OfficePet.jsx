@@ -105,6 +105,9 @@ export default function OfficePet() {
       const t = setTimeout(() => setPerk(false), 2500)
       return () => clearTimeout(t)
     }
+    // Event cleared before the 2.5s window elapsed → drop the perk now, so it can't get stuck
+    // 'true' (the cleanup above cancels the pending reset on the trigger→non-trigger transition).
+    setPerk(false)
   }, [activeEventId])
 
   const baseMode = derivePetState({ mood, blockedCount })
