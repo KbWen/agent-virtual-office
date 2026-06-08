@@ -106,11 +106,31 @@ axes. Shipped increments (all honesty-preserving, Protected Surfaces untouched):
   event). Both folded onto the base mode by the pure `resolvePetMode({base, alert, celebrate})`:
   `alert` wins; `celebrate` shows ONLY when base ≠ hide. **The honesty guarantee is preserved — neither
   can make the pet look happy during a real blocker.** Total modes now 6 (at the guardian's cap).
-- **AC-v2-3 mode cross-fade** — a 220ms `pet-fade-in` on every mode change (keyed remount) so poses
-  cross instead of snapping; reduced-motion → instant swap.
+- **AC-v2-3 mode change beat** — a squash-stretch `pet-pop` on every mode change (keyed remount) so
+  honest state changes are FELT, not just faded; reduced-motion → instant swap. (Originally a 220ms
+  fade; upgraded to the pop in the delight pack, PR #65.)
 - **Guardrails honored**: hide-on-blocker stays the first branch; reduced-motion suppresses all
   motion (wander, hop, fade); transient overlays are timer-owned so a rapidly-oscillating signal
   can't leave a state stuck on (alert uses a two-effect pattern keyed on `alert` itself).
+## delight pack (PR #65, shipped) — "obviously readable/fun" without breaking honesty
+
+A 4-expert panel (game-design · game-feel · calm-tech guardian · feasibility) judged the pet
+"tasteful wallpaper" against the owner's "obviously interesting" goal (live-measured: ~18px speck,
+subtle state diffs). Guardian reframe: push delight INTO the signal, novelty OFF the timer.
+
+- Bigger pet (`PET_BASE_SCALE` 1.7 → ~30px, pose/face readable; composes with v2 readability scale;
+  wander band tightened to keep it off desks + off the coffee-machine click target).
+- Deploy/eureka **spotlight**: a few ✦ confetti rise on the REAL celebrate event (once per event,
+  reduced-motion suppressed).
+- **Click-to-pet** ♥ — a cosmetic user-initiated beat; never changes the mode/honest reading.
+- Mode change is a squash-stretch `pet-pop` (felt, not just faded).
+- All honesty/calm-tech guardrails held (real-signal-only, reduced-motion off, no fake narrative,
+  hide-on-blocker sacred). Visual layer — verified live (pet ~30px, pop/confetti/♥). Reviewer PASS.
+
+> **Deferred to follow-ups** (panel, still open): the pet running to the actually-blocked desk
+> (read-only `agent.position`); distinct robot-vacuum per-mode silhouettes; ControlPanel button
+> consolidation (⚙ settings popover).
+
 - **Multiple pet types** (PR #64, shipped) — cosmetic skins cat / robot-vacuum / dog via
   `PetSprite({type,mode})` + pure `petMotionGrammar(type)` (own motion grammar per skin) +
   `petType` toggle. COSMETIC ONLY: `derivePetState`/`resolvePetMode` take no `type` argument, so the

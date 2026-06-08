@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T07:55:00Z
-- **Update Sequence**: 38
+- **Last Updated**: 2026-06-08T08:40:00Z
+- **Update Sequence**: 39
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -132,6 +132,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-office-pet-delight-2026-06-08 (#39 — delight pack: bigger · deploy spotlight · click-to-pet · mode pop)
+
+- PR #65 (branch `feat/office-pet-delight`), feature (extends #39). Origin: 4-expert panel judged the pet "tasteful wallpaper" vs the owner's "obviously interesting" goal (live-measured ~18px speck); guardian reframe = push delight INTO the signal, novelty OFF the timer.
+- **Shipped**: `PET_BASE_SCALE` 1.7 (pet ~18→~30px, readable; wander band tightened off desks + the coffee-machine click target); deploy/eureka ✦ confetti spotlight (real celebrate event, once per event, RM-suppressed); click-to-pet ♥ (cosmetic, never touches mode); squash-stretch `pet-pop` mode-change beat (felt, not faded). All in `OfficePet.jsx` + `index.css`.
+- **Honesty/calm-tech intact**: real-signal-only, reduced-motion suppresses all new motion, no fake narrative, hide-on-blocker untouched (delight code is all downstream of mode). Protected Surfaces untouched. Reviewer PASS (2 LOW fixed: pet off the coffee-machine click target, aria-hidden wrapper). Suite **1328 passed**; build clean. DEV live-verified: pet ~30px, pet-pop on mode change, click→♥, celebrate→confetti.
+- **Deferred (panel, open)**: run-to-blocked-desk (read-only agent.position); distinct vacuum per-mode silhouettes; ControlPanel ⚙ settings-popover consolidation.
 
 ### Ship-feat-office-pet-types-2026-06-08 (#39 — multiple pet types: cat / robot-vacuum / dog)
 
