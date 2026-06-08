@@ -20,9 +20,10 @@ const START = clampToFloor({ x: 120, y: 512 })
 const PET_BASE_SCALE = 1.7
 
 // Sample a floor point in the lower office band (walkway/lounge) so the pet stays low and out of the
-// desk rows. Band tightened slightly (y 400–525) so the larger pet can't reach up into desks.
+// desk rows. Band: y 400–525 (so the larger pet can't reach up into desks) and x ≥ 80 (so the now-
+// clickable pet doesn't sit over the lower-left coffee-machine tea-break click target at ~x20 y445).
 function randomFloorTarget() {
-  const x = 50 + Math.random() * 700
+  const x = 80 + Math.random() * 670
   const y = 400 + Math.random() * 125
   return clampToFloor({ x, y })
 }
@@ -121,6 +122,7 @@ export default function OfficePet() {
       data-office-pet={mode}
       data-pet-type={petType}
       data-petted={petted ? '1' : undefined}
+      aria-hidden="true"
       transform={`translate(${pos.x}, ${pos.y})`}
       style={reducedMotion ? { cursor: 'pointer' } : { transition: `transform ${glideMs}ms ${grammar.easing}`, cursor: 'pointer' }}
       pointerEvents="auto"
