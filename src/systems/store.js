@@ -8,7 +8,7 @@ import { STATUS_COLORS } from './constants.js'
 import { classifyTask, familyToBehavior, decideBehavior } from './classify.js'
 import { FEED_ORIGINS } from './rosterModel.js'
 import { PET_TYPES, nextPetType } from './petState.js'
-import { recordEpisode, RECURRING_REASONS } from './recurringFailure.js'
+import { recordEpisode, isNewBlockedEpisode } from './recurringFailure.js'
 
 export { STATUS_COLORS }
 
@@ -798,11 +798,11 @@ export const useOfficeStore = create((set) => ({
           expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
           changedAt: sigChanged ? now : (Number.isFinite(prevExt.changedAt) ? prevExt.changedAt : now),
         }
-        // AVO-117: record a blocked EPISODE only on a real edge — transition INTO blocked, OR a
-        // reason change while still blocked — with a SPECIFIC reason. A poll re-read of the same
-        // (blocked, reasonCode) for this agent does NOT increment (EPISODE-EDGE, no double-count).
-        if (u.status === 'blocked' && RECURRING_REASONS.includes(u.reasonCode)
-            && (!prevExt || prevExt.status !== 'blocked' || prevExt.reasonCode !== u.reasonCode)) {
+        // AVO-117: record a blocked EPISODE only on a real edge (pure isNewBlockedEpisode owns the
+        // rule: transition INTO blocked from a non-blocked-family state, or a reason-change while
+        // blocked, with a SPECIFIC reason). A poll re-read OR an idle-gap blocked↔awaiting-approval
+        // flap of the SAME stuck state does NOT increment — no false recurrence (EPISODE-EDGE).
+        if (isNewBlockedEpisode(prevExt, { status: u.status, reasonCode: u.reasonCode })) {
           rfLog = recordEpisode(rfLog, { agentId: u.agentId, reasonCode: u.reasonCode, now })
         }
         // Immediately set behavior + expression to match work status. Behavior/

@@ -17,6 +17,25 @@ function isRecurringReason(reasonCode) {
   return typeof reasonCode === 'string' && RECURRING_REASONS.includes(reasonCode)
 }
 
+// The idle-gap inferrer reclassifies a single stuck agent `blocked → awaiting-approval → blocked`
+// for the SAME unanswered state (see desktopNotifier's BLOCKED_DERIVED). Counting each re-entry as
+// a new episode would manufacture a FALSE recurrence from one real block — the exact alarm the spec
+// forbids. So a blocked-family status is a CONTINUATION, not a new episode.
+const BLOCKED_FAMILY = new Set(['blocked', 'awaiting-approval'])
+
+// Is `next` the START of a NEW blocked episode (vs a continuation / poll re-read)? New episode =
+// entering 'blocked' with a SPECIFIC reason from a NON-blocked-family prior state, OR a genuine
+// reason change while already 'blocked'. A blocked↔awaiting-approval flap is NOT a new episode.
+export function isNewBlockedEpisode(prev, next) {
+  const status = next && next.status
+  const reasonCode = next && next.reasonCode
+  if (status !== 'blocked' || !isRecurringReason(reasonCode)) return false
+  if (!prev) return true
+  if (!BLOCKED_FAMILY.has(prev.status)) return true                          // from working/done/idle → new
+  if (prev.status === 'blocked' && prev.reasonCode !== reasonCode) return true // reason changed while blocked
+  return false                                                                // continuation (incl. idle-gap flap)
+}
+
 // Append one episode timestamp for (agentId, reasonCode), pruning anything outside the window and
 // capping the list. Returns a NEW log object (never mutates the input). A no-op (returns the same
 // reference) for a non-recurring reason / missing args — SPECIFIC-ONLY honesty guarantee.

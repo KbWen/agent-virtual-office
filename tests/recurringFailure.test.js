@@ -1,7 +1,7 @@
 // AVO-117 — pure recurring-detection honesty invariants.
 import { describe, it, expect } from 'vitest'
 import {
-  recordEpisode, recurringInfo, isRecurring,
+  recordEpisode, recurringInfo, isRecurring, isNewBlockedEpisode,
   RECURRING_REASONS, RECURRING_THRESHOLD, RECURRING_WINDOW_MS, RECURRING_EPISODE_CAP,
 } from '../src/systems/recurringFailure.js'
 
@@ -70,6 +70,36 @@ describe('AVO-117 recurringFailure — honesty invariants', () => {
       log = recordEpisode(log, { agentId: 'dev', reasonCode: 'test-run-failed', now: T0 + i * 100 })
     }
     expect(log.dev['test-run-failed'].length).toBeLessThanOrEqual(RECURRING_EPISODE_CAP)
+  })
+
+  describe('isNewBlockedEpisode — EPISODE-EDGE rule (incl. idle-gap flap)', () => {
+    const B = (reasonCode) => ({ status: 'blocked', reasonCode })
+    it('entering blocked from a non-blocked state with a specific reason → new', () => {
+      expect(isNewBlockedEpisode(null, B('test-run-failed'))).toBe(true)
+      expect(isNewBlockedEpisode({ status: 'working' }, B('test-run-failed'))).toBe(true)
+      expect(isNewBlockedEpisode({ status: 'done' }, B('build-failed'))).toBe(true)
+    })
+    it('poll re-read of the SAME (blocked, reason) → NOT new', () => {
+      expect(isNewBlockedEpisode(B('test-run-failed'), B('test-run-failed'))).toBe(false)
+    })
+    it('idle-gap flap blocked→awaiting-approval→blocked of the SAME stuck state → NOT new (no false recurrence)', () => {
+      // prev was reclassified to awaiting-approval; the same prompt re-asserts blocked
+      expect(isNewBlockedEpisode({ status: 'awaiting-approval', reasonCode: null }, B('test-run-failed'))).toBe(false)
+    })
+    it('reason CHANGE while blocked → new episode of the new kind', () => {
+      expect(isNewBlockedEpisode(B('test-run-failed'), B('build-failed'))).toBe(true)
+    })
+    it('blocked-unknown / non-specific → never a new episode', () => {
+      expect(isNewBlockedEpisode({ status: 'working' }, B('blocked-unknown'))).toBe(false)
+      expect(isNewBlockedEpisode(null, { status: 'working', reasonCode: 'test-run-failed' })).toBe(false)
+    })
+  })
+
+  it('WINDOW boundary: an episode exactly windowMs old is excluded (strict >)', () => {
+    const log = { dev: { 'test-run-failed': [T0 - RECURRING_WINDOW_MS] } } // exactly at cutoff
+    expect(recurringInfo(log, { agentId: 'dev', reasonCode: 'test-run-failed', now: T0 }).count).toBe(0)
+    const log2 = { dev: { 'test-run-failed': [T0 - RECURRING_WINDOW_MS + 1] } } // 1ms inside
+    expect(recurringInfo(log2, { agentId: 'dev', reasonCode: 'test-run-failed', now: T0 }).count).toBe(1)
   })
 
   it('exports the 3 specific reasons only (blocked-unknown excluded)', () => {

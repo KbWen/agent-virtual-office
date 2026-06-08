@@ -785,6 +785,19 @@ describe('AVO-117 recurring episode recording (store)', () => {
     expect(useOfficeStore.getState().recurringFailureLog).toEqual({})
   })
 
+  it('idle-gap flap blocked→awaiting-approval→blocked of ONE stuck state does NOT inflate to recurring', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    const awaiting = () => ({ agentId: 'dev', status: 'awaiting-approval', task: 'Bash', label: 'waiting' })
+    // ONE real stuck state, flapped twice by the idle-gap inferrer — must count as 1 episode, not 3.
+    applyExternalStatus([blocked('test-run-failed')], { source: 'hook' })      // episode 1
+    applyExternalStatus([awaiting()], { source: 'idle-gap-infer' })            // reclassified, same stuck
+    applyExternalStatus([blocked('test-run-failed')], { source: 'hook' })      // re-asserts — NOT new
+    applyExternalStatus([awaiting()], { source: 'idle-gap-infer' })
+    applyExternalStatus([blocked('test-run-failed')], { source: 'hook' })      // re-asserts — NOT new
+    expect(info().count).toBe(1)
+    expect(info().recurring).toBe(false)
+  })
+
   it('reason-change while blocked counts as a new episode of the new kind', () => {
     const { applyExternalStatus } = useOfficeStore.getState()
     applyExternalStatus([blocked('test-run-failed')], { source: 'hook' })
