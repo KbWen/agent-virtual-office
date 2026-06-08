@@ -42,7 +42,7 @@ last_updated: 2026-06-05
 | AVO-118 | Workflow graph minimap (DAG view) | product | multi-agent | P2 | — | feature | Pending | AVO-105 |
 | AVO-119 | Language / file-type breakdown | product | info-density | P2 | — | feature | Pending | — |
 | AVO-120 | Daily MVP / productivity leaderboard | product | brand | P2 | — | feature | Pending | — |
-| AVO-121 | Office pet (ambient companion) | product | game-feel | P3 | — | feature | Pending | — |
+| AVO-121 | Office pet (ambient companion) | product | game-feel | P3 | — | feature | Done | reframed as signal-driven barometer; docs/specs/office-pet-barometer.md (PR #62) |
 | AVO-122 | Ambient soundscape (toggle) | product | game-feel | P2 | — | feature | Pending | — |
 | AVO-123 | Office theme / skin selector | product | brand | P2 | — | feature | Pending | — |
 | AVO-124 | Agent appearance customization | product | brand | P3 | — | feature | Pending | — |

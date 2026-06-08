@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T03:45:00Z
-- **Update Sequence**: 35
+- **Last Updated**: 2026-06-08T05:45:00Z
+- **Update Sequence**: 36
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -70,6 +70,7 @@
   - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Frozen]  *(AVO-126/127/128/129/131/132 — branch feat/ux-vibe-rebalance, not yet merged)*
   - [living-office] docs/specs/living-office-events.md [DRAFT, review-gated]  *(P1-P4 shipped to branch feat/ux-vibe-rebalance, not merged; AC-3 pixel-dominance pending owner visual confirm)*
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
+  - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -131,6 +132,14 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-office-pet-barometer-2026-06-08 (#39 / AVO-121 — signal-driven office pet)
+
+- PR #62 (branch `feat/office-pet-barometer`), classification **feature**. Closes #39 (AVO-121). Spec: `docs/specs/office-pet-barometer.md` [shipped].
+- **Origin**: 5-expert brainstorm (game-design · game-feel · calm-tech · feasibility · product). Draggable agents REJECTED 4/5 (breaks position=truth, fights movement system, touches protected `AgentCharacter`). Decorative pet flagged anti-calm. Convergent + user-selected: **pet-as-barometer** — keep the charm, make behavior an HONEST readout of real office state.
+- **What shipped**: `src/systems/petState.js` pure `derivePetState({mood,blockedCount})` (mirrors `moodToWeather`; `hide` ALWAYS wins on a real blocker = honesty guarantee; idle→nap, smooth/rushing/intense→excited, stuck/frustrated→hide, normal→wander). `src/components/OfficePet.jsx` ambient cat: mode→pose, slow CSS-glide wander reusing pure `clampToFloor` (NO calculatePath/HOME_POSITIONS/agent coords — Protected Surfaces untouched), reduced-motion→static, transient perk on real eureka/deploy-success (resets when event clears). `officePet` store toggle (default ON, `office-pet` localStorage key) + ControlPanel 🐈 + en/zh-TW aria. `pet-snooze`/`pet-bob` keyframes in `index.css` (CSP-safe).
+- **Review**: 2 parallel acx-reviewers (correctness + scope/protected/AC) → both **PASS**; all 6 ACs proven; 1 LOW (stuck-perk edge) fixed; protected surfaces untouched; i18n parity; no scope creep.
+- **Tests**: +6 (`tests/petState.test.js`). Full suite **1317 passed / 58 files**; build clean. DEV live-verified incl. blocked→hide honesty guarantee, on-floor placement, toggle-off removal, reduced-motion static.
 
 ### Ship-fix-issue-sweep-52-45-47-2026-06-08 (3 open bugs: roster null-status · weather CPU toggle · bubble edge clip)
 

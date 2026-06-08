@@ -1,6 +1,6 @@
 ---
 title: Office pet (signal-driven barometer)
-status: draft
+status: shipped
 date: 2026-06-08
 primary_files: [src/components/OfficePet.jsx, src/components/PixelOffice.jsx, src/systems/store.js, src/components/ControlPanel.jsx, src/systems/petState.js]
 test_file: tests/petState.test.js
