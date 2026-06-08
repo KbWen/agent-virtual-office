@@ -61,9 +61,23 @@ html, body, #root {
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-2.5px); }
 }
-/* Office pet (v2): a 220ms fade-in on each mode change (keyed remount) so poses cross-fade instead of
-   snapping. reducedMotion skips it (instant swap). */
-@keyframes pet-fade-in {
-  0%   { opacity: 0; }
-  100% { opacity: 1; }
+/* Office pet: a squash-stretch "pop" on each mode change (keyed remount) so honest state changes are
+   FELT, not just faded. reducedMotion skips it (instant swap). transform-origin is the sprite's local
+   origin (feet), so it pops up in place. */
+@keyframes pet-pop {
+  0%   { opacity: 0; transform: scale(0.8); }
+  60%  { opacity: 1; transform: scale(1.07); }
+  100% { opacity: 1; transform: scale(1); }
+}
+/* #39 delight: celebrate confetti — a ✦ rises and fades off the pet on a real deploy/eureka. */
+@keyframes pet-confetti {
+  0%   { opacity: 0; transform: translateY(2px); }
+  20%  { opacity: 0.95; }
+  100% { opacity: 0; transform: translateY(-11px); }
+}
+/* #39 delight: click-to-pet ♥ floats up and fades. */
+@keyframes pet-heart {
+  0%   { opacity: 0; transform: translateY(2px) scale(0.7); }
+  25%  { opacity: 1; transform: translateY(-1px) scale(1); }
+  100% { opacity: 0; transform: translateY(-9px) scale(1); }
 }

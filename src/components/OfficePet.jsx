@@ -11,13 +11,19 @@ import PetSprite from './petSprites.jsx'
 // signal. Movement is a slow CSS-glide wander reusing `clampToFloor` (never `calculatePath`, never
 // HOME_POSITIONS / agent coords — Protected Surfaces untouched). reduced-motion → static pose.
 
-const START = clampToFloor({ x: 120, y: 505 })
+const START = clampToFloor({ x: 120, y: 512 })
+
+// #39 delight: a base legibility bump. The sprite is authored at ~9px radius; ×1.7 makes its pose +
+// face actually readable at native office size (it was a ~18px speck). Composes with the v2
+// readability counter-scale (which only adds MORE when the office docks small). Scaling is about the
+// sprite's local origin (0,0) = floor contact, so feet stay planted.
+const PET_BASE_SCALE = 1.7
 
 // Sample a floor point in the lower office band (walkway/lounge) so the pet stays low and out of the
-// desk rows. clampToFloor snaps to a floor zone and pushes off any furniture.
+// desk rows. Band tightened slightly (y 400–525) so the larger pet can't reach up into desks.
 function randomFloorTarget() {
-  const x = 40 + Math.random() * 720
-  const y = 380 + Math.random() * 150
+  const x = 50 + Math.random() * 700
+  const y = 400 + Math.random() * 125
   return clampToFloor({ x, y })
 }
 
@@ -67,6 +73,15 @@ export default function OfficePet() {
   const baseMode = derivePetState({ mood, blockedCount })
   const mode = resolvePetMode({ base: baseMode, alert, celebrate })
 
+  // #39 delight: click-to-pet — a purely cosmetic, user-initiated ♥ beat (no mode/state change, never
+  // affects the honest reading). Auto-clears after 1s.
+  const [petted, setPetted] = useState(false)
+  useEffect(() => {
+    if (!petted) return
+    const t = setTimeout(() => setPetted(false), 1000)
+    return () => clearTimeout(t)
+  }, [petted])
+
   const [pos, setPos] = useState(START)
   const [facing, setFacing] = useState(1)
   const posRef = useRef(START)
@@ -91,23 +106,42 @@ export default function OfficePet() {
   // dog bobs bigger). reduced-motion off.
   const hop = grammar.bob && (mode === PET_MODES.EXCITED || mode === PET_MODES.CELEBRATE) && !reducedMotion
     ? { animation: `${grammar.bobKeyframe} 0.6s ease-in-out infinite` } : undefined
-  // v2: keep the pet legible when the office docks small without faking size (partial √ counter-scale)
-  const petScale = petReadabilityScale(sceneScale)
-  // v2: a gentle 220ms fade-in on every mode change (keyed remount) so poses cross instead of snapping
-  const fadeIn = reducedMotion ? undefined : { animation: 'pet-fade-in 0.22s ease-out' }
+  // v2: keep the pet legible when the office docks small without faking size (partial √ counter-scale),
+  // composed with the base legibility bump.
+  const petScale = petReadabilityScale(sceneScale) * PET_BASE_SCALE
+  // a squash-stretch "pop" on every mode change (keyed remount) so honest state changes are FELT, not
+  // just faded. reduced-motion → instant swap.
+  const pop = reducedMotion ? undefined : { animation: 'pet-pop 0.3s ease-out' }
+  // #39 delight: a brief celebrate spotlight — a few ✦ rise off the pet on a REAL deploy/eureka. Once
+  // per event (rides the celebrate transient), reduced-motion suppressed.
+  const showConfetti = mode === PET_MODES.CELEBRATE && !reducedMotion
 
   return (
     <g
       data-office-pet={mode}
       data-pet-type={petType}
+      data-petted={petted ? '1' : undefined}
       transform={`translate(${pos.x}, ${pos.y})`}
-      style={reducedMotion ? undefined : { transition: `transform ${glideMs}ms ${grammar.easing}` }}
-      pointerEvents="none"
+      style={reducedMotion ? { cursor: 'pointer' } : { transition: `transform ${glideMs}ms ${grammar.easing}`, cursor: 'pointer' }}
+      pointerEvents="auto"
+      onClick={() => setPetted(true)}
     >
       <g transform={`scale(${facing * petScale}, ${petScale})`} style={hop}>
-        <g key={mode} style={fadeIn}>
+        <g key={mode} style={pop}>
           <PetSprite type={petType} mode={mode} reducedMotion={reducedMotion} />
         </g>
+        {showConfetti && (
+          <g pointerEvents="none" aria-hidden="true">
+            {[-6, 0, 6].map((dx, i) => (
+              <text key={i} x={dx} y={-9} fontSize="5" textAnchor="middle" fill="#E0A800"
+                style={{ animation: `pet-confetti 1.2s ease-out ${i * 0.14}s both` }}>✦</text>
+            ))}
+          </g>
+        )}
+        {petted && (
+          <text x={0} y={-9} fontSize="6" textAnchor="middle" fill="#E2588B" aria-hidden="true"
+            style={reducedMotion ? undefined : { animation: 'pet-heart 1s ease-out both' }}>♥</text>
+        )}
       </g>
     </g>
   )
