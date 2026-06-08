@@ -351,5 +351,12 @@
     "build-failed": { "label": "建置", "a11y": "卡在建置" },
     "deps-failed": { "label": "安裝套件", "a11y": "卡在安裝套件" },
     "blocked-unknown": { "label": "卡住", "a11y": "卡住，原因未知" }
+  },
+  "recurringFailure": {
+    "test-run-failed": { "label": "反覆卡在測試", "a11y": "重複問題:這個 agent 反覆卡在測試執行" },
+    "build-failed": { "label": "反覆建置失敗", "a11y": "重複問題:這個 agent 反覆建置失敗" },
+    "deps-failed": { "label": "反覆安裝失敗", "a11y": "重複問題:這個 agent 反覆安裝套件失敗" },
+    "notifyTitle": "重複問題",
+    "notifyBody": "{0} 反覆遇到同一類失敗"
   }
 }

@@ -25,6 +25,7 @@
  * polling becomes a no-op.
  */
 import { t, charName } from '../i18n.js'
+import { recurringInfo } from '../systems/recurringFailure.js'
 
 const DEFAULT_BLOCKED_THRESHOLD_MS = 30_000
 const POLL_INTERVAL_MS = 5_000
@@ -32,6 +33,9 @@ const POLL_INTERVAL_MS = 5_000
 // Per-agent dedupe state. Module-scope so reload-style remounts share continuity.
 const blockedSince = new Map()  // agentId → timestamp when first observed in blocked state
 const notifiedFor  = new Map()  // agentId → blocked-since timestamp we already fired for
+// AVO-117: recurring-failure dedupe — agentId → reasonCode we already fired a recurring notice for.
+// Reset on leaving the blocked family so a fresh recurrence (after recovery) can re-fire once.
+const recurringNotifiedFor = new Map()
 
 // Statuses that the idle-gap inferrer reclassifies FROM 'blocked' (fix #2).
 // These are still considered part of the same blocked episode for dedupe
@@ -99,6 +103,22 @@ function fireNotification(agentId) {
   }
 }
 
+// AVO-117: recurring-failure notification — the agent keeps hitting the SAME specific kind of block.
+// Wording claims only the recurring PATTERN, never a root cause. Distinct tag from the 30s-blocked one.
+function fireRecurringNotification(agentId, reasonCode) {
+  if (typeof Notification === 'undefined' || typeof window === 'undefined') return
+  if (Notification.permission !== 'granted') return
+  const name = charName(agentId)
+  const title = t('recurringFailure.notifyTitle', 'Recurring failure')
+  const body  = t('recurringFailure.notifyBody', '{0} keeps hitting the same kind of failure').replace('{0}', name)
+  try {
+    const n = new Notification(title, { body, tag: `office-recurring-${agentId}-${reasonCode}`, silent: false, requireInteraction: false })
+    n.onclick = () => { try { window.focus() } catch { /* ignore */ } try { n.close() } catch { /* ignore */ } }
+  } catch {
+    /* Swallow — same defensive posture as fireNotification. */
+  }
+}
+
 /**
  * Internal: one polling tick. Walks the store's agents and decides whether
  * to start, continue, fire, or clear an episode for each agent.
@@ -120,6 +140,17 @@ function tick(store, opts, now = Date.now) {
       // doing so would reset the episode and allow a 2nd OS notification when the real
       // 'blocked' signal re-asserts for the same unanswered prompt.
       if (a?.status === 'blocked' && !blockedSince.has(id)) blockedSince.set(id, t0)
+      // AVO-117: recurring-failure notice — fire ONCE per recurring (agent, reason) while in the
+      // blocked family. Independent of the 30s-duration notice above (a recurrence is its own signal).
+      if (canFire) {
+        const st = store.getState()
+        const rc = st.externalStatus?.[id]?.reasonCode
+        if (recurringInfo(st.recurringFailureLog, { agentId: id, reasonCode: rc, now: t0 }).recurring
+            && recurringNotifiedFor.get(id) !== rc) {
+          fireRecurringNotification(id, rc)
+          recurringNotifiedFor.set(id, rc)
+        }
+      }
       if (!canFire || !blockedSince.has(id)) continue
       const since = blockedSince.get(id)
       if (t0 - since >= opts.thresholdMs && notifiedFor.get(id) !== since) {
@@ -127,10 +158,11 @@ function tick(store, opts, now = Date.now) {
         notifiedFor.set(id, since)  // dedupe — same episode keyed by start-time
       }
     } else {
-      // Genuine transition out of blocked family → reset both maps so the next
-      // blocked episode is fresh.
+      // Genuine transition out of blocked family → reset all maps so the next
+      // blocked episode (and a fresh recurrence) is fresh.
       blockedSince.delete(id)
       notifiedFor.delete(id)
+      recurringNotifiedFor.delete(id)
     }
   }
 }

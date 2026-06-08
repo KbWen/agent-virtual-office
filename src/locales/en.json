@@ -351,5 +351,12 @@
     "build-failed": { "label": "Build", "a11y": "Blocked on the build" },
     "deps-failed": { "label": "Install", "a11y": "Blocked on installing dependencies" },
     "blocked-unknown": { "label": "Blocked", "a11y": "Blocked, cause unknown" }
+  },
+  "recurringFailure": {
+    "test-run-failed": { "label": "Tests keep failing", "a11y": "Recurring: the test run keeps failing for this agent" },
+    "build-failed": { "label": "Build keeps failing", "a11y": "Recurring: the build keeps failing for this agent" },
+    "deps-failed": { "label": "Installs keep failing", "a11y": "Recurring: installing dependencies keeps failing for this agent" },
+    "notifyTitle": "Recurring failure",
+    "notifyBody": "{0} keeps hitting the same kind of failure"
   }
 }

@@ -50,15 +50,27 @@ function Glyph({ iconId, hue }) {
 
 // Pure glyph group. `reasonCode` is the hook-stamped token; anything unknown/absent → blocked-unknown
 // (the honest floor) via classifyBlockedReason. Positioned over the head, mirroring BehaviorIndicator.
-export function BlockedReasonBadge({ reasonCode }) {
-  const { iconId, hue, a11yKey } = classifyBlockedReason(reasonCode)
-  const label = t(a11yKey, 'Blocked')
+// AVO-117: when `recurring` is true (the SAME specific kind has recurred ≥N times in the window — see
+// recurringFailure.js), escalate with a small ↻ loop mark + the recurring a11y wording. The wording
+// claims only the recurring PATTERN of a kind ("tests keep failing"), NEVER a specific root cause.
+export function BlockedReasonBadge({ reasonCode, recurring = false }) {
+  const { reason, iconId, hue, a11yKey } = classifyBlockedReason(reasonCode)
+  // recurring only escalates the 3 specific reasons (blocked-unknown never recurs — see recurringFailure)
+  const escalate = recurring && reason !== 'blocked-unknown'
+  const label = escalate ? t(`recurringFailure.${reason}.a11y`, t(a11yKey, 'Blocked')) : t(a11yKey, 'Blocked')
   return (
     <g transform="translate(13, -9)" role="img" aria-label={label}>
       <title>{label}</title>
       {/* effect-chip backdrop: 1px dark outline so the glyph reads on any wall colour */}
       <rect x={-6} y={-6} width={12} height={12} rx={3} fill="#fdfdfd" stroke={STROKE} strokeWidth={0.8} opacity={0.96} />
       <Glyph iconId={iconId} hue={hue} />
+      {escalate && (
+        // quiet escalation (calm-tech: no alarm) — a small ↻ loop mark in the corner saying "again".
+        <g transform="translate(5, -5)" aria-hidden="true">
+          <circle cx={0} cy={0} r={3.2} fill="#c0392b" stroke="#fff" strokeWidth={0.6} />
+          <text x={0} y={1.6} textAnchor="middle" fontSize={4.4} fontWeight="bold" fill="#fff" stroke="none">↻</text>
+        </g>
+      )}
     </g>
   )
 }

@@ -4,6 +4,7 @@ import { getNextBehavior } from '../systems/behaviorEngine'
 import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveFocusFacing } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale } from '../i18n'
 import { BlockedReasonBadge } from './blockedReasonBadge'
+import { recurringInfo } from '../systems/recurringFailure'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
 
@@ -649,6 +650,10 @@ function AgentCharacter({ agent }) {
   // AVO-110: hook-stamped blocked-reason token (primitive subscription → re-render only on change).
   // When blocked, this drives the over-head reason badge that overrides the BehaviorIndicator glyph.
   const reasonCode = useOfficeStore((s) => s.externalStatus[id]?.reasonCode || null)
+  // AVO-117: this agent's rolling blocked-episode log slice (ref changes only when an episode is
+  // recorded → re-render). The recurring SIGN is EPHEMERAL: only while currently blocked AND the
+  // current reason is recurring (≥threshold in-window). Computed from the slice at render.
+  const recurringLog = useOfficeStore((s) => s.recurringFailureLog?.[id])
 
   const timerRef = useRef(null)
   const pathRef = useRef([])
@@ -1192,7 +1197,11 @@ function AgentCharacter({ agent }) {
               <animateTransform attributeName="transform" type="scale"
                 values="0.6 0.6;1.1 1.1;1 1" keyTimes="0;0.6;1" dur="0.35s" repeatCount="1" fill="freeze" />
             )}
-            <BlockedReasonBadge reasonCode={reasonCode} />
+            <BlockedReasonBadge
+              reasonCode={reasonCode}
+              recurring={!!(reasonCode && recurringLog
+                && recurringInfo({ [id]: recurringLog }, { agentId: id, reasonCode, now: Date.now() }).recurring)}
+            />
           </g>
         ) : (
           <g key={state.behavior}>
