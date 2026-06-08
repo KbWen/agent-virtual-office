@@ -8,8 +8,12 @@ import { PET_TYPES } from '../systems/petState.js'
 const statusOptions = ['idle', 'working', 'blocked', 'done']
 
 // Pure label/format helpers were extracted to controlPanelLabels.js (testable without this JSX
-// module). Re-exported here for back-compat with existing importers (NarrowRoster, tests).
-export { taskChipLabel, blockedReasonLabel, formatTokens, agentLineLabel, shouldShowWatchdogDiag } from './controlPanelLabels.js'
+// module). IMPORT them for this component's own render use, AND re-export for back-compat with
+// existing importers (NarrowRoster, tests). NOTE: `export { x } from './m'` alone re-exports without
+// binding x into THIS module's scope — the component's internal calls would then crash with
+// "x is not defined" (regression caught only by actually loading the page).
+import { taskChipLabel, blockedReasonLabel, formatTokens, agentLineLabel, shouldShowWatchdogDiag } from './controlPanelLabels.js'
+export { taskChipLabel, blockedReasonLabel, formatTokens, agentLineLabel, shouldShowWatchdogDiag }
 
 // #39 types: emoji shown on the "change pet" button per current skin.
 const PET_TYPE_EMOJI = { cat: '🐈', vacuum: '🤖', dog: '🐕' }
