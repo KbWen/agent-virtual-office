@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-06T07:00:00Z
-- **Update Sequence**: 34
+- **Last Updated**: 2026-06-08T03:45:00Z
+- **Update Sequence**: 35
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -131,6 +131,16 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-issue-sweep-52-45-47-2026-06-08 (3 open bugs: roster null-status · weather CPU toggle · bubble edge clip)
+
+- PR #59 (https://github.com/KbWen/agent-virtual-office/pull/59), branch `fix/issue-sweep-52-45-47`, classification quick-win. Closes #52, #45, #47. Opened for human merge (main protected); SSoT Ship History committed into the SAME PR.
+- **#52** `src/utils/normalizePost.js` — the `office-status` ingestion path dropped any agent whose `status` was null/undefined/invalid (the filter discarded the whole agent → it vanished from roster/office). Now a valid role is KEPT and status coerces to the known-safe `'idle'` enum; an unknown/invalid ROLE is still dropped (identity has no safe fallback). The existing "filters out invalid statuses" test contract was updated to "coerces … to idle".
+- **#45** weather-animation CPU toggle — new persisted `weatherEffects` store flag (default ON, `office-weather` localStorage key, same pattern as isPaused/rosterMode) + `toggleWeatherEffects`; `PixelOffice` feeds `weatherReduced = reducedMotion || !weatherEffects` to all 12 WallWindow sites; ControlPanel 🌧/🌤 button; en/zh-TW `aria.weatherOff/On`. OFF → static weather (no per-frame rain/cloud/lightning). `prefers-reduced-motion` still forces static regardless. Data paths untouched.
+- **#47** speech-bubble horizontal edge clamp — pure exported `computeEdgeShift` in `BehaviorBubble.jsx` shifts the box within `[edgePad, sceneW−edgePad]` while the tail stays anchored on the agent; `AgentCharacter` passes `absX={pos.x} scale={labelScale}`. Back-compat: no scene context → centered as before. **Protected Surface** (bubble positioning) — math unit-proven + live-measured 0-clip/0-regression, but final extreme-edge pixel confirm is owner-only.
+- **Tests**: +13 (`normalizePost` +5, `weatherEffectsToggle` 3, `bubbleEdgeClamp` 6). Full suite **1302 passed / 56 files**; vite build clean (416 KB JS / 31 KB CSS). #45 verified end-to-end in the running app via store import.
+- **Tooling note**: `preview_screenshot` re-tested fresh this session — times out (30s) even with animations frozen AND with SVG hidden (near-blank page) while eval/console/snapshot respond → the hang is the screenshot TRANSPORT in this environment, not the app. Visual proof path = `getBoundingClientRect` measurement.
+- **Known (pre-existing, not from this PR)**: validator `illegal gate phase progression: 2` comes from two completed local work logs (`main.md`, `fix-watchdog-…`) that the validator concatenates into one gate chain; they are gitignored and never shipped.
 
 ### Ship-docs-audit-baseline-2026-06-05
 
