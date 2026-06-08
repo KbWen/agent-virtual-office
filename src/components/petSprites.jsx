@@ -18,10 +18,7 @@ function CatSprite({ mode, reducedMotion }) {
         <circle cx={-6} cy={-1} r={3.6} fill={fur} />
         <path d="M -8.6 -3 l 1.4 -2.2 l 1.4 2.2 Z" fill={fur} />
         <path d="M -7.4 -1.2 q 1 0.8 2 0" stroke={dark} strokeWidth="0.5" fill="none" />
-        <path d="M 8 0 q 5 0 4 -4" stroke={fur} strokeWidth="2.4" fill="none" strokeLinecap="round" />
-        <text x={4} y={-7} fontSize="5" fill={dark} opacity="0.7"
-          style={reducedMotion ? undefined : { animation: 'pet-snooze 2.4s ease-in-out infinite' }}>z</text>
-      </g>
+        <path d="M 8 0 q 5 0 4 -4" stroke={fur} strokeWidth="2.4" fill="none" strokeLinecap="round" />      </g>
     )
   }
   if (mode === PET_MODES.HIDE) {
@@ -47,9 +44,7 @@ function CatSprite({ mode, reducedMotion }) {
         <path d="M -0.6 -6.4 l -0.4 -3.4 l 2.2 1.8 Z" fill={fur} />
         <path d="M 4.6 -6.4 l 0.4 -3.4 l -2.2 1.8 Z" fill={fur} />
         <circle cx={0.6} cy={-4.2} r={1} fill={dark} />
-        <circle cx={3.4} cy={-4.2} r={1} fill={dark} />
-        <text x={7} y={-6} fontSize="6" fill="#D98324" opacity="0.9">!</text>
-      </g>
+        <circle cx={3.4} cy={-4.2} r={1} fill={dark} />      </g>
     )
   }
   if (mode === PET_MODES.CELEBRATE) {
@@ -132,9 +127,7 @@ function VacuumSprite({ mode, reducedMotion }) {
       </g>
       {/* status LED */}
       <circle cx={0} cy={0} r={1.5} fill={led} opacity={mode === PET_MODES.HIDE ? 0.6 : 0.95}
-        style={blink ? { animation: 'pet-snooze 0.8s steps(2,end) infinite' } : undefined} />
-      {mode === PET_MODES.ALERT && <text x={6} y={-5} fontSize="6" fill="#D98324" opacity="0.9">!</text>}
-    </g>
+        style={blink ? { animation: 'pet-snooze 0.8s steps(2,end) infinite' } : undefined} />    </g>
   )
 }
 
@@ -149,10 +142,7 @@ function DogSprite({ mode, reducedMotion }) {
         <circle cx={-6.5} cy={-0.5} r={3.8} fill={fur} />
         <path d="M -9.4 -1.6 q -2 1 -1 3.4" stroke={dark} strokeWidth="2" fill="none" strokeLinecap="round" />{/* floppy ear */}
         <path d="M -7.6 -0.6 q 1 0.8 2 0" stroke={dark} strokeWidth="0.5" fill="none" />
-        <path d="M 8.4 0.4 q 4.4 0 3.6 -3.4" stroke={fur} strokeWidth="2.6" fill="none" strokeLinecap="round" />
-        <text x={4} y={-7} fontSize="5" fill={dark} opacity="0.7"
-          style={reducedMotion ? undefined : { animation: 'pet-snooze 2.4s ease-in-out infinite' }}>z</text>
-      </g>
+        <path d="M 8.4 0.4 q 4.4 0 3.6 -3.4" stroke={fur} strokeWidth="2.6" fill="none" strokeLinecap="round" />      </g>
     )
   }
   if (mode === PET_MODES.HIDE) {
@@ -178,9 +168,7 @@ function DogSprite({ mode, reducedMotion }) {
         <path d="M -1.4 -5.4 q -2.4 -0.6 -2.6 2.4" stroke={dark} strokeWidth="2" fill="none" strokeLinecap="round" />{/* perked floppy ear */}
         <circle cx={0.8} cy={-4.2} r={1} fill={dark} />
         <circle cx={3.6} cy={-4.2} r={1} fill={dark} />
-        <ellipse cx={4} cy={-2.6} rx={1.4} ry={1} fill={dark} />
-        <text x={7} y={-6} fontSize="6" fill="#D98324" opacity="0.9">!</text>
-      </g>
+        <ellipse cx={4} cy={-2.6} rx={1.4} ry={1} fill={dark} />      </g>
     )
   }
   if (mode === PET_MODES.CELEBRATE) {

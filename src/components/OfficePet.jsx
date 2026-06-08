@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useOfficeStore } from '../systems/store.js'
 import { clampToFloor } from '../systems/movementSystem.js'
-import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, runTarget, PET_MODES } from '../systems/petState.js'
+import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, runTarget, modeEmote, PET_MODES } from '../systems/petState.js'
 import PetSprite from './petSprites.jsx'
 import { useTransientFlag } from './useTransientFlag.js'
 
@@ -151,6 +151,14 @@ export default function OfficePet() {
         <g key={mode} style={pop}>
           <PetSprite type={petType} mode={mode} reducedMotion={reducedMotion} />
         </g>
+        {/* Type-independent mode emote — makes the state legible at a glance for ANY skin (the poses
+            alone are subtle at ~30px). Static (no animation). Counter-flipped so the glyph reads
+            upright whichever way the pet faces. */}
+        {modeEmote(mode) && (
+          <g transform={`scale(${facing}, 1)`} pointerEvents="none" aria-hidden="true">
+            <text x={0} y={-12} fontSize="6" textAnchor="middle" opacity="0.92">{modeEmote(mode)}</text>
+          </g>
+        )}
         {showConfetti && (
           <g pointerEvents="none" aria-hidden="true">
             {[-6, 0, 6].map((dx, i) => (
