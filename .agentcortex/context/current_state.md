@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T11:40:00Z
-- **Update Sequence**: 44
+- **Last Updated**: 2026-06-08T12:30:00Z
+- **Update Sequence**: 45
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -132,6 +132,12 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-pet-legibility-and-more-types-2026-06-08 (#39 — mode emote + 3 more skins)
+
+- **PR #74 (legibility)**: a TYPE-INDEPENDENT mode emote glyph floats above the pet (hide ⚠ · nap 💤 · excited ⚡ · alert ❗; wander/celebrate none) so the state reads at a glance for ANY skin — owner feedback that the subtle poses were unreadable. Consolidated the scattered per-sprite z/! glyphs into one place. Pure `modeEmote` (+3 tests).
+- **PR #75 (more types)**: 3 → **6 skins** — added 🐇 rabbit, 🐦 bird, 🐹 hamster (cosmetic; per-type motion grammar; same honest mode logic). ControlPanel ⚙ radiogroup + en/zh-TW labels.
+- **Caught the load-the-page lesson in action**: both verified via headless-Playwright screenshots (all skins render, emotes distinct, 0 console errors) — not just green tests. Suite **1341 passed**; build clean. Spec reference table updated to 6 types + emote column.
 
 ### Ship-hotfix-controlpanel-render-crash-2026-06-08 (crash shipped green, caught by ACTUALLY loading the page)
 
