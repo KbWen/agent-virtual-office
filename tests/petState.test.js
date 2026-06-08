@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
-import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, PET_MODES } from '../src/systems/petState.js'
+import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, nextPetType, PET_TYPES, PET_MODES } from '../src/systems/petState.js'
 // Static import (hoisted above the window shim below) so the store + i18n initialize while `window`
 // is still undefined — matching the repo's node test env. The shim then provides localStorage so the
 // toggle's persistence path runs. (Same approach as weatherEffectsToggle.test.js.)
@@ -86,6 +86,28 @@ describe('petReadabilityScale (#39 v2 — legible when docked small, never fakes
   })
 })
 
+describe('pet types (#39 — cosmetic skins, behavior-identical)', () => {
+  it('PET_TYPES is a capped set of 3', () => {
+    expect(PET_TYPES).toEqual(['cat', 'vacuum', 'dog'])
+  })
+  it('nextPetType cycles cat → vacuum → dog → cat (unknown → cat)', () => {
+    expect(nextPetType('cat')).toBe('vacuum')
+    expect(nextPetType('vacuum')).toBe('dog')
+    expect(nextPetType('dog')).toBe('cat')
+    expect(nextPetType('bogus')).toBe('cat')
+  })
+  it('petMotionGrammar gives each type a distinct feel; unknown → cat grammar', () => {
+    expect(petMotionGrammar('vacuum').bob).toBe(false)       // a Roomba does not bob
+    expect(petMotionGrammar('vacuum').easing).toBe('linear') // machines move linearly
+    expect(petMotionGrammar('dog').bobAmp).toBeGreaterThan(petMotionGrammar('cat').bobAmp)
+    expect(petMotionGrammar('bogus')).toEqual(petMotionGrammar('cat'))
+  })
+  it('type changes FEEL only — mode logic is type-independent (honesty unaffected)', () => {
+    // derivePetState/resolvePetMode take no `type` argument, so a real blocker → hide for ALL skins
+    expect(derivePetState({ mood: 'smooth', blockedCount: 1 })).toBe(PET_MODES.HIDE)
+  })
+})
+
 describe('store — officePet toggle (#39)', () => {
   beforeEach(() => {
     localStorage.removeItem('office-pet')
@@ -103,5 +125,18 @@ describe('store — officePet toggle (#39)', () => {
     useOfficeStore.getState().toggleOfficePet()
     expect(useOfficeStore.getState().officePet).toBe(true)
     expect(localStorage.getItem('office-pet')).toBe('on')
+  })
+
+  it('cyclePetType cycles + persists the skin (#39 types)', () => {
+    localStorage.removeItem('office-pet-type')
+    useOfficeStore.setState({ petType: 'cat' })
+    useOfficeStore.getState().cyclePetType()
+    expect(useOfficeStore.getState().petType).toBe('vacuum')
+    expect(localStorage.getItem('office-pet-type')).toBe('vacuum')
+    useOfficeStore.getState().cyclePetType()
+    expect(useOfficeStore.getState().petType).toBe('dog')
+    useOfficeStore.getState().cyclePetType()
+    expect(useOfficeStore.getState().petType).toBe('cat')
+    expect(localStorage.getItem('office-pet-type')).toBe('cat')
   })
 })

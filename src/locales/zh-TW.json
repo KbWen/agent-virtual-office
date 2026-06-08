@@ -292,6 +292,7 @@
     "weatherOn": "開啟天氣動畫",
     "petOff": "隱藏辦公室寵物",
     "petOn": "顯示辦公室寵物",
+    "petType": "更換寵物",
     "info": "資訊"
   },
   "time": {

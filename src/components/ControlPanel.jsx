@@ -56,6 +56,9 @@ export function shouldShowWatchdogDiag(count, isDev = import.meta.env.DEV) {
   return !!isDev && typeof count === 'number' && count > 0
 }
 
+// #39 types: emoji shown on the "change pet" button per current skin.
+const PET_TYPE_EMOJI = { cat: '🐈', vacuum: '🤖', dog: '🐕' }
+
 export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   // Return full agent objects so useShallow can compare by reference. Mapping to
   // new projected objects {id,color,behavior,status} on every call means the inner
@@ -70,6 +73,8 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const toggleWeatherEffects = useOfficeStore((s) => s.toggleWeatherEffects)
   const officePet = useOfficeStore((s) => s.officePet)
   const toggleOfficePet = useOfficeStore((s) => s.toggleOfficePet)
+  const petType = useOfficeStore((s) => s.petType)
+  const cyclePetType = useOfficeStore((s) => s.cyclePetType)
   // #28: RAF-watchdog stall counter — surfaced as a DEV-only diagnostic chip (see render). Cheap
   // primitive subscription; re-renders only when a stall actually bumps the count (rare).
   const watchdogRestarts = useOfficeStore((s) => s.watchdogRestarts)
@@ -352,8 +357,19 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             aria-label={officePet ? t('aria.petOff', 'Hide office pet') : t('aria.petOn', 'Show office pet')}
             aria-pressed={officePet}
           >
-            🐈
+            🐾
           </button>
+          {/* #39 types: cycle the pet skin (cosmetic). Only meaningful while the pet is shown. */}
+          {officePet && (
+            <button
+              onClick={cyclePetType}
+              className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              title={t('aria.petType', 'Change pet')}
+              aria-label={t('aria.petType', 'Change pet')}
+            >
+              {PET_TYPE_EMOJI[petType] || PET_TYPE_EMOJI.cat}
+            </button>
+          )}
           <button onClick={triggerWorkflow} className="px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors" title={t('aria.runWorkflow', 'Run workflow animation')}>
             {t('ui.run')}
           </button>

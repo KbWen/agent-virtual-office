@@ -111,8 +111,10 @@ axes. Shipped increments (all honesty-preserving, Protected Surfaces untouched):
 - **Guardrails honored**: hide-on-blocker stays the first branch; reduced-motion suppresses all
   motion (wander, hop, fade); transient overlays are timer-owned so a rapidly-oscillating signal
   can't leave a state stuck on (alert uses a two-effect pattern keyed on `alert` itself).
-- **Deferred to a follow-up** (panel "nice/cosmetic"): multiple pet types (cat / robot-vacuum / dog,
-  cosmetic-only, behavior-identical, own motion grammar).
+- **Multiple pet types** (PR #64, shipped) — cosmetic skins cat / robot-vacuum / dog via
+  `PetSprite({type,mode})` + pure `petMotionGrammar(type)` (own motion grammar per skin) +
+  `petType` toggle. COSMETIC ONLY: `derivePetState`/`resolvePetMode` take no `type` argument, so the
+  hide-on-blocker honesty guarantee holds identically for every skin (red-team-confirmed).
 - Tests: `tests/petState.test.js` +6 (`resolvePetMode` precedence/honesty, `petReadabilityScale`).
   DEV live-verified: alert fires on new-blocker edge + auto-clears (no stuck state); petScale wiring
   (0.25→1.6, 0.64→1.25). Honesty precedence is unit-proven (live env can't hold a blocker — the hook
