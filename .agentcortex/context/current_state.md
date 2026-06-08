@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T11:10:00Z
-- **Update Sequence**: 43
+- **Last Updated**: 2026-06-08T11:40:00Z
+- **Update Sequence**: 44
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -132,6 +132,12 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-hotfix-controlpanel-render-crash-2026-06-08 (crash shipped green, caught by ACTUALLY loading the page)
+
+- **PR #71 hotfix.** PR #70 (ControlPanel helper extraction) used `export { … } from './controlPanelLabels.js'` — which re-exports to other modules but does NOT bind the names into ControlPanel's own scope. The component body still calls `shouldShowWatchdogDiag`/`taskChipLabel`/etc. at render → `ReferenceError` → ControlPanel threw → the WHOLE app fell back to the ErrorBoundary ("Something went wrong") on every load. Fix: `import { … }` (binds locally) AND re-export.
+- **CI/tests/build were ALL green** (1338 pass) because the node test env has no jsdom — nothing renders ControlPanel, and build doesn't execute render. The crash was invisible until a real page-load (headless-Playwright screenshot; `preview_screenshot` hangs here). Owner prompt "有沒有好好開畫面看看???" surfaced it.
+- **Lesson recorded (memory `feedback_load_the_page_render_crashes_invisible_to_ci`)**: after editing ANY rendered component, ACTUALLY load the page + assert svg renders / 0 console errors — green tests ≠ app renders. A reusable headless-shot tool lives at `scripts/pet-shot.mjs` (gitignored / local).
 
 ### Ship-retro-cleanup-pet-2026-06-08 (debt cleanup + polish from the 4-perspective retro)
 
