@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react'
 
-function BehaviorBubble({ x, y, message, below = false, absX = null, scale = 1, sceneW = 800, edgePad = 4 }) {
+function BehaviorBubble({ x, y, message, below = false, absX = null, scale = 1, sceneMinX = 0, sceneW = 800, edgePad = 4 }) {
   const [visible, setVisible] = useState(false)
   const [currentMsg, setCurrentMsg] = useState(message)
   const fadeTimerRef = useRef(null)
@@ -38,12 +38,14 @@ function BehaviorBubble({ x, y, message, below = false, absX = null, scale = 1, 
   // scene x (`absX`) + the net local→scene scale, we shift the box horizontally so it stays inside
   // [edgePad, sceneW−edgePad] while the TAIL stays anchored on the agent (see tailAnchor below).
   // absX===null (back-compat / no scene context) → shift 0, byte-identical to the old centered box.
-  const shift = computeEdgeShift({ boxW, absX, scale, sceneW, edgePad })
+  const shift = computeEdgeShift({ boxW, absX, scale, sceneMinX, sceneW, edgePad })
   const bx = x - boxW / 2 + shift
   const textX = x + shift
-  // Tail tip points at the agent (x); its base attaches to the shifted box, clamped 6px inside the
-  // box edges so a large shift slants the tail back to the speaker instead of detaching from it.
-  const tailAnchor = Math.max(bx + 6, Math.min(x, bx + boxW - 6))
+  // Tail tip points at the agent (x); its base attaches to the shifted box, inset from the box edges
+  // so a large shift slants the tail back to the speaker instead of detaching from it. The inset is
+  // capped at boxW/2-1 so the clamp can't invert for a hypothetical sub-12px box (today boxW≥48).
+  const tailInset = Math.min(6, boxW / 2 - 1)
+  const tailAnchor = Math.max(bx + tailInset, Math.min(x, bx + boxW - tailInset))
   // `below`: for agents at the very top of the office, the default (above-the-head) bubble draws
   // past the SVG's top edge and gets clipped. The parent flips it BELOW the agent and the tail
   // points up instead of down.
@@ -127,17 +129,21 @@ function computeBubbleLayout(currentMsg) {
 }
 
 // #47 — pure horizontal-edge shift (local units) so a bubble centered on an agent at absolute scene
-// x `absX` stays inside [edgePad, sceneW − edgePad]. `scale` is the net local→scene factor (so a
-// local shift of `s` moves the box `s·scale` in scene units). Returns 0 when no scene context is
-// given (absX null / non-finite scale) — the bubble then renders centered as before.
+// x `absX` stays inside the VISIBLE viewBox x-range [sceneMinX+edgePad, sceneMinX+sceneW−edgePad].
+// `sceneMinX` is 0 in the default office (viewBox 0..800) and non-zero in panel mode (cropped
+// viewBox). `scale` is the net local→scene factor (so a local shift of `s` moves the box `s·scale`
+// in scene units). Returns 0 when no scene context is given (absX null / non-finite scale) — the
+// bubble then renders centered as before.
 //   box scene span = absX + (localX ± boxW/2 + shift)·scale, with localX = 0 (bubble is centered on
 //   the agent). Solve each edge for shift, then pick the value closest to 0 (no shift) that satisfies
 //   both — pushing right when it would clip the left edge, left when it would clip the right.
-export function computeEdgeShift({ boxW, absX, scale = 1, sceneW = 800, edgePad = 4 }) {
+export function computeEdgeShift({ boxW, absX, scale = 1, sceneMinX = 0, sceneW = 800, edgePad = 4 }) {
   if (absX == null || !Number.isFinite(absX) || !Number.isFinite(scale) || scale <= 0) return 0
   const half = boxW / 2
-  const leftBound = (edgePad - absX) / scale + half          // minimum shift to clear the left edge
-  const rightBound = (sceneW - edgePad - absX) / scale - half // maximum shift before clipping right
+  const minEdge = sceneMinX + edgePad           // left visible edge (+pad); 0-based in default mode
+  const maxEdge = sceneMinX + sceneW - edgePad  // right visible edge (−pad)
+  const leftBound = (minEdge - absX) / scale + half   // minimum shift to clear the left edge
+  const rightBound = (maxEdge - absX) / scale - half  // maximum shift before clipping right
   // closest-to-zero shift within [leftBound, rightBound]. If the box is wider than the available
   // span (leftBound > rightBound) this yields rightBound — best effort that keeps the right edge in.
   return Math.min(Math.max(0, leftBound), rightBound)

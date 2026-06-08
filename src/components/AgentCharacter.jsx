@@ -639,6 +639,10 @@ function AgentCharacter({ agent }) {
   // re-renders only when the scale actually changes (PixelOffice no-ops equal writes).
   const sceneScale = useOfficeStore((s) => s.sceneScale)
   const labelScale = computeLabelScale(sceneScale)
+  // #47: active viewBox x-bounds so the speech bubble clamps to the VISIBLE office edges (default
+  // 0..800 OR the panel crop). Primitive subscriptions → re-render only on a real bounds change.
+  const sceneMinX = useOfficeStore((s) => s.sceneBounds.minX)
+  const sceneW = useOfficeStore((s) => s.sceneBounds.w)
   // L3 reluctant-participant tell (transient expiry ts). Pure overlay — never affects behavior.
   const reluctantUntil = useOfficeStore((s) => s.reluctant?.[id])
 
@@ -1242,7 +1246,7 @@ function AgentCharacter({ agent }) {
               {/* #47: pass the agent's absolute scene x + net local→scene scale (labelScale, since
                   the char's 1.35 scale is undone above) so the bubble self-clamps horizontally and
                   far-left/right desks no longer clip the bubble at the office edge. */}
-              <BehaviorBubble x={0} y={0} below={below} message={state.bubble} absX={pos.x} scale={labelScale} />
+              <BehaviorBubble x={0} y={0} below={below} message={state.bubble} absX={pos.x} scale={labelScale} sceneMinX={sceneMinX} sceneW={sceneW} />
             </g>
           )
         })()}

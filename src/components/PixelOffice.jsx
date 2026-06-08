@@ -877,6 +877,16 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   }, [isPanel, rosterMode, setSceneScale])
 
   const viewBox = isPanel ? panelViewBox : '0 0 800 560'
+  // #47: publish the active viewBox x-bounds (minX, width) so BehaviorBubble clamps speech bubbles
+  // to the VISIBLE edges in BOTH default (0..800) and panel (cropped) modes — a hardcoded 0..800
+  // clamp would target the wrong edges in panel mode and let bubbles clip the crop.
+  const setSceneBounds = useOfficeStore((s) => s.setSceneBounds)
+  useEffect(() => {
+    const parts = viewBox.split(/\s+/).map(Number)
+    if (parts.length === 4 && Number.isFinite(parts[0]) && Number.isFinite(parts[2])) {
+      setSceneBounds(parts[0], parts[2])
+    }
+  }, [viewBox, setSceneBounds])
   // Office (non-panel) FILLS THE WIDTH at every pane shape: the svg is width-driven via aspect-ratio
   // (800/560), so the scene ALWAYS spans the full browser width — no left/right whitespace, ever.
   // Its height follows the ratio; the wrapper centers + clips, so a wide-short pane trims the empty
