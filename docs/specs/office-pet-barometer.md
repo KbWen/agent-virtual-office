@@ -26,17 +26,19 @@ movement system.
 ## Complete state & signal reference (the canonical map)
 
 **6 pet modes** — 4 persistent (from the honest base table) + 2 transient event-edge beats.
-**3 cosmetic types** (cat · robot-vacuum · dog) — same modes, different sprite + motion grammar.
+**6 cosmetic types** (cat · robot-vacuum · dog · rabbit · bird · hamster) — same modes, different
+sprite + motion grammar. A **type-independent emote glyph** above the pet makes the mode legible at a
+glance for ANY skin (the poses alone are subtle at ~30px).
 
-| Mode | Kind | Real signal that triggers it | Per-type look |
-|------|------|------------------------------|---------------|
-| `hide` | base | any agent `blocked` **OR** mood `stuck`/`frustrated` | cat: crouched, ears down · vacuum: tilted + dim · dog: crouched |
-| `nap` | base | mood `idle` (and nobody blocked) | cat/dog: curled + rising "z" · vacuum: docked + dim |
-| `wander` | base | mood `normal` (steady, default) | cat/dog: amble · vacuum: glide + sweep trail |
-| `excited` | base | mood `smooth`/`rushing`/`intense` | cat/dog: trot, tail up + hop · vacuum: + dust puff |
-| `alert` | transient (~2.5s) | blockedCount **rose** (a NEW blocker) → also RUNS to that desk; settles into `hide` | ears up + `!` (vacuum: red LED + `!`) |
-| `celebrate` | transient (~2.5s) | real `eureka`/`deploy-success` event **OR** a blocker just cleared (relief) — only when not hiding | hop + ✦ confetti |
-| _(click-♥)_ | cosmetic overlay | user clicks the pet (calm modes only) — NOT a real signal | a ♥ floats up |
+| Mode | Kind | Real signal that triggers it | Emote | Pose / look |
+|------|------|------------------------------|-------|-------------|
+| `hide` | base | any agent `blocked` **OR** mood `stuck`/`frustrated` | ⚠ | crouched low (vacuum: tilted + dim) |
+| `nap` | base | mood `idle` (and nobody blocked) | 💤 | curled (vacuum: docked + dim) |
+| `wander` | base | mood `normal` (steady, default) | — | amble (vacuum: glide + sweep trail) |
+| `excited` | base | mood `smooth`/`rushing`/`intense` | ⚡ | trot/tail-up + hop (vacuum: + dust puff) |
+| `alert` | transient (~2.5s) | blockedCount **rose** (a NEW blocker) → also RUNS to that desk; settles into `hide` | ❗ | ears up |
+| `celebrate` | transient (~2.5s) | real `eureka`/`deploy-success` event **OR** a blocker just cleared (relief) — only when not hiding | — | hop + ✦ confetti |
+| _(click-♥)_ | cosmetic overlay | user clicks the pet (calm modes only) — NOT a real signal | ♥ | — |
 
 ### Signal coverage — what maps, and what deliberately does NOT
 
