@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
-import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, nextPetType, runTarget, PET_TYPES, PET_MODES } from '../src/systems/petState.js'
+import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, nextPetType, runTarget, modeEmote, PET_TYPES, PET_MODES } from '../src/systems/petState.js'
 // Static import (hoisted above the window shim below) so the store + i18n initialize while `window`
 // is still undefined — matching the repo's node test env. The shim then provides localStorage so the
 // toggle's persistence path runs. (Same approach as weatherEffectsToggle.test.js.)
@@ -95,6 +95,24 @@ describe('runTarget (#39 — pet points at the blocked desk)', () => {
     expect(runTarget(undefined)).toBeNull()
     expect(runTarget({ x: NaN, y: 1 })).toBeNull()
     expect(runTarget({ x: 1 })).toBeNull()
+  })
+})
+
+describe('modeEmote (#39 — type-independent legibility glyph)', () => {
+  it('gives a distinct glyph to each non-neutral mode; none for wander/celebrate', () => {
+    expect(modeEmote(PET_MODES.HIDE)).toBe('⚠')
+    expect(modeEmote(PET_MODES.NAP)).toBe('💤')
+    expect(modeEmote(PET_MODES.EXCITED)).toBe('⚡')
+    expect(modeEmote(PET_MODES.ALERT)).toBe('❗')
+    expect(modeEmote(PET_MODES.WANDER)).toBeNull()      // neutral default — no glyph
+    expect(modeEmote(PET_MODES.CELEBRATE)).toBeNull()   // the ✦ confetti is the tell
+  })
+  it('all four glyphs are distinct (legibility)', () => {
+    const g = [PET_MODES.HIDE, PET_MODES.NAP, PET_MODES.EXCITED, PET_MODES.ALERT].map(modeEmote)
+    expect(new Set(g).size).toBe(4)
+  })
+  it('unknown mode → null', () => {
+    expect(modeEmote('bogus')).toBeNull()
   })
 })
 

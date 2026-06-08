@@ -16,6 +16,21 @@ export const PET_MODES = Object.freeze({
   CELEBRATE: 'celebrate', // a real positive event (eureka / deploy-success) — only when not hiding
 })
 
+// A clear, TYPE-INDEPENDENT emote glyph floated above the pet per mode, so the state is legible at a
+// glance for ANY skin (the poses alone are subtle at ~30px). `wander` (neutral default) shows none;
+// `celebrate` shows none here because its rising ✦ confetti IS the indicator. Pure → testable.
+export const MODE_EMOTE = Object.freeze({
+  hide: '⚠',       // something needs a human / rough patch
+  nap: '💤',       // resting
+  excited: '⚡',   // momentum
+  alert: '❗',     // a NEW blocker — go look
+  wander: null,
+  celebrate: null, // the confetti is the tell
+})
+export function modeEmote(mode) {
+  return MODE_EMOTE[mode] || null
+}
+
 // mood enum (constants.VALID_MOODS): normal · rushing · frustrated · stuck · smooth · intense · idle
 const MOOD_TO_PET = Object.freeze({
   stuck: 'hide',
