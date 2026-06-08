@@ -8,6 +8,7 @@ import { STATUS_COLORS } from './constants.js'
 import { classifyTask, familyToBehavior, decideBehavior } from './classify.js'
 import { FEED_ORIGINS } from './rosterModel.js'
 import { PET_TYPES, nextPetType } from './petState.js'
+import { recordEpisode, isNewBlockedEpisode } from './recurringFailure.js'
 
 export { STATUS_COLORS }
 
@@ -636,7 +637,11 @@ export const useOfficeStore = create((set) => ({
   endWorkflow: () => set({ showWorkflow: false }),
 
   // ─── External status integration ───
-  externalStatus: {},          // { [agentId]: { status, task, label, expiresAt } }
+  externalStatus: {},          // { [agentId]: { status, task, label, expiresAt, reasonCode } }
+  // AVO-117: per-(agentId)(reasonCode) rolling list of blocked-EPISODE timestamps. Transient
+  // (savePersistedState whitelists fields and this is not one — like watchdogRestarts/externalStatus);
+  // a live-window signal, reset on reload. Drives the recurring-failure sign + notification.
+  recurringFailureLog: {},
   hasEverReceivedStatus: false, // true once ANY external status has been applied
   statusSource: 'organic',     // 'organic' | 'external' | 'fallback'
   integrationSource: null,     // e.g. claude-cli | codex-cli | codex-app | webhook
@@ -720,6 +725,8 @@ export const useOfficeStore = create((set) => ({
         if (slot !== undefined) occupiedSlots.add(slot)
       }
 
+      // AVO-117: accumulate blocked-episode timestamps across this payload's updates.
+      let rfLog = s.recurringFailureLog || {}
       for (const u of updates) {
         const previousStatus = ext[u.agentId]?.status || agents[u.agentId]?.status || 'idle'
         if (!agents[u.agentId]) {
@@ -790,6 +797,13 @@ export const useOfficeStore = create((set) => ({
           // done: 10s expiry (brief celebration then back to idle)
           expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
           changedAt: sigChanged ? now : (Number.isFinite(prevExt.changedAt) ? prevExt.changedAt : now),
+        }
+        // AVO-117: record a blocked EPISODE only on a real edge (pure isNewBlockedEpisode owns the
+        // rule: transition INTO blocked from a non-blocked-family state, or a reason-change while
+        // blocked, with a SPECIFIC reason). A poll re-read OR an idle-gap blocked↔awaiting-approval
+        // flap of the SAME stuck state does NOT increment — no false recurrence (EPISODE-EDGE).
+        if (isNewBlockedEpisode(prevExt, { status: u.status, reasonCode: u.reasonCode })) {
+          rfLog = recordEpisode(rfLog, { agentId: u.agentId, reasonCode: u.reasonCode, now })
         }
         // Immediately set behavior + expression to match work status. Behavior/
         // expression/bubble are all folded into a SINGLE object spread below —
@@ -958,6 +972,7 @@ export const useOfficeStore = create((set) => ({
       }
       return {
         externalStatus: ext, agents, activityLog: log, eventFeed: feedLog, dailyDoneLedger, dailyBlockedLedger,
+        recurringFailureLog: rfLog,
         hasEverReceivedStatus: meta.skipHintDismiss ? s.hasEverReceivedStatus : true,
         ...(evictedSelected ? { selectedAgent: null } : {}),
         ...integrationPatch,

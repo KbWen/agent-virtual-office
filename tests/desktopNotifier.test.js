@@ -354,3 +354,33 @@ describe('desktopNotifier — stop() prunes evicted agents (fix #3)', () => {
     stop2()
   })
 })
+
+describe('desktopNotifier — recurring-failure notice (AVO-117)', () => {
+  const recStore = (agentId, reasonCode, episodes) => ({
+    getState: () => ({
+      agents: { [agentId]: { status: 'blocked' } },
+      externalStatus: { [agentId]: { reasonCode } },
+      recurringFailureLog: { [agentId]: { [reasonCode]: episodes } },
+    }),
+  })
+  const recurringFires = () => MockNotification.lastFired.filter(n => n.tag?.startsWith('office-recurring-'))
+
+  it('fires ONE recurring notification (distinct tag) when the same kind recurs ≥ threshold, then dedups', () => {
+    const now = 1_000_000
+    const store = recStore('dev', 'test-run-failed', [now - 2000, now - 1000, now])
+    const stop = startDesktopNotifier(store, { now: () => now }) // immediate tick fires
+    expect(recurringFires().length).toBe(1)
+    expect(recurringFires()[0].tag).toBe('office-recurring-dev-test-run-failed')
+    vi.advanceTimersByTime(20000) // 4 more polls, recurrence unchanged
+    expect(recurringFires().length).toBe(1) // NOTIFY-ONCE-PER-EPISODE
+    stop()
+  })
+
+  it('does NOT fire below threshold (2 episodes)', () => {
+    const now = 2_000_000
+    const store = recStore('qa', 'build-failed', [now - 1000, now])
+    const stop = startDesktopNotifier(store, { now: () => now })
+    expect(recurringFires().length).toBe(0)
+    stop()
+  })
+})

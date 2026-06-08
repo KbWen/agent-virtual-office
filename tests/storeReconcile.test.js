@@ -23,6 +23,7 @@ function resetStore() {
   useOfficeStore.setState({
     agents,
     externalStatus: {},
+    recurringFailureLog: {},
     statusSource: 'organic',
     activeWorkflow: null,
     activityLog: [],
@@ -746,5 +747,63 @@ describe('blocked-reason data path (AVO-110)', () => {
     // 3. store whitelist
     useOfficeStore.getState().applyExternalStatus(routed, { source: 'hook' })
     expect(useOfficeStore.getState().externalStatus[routed[0].agentId].reasonCode).toBe('test-run-failed')
+  })
+})
+
+// AVO-117 — blocked-episode recording happens in the store, only on real edges.
+import { recurringInfo } from '../src/systems/recurringFailure.js'
+describe('AVO-117 recurring episode recording (store)', () => {
+  beforeEach(resetStore)
+  const blocked = (reasonCode) => ({ agentId: 'dev', status: 'blocked', task: 'Bash', label: 'x', reasonCode })
+  const working = () => ({ agentId: 'dev', status: 'working', task: 'Bash', label: 'y' })
+  const info = () => recurringInfo(useOfficeStore.getState().recurringFailureLog, { agentId: 'dev', reasonCode: 'test-run-failed', now: Date.now() })
+
+  it('EPISODE-EDGE: distinct blocked episodes accrue; 3rd → recurring', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([blocked('test-run-failed')], { source: 'hook' }) // edge 1
+    expect(info().count).toBe(1)
+    applyExternalStatus([working()], { source: 'hook' })
+    applyExternalStatus([blocked('test-run-failed')], { source: 'hook' }) // edge 2
+    expect(info().count).toBe(2)
+    expect(info().recurring).toBe(false)
+    applyExternalStatus([working()], { source: 'hook' })
+    applyExternalStatus([blocked('test-run-failed')], { source: 'hook' }) // edge 3
+    expect(info().recurring).toBe(true)
+  })
+
+  it('NO double-count: re-reading the SAME (blocked, reason) on every poll stays at 1 episode', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    for (let i = 0; i < 5; i++) applyExternalStatus([blocked('test-run-failed')], { source: 'hook' })
+    expect(info().count).toBe(1)
+  })
+
+  it('SPECIFIC-ONLY in store: blocked-unknown episodes never record', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([blocked('blocked-unknown')], { source: 'hook' })
+    applyExternalStatus([working()], { source: 'hook' })
+    applyExternalStatus([blocked('blocked-unknown')], { source: 'hook' })
+    expect(useOfficeStore.getState().recurringFailureLog).toEqual({})
+  })
+
+  it('idle-gap flap blocked→awaiting-approval→blocked of ONE stuck state does NOT inflate to recurring', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    const awaiting = () => ({ agentId: 'dev', status: 'awaiting-approval', task: 'Bash', label: 'waiting' })
+    // ONE real stuck state, flapped twice by the idle-gap inferrer — must count as 1 episode, not 3.
+    applyExternalStatus([blocked('test-run-failed')], { source: 'hook' })      // episode 1
+    applyExternalStatus([awaiting()], { source: 'idle-gap-infer' })            // reclassified, same stuck
+    applyExternalStatus([blocked('test-run-failed')], { source: 'hook' })      // re-asserts — NOT new
+    applyExternalStatus([awaiting()], { source: 'idle-gap-infer' })
+    applyExternalStatus([blocked('test-run-failed')], { source: 'hook' })      // re-asserts — NOT new
+    expect(info().count).toBe(1)
+    expect(info().recurring).toBe(false)
+  })
+
+  it('reason-change while blocked counts as a new episode of the new kind', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus([blocked('test-run-failed')], { source: 'hook' })
+    applyExternalStatus([blocked('build-failed')], { source: 'hook' }) // edge for build
+    const log = useOfficeStore.getState().recurringFailureLog
+    expect(recurringInfo(log, { agentId: 'dev', reasonCode: 'test-run-failed', now: Date.now() }).count).toBe(1)
+    expect(recurringInfo(log, { agentId: 'dev', reasonCode: 'build-failed', now: Date.now() }).count).toBe(1)
   })
 })

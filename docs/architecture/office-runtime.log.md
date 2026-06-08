@@ -50,3 +50,14 @@ source_sha: d07cf37
 - [DECISION] The badge is a PER-AGENT over-head element overriding the BehaviorIndicator glyph while blocked; the singleton OfficePet (already hides on blockers) is a separate surface and is untouched.
 - [CONSTRAINT] The `reasonCode` field MUST survive the full path — hook `newAgents` literal + hook merge-read carry-forward + transport `u` payload (sanitizeAgent + routeExternalAgents) + the POST `/api/status` ingest (`normalizePost.js` + `server.mjs` mirror) + store `ext` rebuild = FIVE whitelists. Review caught the POST hop (4th/5th) as a silent drop; any future agent-record normalizer MUST carry it or the feature renders nothing while unit tests pass trivially.
 - [TRADEOFF] MVP under-specifies (the harness wraps `cd "<dir>" && <cmd>`; the glue-strip handles the common shape, but compound commands → `blocked-unknown`) in exchange for zero false-positive specific tags. permission/auth/rate-limit deferred to Phase-2 (need a structured errno/HTTP-status field; substring regex over free-text is fabrication). A false negative preserves honesty; a false positive breaks it.
+
+### [office-runtime][2026-06-08][feat/recurring-failure-detection]
+source_spec: docs/specs/recurring-failure-detection.md
+source_sha: 47724e9
+
+- [DECISION] Recurrence is keyed on the coarse reasonCode (the only honest observable unit); the sign claims the PATTERN ("same kind keeps failing"), never a specific bug. Rejected error-text/stack clustering — AVO-110 firewall forbids free-text fabrication.
+- [CONSTRAINT] blocked-unknown is EXCLUDED from recurrence — recurring of an unknown cause is noise and over-claims. Only the 3 specific reasons accrue.
+- [CONSTRAINT] Count distinct blocked EPISODES, never poll ticks. The blocked-family (blocked + idle-gap-derived awaiting-approval) is ONE continuous episode — a blocked<->awaiting-approval flap must NOT manufacture a false recurrence (review BLOCKER). Pure isNewBlockedEpisode owns the rule; mirrors desktopNotifier BLOCKED_DERIVED.
+- [DECISION] State lives in the store, in-memory, not persisted (reload resets the window) — the reasonCode stream itself is non-persisted. Pure helpers in recurringFailure.js; store is the single recording point.
+- [CONSTRAINT] Recurring sign is EPHEMERAL: only while currently blocked AND currently recurring; threshold >=3 within a 10-min window. A false-positive alarm is worse than silence.
+- [TRADEOFF] reasonCode is coarse, so recurring means "this KIND of step keeps failing" (may bundle distinct root causes). Accepted: still a true actionable signal; honest wording prevents over-claiming. Finer signatures wait for a structured-error hook field (shared Phase-2 boundary with AVO-110).

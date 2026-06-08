@@ -38,7 +38,7 @@ last_updated: 2026-06-08
 | AVO-114 | Event-stream replay scrubber | product | observability | P2 | — | feature | Pending | — |
 | AVO-115 | Shareable daily card | product | brand | P1 | — | feature | Pending | — |
 | AVO-116 | Per-agent cost attribution & daily $ trend | product | info-density | P1 | — | feature | Pending | AVO-108 |
-| AVO-117 | Recurring failure-mode detection | product | observability | P1 | — | feature | Pending | AVO-110 |
+| AVO-117 | Recurring failure-mode detection | product | observability | P1 | docs/specs/recurring-failure-detection.md | feature | Done | AVO-110 |
 | AVO-118 | Workflow graph minimap (DAG view) | product | multi-agent | P2 | — | feature | Pending | AVO-105 |
 | AVO-119 | Language / file-type breakdown | product | info-density | P2 | — | feature | Pending | — |
 | AVO-120 | Daily MVP / productivity leaderboard | product | brand | P2 | — | feature | Pending | — |
