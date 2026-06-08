@@ -111,9 +111,10 @@ export default function OfficePet() {
     return () => clearInterval(id)
   }, [mobile, mode, grammar.cadenceMul])
 
-  // #39: on a new blocker (alert turns true), trot over and stand just below that agent's desk so the
-  // pet POINTS AT the real blocker (motion = information; the honest beat made legible). Reads the
-  // store's published agent.position only — no movement-system / HOME_POSITIONS coupling.
+  // #39: when a new blocker appears (alert turns true), trot over and stand just below a blocked
+  // agent's desk so the pet POINTS AT a real blocker (motion = information; the honest beat made
+  // legible). With multiple blockers it targets the first one found — still always a REAL blocker, so
+  // honesty holds. Reads the store's published agent.position only — no movement-system / HOME_POSITIONS coupling.
   useEffect(() => {
     if (!alert || !officePet) return
     const raw = blockedPosRef.current

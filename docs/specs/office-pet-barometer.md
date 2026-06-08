@@ -127,9 +127,13 @@ subtle state diffs). Guardian reframe: push delight INTO the signal, novelty OFF
 - All honesty/calm-tech guardrails held (real-signal-only, reduced-motion off, no fake narrative,
   hide-on-blocker sacred). Visual layer — verified live (pet ~30px, pop/confetti/♥). Reviewer PASS.
 
-> **Deferred to follow-ups** (panel, still open): the pet running to the actually-blocked desk
-> (read-only `agent.position`); distinct robot-vacuum per-mode silhouettes; ControlPanel button
-> consolidation (⚙ settings popover).
+**Run-to-blocked-desk + vacuum silhouettes (PR #66, shipped)** — on a new-blocker edge the pet trots
+to stand just below a blocked agent's desk so it POINTS AT a real blocker (pure `runTarget`; reads the
+store's published `agent.position` read-only — no HOME_POSITIONS / movement coupling; honesty held,
+alert still settles to hide). The robot-vacuum's near-identical modes got distinct static silhouettes
+(nap dock+dim · wander sweep trail · excited dust puff · hide tilt+dim).
+
+> **Deferred to a follow-up** (panel, still open): ControlPanel button consolidation (⚙ settings popover).
 
 - **Multiple pet types** (PR #64, shipped) — cosmetic skins cat / robot-vacuum / dog via
   `PetSprite({type,mode})` + pure `petMotionGrammar(type)` (own motion grammar per skin) +
