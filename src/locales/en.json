@@ -83,8 +83,6 @@
     "tea-break": ["☕ break~", "grab a cup", "let's chat", "so tired"],
     "standup": ["today's progress...", "reporting in", "mm-hmm", "standup time!", "keep it short"],
     "standup-done": "report done",
-    "pair-programming": ["same file 🤝", "let's pair on this", "you're on this too?", "two heads better"],
-    "pair-done": ["nice teamwork", "sorted it together", "👍 done"],
     "food-delivery": "food's here! 🍱",
     "food-react": "awesome! let's eat!",
     "coffee-spill": "oh no! spilled it!",
@@ -360,5 +358,8 @@
     "deps-failed": { "label": "Installs keep failing", "a11y": "Recurring: installing dependencies keeps failing for this agent" },
     "notifyTitle": "Recurring failure",
     "notifyBody": "{0} keeps hitting the same kind of failure"
+  },
+  "pairLink": {
+    "coediting": "both editing"
   }
 }

@@ -83,8 +83,6 @@
     "tea-break": ["☕ 休息~", "喝一杯", "聊聊天", "好累啊"],
     "standup": ["今天進度...", "來報告", "嗯嗯", "站立會議！", "快快講"],
     "standup-done": "報告完畢",
-    "pair-programming": ["同一個檔案 🤝", "一起看這個", "你也在改這個？", "兩個人一起"],
-    "pair-done": ["合作愉快", "一起搞定了", "👍 完成"],
     "food-delivery": "外送到了！🍱",
     "food-react": "讚！吃飯！",
     "coffee-spill": "啊！打翻了！",
@@ -360,5 +358,8 @@
     "deps-failed": { "label": "反覆安裝失敗", "a11y": "重複問題:這個 agent 反覆安裝套件失敗" },
     "notifyTitle": "重複問題",
     "notifyBody": "{0} 反覆遇到同一類失敗"
+  },
+  "pairLink": {
+    "coediting": "同時在編輯"
   }
 }

@@ -8,6 +8,7 @@ import { startIdleGapInference } from '../inference/idleGapInfer'
 import { startWorkflowHandoffs } from '../inference/workflowHandoff'
 import { eventName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
+import PairLinkOverlay from './PairLink'
 import HelperHuddles from './HelperHuddle'
 import OfficePet from './OfficePet'
 import NarrowRoster from './NarrowRoster'
@@ -1150,6 +1151,11 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {/* ═══ SUBAGENT HELPER HUDDLES ═══ (capped helper figures — painted BEHIND the agents
           so the full-size lead is never clipped by its own helpers; they trail the lead's live pos) */}
       <HelperHuddles />
+
+      {/* ═══ CO-EDITING PAIR LINK ═══ (AVO-106 — faint desk-to-desk link when two agents co-edit
+          the same file; painted BEHIND agents so sprites occlude the endpoints. Pure overlay — never
+          moves an agent. Renders nothing when no pair.) */}
+      <PairLinkOverlay />
 
       {/* ═══ AGENTS ═══ */}
       {agentList.map((agent) => (

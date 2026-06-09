@@ -1,10 +1,11 @@
 /**
- * AVO-106 — Pair-programming huddle detector (PURE).
+ * AVO-106 — Co-editing pair detector (PURE).
  *
- * Honest shared-file correlation: returns the two distinct agents that are BOTH currently on
- * the byte-identical file, or null. The caller (officeLife) turns a non-null result into a
- * brief whiteboard huddle. This module asserts nothing it cannot prove from the live
- * externalStatus snapshot — see docs/specs/pair-programming-huddle.md §Honesty Contract.
+ * Honest shared-file correlation: returns the two distinct agents that are BOTH currently
+ * co-editing the byte-identical file, or null. The caller (officeLife) turns a non-null result
+ * into a pure in-place overlay (a faint desk-to-desk link — NOT a relocating event). This module
+ * asserts nothing it cannot prove from the live externalStatus snapshot — see
+ * docs/specs/pair-programming-huddle.md §Honesty Contract.
  *
  *   - distinct identities — externalStatus keys are unique agent ids; two events that collapse
  *     to the same role are ONE key, so they can never form a pair (we never invent a 2nd agent).
@@ -12,6 +13,11 @@
  *     different `index.js` in different dirs are NOT "the same file".
  *   - recency — each agent's activeFileAt must be within `window`; a stale file does not huddle.
  *   - not idle — an idle agent is not "working on" anything.
+ *   - co-EDITING (not reading) — this detector trusts that `activeFile` is already write-class only.
+ *     The Read-exclusion is enforced at the SOLE producer (`activeFileForTool` in the hook): Read
+ *     never publishes an activeFile, so a co-read can never reach this snapshot. (The transport
+ *     whitelists carry the field verbatim — they don't re-gate by tool, by design; `task` is the
+ *     tool name and is display-only. The hook is the single source of the co-edit semantics.)
  */
 
 // Normalize a file path for comparison: unify separators + lower-case (the host is Windows,
@@ -64,9 +70,4 @@ export function findSharedFilePair(externalStatus, now, window) {
     }
   }
   return best ? best.pair : null
-}
-
-// Stable cooldown key for a pair (order-independent) so a lingering pair maps to one cooldown slot.
-export function pairKey(a, b) {
-  return a < b ? `${a}|${b}` : `${b}|${a}`
 }

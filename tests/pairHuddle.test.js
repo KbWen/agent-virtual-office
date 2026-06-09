@@ -4,7 +4,7 @@
  * byte-identical file within the recency window. See spec §Honesty Contract.
  */
 import { describe, it, expect } from 'vitest'
-import { findSharedFilePair, normalizeFilePath, fileBasename, pairKey } from '../src/systems/pairHuddle.js'
+import { findSharedFilePair, normalizeFilePath, fileBasename } from '../src/systems/pairHuddle.js'
 
 const WIN = 90000
 const NOW = 1_000_000
@@ -26,9 +26,6 @@ describe('normalizeFilePath / fileBasename', () => {
     expect(fileBasename('/a/b/c/App.jsx')).toBe('App.jsx')
     expect(fileBasename('lonefile')).toBe('lonefile')
     expect(fileBasename('')).toBe('')
-  })
-  it('pairKey is order-independent', () => {
-    expect(pairKey('dev', 'qa')).toBe(pairKey('qa', 'dev'))
   })
 })
 

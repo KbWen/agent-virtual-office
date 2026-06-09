@@ -417,6 +417,16 @@ export const useOfficeStore = create((set) => ({
       }
     }),
 
+  // AVO-106: set/clear the co-editing pair overlay. No-op when unchanged so the renderer doesn't
+  // wake on every poll that re-confirms the same pair. Pure overlay — touches nothing but pairLink.
+  setPairLink: (link) =>
+    set((s) => {
+      const cur = s.pairLink
+      if (link == null) return cur == null ? s : { pairLink: null }
+      if (cur && cur.a === link.a && cur.b === link.b && cur.file === link.file) return s
+      return { pairLink: { a: link.a, b: link.b, file: link.file } }
+    }),
+
   clearReturnHomeIntent: (id) =>
     set((s) => {
       const current = s.agents[id]
@@ -638,6 +648,11 @@ export const useOfficeStore = create((set) => ({
 
   // ─── External status integration ───
   externalStatus: {},          // { [agentId]: { status, task, label, expiresAt, reasonCode, activeFile, activeFileAt } }
+  // AVO-106: pair-overlay — { a, b, file } when two distinct agents are co-EDITING the byte-identical
+  // file (derived by officeLife from externalStatus), else null. PURE OVERLAY: the renderer draws a
+  // faint desk-to-desk link; it NEVER moves an agent or touches status/behavior (R1 — a tracked desk
+  // is never modulated). Transient (not in the persist whitelist).
+  pairLink: null,
   // AVO-117: per-(agentId)(reasonCode) rolling list of blocked-EPISODE timestamps. Transient
   // (savePersistedState whitelists fields and this is not one — like watchdogRestarts/externalStatus);
   // a live-window signal, reset on reload. Drives the recurring-failure sign + notification.

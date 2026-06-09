@@ -2,12 +2,7 @@ import eventsData from '../config/officeEvents.json'
 import { WAYPOINTS, MEETING_CHAIRS, HOME_POSITIONS } from './movementSystem.js'
 import { eventBubble } from '../i18n'
 import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL, WORK_CLAIM_SIGNAL_WINDOW, LIVE_FLOOR_FIRE_CHANCE, SEED_COOLDOWN_MS, PAIR_HUDDLE_WINDOW } from './constants.js'
-import { findSharedFilePair, pairKey, fileBasename } from './pairHuddle.js'
-
-// AVO-106: the pair-programming huddle is a STANDALONE event — deliberately NOT in
-// eventsData.daily/rare, so the random scheduler can never fire it. It is triggered ONLY by the
-// shared-file detector off a real externalStatus edge (honesty: no real same-file signal → no huddle).
-const PAIR_EVENT = { id: 'pair-programming', duration: 14000 }
+import { findSharedFilePair, fileBasename } from './pairHuddle.js'
 
 let dailyTimer = null
 let rareTimer = null
@@ -430,37 +425,6 @@ const EVENT_HANDLERS = {
     }, 2500)
   },
 
-  // AVO-106: two distinct agents are on the SAME real file → a brief shared-file huddle at the
-  // whiteboard. participants is the EXACT pair from findSharedFilePair (NOT pickParticipants) —
-  // firePairHuddle passes [lead, partner] explicitly. The lead's bubble names the real basename
-  // (honest: it is the file both agents reported); the partner shows a localized "same file".
-  'pair-programming': (store, participants, cancelled) => {
-    const s = store.getState()
-    const [lead, partner] = participants
-    if (!lead || !partner || !s.agents[lead] || !s.agents[partner]) return
-    const file = fileBasename(s.externalStatus[lead]?.activeFile || s.externalStatus[partner]?.activeFile || '')
-    // Two spaced spots in front of the whiteboard (same verified floor band as standup).
-    const spots = [{ x: 502, y: 352 }, { x: 542, y: 380 }]
-    store.getState().setMultipleAgentGroupEvents([
-      {
-        id: lead, behavior: 'whiteboard', expression: 'focused',
-        bubble: file ? `🤝 ${file}` : eventBubble('pair-programming'),
-        groupTarget: jitter(spots[0], 7),
-      },
-      {
-        id: partner, behavior: 'chat', expression: 'normal',
-        bubble: eventBubble('pair-programming'),
-        groupTarget: jitter(spots[1], 7),
-      },
-    ])
-    setTimeout(() => {
-      if (cancelled?.value) return
-      const s2 = store.getState()
-      if (s2.agents[lead]?.inGroupEvent) s2.setAgentBehavior(lead, 'chat', 'normal', eventBubble('pair-done'))
-      if (s2.agents[partner]?.inGroupEvent) s2.setAgentBehavior(partner, 'thumbs-up', 'happy', eventBubble('pair-done'))
-    }, 7000)
-  },
-
   // ─── Rare events ─────────────────────────────────────────────────
 
   'boss-visit': (store, participants, cancelled) => {
@@ -700,7 +664,6 @@ export function startOfficeLife(store) {
   // per-event cooldown'd (SEED_COOLDOWN_MS — a flapping signal can't spam, R4). Edge-detected on
   // the cheap tracked fields only; high-frequency position churn early-returns.
   const seedCooldown = {}
-  const pairCooldown = {}  // AVO-106: per-pair cooldown so a lingering same-file pair can't re-huddle every poll
   let lastSeedAt = 0   // GLOBAL real-seed cooldown — keeps the causal layer RARE (calm-tech). A busy
                        // session fires many signal edges; without a global gate the office would be in
                        // perpetual event-mode (agents stuck gathering). At most one real-seed / window.
@@ -717,22 +680,23 @@ export function startOfficeLife(store) {
     store.getState().setActiveEvent(ev)
     executeEvent(store, ev, participants, cancelled)
   }
-  // AVO-106: fire the shared-file huddle for an EXPLICIT pair (bypasses pickParticipants). Shares
-  // the global lastSeedAt gate (calm-tech cadence) + a per-pair cooldown (a lingering pair can't
-  // re-trigger every poll). Mutex'd on activeEvent like every other coordinated event.
-  const firePairHuddle = (state, pair) => {
-    if (state.isPaused || state.activeEvent) return
-    const now = Date.now()
-    if (now - lastSeedAt < SEED_COOLDOWN_MS) return                                  // GLOBAL gate
-    const key = pairKey(pair[0], pair[1])
-    if (pairCooldown[key] && now - pairCooldown[key] < SEED_COOLDOWN_MS * 3) return  // per-pair
-    pairCooldown[key] = now
-    lastSeedAt = now
-    store.getState().setActiveEvent(PAIR_EVENT)
-    executeEvent(store, PAIR_EVENT, pair, cancelled)
-  }
   seedUnsub = typeof store.subscribe === 'function' ? store.subscribe((state, prev) => {
-    if (cancelled.value || !prev || state.isPaused || state.activeEvent) return
+    if (cancelled.value || !prev) return
+    // AVO-106: co-editing pair overlay. PURE derived "show-while-true" state — computed BEFORE the
+    // pause/activeEvent guard below (it is NOT a fired event: no mutex, no cooldown, no relocation).
+    // Gated only on externalStatus IDENTITY change so it never runs on 60fps position ticks.
+    if (state.externalStatus !== prev.externalStatus) {
+      const pair = findSharedFilePair(state.externalStatus, Date.now(), PAIR_HUDDLE_WINDOW)
+      if (pair) {
+        const ext = state.externalStatus
+        const file = fileBasename(ext[pair[0]]?.activeFile || ext[pair[1]]?.activeFile || '')
+        state.setPairLink({ a: pair[0], b: pair[1], file })
+      } else {
+        state.setPairLink(null)
+      }
+    }
+    // ── Seeded EVENTS below remain pause/mutex gated (they fire coordinated set-pieces). ──
+    if (state.isPaused || state.activeEvent) return
     // mood edge → real block-streak / done-streak coordinated moment (cadence source #2). Mood is a
     // slow-moving distillation of real signals, so these are naturally infrequent.
     if (state.mood !== prev.mood) {
@@ -742,14 +706,6 @@ export function startOfficeLife(store) {
     // real deploy: Ops just transitioned to done (cadence source #1)
     if (state.externalStatus?.ops?.status === 'done' && prev.externalStatus?.ops?.status !== 'done') {
       fireSeed(state, 'deploy-success')
-    }
-    // AVO-106: shared-file huddle. Gate on externalStatus IDENTITY change so this never runs on
-    // 60fps position ticks (which mutate state.agents, not externalStatus). The detector is pure +
-    // cheap (≤ roster size); a non-null result means two distinct agents are on the byte-identical
-    // file within the recency window — fire the huddle (mutex/cooldown enforced inside).
-    if (state.externalStatus !== prev.externalStatus) {
-      const pair = findSharedFilePair(state.externalStatus, Date.now(), PAIR_HUDDLE_WINDOW)
-      if (pair) firePairHuddle(state, pair)
     }
     // NOTE: the former `helpers-rise → standup` real-seed was REMOVED — SubagentStart fires often, and
     // `standup` gathers ALL agents, so it made the office perpetually clustered/frozen in a busy

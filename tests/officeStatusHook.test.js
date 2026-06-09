@@ -4,7 +4,22 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, bashVibeLabel, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse, readLatestTokenUsage, effortLevel, helperHash, helperAdd, helperRemove } = await import('../public/hooks/office-status-hook.js')
+const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, bashVibeLabel, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse, readLatestTokenUsage, effortLevel, activeFileForTool, helperHash, helperAdd, helperRemove } = await import('../public/hooks/office-status-hook.js')
+
+describe('activeFileForTool — AVO-106 co-editing signal gate (Read excluded)', () => {
+  it('publishes activeFile for write-class tools (Edit/Write)', () => {
+    expect(activeFileForTool('Edit', '/r/src/store.js')).toBe('/r/src/store.js')
+    expect(activeFileForTool('Write', '/r/src/new.js')).toBe('/r/src/new.js')
+  })
+  it('does NOT publish activeFile for Read (co-reads must not over-claim collaboration)', () => {
+    expect(activeFileForTool('Read', '/r/src/store.js')).toBeNull()
+  })
+  it('returns null for non-file tools and when no path was extracted', () => {
+    expect(activeFileForTool('Bash', null)).toBeNull()
+    expect(activeFileForTool('Grep', null)).toBeNull()
+    expect(activeFileForTool('Edit', null)).toBeNull()
+  })
+})
 
 describe('effortLevel — AVO-102 effort extraction', () => {
   it('returns the level for each known ordinal value', () => {
