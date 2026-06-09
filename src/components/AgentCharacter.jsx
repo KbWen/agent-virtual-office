@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
 import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveFocusFacing } from '../systems/movementSystem'
-import { eventBubble, charName, useLocale } from '../i18n'
+import { eventBubble, charName, useLocale, t } from '../i18n'
 import { BlockedReasonBadge } from './blockedReasonBadge'
 import { recurringInfo } from '../systems/recurringFailure'
+import { selectVisibleBubbles, BUBBLE_VISIBLE_CAP } from '../systems/bubbleVisibility.js'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
 
@@ -654,6 +655,12 @@ function AgentCharacter({ agent }) {
   // recorded → re-render). The recurring SIGN is EPHEMERAL: only while currently blocked AND the
   // current reason is recurring (≥threshold in-window). Computed from the slice at render.
   const recurringLog = useOfficeStore((s) => s.recurringFailureLog?.[id])
+  // Declutter: global speech-bubble concurrency cap. This agent shows its bubble only if it wins one
+  // of the BUBBLE_VISIBLE_CAP slots (priority blocked>done>working, most-recent first). Primitive
+  // boolean selector → this AgentCharacter re-renders only when ITS OWN visibility flips. Suppressing
+  // the bubble hides TEXT only — the status ring / name-pill color / over-head badge still render, so
+  // a blocked agent's state is never hidden by the cap (honesty preserved).
+  const bubbleVisible = useOfficeStore((s) => selectVisibleBubbles(s.agents, s.externalStatus, BUBBLE_VISIBLE_CAP).has(id))
 
   const timerRef = useRef(null)
   const pathRef = useRef([])
@@ -1114,10 +1121,6 @@ function AgentCharacter({ agent }) {
     return { tagW: w, tagHalfW: w / 2 }
   }, [name])
   const tagFill = state.status !== 'idle' ? (STATUS_COLORS[state.status] || color) : color
-  // '◷' is a monochrome Unicode clock glyph — tints with tagFill like the other status icons,
-  // consistent with the 8×8 white badge. Replaces the colour emoji '🧠' which clipped and
-  // ignored tagFill at fontSize 7.
-  const statusIcon = state.status === 'working' ? '⚡' : state.status === 'blocked' ? '✕' : state.status === 'done' ? '✓' : state.status === 'planning' ? '◷' : null
   const glowColor = STATUS_COLORS[state.status]
   // AVO-128: show the name only when the agent is doing something or is being inspected.
   const showName = hovered || (state.status && state.status !== 'idle')
@@ -1130,7 +1133,7 @@ function AgentCharacter({ agent }) {
       data-agent-status={state.status || 'idle'}
       data-agent-behavior={state.behavior || 'idle'}
       data-supervising={hasActiveHelper ? '1' : '0'}
-      role="button" aria-label={name} tabIndex={0}
+      role="button" aria-label={`${name} — ${t(`statusLabels.${state.status || 'idle'}`, state.status || 'idle')}`} tabIndex={0}
       onKeyDown={handleKeyDown}>
       {/* AVO-132: single working/planning glow ring; effort (high/xhigh/max) intensifies it
           (peak opacity + stroke width) instead of stacking a second concentric aura.
@@ -1243,12 +1246,9 @@ function AgentCharacter({ agent }) {
               </text>
             </>
           )}
-          {statusIcon && (
-            <g transform={`translate(${tagHalfW - 2}, -2)`}>
-              <rect x={-4} y={-4} width={8} height={8} rx={2} fill="white" opacity="0.9" />
-              <text x={0} y={1} textAnchor="middle" dominantBaseline="middle" fontSize="7" fill={tagFill}>{statusIcon}</text>
-            </g>
-          )}
+          {/* Declutter: the corner status glyph (⚡/✓/✕/◷) was a 3rd redundant status channel — the
+              name-pill FILL color (tagFill) and the glow RING already encode status. Removed to de-noise
+              every active sprite; status now rides on color + ring (visual) + the group aria-label (a11y). */}
           {/* AVO-138: steady 👀 overseer chip on the opposite shoulder while supervising helpers. */}
           {hasActiveHelper && (
             <g transform={`translate(${-(tagHalfW - 2)}, -2)`} data-supervise-cue="1">
@@ -1272,7 +1272,7 @@ function AgentCharacter({ agent }) {
               {/* #47: pass the agent's absolute scene x + net local→scene scale (labelScale, since
                   the char's 1.35 scale is undone above) so the bubble self-clamps horizontally and
                   far-left/right desks no longer clip the bubble at the office edge. */}
-              <BehaviorBubble x={0} y={0} below={below} message={state.bubble} absX={pos.x} scale={labelScale} sceneMinX={sceneMinX} sceneW={sceneW} />
+              <BehaviorBubble x={0} y={0} below={below} message={bubbleVisible ? state.bubble : null} absX={pos.x} scale={labelScale} sceneMinX={sceneMinX} sceneW={sceneW} />
             </g>
           )
         })()}

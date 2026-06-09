@@ -55,6 +55,8 @@ function BehaviorBubble({ x, y, message, below = false, absX = null, scale = 1, 
 
   return (
     <g
+      className="speech-bubble"
+      data-bubble-visible={visible ? '1' : '0'}
       style={{
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0)' : 'translateY(-5px)',

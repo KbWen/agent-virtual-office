@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T23:25:00Z
-- **Update Sequence**: 47
+- **Last Updated**: 2026-06-09T01:30:00Z
+- **Update Sequence**: 48
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -136,6 +136,15 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-declutter-glance-layer-2026-06-09 (UX declutter — bubble cap + de-alarm, owner "畫面太亂")
+
+- Branch `feat/declutter-glance-layer`, quick-win. PR pending (main protected). NOTE: parallel to the AVO-106 pair-link PR #80 — both touch this SSoT (Ship History + Update Sequence); whichever merges 2nd rebases the sequence. Off `main` (independent of #80).
+- **Origin**: owner worried the office is "too messy". Evidence-first: captured a real busy-moment screenshot, then a 4-lens declutter panel (clutter-auditor · first-time-user · wall-TV readability · calm-tech) each READ the screenshot + the code. **Unanimous #1 noise = simultaneous speech bubbles** (N active agents → N bubbles, no concurrency cap, ~60% of the mess).
+- **What shipped (REDUCTION, not new features)**: (1) **Bubble concurrency cap** — pure `src/systems/bubbleVisibility.js` `selectVisibleBubbles(agents, ext, cap=3)` picks ≤3 bubbles by priority `blocked > done > working`, recency tiebreak, stable id order; AgentCharacter gates `BehaviorBubble` on a per-agent boolean selector. **Honesty guarantee**: suppressing a bubble hides TEXT only — the status ring + name-pill color + over-head blocked-reason badge still render, so a real block is never hidden by the cap. (2) **OVERTIME de-alarmed** — the perpetual red pulse (read as a false alarm) → a steady muted-brown chip (night lighting already signals late; red reserved for real blocked state). (3) **Removed the redundant corner status glyph** (⚡/✓/✕/◷) — a 3rd status channel duplicating the pill color + glow ring; status now rides color+ring (visual) + the group aria-label (net a11y gain).
+- **Deferred**: bottom role-legend strip demote = its own ticket **AVO-130** (different surface — the control bar, not the office scene). Bigger wall-TV plays (blocked→whole-agent escalation, per-status posture/silhouette, AVO-137 density layers) remain backlog.
+- **Tests**: +9 (`bubbleVisibility` — cap, priority blocked>done>working, recency, stable tiebreak, honesty). Full suite **1420 passed**; build clean (444.5 KB). **Load-the-page verified** (headless Playwright `scripts/clutter-after-shot.mjs`): busy 7-agent scene → **3 bubbles ≤ cap**, blocked agent kept a slot, status chips gone, OVERTIME muted, **0 console errors, no ErrorBoundary**. Owner confirmed the before/after visually.
+- Tests: Pass
 
 ### Ship-feat-recurring-failure-detection-2026-06-08 (AVO-117 — recurring failure-mode detection)
 
