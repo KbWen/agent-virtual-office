@@ -27,7 +27,7 @@ last_updated: 2026-06-08
 | AVO-103 | Tool inventory label | product | real-ai-behavior | P1 | — | feature | Done | — |
 | AVO-104 | Skill activation badge | product | real-ai-behavior | P2 | — | feature | Pending | — |
 | AVO-105 | Handoff arrows | product | multi-agent | P0 | — | feature | Done | — |
-| AVO-106 | Pair-programming huddle | product | multi-agent | P1 | — | feature | Pending | — |
+| AVO-106 | Pair-programming huddle | product | multi-agent | P1 | docs/specs/pair-programming-huddle.md | feature | Done | shared-file huddle; per-agent activeFile + never-random event (PR pending) |
 | AVO-107 | Review-gate queue | product | multi-agent | P1 | — | feature | Pending | — |
 | AVO-108 | Token & cost meter | product | info-density | P0 | — | feature | Done | — |
 | AVO-109 | Recent-files heatmap | product | info-density | P2 | — | feature | Pending | — |

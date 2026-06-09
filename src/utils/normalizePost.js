@@ -57,6 +57,9 @@ export function normalizePost(body) {
         // AVO-110: carry the enum-validated blocked-reason through the POST ingest hop too
         // (parity with sanitizeAgent); anything else → null (render coerces → blocked-unknown).
         reasonCode: BLOCKED_REASONS.includes(a.reasonCode) ? a.reasonCode : null,
+        // AVO-106: carry the per-agent active file through the POST /api/status ingest (parity
+        // with sanitizeAgent). String, capped; anything else → null.
+        activeFile: typeof a.activeFile === 'string' ? a.activeFile.slice(0, 200) : null,
       }))
     const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
     return {

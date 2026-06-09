@@ -637,7 +637,7 @@ export const useOfficeStore = create((set) => ({
   endWorkflow: () => set({ showWorkflow: false }),
 
   // ─── External status integration ───
-  externalStatus: {},          // { [agentId]: { status, task, label, expiresAt, reasonCode } }
+  externalStatus: {},          // { [agentId]: { status, task, label, expiresAt, reasonCode, activeFile, activeFileAt } }
   // AVO-117: per-(agentId)(reasonCode) rolling list of blocked-EPISODE timestamps. Transient
   // (savePersistedState whitelists fields and this is not one — like watchdogRestarts/externalStatus);
   // a live-window signal, reset on reload. Drives the recurring-failure sign + notification.
@@ -784,6 +784,15 @@ export const useOfficeStore = create((set) => ({
         // externalStatus, which is never persisted). label/hint excluded — cosmetic, they flap.
         const prevExt = ext[u.agentId]
         const sigChanged = !prevExt || prevExt.status !== u.status || (prevExt.task || '') !== (u.task || '')
+        // AVO-106: stamp when this agent's active FILE last changed. Independent of sigChanged
+        // (task carries the TOOL name, not the file — editing a.js then b.js is task='Edit' both
+        // times, so sigChanged stays false while the file changes). The pair-huddle detector gates
+        // on this freshness; deliberately NOT folded into sigChanged so it never re-pops a bubble.
+        const nextActiveFile = u.activeFile || null
+        const fileChanged = !prevExt || (prevExt.activeFile || null) !== nextActiveFile
+        const activeFileAt = nextActiveFile == null
+          ? null
+          : (fileChanged ? now : (Number.isFinite(prevExt.activeFileAt) ? prevExt.activeFileAt : now))
         ext[u.agentId] = {
           status: u.status,
           task: u.task,
@@ -791,6 +800,9 @@ export const useOfficeStore = create((set) => ({
           hint: u.hint || null,
           // AVO-110: blocked-reason token (render maps it to a badge; null → no/blocked-unknown).
           reasonCode: u.reasonCode || null,
+          // AVO-106: per-agent active file + the freshness stamp the pair-huddle detector reads.
+          activeFile: nextActiveFile,
+          activeFileAt,
           // working/blocked: 5 min expiry — long-running tool calls (build, test suite, npm install)
           // can take >30s with no hook event between PreToolUse and PostToolUse; a shorter
           // expiry caused the workflow banner to flicker off mid-run and then self-heal.

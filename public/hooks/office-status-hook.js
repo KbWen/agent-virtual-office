@@ -653,6 +653,7 @@ function processEvent(event) {
 
   let role, task, status, label, hint = null
   let reasonCode = null  // AVO-110: language-neutral blocked-reason; stamped only on a trusted error
+  let activeFile = null  // AVO-106: full path of the file this agent is on (Edit/Write/Read); null otherwise
   let clearWorkflow = false
   let workflowOverride = null  // only SubagentStart sets this; PreToolUse/PostToolUse must not clobber workflow
   let capturedPromptId = null  // PreToolUse captures current _promptId for straggler detection
@@ -695,6 +696,7 @@ function processEvent(event) {
       // straggler gate structurally dead for the entire first turn.
       if (capturedPromptId === null) capturedPromptId = `__t:${nextSeq()}`
       const fullPath = extractFilePath(tool, toolInput)
+      activeFile = fullPath  // AVO-106: the file this agent is now on (null for non-file tools)
       // If inside a subagent with skill context, prefer the skill's role
       const skillCtx = readSkillContext(agentId)
       role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
@@ -713,6 +715,7 @@ function processEvent(event) {
         if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
+      activeFile = fullPath  // AVO-106: file this agent just touched (null for non-file tools)
       const skillCtx = readSkillContext(agentId)
       role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
       task = tool
@@ -896,6 +899,9 @@ function processEvent(event) {
             // AVO-110: carry a still-blocked agent's reason forward so another agent's event
             // can't stale-clear it (EPHEMERAL cross-agent path); non-blocked → no reason.
             reasonCode: pickReason(a.status, a.reasonCode),
+            // AVO-106: carry the OTHER agents' last-known file forward (only this event's role is
+            // replaced below). Recency is enforced downstream by activeFileAt + the huddle window.
+            activeFile: typeof a.activeFile === 'string' ? a.activeFile.slice(0, 200) : null,
           }))
       : []
     existingWorkflow = typeof data.workflow === 'string' ? data.workflow.slice(0, 200) : null
@@ -939,6 +945,8 @@ function processEvent(event) {
       hint: typeof hint === 'string' ? hint.slice(0, 200) : null,
       // AVO-110: a blocked agent carries its reason; any other status clears it (EPHEMERAL).
       reasonCode: pickReason(status, reasonCode),
+      // AVO-106: the file this agent is on (Edit/Write/Read); null for non-file tools / events.
+      activeFile: typeof activeFile === 'string' ? activeFile.slice(0, 200) : null,
     },
   ]
 

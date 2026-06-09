@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T23:25:00Z
-- **Update Sequence**: 47
+- **Last Updated**: 2026-06-09T00:45:00Z
+- **Update Sequence**: 48
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -73,6 +73,7 @@
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
   - [office-runtime] docs/specs/blocked-reason-tags.md [Shipped]  *(AVO-110 / #29 — honest-narrow blocked-reason badge; reasonCode contract)*
   - [office-runtime] docs/specs/recurring-failure-detection.md [Shipped]  *(AVO-117 — recurring blocked-reason detection; downstream of AVO-110)*
+  - [multi-agent] docs/specs/pair-programming-huddle.md [Shipped]  *(AVO-106 — shared-file huddle; per-agent activeFile + never-random event)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -136,6 +137,15 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-pair-programming-huddle-2026-06-09 (AVO-106 — shared-file collaboration huddle)
+
+- Branch `feat/pair-programming-huddle`, feature. Closes AVO-106. Spec `docs/specs/pair-programming-huddle.md` [shipped]. PR opened for human merge (main protected); SSoT + work-log archive committed in the SAME PR.
+- **What shipped**: when two DISTINCT office agents touch the **byte-identical** file within a 90s window, both walk to the whiteboard for a brief huddle (`🤝 <basename>` bubble). New per-agent `activeFile` field threaded through the SAME 6 whitelists as `reasonCode` (hook emit + merge carry-forward · `normalizePost` server ingest · `server.mjs` inline copy + its parity-test embedded copy · `sanitizeAgent` in-browser channels · `routeExternalAgents` · `applyExternalStatus` sink). Store also stamps `activeFileAt` — DECOUPLED from `sigChanged` (task carries the TOOL name not the file, so editing a.js→b.js keeps task='Edit'; the stamp re-fires on a real file change but is carried-forward-unrefreshed on a same-file re-apply, so a stale file goes out of window honestly). Pure `src/systems/pairHuddle.js` `findSharedFilePair` (distinct ids, full-normalized-path compare NOT basename, recency window, idle-excluded, >2 → 2 most-recent). Standalone `PAIR_EVENT` in `officeLife.js` — **NOT in the daily/rare random pool** (honesty: only a real shared-file edge can fire it), triggered by `firePairHuddle` (mutex on activeEvent + global `lastSeedAt` + per-pair cooldown) inside the existing seed subscription, gated on `externalStatus` identity change (never runs on position ticks). en/zh-TW bubbles claim only "same file" / "同一個檔案", never co-editing.
+- **Honesty by construction**: two events that collapse to one role = one store key → can never form a pair (we never invent a 2nd agent). Realistic signal source = a main session + a subagent in the SAME cwd; multi-worktree cannot false-trigger (hooks don't fire in worktrees + worktree paths differ → no byte-identical match).
+- **Review (fresh adversarial, truth/data)**: 1 fresh acx-reviewer (freshness invariant — diff+spec only) → **PASS**, 0 HIGH / 0 MED. Attacked and could not break: whitelist completeness (symmetric with reasonCode at all 6 sites, incl. the source-drift guard), the carry-forward stale-file attack (stamp correct in BOTH directions), never-random, re-entrancy (setActiveEvent before executeEvent + externalStatus-gated branch), cooldown, teardown (fresh closures, cancelled-checked timers), Protected Surfaces (whiteboard spots in the verified standup band, gather via the avoidOverlap+clampToFloor chokepoint, 2 participants only). 3 LOW (all non-blocking): pairCooldown unbounded-within-session (same as shipped seedCooldown), role-less pair → arbitrary office-char mapping (in-contract), done-counts (in-contract — claim scoped to "touched the same file").
+- **Tests**: +31 (`pairHuddle` 16 honesty invariants · `pairHuddleDataPath` 11 end-to-end whitelist · `pairHuddleEvent` 4 real-store integration incl. never-random + cooldown). Full suite **1442 passed / 66 files**; build clean (446.72 KB JS). **Load-the-page verified** (headless Playwright `scripts/pair-huddle-shot.mjs` — `preview_screenshot` hangs): dev+qa on byte-identical store.js → huddle fires via live subscription, both gather, `🤝 store.js` renders, 0 console errors, no ErrorBoundary.
+- Tests: Pass
 
 ### Ship-feat-recurring-failure-detection-2026-06-08 (AVO-117 — recurring failure-mode detection)
 
