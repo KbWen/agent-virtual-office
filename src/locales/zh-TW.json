@@ -128,7 +128,9 @@
     "blocked": "卡住了",
     "done": "完成",
     "idle": "閒置",
-    "planning": "規劃中"
+    "planning": "規劃中",
+    "awaiting-approval": "等待核准",
+    "thinking": "思考中"
   },
   "contextBubbles": {
     "dev-edit": ["{ctx} 這段...嗯讓我想想", "改 {ctx} 中，手感不錯", "{ctx} 又要動刀了", "嗯 {ctx} 這裡可以更好", "{ctx} 重構一下~", "動 {ctx}，別催我"],

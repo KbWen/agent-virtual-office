@@ -660,7 +660,12 @@ function AgentCharacter({ agent }) {
   // boolean selector → this AgentCharacter re-renders only when ITS OWN visibility flips. Suppressing
   // the bubble hides TEXT only — the status ring / name-pill color / over-head badge still render, so
   // a blocked agent's state is never hidden by the cap (honesty preserved).
-  const bubbleVisible = useOfficeStore((s) => selectVisibleBubbles(s.agents, s.externalStatus, BUBBLE_VISIBLE_CAP).has(id))
+  // Rotation cadence is driven by store-emit frequency (the selector re-evaluates on each store
+  // change). In any ACTIVE office that's sub-second — doSchedule fires setAgentBehavior every behavior
+  // cycle (~2-5s × N agents) + waypoint arrivals + the ~1s status poll all write the store — and the
+  // cap only binds when busy (many bubbles), exactly when churn is highest, so rotation advances
+  // smoothly when it matters. A PAUSED office intentionally freezes everything (no liveliness expected).
+  const bubbleVisible = useOfficeStore((s) => selectVisibleBubbles(s.agents, s.externalStatus, BUBBLE_VISIBLE_CAP, Date.now()).has(id))
 
   const timerRef = useRef(null)
   const pathRef = useRef([])
