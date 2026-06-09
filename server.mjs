@@ -66,6 +66,8 @@ function normalizePost(body) {
         hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
         // AVO-110: parity with src/utils/normalizePost.js — carry the enum-validated blocked-reason.
         reasonCode: BLOCKED_REASONS.includes(a.reasonCode) ? a.reasonCode : null,
+        // AVO-106: parity with src/utils/normalizePost.js — carry the per-agent active file.
+        activeFile: typeof a.activeFile === 'string' ? a.activeFile.slice(0, 200) : null,
       }))
     const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
     return {

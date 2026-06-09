@@ -129,6 +129,7 @@ export function routeExternalAgents(agents) {
         hint: entry.hint || null,
         session: entry.session || null,
         reasonCode: entry.reasonCode || null,  // AVO-110: carry the validated blocked-reason through routing
+        activeFile: entry.activeFile || null,  // AVO-106: carry the per-agent active file through routing
       })
     }
   }

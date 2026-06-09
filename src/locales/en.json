@@ -358,5 +358,8 @@
     "deps-failed": { "label": "Installs keep failing", "a11y": "Recurring: installing dependencies keeps failing for this agent" },
     "notifyTitle": "Recurring failure",
     "notifyBody": "{0} keeps hitting the same kind of failure"
+  },
+  "pairLink": {
+    "coediting": "both editing"
   }
 }

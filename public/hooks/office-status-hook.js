@@ -154,6 +154,13 @@ function fileToRole(filePath) {
   return null  // null = fall through to tool-based mapping
 }
 
+// AVO-106: which tools publish `activeFile` (the co-EDITING signal that drives the pair overlay).
+// ONLY write-class tools (Edit/Write) — Read is deliberately excluded: two agents merely reading the
+// same file is not collaboration, so a pair overlay off co-reads would over-claim. Pure + exported.
+function activeFileForTool(tool, fullPath) {
+  return (tool === 'Edit' || tool === 'Write') ? (fullPath || null) : null
+}
+
 // Extract full file path from tool_input (for routing, not display)
 function extractFilePath(tool, toolInput) {
   if (!toolInput || !['Edit', 'Write', 'Read'].includes(tool)) return null
@@ -653,6 +660,7 @@ function processEvent(event) {
 
   let role, task, status, label, hint = null
   let reasonCode = null  // AVO-110: language-neutral blocked-reason; stamped only on a trusted error
+  let activeFile = null  // AVO-106: full path of the file this agent is co-EDITING (Edit/Write only); null otherwise
   let clearWorkflow = false
   let workflowOverride = null  // only SubagentStart sets this; PreToolUse/PostToolUse must not clobber workflow
   let capturedPromptId = null  // PreToolUse captures current _promptId for straggler detection
@@ -695,6 +703,9 @@ function processEvent(event) {
       // straggler gate structurally dead for the entire first turn.
       if (capturedPromptId === null) capturedPromptId = `__t:${nextSeq()}`
       const fullPath = extractFilePath(tool, toolInput)
+      // AVO-106: only write-class touches publish activeFile (co-editing signal); Read excluded so
+      // the pair overlay never over-claims co-reads. Read still routes role via fullPath below.
+      activeFile = activeFileForTool(tool, fullPath)
       // If inside a subagent with skill context, prefer the skill's role
       const skillCtx = readSkillContext(agentId)
       role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
@@ -713,6 +724,8 @@ function processEvent(event) {
         if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
       } catch {}
       const fullPath = extractFilePath(tool, toolInput)
+      // AVO-106: only write-class touches publish activeFile (co-editing signal); Read excluded.
+      activeFile = activeFileForTool(tool, fullPath)
       const skillCtx = readSkillContext(agentId)
       role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
       task = tool
@@ -896,6 +909,9 @@ function processEvent(event) {
             // AVO-110: carry a still-blocked agent's reason forward so another agent's event
             // can't stale-clear it (EPHEMERAL cross-agent path); non-blocked → no reason.
             reasonCode: pickReason(a.status, a.reasonCode),
+            // AVO-106: carry the OTHER agents' last-known file forward (only this event's role is
+            // replaced below). Recency is enforced downstream by activeFileAt + the huddle window.
+            activeFile: typeof a.activeFile === 'string' ? a.activeFile.slice(0, 200) : null,
           }))
       : []
     existingWorkflow = typeof data.workflow === 'string' ? data.workflow.slice(0, 200) : null
@@ -939,6 +955,8 @@ function processEvent(event) {
       hint: typeof hint === 'string' ? hint.slice(0, 200) : null,
       // AVO-110: a blocked agent carries its reason; any other status clears it (EPHEMERAL).
       reasonCode: pickReason(status, reasonCode),
+      // AVO-106: the file this agent is on (Edit/Write/Read); null for non-file tools / events.
+      activeFile: typeof activeFile === 'string' ? activeFile.slice(0, 200) : null,
     },
   ]
 
@@ -1122,6 +1140,6 @@ if (typeof module !== 'undefined') {
     shortFile, shortCommand, bashVibeLabel, deriveBlockedReason, pickReason, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
     shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse,
-    readLatestTokenUsage, effortLevel,
+    readLatestTokenUsage, effortLevel, activeFileForTool,
     helperHash, helperAdd, helperRemove }
 }

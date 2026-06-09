@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-08T23:25:00Z
-- **Update Sequence**: 47
+- **Last Updated**: 2026-06-09T00:45:00Z
+- **Update Sequence**: 48
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -73,6 +73,7 @@
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
   - [office-runtime] docs/specs/blocked-reason-tags.md [Shipped]  *(AVO-110 / #29 — honest-narrow blocked-reason badge; reasonCode contract)*
   - [office-runtime] docs/specs/recurring-failure-detection.md [Shipped]  *(AVO-117 — recurring blocked-reason detection; downstream of AVO-110)*
+  - [multi-agent] docs/specs/pair-programming-huddle.md [Shipped]  *(AVO-106 — co-editing pair OVERLAY (desk-to-desk link); per-agent activeFile, edit-only; redesigned from a huddle per expert panel)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -136,6 +137,16 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-pair-programming-huddle-2026-06-09 (AVO-106 — co-editing pair OVERLAY; redesigned from a huddle after expert panel)
+
+- Branch `feat/pair-programming-huddle`, feature. Closes AVO-106. Spec `docs/specs/pair-programming-huddle.md` [shipped]. PR https://github.com/KbWen/agent-virtual-office/pull/80 for human merge (main protected); SSoT + work-log archive in the SAME PR.
+- **What shipped (final = overlay)**: when two DISTINCT office agents are **co-EDITING the byte-identical file** within a 90s window, a faint **desk-to-desk connecting line + 🔗 `<basename>`** is drawn between them (`src/components/PairLink.jsx`, painted behind agents). PURE in-place overlay — the agents stay at their desks; it NEVER moves them, never sets `inGroupEvent`/`groupTarget`, never holds an `activeEvent`/mutex, has no cooldown, and is NOT in the random event pool. Driven by a transient `store.pairLink` field (not persisted) set/cleared from the existing officeLife `seedUnsub` subscription (gated on `externalStatus` identity change → never on 60fps position ticks; runs before the pause/event guard since it's not an event). Pure `src/systems/pairHuddle.js` `findSharedFilePair` (distinct ids, full-normalized-path compare NOT basename, recency window, idle-excluded). New per-agent `activeFile` threaded through the SAME 6 whitelists as `reasonCode` (hook `activeFileForTool` + merge · `normalizePost` + `server.mjs` inline copy + parity-test embedded copy · `sanitizeAgent` · `routeExternalAgents` · `applyExternalStatus` + `activeFileAt` stamp decoupled from `sigChanged`). **Read excluded at the hook** (`activeFileForTool` = Edit/Write only) so co-reads never over-claim collaboration.
+- **Redesigned mid-flight from a 4-expert game panel** (game-feel · calm-tech · systems · sim-fidelity, all read the real code): the first cut was a fired event that **relocated working agents to a whiteboard huddle** (mutex + shared global cooldown, counted Read+Read). Panel verdict: relocating genuinely-*working* agents = the FIRST set-piece to violate the project's **R1 "a tracked desk is never modulated"**; Read+Read over-claimed; the shared `lastSeedAt` budget crowded out the real deploy/eureka seeds; ~every-2-min firing = wallpaper. Owner chose **redesign → pure overlay**, which dissolves ALL of those (no relocation, co-edit-only, no budget/mutex).
+- **Honesty by construction**: two events that collapse to one role = one store key → never a pair (we never invent a 2nd agent). Realistic source = a main session + a subagent co-editing in the SAME cwd; multi-worktree cannot false-trigger (hooks don't fire in worktrees + paths differ).
+- **Review (2 fresh adversarial passes, truth/data)**: pass-1 on the original huddle → PASS (whitelist + stale-file attack airtight); the OVERLAY redesign got a 2nd fresh delta reviewer → NOT READY on 1 blocker (stale spec still described the removed huddle) → spec rewritten to the overlay + ACs → resolved. Verified: overlay touches ONLY `pairLink` (no position/behavior/status/inGroupEvent), Read-exclusion wired into both hook paths, zero dangling refs to the removed event symbols, render null-safe, self-healing lifecycle. LOW cleanups applied (dead `pairKey` export removed, stale comments, M1 defense-in-depth note that the hook is the sole co-edit gate).
+- **Tests**: +33 net (`pairHuddle` 15 honesty invariants · `pairHuddleDataPath` 11 whitelist · `pairLinkOverlay` 6 real-store integration incl. the **R1 assertion: agents NOT relocated** · `pairLink.jsx` 3 SSR render · `activeFileForTool` 3 hook gate). Full suite **1449 passed / 67 files**; build clean (446.68 KB JS). **Load-the-page verified** (headless Playwright `scripts/pair-huddle-shot.mjs`): dev+qa co-editing store.js → `pairLink` set, **`inGroupEvent` false on both / no `activeEvent`** (agents un-relocated), 🔗 line + `store.js` render in place, 0 console errors, no ErrorBoundary.
+- Tests: Pass
 
 ### Ship-feat-recurring-failure-detection-2026-06-08 (AVO-117 — recurring failure-mode detection)
 

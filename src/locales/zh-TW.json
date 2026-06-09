@@ -358,5 +358,8 @@
     "deps-failed": { "label": "反覆安裝失敗", "a11y": "重複問題:這個 agent 反覆安裝套件失敗" },
     "notifyTitle": "重複問題",
     "notifyBody": "{0} 反覆遇到同一類失敗"
+  },
+  "pairLink": {
+    "coediting": "同時在編輯"
   }
 }
