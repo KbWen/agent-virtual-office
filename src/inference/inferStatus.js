@@ -71,7 +71,10 @@ function sanitizeAgent(a) {
   // AVO-110: validate the blocked-reason against the enum at the trust boundary (the status
   // file is not fully trusted); anything else → null (render coerces null → blocked-unknown).
   const reasonCode = BLOCKED_REASONS.includes(a.reasonCode) ? a.reasonCode : null
-  return { role, status: a.status, task: capStr(a.task), label: capStr(a.label), hint: capStr(a.hint), session, reasonCode }
+  // AVO-106: per-agent active file (drives the pair-programming huddle). Untrusted in-browser
+  // channels reach here, so cap it like task/label; non-string → null.
+  const activeFile = capStr(a.activeFile)
+  return { role, status: a.status, task: capStr(a.task), label: capStr(a.label), hint: capStr(a.hint), session, reasonCode, activeFile }
 }
 
 // AVO-108: validate a token-usage object from any channel. Returns {ctx,out,model} with

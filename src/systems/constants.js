@@ -57,6 +57,10 @@ export const LIVE_FLOOR_FIRE_CHANCE = 0.3
 // living-office-events Phase 4: a real-signal edge CAUSALLY fires the matching coordinated event;
 // per-event cooldown so a flapping signal can't spam (anti-thrash, R4).
 export const SEED_COOLDOWN_MS = 120000                 // 2 min per real-seeded event type
+// AVO-106 pair-programming huddle: two distinct agents are "on the same file together" only if
+// BOTH touched the byte-identical path within this window. Outside it, the shared file is stale and
+// must NOT huddle (honesty — the claim must not outlive its truth).
+export const PAIR_HUDDLE_WINDOW = 90000                // 90s shared-file recency bound
 
 // API
 export const STATUS_POLL_INTERVAL = 1000   // ms — matches startFilePolling default

@@ -1,7 +1,8 @@
 import eventsData from '../config/officeEvents.json'
 import { WAYPOINTS, MEETING_CHAIRS, HOME_POSITIONS } from './movementSystem.js'
 import { eventBubble } from '../i18n'
-import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL, WORK_CLAIM_SIGNAL_WINDOW, LIVE_FLOOR_FIRE_CHANCE, SEED_COOLDOWN_MS } from './constants.js'
+import { DAILY_EVENT_INTERVAL, RARE_EVENT_INTERVAL, TIME_CHECK_INTERVAL, WORK_CLAIM_SIGNAL_WINDOW, LIVE_FLOOR_FIRE_CHANCE, SEED_COOLDOWN_MS, PAIR_HUDDLE_WINDOW } from './constants.js'
+import { findSharedFilePair, fileBasename } from './pairHuddle.js'
 
 let dailyTimer = null
 let rareTimer = null
@@ -680,7 +681,22 @@ export function startOfficeLife(store) {
     executeEvent(store, ev, participants, cancelled)
   }
   seedUnsub = typeof store.subscribe === 'function' ? store.subscribe((state, prev) => {
-    if (cancelled.value || !prev || state.isPaused || state.activeEvent) return
+    if (cancelled.value || !prev) return
+    // AVO-106: co-editing pair overlay. PURE derived "show-while-true" state — computed BEFORE the
+    // pause/activeEvent guard below (it is NOT a fired event: no mutex, no cooldown, no relocation).
+    // Gated only on externalStatus IDENTITY change so it never runs on 60fps position ticks.
+    if (state.externalStatus !== prev.externalStatus) {
+      const pair = findSharedFilePair(state.externalStatus, Date.now(), PAIR_HUDDLE_WINDOW)
+      if (pair) {
+        const ext = state.externalStatus
+        const file = fileBasename(ext[pair[0]]?.activeFile || ext[pair[1]]?.activeFile || '')
+        state.setPairLink({ a: pair[0], b: pair[1], file })
+      } else {
+        state.setPairLink(null)
+      }
+    }
+    // ── Seeded EVENTS below remain pause/mutex gated (they fire coordinated set-pieces). ──
+    if (state.isPaused || state.activeEvent) return
     // mood edge → real block-streak / done-streak coordinated moment (cadence source #2). Mood is a
     // slow-moving distillation of real signals, so these are naturally infrequent.
     if (state.mood !== prev.mood) {

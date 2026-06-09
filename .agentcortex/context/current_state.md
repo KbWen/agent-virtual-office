@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-09T01:30:00Z
-- **Update Sequence**: 48
+- **Last Updated**: 2026-06-10T00:00:00Z
+- **Update Sequence**: 49
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -73,6 +73,7 @@
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
   - [office-runtime] docs/specs/blocked-reason-tags.md [Shipped]  *(AVO-110 / #29 — honest-narrow blocked-reason badge; reasonCode contract)*
   - [office-runtime] docs/specs/recurring-failure-detection.md [Shipped]  *(AVO-117 — recurring blocked-reason detection; downstream of AVO-110)*
+  - [multi-agent] docs/specs/pair-programming-huddle.md [Shipped]  *(AVO-106 — co-editing pair OVERLAY (desk-to-desk link); per-agent activeFile, edit-only; redesigned from a huddle per expert panel)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -137,15 +138,25 @@
 
 ## Ship History
 
-### Ship-feat-declutter-glance-layer-2026-06-09 (UX declutter — bubble cap + de-alarm, owner "畫面太亂")
+### Ship-feat-declutter-glance-layer-2026-06-10 (UX declutter — bubble cap + de-alarm, owner "畫面太亂")
 
-- Branch `feat/declutter-glance-layer`, quick-win. PR pending (main protected). NOTE: parallel to the AVO-106 pair-link PR #80 — both touch this SSoT (Ship History + Update Sequence); whichever merges 2nd rebases the sequence. Off `main` (independent of #80).
+- Branch `feat/declutter-glance-layer`, quick-win. PR #81 (merged 2nd, after pair-link #80 — rebased to Update Sequence 49, INDEX chain relinked). Off `main` (independent of #80).
 - **Origin**: owner worried the office is "too messy". Evidence-first: captured a real busy-moment screenshot, then a 4-lens declutter panel (clutter-auditor · first-time-user · wall-TV readability · calm-tech) each READ the screenshot + the code. **Unanimous #1 noise = simultaneous speech bubbles** (N active agents → N bubbles, no concurrency cap, ~60% of the mess).
 - **What shipped (REDUCTION, not new features)**: (1) **Bubble concurrency cap** — pure `src/systems/bubbleVisibility.js` `selectVisibleBubbles(agents, ext, cap=3)` picks ≤3 bubbles by priority `blocked > done > working`, recency tiebreak, stable id order; AgentCharacter gates `BehaviorBubble` on a per-agent boolean selector. **Honesty guarantee**: suppressing a bubble hides TEXT only — the status ring + name-pill color + over-head blocked-reason badge still render, so a real block is never hidden by the cap. (2) **OVERTIME de-alarmed** — the perpetual red pulse (read as a false alarm) → a steady muted-brown chip (night lighting already signals late; red reserved for real blocked state). (3) **Removed the redundant corner status glyph** (⚡/✓/✕/◷) — a 3rd status channel duplicating the pill color + glow ring; status now rides color+ring (visual) + the group aria-label (net a11y gain).
 - **Deferred**: bottom role-legend strip demote = its own ticket **AVO-130** (different surface — the control bar, not the office scene). Bigger wall-TV plays (blocked→whole-agent escalation, per-status posture/silhouette, AVO-137 density layers) remain backlog.
 - **Liveliness (owner challenge "蓋掉的方式是活躍的嗎? 別蓋死/死氣沉沉")**: the cap originally tie-broke by STABLE id → same low-id agents always won when several held stale ambient bubbles → others permanently mute (dead). Fixed: `selectVisibleBubbles(…, now)` breaks priority+recency TIES with a 2.5s time-rotation so tied agents take turns; real recency still wins (meaningful), blocked/done stay pinned. AgentCharacter passes `Date.now()`; cadence rides the office's continuous store churn (doSchedule/waypoints/poll, sub-second when busy = when the cap binds).
 - **Review (fresh, owner-requested)**: 1 acx-reviewer → NOT READY (3 findings) → all addressed: HIGH (rotation was uncommitted → committed), MED (rotation cadence coupled to store-emit — ACCEPTED + documented; a paused office intentionally freezes), LOW (added `awaiting-approval`/`thinking` statusLabels). Honesty (suppress hides TEXT not STATUS) verified live.
 - **Tests**: +13 (`bubbleVisibility` — cap, priority, recency, no-thrash-in-window, ROTATION cycles all tied agents, recency-still-wins, blocked-pinned, honesty). Full suite **1424 passed**; build clean (444.8 KB). **Load-the-page verified**: busy 7-agent scene → **3 bubbles ≤ cap**, blocked kept a slot, chips gone, OVERTIME muted, 0 errors. **Liveliness-over-time verified** (`scripts/bubble-rotation-shot.mjs`): ≤3 at once but **5 distinct agents shown across rotation windows** (rotates, not frozen).
+- Tests: Pass
+
+### Ship-feat-pair-programming-huddle-2026-06-09 (AVO-106 — co-editing pair OVERLAY; redesigned from a huddle after expert panel)
+
+- Branch `feat/pair-programming-huddle`, feature. Closes AVO-106. Spec `docs/specs/pair-programming-huddle.md` [shipped]. PR https://github.com/KbWen/agent-virtual-office/pull/80 for human merge (main protected); SSoT + work-log archive in the SAME PR.
+- **What shipped (final = overlay)**: when two DISTINCT office agents are **co-EDITING the byte-identical file** within a 90s window, a faint **desk-to-desk connecting line + 🔗 `<basename>`** is drawn between them (`src/components/PairLink.jsx`, painted behind agents). PURE in-place overlay — the agents stay at their desks; it NEVER moves them, never sets `inGroupEvent`/`groupTarget`, never holds an `activeEvent`/mutex, has no cooldown, and is NOT in the random event pool. Driven by a transient `store.pairLink` field (not persisted) set/cleared from the existing officeLife `seedUnsub` subscription (gated on `externalStatus` identity change → never on 60fps position ticks; runs before the pause/event guard since it's not an event). Pure `src/systems/pairHuddle.js` `findSharedFilePair` (distinct ids, full-normalized-path compare NOT basename, recency window, idle-excluded). New per-agent `activeFile` threaded through the SAME 6 whitelists as `reasonCode` (hook `activeFileForTool` + merge · `normalizePost` + `server.mjs` inline copy + parity-test embedded copy · `sanitizeAgent` · `routeExternalAgents` · `applyExternalStatus` + `activeFileAt` stamp decoupled from `sigChanged`). **Read excluded at the hook** (`activeFileForTool` = Edit/Write only) so co-reads never over-claim collaboration.
+- **Redesigned mid-flight from a 4-expert game panel** (game-feel · calm-tech · systems · sim-fidelity, all read the real code): the first cut was a fired event that **relocated working agents to a whiteboard huddle** (mutex + shared global cooldown, counted Read+Read). Panel verdict: relocating genuinely-*working* agents = the FIRST set-piece to violate the project's **R1 "a tracked desk is never modulated"**; Read+Read over-claimed; the shared `lastSeedAt` budget crowded out the real deploy/eureka seeds; ~every-2-min firing = wallpaper. Owner chose **redesign → pure overlay**, which dissolves ALL of those (no relocation, co-edit-only, no budget/mutex).
+- **Honesty by construction**: two events that collapse to one role = one store key → never a pair (we never invent a 2nd agent). Realistic source = a main session + a subagent co-editing in the SAME cwd; multi-worktree cannot false-trigger (hooks don't fire in worktrees + paths differ).
+- **Review (2 fresh adversarial passes, truth/data)**: pass-1 on the original huddle → PASS (whitelist + stale-file attack airtight); the OVERLAY redesign got a 2nd fresh delta reviewer → NOT READY on 1 blocker (stale spec still described the removed huddle) → spec rewritten to the overlay + ACs → resolved. Verified: overlay touches ONLY `pairLink` (no position/behavior/status/inGroupEvent), Read-exclusion wired into both hook paths, zero dangling refs to the removed event symbols, render null-safe, self-healing lifecycle. LOW cleanups applied (dead `pairKey` export removed, stale comments, M1 defense-in-depth note that the hook is the sole co-edit gate).
+- **Tests**: +33 net (`pairHuddle` 15 honesty invariants · `pairHuddleDataPath` 11 whitelist · `pairLinkOverlay` 6 real-store integration incl. the **R1 assertion: agents NOT relocated** · `pairLink.jsx` 3 SSR render · `activeFileForTool` 3 hook gate). Full suite **1449 passed / 67 files**; build clean (446.68 KB JS). **Load-the-page verified** (headless Playwright `scripts/pair-huddle-shot.mjs`): dev+qa co-editing store.js → `pairLink` set, **`inGroupEvent` false on both / no `activeEvent`** (agents un-relocated), 🔗 line + `store.js` render in place, 0 console errors, no ErrorBoundary.
 - Tests: Pass
 
 ### Ship-feat-recurring-failure-detection-2026-06-08 (AVO-117 — recurring failure-mode detection)
