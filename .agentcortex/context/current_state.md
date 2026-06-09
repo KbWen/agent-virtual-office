@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-09T00:45:00Z
-- **Update Sequence**: 48
+- **Last Updated**: 2026-06-10T00:00:00Z
+- **Update Sequence**: 49
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -137,6 +137,17 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-declutter-glance-layer-2026-06-10 (UX declutter — bubble cap + de-alarm, owner "畫面太亂")
+
+- Branch `feat/declutter-glance-layer`, quick-win. PR #81 (merged 2nd, after pair-link #80 — rebased to Update Sequence 49, INDEX chain relinked). Off `main` (independent of #80).
+- **Origin**: owner worried the office is "too messy". Evidence-first: captured a real busy-moment screenshot, then a 4-lens declutter panel (clutter-auditor · first-time-user · wall-TV readability · calm-tech) each READ the screenshot + the code. **Unanimous #1 noise = simultaneous speech bubbles** (N active agents → N bubbles, no concurrency cap, ~60% of the mess).
+- **What shipped (REDUCTION, not new features)**: (1) **Bubble concurrency cap** — pure `src/systems/bubbleVisibility.js` `selectVisibleBubbles(agents, ext, cap=3)` picks ≤3 bubbles by priority `blocked > done > working`, recency tiebreak, stable id order; AgentCharacter gates `BehaviorBubble` on a per-agent boolean selector. **Honesty guarantee**: suppressing a bubble hides TEXT only — the status ring + name-pill color + over-head blocked-reason badge still render, so a real block is never hidden by the cap. (2) **OVERTIME de-alarmed** — the perpetual red pulse (read as a false alarm) → a steady muted-brown chip (night lighting already signals late; red reserved for real blocked state). (3) **Removed the redundant corner status glyph** (⚡/✓/✕/◷) — a 3rd status channel duplicating the pill color + glow ring; status now rides color+ring (visual) + the group aria-label (net a11y gain).
+- **Deferred**: bottom role-legend strip demote = its own ticket **AVO-130** (different surface — the control bar, not the office scene). Bigger wall-TV plays (blocked→whole-agent escalation, per-status posture/silhouette, AVO-137 density layers) remain backlog.
+- **Liveliness (owner challenge "蓋掉的方式是活躍的嗎? 別蓋死/死氣沉沉")**: the cap originally tie-broke by STABLE id → same low-id agents always won when several held stale ambient bubbles → others permanently mute (dead). Fixed: `selectVisibleBubbles(…, now)` breaks priority+recency TIES with a 2.5s time-rotation so tied agents take turns; real recency still wins (meaningful), blocked/done stay pinned. AgentCharacter passes `Date.now()`; cadence rides the office's continuous store churn (doSchedule/waypoints/poll, sub-second when busy = when the cap binds).
+- **Review (fresh, owner-requested)**: 1 acx-reviewer → NOT READY (3 findings) → all addressed: HIGH (rotation was uncommitted → committed), MED (rotation cadence coupled to store-emit — ACCEPTED + documented; a paused office intentionally freezes), LOW (added `awaiting-approval`/`thinking` statusLabels). Honesty (suppress hides TEXT not STATUS) verified live.
+- **Tests**: +13 (`bubbleVisibility` — cap, priority, recency, no-thrash-in-window, ROTATION cycles all tied agents, recency-still-wins, blocked-pinned, honesty). Full suite **1424 passed**; build clean (444.8 KB). **Load-the-page verified**: busy 7-agent scene → **3 bubbles ≤ cap**, blocked kept a slot, chips gone, OVERTIME muted, 0 errors. **Liveliness-over-time verified** (`scripts/bubble-rotation-shot.mjs`): ≤3 at once but **5 distinct agents shown across rotation windows** (rotates, not frozen).
+- Tests: Pass
 
 ### Ship-feat-pair-programming-huddle-2026-06-09 (AVO-106 — co-editing pair OVERLAY; redesigned from a huddle after expert panel)
 
