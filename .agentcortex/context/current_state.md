@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T05:35:00Z
-- **Update Sequence**: 62
+- **Last Updated**: 2026-06-11T06:45:00Z
+- **Update Sequence**: 63
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -145,6 +145,12 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-q2-q3-security-ci-coherence-2026-06-11 (品質波 Q2+Q3 — 漏洞修補 + CI 一致性)
+
+- Branch `chore/q2-q3-security-ci-coherence`, quick-win. **Q3**: `npm audit fix` resolved 4 REAL vulnerabilities the report-only audit had been hiding — **vitest <3.2.6 CRITICAL** (UI-server arbitrary read/execute) + **vite ≤6.4.1 HIGH** (dev-server arbitrary file read — users literally run this dev server) + picomatch HIGH (ReDoS) + postcss moderate. Lockfile-only in-range bumps; post-bump FULL sweep green (vitest 1810/1810 · build · bundle-budget +0.00% · render-smoke · pack-smoke). security.yml dependency-audit now ENFORCES `--audit-level=high` (`|| true` dropped). Semgrep stays report-only (findings untriaged — deliberate, noted).
+- **Q2**: CI matrix [20,22] → **[22,24]** (engines >=22; Node 20 EOL). Branch-protection required checks updated IN LOCKSTEP (else PRs would wedge on the never-reporting `test (20)`): now `test (22)` + `test (24)` + `render-smoke` + **`pack-smoke` (newly promoted to required)**.
+- Tests: Pass (full sweep above)
 
 ### Ship-fix-avo-154-hook-result-reconcile-2026-06-11 (品質波 Q1 — hook 結果欄位對賬)
 

@@ -61,14 +61,14 @@ jobs:
         with:
           node-version: '22'
 
-      # Report-only on introduction: prints the advisory table without failing the
-      # build on pre-existing transitive advisories. Raise to `--audit-level=high`
-      # (drop `|| true`) once the dependency tree is triaged.
+      # ENFORCED since 2026-06-11 (quality wave Q3): the tree was triaged + fixed
+      # (vite/vitest/picomatch/postcss advisories resolved via npm audit fix), so
+      # high+ advisories now FAIL the job instead of printing a table nobody reads.
       - name: Audit npm dependencies
         shell: bash
         run: |
           if [ -f package-lock.json ]; then
-            npm audit --audit-level=critical || true
+            npm audit --audit-level=high
           else
             echo "::warning::dependency-audit: no package-lock.json at repo root — npm audit skipped"
           fi
