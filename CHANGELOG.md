@@ -5,6 +5,50 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.4.0 — 2026-06-10 — A calmer, honest office that can't pile up — and watches itself overnight
+
+The "characters keep stacking / teleporting / rushing around" era ends here. Every fix in
+this release was driven by **measurement first** (live forensic recorders, engine
+simulations, A/B protocols), then locked in by a soak gate that re-checks the office
+every night so this bug class can't silently return.
+
+### Added
+
+- **Pair-programming link (AVO-106)** — two agents editing the SAME file within 90s show an
+  honest desk-to-desk collaboration link (no fake relocation; the claim expires with its truth).
+- **Sim-soak gate (AVO-157)** — `npm run soak` runs the office headless for N minutes and
+  fails on world-invariant violations: teleports, sustained standing stacks, frozen walkers,
+  characters standing inside furniture. Nightly CI workflow + on-demand dispatch; the gate
+  logic itself is unit-tested (a gate that can't fail protects nothing). Forensic tooling
+  family included: `scripts/zone-audit.mjs` (rhythm/zone occupancy), `scripts/overlap-recorder.mjs`
+  (stack forensics with per-agent state chains).
+
+### Fixed
+
+- **Standing overlaps, structurally (AVO-156)** — five stacked root causes closed in one
+  forensics-driven pass: walk freezes on unguarded animation legs (stall watchdog now guards
+  the WHOLE journey), all cross-room walks funneling through one exact door pixel (per-transit
+  jitter), walkers' landing spots invisible to others (journey targets published), circular
+  spacing that allowed fully-overlapped "vertical separations" (visual-ellipse contract,
+  32×44px), and no recovery once stacked (polite arrival side-step). Live 12-min A/B:
+  **12 sustained stack events → 0**.
+- **Three-sprite stack at the gate** — social visitors now approach from the SIDE (±45°
+  lateral cones, 並肩聊天); vertical pile-ups are geometrically impossible.
+- **Restless walking (躁動)** — removed the solo meeting-room march (≈20% of all behavior
+  cycles!), slowed walks 80→60px/s, lengthened desk focus and break-room dwells. Working
+  agents now read as working; the break room and research library actually get visited.
+  Live A/B: screen time with 2+ simultaneous walkers 46% → 24%.
+- **Sudden position resets / brief disappearances** — hidden-tab walk freezes now snap
+  cleanly (5s threshold, A/B-proven) and branch-hop ghost sessions are cleaned at the hook
+  (43 stale roster entries → 1).
+- **Pet wall-phasing** — wander hops are accepted only when every 2px sample of the segment
+  is walkable; the pet pauses instead of ghosting through walls.
+
+### Notes
+
+- Engineering details, forensic captures, and review receipts: `docs/specs/standing-overlap-deconfliction.md`,
+  `docs/specs/sim-soak-gate.md`, and `.agentcortex/context/archive/`.
+
 ## v1.3.0 — 2026-06-08 — Blocked-reason tags + recurring-failure detection
 
 The office stopped just saying "stuck" and started saying **stuck on what** — and **stuck again**.

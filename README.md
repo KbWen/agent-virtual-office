@@ -155,6 +155,23 @@ the `--lang` flag, or browser auto-detect (`zh-TW` / `zh-Hant`).
 
 ---
 
+## Diagnostics & soak testing
+
+Visual/emergent bugs (stacked characters, teleports, frozen walkers) live in *minutes of
+runtime*, not in any single function — so the repo ships its own observation tools:
+
+| command | what it does |
+|---|---|
+| `npm run soak` | **The soak gate.** Runs the office headless for 5 min (`--minutes N` to change) and fails on world-invariant violations: teleports, sustained standing stacks, frozen walkers, characters standing inside furniture. Also runs nightly in CI (`sim-soak` workflow). |
+| `node scripts/overlap-recorder.mjs 12` | Stack forensics: when two characters sit fully overlapped ≥2s, dumps both agents' last ~12s state chains (positions, targets, behaviors) so the mechanism is visible. |
+| `node scripts/zone-audit.mjs` | Movement-rhythm audit: 3-min zone occupancy, room visits, and how often 0/1/2+ characters are walking at once. |
+
+All three reuse a running `npm run dev` server on :5173, or start their own. If you see a
+visual glitch, run the matching recorder *before* theorizing — every overlap/rhythm fix in
+v1.4.0 started from one of these captures.
+
+---
+
 ## Troubleshooting
 
 <details>

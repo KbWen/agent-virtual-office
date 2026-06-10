@@ -13,7 +13,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-06-11T21:25:00Z
-- **Update Sequence**: 72
+- **Update Sequence**: 73
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -71,6 +71,7 @@
   - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Frozen]  *(AVO-126/127/128/129/131/132 — branch feat/ux-vibe-rebalance, not yet merged)*
   - [living-office] docs/specs/living-office-events.md [DRAFT, review-gated]  *(P1-P4 shipped to branch feat/ux-vibe-rebalance, not merged; AC-3 pixel-dominance pending owner visual confirm)*
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
+  - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
   - [office-runtime] docs/specs/blocked-reason-tags.md [Shipped]  *(AVO-110 / #29 — honest-narrow blocked-reason badge; reasonCode contract)*
@@ -146,6 +147,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-sim-soak-gate-2026-06-10 (owner 核准 — 一次性取證工具升級為常駐夜間閘門 + v1.4.0, AVO-157)
+
+- Branch `feat/sim-soak-gate`, quick-win。owner:「以後可能很多類似的視覺改動也會遇到」→ 把 zone-audit/overlap-recorder 的取證能力固化成機器閘門：`npm run soak` headless 跑 N 分鐘斷言世界不變量（I1 持續疊站 ≥3s、I2 瞬移 >48px、I3 站進家具/出界 ≥2s、I4 凍結行走者 ≥90s）+ nightly CI（`sim-soak.yml`，10 分鐘，非 PR 阻擋——穩定後再升級）。
+- **判定器是純函數**（`scripts/soakInvariants.mjs`）+ test-the-test 11 釘（每類違規種入必抓、健康時間線必靜默——含 sampler-gap 守衛殺 GAP_SNAP 假陽性、frozen-walker 90s 依恢復層預算推導）。node-CJS 陷阱實戰命中（src/*.js 在 node 端解析為 CJS）→ 幾何判定改在頁內計算。
+- **實跑驗證**：2 分鐘 reuse-server PASS（470 樣本 0 違規）+ 1 分鐘 spawn-server PASS（CI 路徑，report JSON 落檔）。
+- **v1.4.0 發版**：package.json 1.3.0→1.4.0、CHANGELOG 故事條目（疊圖時代終結 + 量測先行方法論）、README「Diagnostics & soak testing」節。**Tests: 1885 → 1896**。render-smoke PASS。Tests: Pass
 
 ### Ship-feat-standing-overlap-deconfliction-2026-06-10 (owner 第三次疊圖 — 站立疊合五層根因一次關閉, AVO-156)
 
