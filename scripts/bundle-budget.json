@@ -1,0 +1,6 @@
+{
+  "comment": "AVO-152 bundle budget. baselineBytes = total dist/assets/*.js at the time the baseline was last RE-BASED (intentionally, in a PR that justifies the growth). The gate fails when the built total exceeds baselineBytes * (1 + maxGrowthPct/100). To re-base: run `npm run build`, update baselineBytes to the new total, explain why in the PR.",
+  "baselineBytes": 450069,
+  "baselineDate": "2026-06-10",
+  "maxGrowthPct": 10
+}
