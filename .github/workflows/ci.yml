@@ -24,6 +24,9 @@ jobs:
       # Build BEFORE test: the transport-spine e2e (AVO-150) boots the real
       # server.mjs, which refuses to start without dist/index.html.
       - run: npm run build
+      # AVO-152: bundle-size budget — fails on >+10% vs the committed baseline
+      # (re-base scripts/bundle-budget.json intentionally when growth is justified).
+      - run: node scripts/bundle-budget.mjs
       - run: npm test
 
   render-smoke:

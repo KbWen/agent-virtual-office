@@ -1,3 +1,15 @@
+---
+title: "ADR-004 — No Per-Frame Agent Separation (AVO-144 resolved by decision)"
+date: 2026-06-10
+status: accepted
+lifecycle:
+  owner: KbWen
+  review_cadence: on-event
+  review_trigger: "any proposal to add in-transit agent separation, or a change to the movement RAF architecture / doorway geometry"
+  supersedes: null
+  superseded_by: null
+---
+
 # ADR-004: No Per-Frame Agent Separation (AVO-144 resolved by decision)
 
 - **Status**: Accepted (2026-06-10)

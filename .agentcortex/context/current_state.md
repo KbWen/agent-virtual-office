@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T02:45:00Z
-- **Update Sequence**: 60
+- **Last Updated**: 2026-06-11T03:25:00Z
+- **Update Sequence**: 61
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -145,6 +145,11 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-avo-152-bundle-budget-2026-06-10 (穩定波 W5 — bundle 預算 gate；穩定波收官)
+
+- Branch `chore/avo-152-bundle-budget`, quick-win. Closes AVO-152 — **the stability wave (W1–W5 = AVO-149..153) is COMPLETE**. `scripts/bundle-budget.mjs` + committed baseline (450069 B @ 2026-06-10, +10% limit) + CI step in the test job after build. Canary-proven both directions (baseline=100 → FAIL exit 1 with re-base instruction; restored → PASS exit 0). Silent bundle creep now requires an intentional, justified re-base in the same PR.
+- Wave totals: tests 1543 → **1705**, 4 new CI gates (npm ci reproducibility · pack-smoke · transport e2e in test job · bundle budget; render-smoke from H1), branch-protection required checks enabled (red PR #89 exposed the empty list), hookWriteLock CI deflake (#90), and W4's REAL finding (tool_response/tool_result divergence → AVO-154). Tests: Pass
 
 ### Ship-feat-avo-153-hook-contract-2026-06-10 (穩定波 W4 — hook runtime 契約)
 
