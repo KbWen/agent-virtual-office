@@ -361,6 +361,9 @@
     "test-run-failed": { "label": "Tests keep failing", "a11y": "Recurring: the test run keeps failing for this agent" },
     "build-failed": { "label": "Build keeps failing", "a11y": "Recurring: the build keeps failing for this agent" },
     "deps-failed": { "label": "Installs keep failing", "a11y": "Recurring: installing dependencies keeps failing for this agent" },
+    "permission-denied": { "label": "Permission keeps getting denied", "a11y": "Recurring: permission keeps getting denied for this agent" },
+    "api-rate-limit": { "label": "API keeps rate-limiting", "a11y": "Recurring: the API keeps rate-limiting this agent" },
+    "api-auth-failed": { "label": "API auth keeps failing", "a11y": "Recurring: API authentication keeps failing for this agent" },
     "notifyTitle": "Recurring failure",
     "notifyBody": "{0} keeps hitting the same kind of failure"
   },

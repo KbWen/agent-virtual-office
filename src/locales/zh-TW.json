@@ -361,6 +361,9 @@
     "test-run-failed": { "label": "反覆卡在測試", "a11y": "重複問題:這個 agent 反覆卡在測試執行" },
     "build-failed": { "label": "反覆建置失敗", "a11y": "重複問題:這個 agent 反覆建置失敗" },
     "deps-failed": { "label": "反覆安裝失敗", "a11y": "重複問題:這個 agent 反覆安裝套件失敗" },
+    "permission-denied": { "label": "權限反覆被拒", "a11y": "重複問題:這個 agent 的權限反覆被拒" },
+    "api-rate-limit": { "label": "API 反覆限流", "a11y": "重複問題:這個 agent 反覆遇到 API 限流" },
+    "api-auth-failed": { "label": "API 認證反覆失敗", "a11y": "重複問題:這個 agent 的 API 認證反覆失敗" },
     "notifyTitle": "重複問題",
     "notifyBody": "{0} 反覆遇到同一類失敗"
   },

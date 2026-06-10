@@ -80,6 +80,8 @@ function readStatus(base) {
 }
 
 // ── (a) PermissionDenied handler ─────────────────────────────────────────────
+// OFFICE_STATUS_FILE is now respected by getStatusFile() inside the hook (each processEvent call
+// reads it lazily), so withStatusFile() seeds the temp file AND redirects writes.
 
 describe('AVO-148 PermissionDenied handler (AC-1)', () => {
   let tmp, restore
@@ -88,57 +90,89 @@ describe('AVO-148 PermissionDenied handler (AC-1)', () => {
     tmp = makeTempBase('pd')
     restore = withStatusFile(tmp.base, [
       { role: 'dev', status: 'working', task: 'Edit', label: '✏️ edit', hint: null, reasonCode: null, activeFile: null },
+      { role: 'ops', status: 'working', task: 'Bash', label: '⚡ tests', hint: null, reasonCode: null, activeFile: null },
     ])
   })
 
   afterEach(() => { restore(); tmp.cleanup() })
 
-  it('valid payload → dev agent becomes blocked with permission-denied', () => {
-    // Hook's STATUS_FILE is fixed at module-load time; PermissionDenied writes via
-    // the normal RMW-SITE-B path using the hook's own STATUS_FILE.  We cannot easily
-    // redirect it after module-load, so we test the behaviour via the exported
-    // classifyBlockedReason + pickReason logic and verify the handler doesn't throw.
-    //
-    // For a full integration test we drive processEvent with the event and inspect
-    // the output file when OFFICE_STATUS_FILE redirects the lock path (see lock test pattern).
-    const event = {
-      hook_event_name: 'PermissionDenied',
-      tool_name: 'Edit',
-    }
-    // Must not throw (honesty guarantee — hook always exits 0)
-    expect(() => processEvent(event)).not.toThrow()
+  it('Bash tool_name → ops agent blocked with permission-denied; dev agent untouched', () => {
+    processEvent({ hook_event_name: 'PermissionDenied', tool_name: 'Bash' })
+    const status = readStatus(tmp.base)
+    const ops = status.agents.find(a => a.role === 'ops')
+    const dev = status.agents.find(a => a.role === 'dev')
+    expect(ops).toBeDefined()
+    expect(ops.status).toBe('blocked')
+    expect(ops.reasonCode).toBe('permission-denied')
+    // dev was working → not stamped by this PermissionDenied event (ops is the target)
+    expect(dev).toBeDefined()
+    expect(dev.status).toBe('working')
+    expect(dev.reasonCode).toBeNull()
   })
 
-  it('missing tool_name → defaults to dev role, still does not throw', () => {
-    const event = { hook_event_name: 'PermissionDenied' }
-    expect(() => processEvent(event)).not.toThrow()
+  it('Edit tool_name → dev agent blocked with permission-denied', () => {
+    processEvent({ hook_event_name: 'PermissionDenied', tool_name: 'Edit' })
+    const status = readStatus(tmp.base)
+    const dev = status.agents.find(a => a.role === 'dev')
+    expect(dev.status).toBe('blocked')
+    expect(dev.reasonCode).toBe('permission-denied')
   })
 
-  it('null event fields → no throw (malformed payload degrades gracefully)', () => {
-    const event = { hook_event_name: 'PermissionDenied', tool_name: null }
-    expect(() => processEvent(event)).not.toThrow()
+  it('missing tool_name → NO-OP (honest-narrow: cannot attribute to a role)', () => {
+    const before = readStatus(tmp.base)
+    processEvent({ hook_event_name: 'PermissionDenied' })
+    const after = readStatus(tmp.base)
+    // File must be unchanged (no write happened)
+    expect(after).toEqual(before)
   })
 
-  it('completely malformed event → no throw', () => {
-    expect(() => processEvent({ hook_event_name: 'PermissionDenied', tool_name: 123 })).not.toThrow()
-    expect(() => processEvent({ hook_event_name: 'PermissionDenied', tool_name: {} })).not.toThrow()
+  it('null tool_name → NO-OP (no spatial over-claim)', () => {
+    const before = readStatus(tmp.base)
+    processEvent({ hook_event_name: 'PermissionDenied', tool_name: null })
+    const after = readStatus(tmp.base)
+    expect(after).toEqual(before)
+  })
+
+  it('non-string tool_name → NO-OP', () => {
+    const before = readStatus(tmp.base)
+    processEvent({ hook_event_name: 'PermissionDenied', tool_name: 123 })
+    processEvent({ hook_event_name: 'PermissionDenied', tool_name: {} })
+    const after = readStatus(tmp.base)
+    expect(after).toEqual(before)
   })
 
   it('toolToRole convention matches the spec (Edit→dev, Bash→ops, Read→res)', () => {
-    // Spec: role = toolToRole(tool_name) with 'dev' fallback for unknown tool.
     expect(toolToRole('Edit')).toBe('dev')
     expect(toolToRole('Bash')).toBe('ops')
     expect(toolToRole('Read')).toBe('res')
-    // Unknown tool → 'dev' (the fallback)
     expect(toolToRole('UnknownTool')).toBe('dev')
   })
 
   it('pickReason gates: permission-denied is EPHEMERAL (cleared on non-blocked status)', () => {
-    // This is the EPHEMERAL contract — the same as for the 4 AVO-110 reasons.
     expect(pickReason('blocked', 'permission-denied')).toBe('permission-denied')
     expect(pickReason('done',    'permission-denied')).toBeNull()
     expect(pickReason('working', 'permission-denied')).toBeNull()
     expect(pickReason('idle',    'permission-denied')).toBeNull()
+  })
+
+  it('EPHEMERAL clear: a subsequent normal PostToolUse for the ops agent clears the reasonCode', () => {
+    // Step 1: stamp ops as blocked/permission-denied
+    processEvent({ hook_event_name: 'PermissionDenied', tool_name: 'Bash' })
+    const blocked = readStatus(tmp.base)
+    expect(blocked.agents.find(a => a.role === 'ops').reasonCode).toBe('permission-denied')
+
+    // Step 2: normal PostToolUse for ops (no error) → ops goes done, reasonCode cleared
+    processEvent({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: JSON.stringify({ command: 'npm test' }),
+      tool_result: 'All tests passed',
+      is_error: false,
+    })
+    const cleared = readStatus(tmp.base)
+    const ops = cleared.agents.find(a => a.role === 'ops')
+    expect(ops.status).toBe('done')
+    expect(ops.reasonCode).toBeNull()
   })
 })
 
@@ -150,40 +184,91 @@ describe('AVO-148 StopFailure handler (AC-1)', () => {
   beforeEach(() => {
     tmp = makeTempBase('sf')
     restore = withStatusFile(tmp.base, [
-      { role: 'dev', status: 'working', task: 'Bash', label: '⚡ tests', hint: null, reasonCode: null, activeFile: null },
-      { role: 'qa',  status: 'working', task: 'Bash', label: '⚡ tests', hint: null, reasonCode: null, activeFile: null },
-      { role: 'ops', status: 'done',    task: 'Bash', label: '✅ done',  hint: null, reasonCode: null, activeFile: null },
+      { role: 'dev', status: 'working',  task: 'Bash', label: '⚡ tests', hint: null, reasonCode: null, activeFile: null },
+      { role: 'qa',  status: 'planning', task: 'Bash', label: '⚡ tests', hint: null, reasonCode: null, activeFile: null },
+      { role: 'ops', status: 'done',     task: 'Bash', label: '✅ done',  hint: null, reasonCode: null, activeFile: null },
     ])
   })
 
   afterEach(() => { restore(); tmp.cleanup() })
 
-  it('rate_limit matcher → no throw', () => {
-    expect(() => processEvent({ hook_event_name: 'StopFailure', matcher: 'rate_limit' })).not.toThrow()
+  it('rate_limit matcher → working+planning agents get api-rate-limit; done agent untouched', () => {
+    processEvent({ hook_event_name: 'StopFailure', matcher: 'rate_limit' })
+    const status = readStatus(tmp.base)
+    const dev = status.agents.find(a => a.role === 'dev')
+    const qa  = status.agents.find(a => a.role === 'qa')
+    const ops = status.agents.find(a => a.role === 'ops')
+    expect(dev.status).toBe('blocked')
+    expect(dev.reasonCode).toBe('api-rate-limit')
+    expect(qa.status).toBe('blocked')
+    expect(qa.reasonCode).toBe('api-rate-limit')
+    // ops was done → not stamped
+    expect(ops.status).toBe('done')
+    expect(ops.reasonCode).toBeNull()
   })
 
-  it('authentication_failed matcher → no throw', () => {
-    expect(() => processEvent({ hook_event_name: 'StopFailure', matcher: 'authentication_failed' })).not.toThrow()
+  it('authentication_failed matcher → working+planning agents get api-auth-failed', () => {
+    processEvent({ hook_event_name: 'StopFailure', matcher: 'authentication_failed' })
+    const status = readStatus(tmp.base)
+    const dev = status.agents.find(a => a.role === 'dev')
+    const qa  = status.agents.find(a => a.role === 'qa')
+    expect(dev.reasonCode).toBe('api-auth-failed')
+    expect(qa.reasonCode).toBe('api-auth-failed')
   })
 
-  it('other matcher (overloaded) → no throw, degrades to blocked-unknown', () => {
-    expect(() => processEvent({ hook_event_name: 'StopFailure', matcher: 'overloaded' })).not.toThrow()
+  it('negative over-claim guard: overloaded matcher → blocked-unknown NEVER api-rate-limit or api-auth-failed', () => {
+    processEvent({ hook_event_name: 'StopFailure', matcher: 'overloaded' })
+    const status = readStatus(tmp.base)
+    const dev = status.agents.find(a => a.role === 'dev')
+    expect(dev.status).toBe('blocked')
+    expect(dev.reasonCode).toBe('blocked-unknown')
+    expect(dev.reasonCode).not.toBe('api-rate-limit')
+    expect(dev.reasonCode).not.toBe('api-auth-failed')
   })
 
-  it('missing matcher → no throw', () => {
-    expect(() => processEvent({ hook_event_name: 'StopFailure' })).not.toThrow()
+  it('negative over-claim guard: absent matcher → blocked-unknown', () => {
+    processEvent({ hook_event_name: 'StopFailure' })
+    const status = readStatus(tmp.base)
+    const dev = status.agents.find(a => a.role === 'dev')
+    expect(dev.reasonCode).toBe('blocked-unknown')
   })
 
-  it('null matcher → no throw', () => {
+  it('done/idle agents are NEVER stamped', () => {
+    processEvent({ hook_event_name: 'StopFailure', matcher: 'rate_limit' })
+    const status = readStatus(tmp.base)
+    const ops = status.agents.find(a => a.role === 'ops')
+    expect(ops.status).toBe('done')
+    expect(ops.reasonCode).toBeNull()
+  })
+
+  it('EPHEMERAL: subsequent normal PostToolUse for an agent clears the reasonCode', () => {
+    // Step 1: StopFailure stamps dev (working) with api-rate-limit
+    processEvent({ hook_event_name: 'StopFailure', matcher: 'rate_limit' })
+    const blocked = readStatus(tmp.base)
+    expect(blocked.agents.find(a => a.role === 'dev').reasonCode).toBe('api-rate-limit')
+
+    // Step 2: normal PostToolUse for a dev-mapped tool (Edit → role:'dev', is_error:false)
+    // → dev goes done, reasonCode cleared (EPHEMERAL contract)
+    processEvent({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Edit',
+      tool_input: JSON.stringify({ file_path: '/src/foo.js' }),
+      tool_result: 'ok',
+      is_error: false,
+    })
+    const cleared = readStatus(tmp.base)
+    const dev = cleared.agents.find(a => a.role === 'dev')
+    expect(dev.status).toBe('done')
+    expect(dev.reasonCode).toBeNull()
+  })
+
+  it('null/malformed matcher → no throw', () => {
     expect(() => processEvent({ hook_event_name: 'StopFailure', matcher: null })).not.toThrow()
-  })
-
-  it('completely malformed event → no throw', () => {
     expect(() => processEvent({ hook_event_name: 'StopFailure', matcher: 42 })).not.toThrow()
     expect(() => processEvent({ hook_event_name: 'StopFailure', matcher: {} })).not.toThrow()
   })
 
-  it('api-rate-limit and api-auth-failed are EPHEMERAL (cleared on non-blocked status)', () => {
+  it('api-rate-limit and api-auth-failed are EPHEMERAL via pickReason', () => {
     expect(pickReason('blocked', 'api-rate-limit')).toBe('api-rate-limit')
     expect(pickReason('blocked', 'api-auth-failed')).toBe('api-auth-failed')
     expect(pickReason('done',    'api-rate-limit')).toBeNull()

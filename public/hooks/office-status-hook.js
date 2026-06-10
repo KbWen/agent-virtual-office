@@ -95,7 +95,12 @@ function getSessionSlug() {
 }
 
 const SESSION_SLUG = getSessionSlug()
-const STATUS_FILE = path.join(os.homedir(), '.claude', `office-status-${SESSION_SLUG}.json`)
+const _STATUS_FILE_DEFAULT = path.join(os.homedir(), '.claude', `office-status-${SESSION_SLUG}.json`)
+// AVO-148 review fix: STATUS_FILE is now a lazy function so tests can set OFFICE_STATUS_FILE env
+// var after module load and have it take effect per-call (production behavior is byte-identical
+// when the env var is absent — returns the same session-slug path as before).
+// All read/write call sites use STATUS_FILE as a value; they now call getStatusFile() instead.
+function getStatusFile() { return process.env.OFFICE_STATUS_FILE || _STATUS_FILE_DEFAULT }
 
 // ─── Write-lock helpers (AC-1..AC-3) ───────────────────────────────────────
 // Lock primitive: a DIRECTORY at STATUS_FILE + '.lock' created with mkdirSync.
@@ -105,10 +110,8 @@ const STATUS_FILE = path.join(os.homedir(), '.claude', `office-status-${SESSION_
 // without forking the hook file.  Tests set OFFICE_STATUS_FILE env var to redirect
 // STATUS_FILE (and the derived LOCK_DIR) to a temp path.
 const STATUS_LOCK_CONFIG = {
-  // Derive at module load time; tests may set process.env.OFFICE_STATUS_FILE before import.
   get lockDir() {
-    const base = process.env.OFFICE_STATUS_FILE || STATUS_FILE
-    return base + '.lock'
+    return getStatusFile() + '.lock'
   },
   staleMs: 2000,   // lock dir older than this is considered stale → steal
   waitMs:  25,     // busy-wait sleep per retry (Atomics.wait — synchronous, bounded)
@@ -760,7 +763,7 @@ function processEvent(event) {
       // Also capture _promptId at entry — PreToolUse writes it as _preToolPromptId so
       // a later PostToolUse straggler can detect if UserPromptSubmit fired between them.
       try {
-        const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+        const cur = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
         const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
         if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
         capturedPromptId = cur._promptId || null
@@ -787,7 +790,7 @@ function processEvent(event) {
       // Suppress straggler PostToolUse events that arrive after Stop.
       // Same _stoppedAt guard as PreToolUse — see comment above.
       try {
-        const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+        const cur = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
         const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
         if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
       } catch {}
@@ -849,7 +852,7 @@ function processEvent(event) {
       // context file is safe to remove regardless. The key fix is that the status write
       // (which would erase done-agents from Stop) must not happen on the suppressed path.
       try {
-        const cur = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+        const cur = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
         const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
         if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) {
           if (agentId) clearSkillContext(agentId)
@@ -868,12 +871,14 @@ function processEvent(event) {
     case 'PermissionDenied': {
       // AVO-148: the permission system denied a tool call. Only fires on a genuine denial —
       // zero text parsing, zero inference. Stamp the responsible agent (by tool→role mapping)
-      // as blocked with reason 'permission-denied'. Defensive: missing tool_name falls back
-      // to 'dev' (same toolToRole fallback convention); any error → no-op, never throws.
+      // as blocked with reason 'permission-denied'.
+      // Honest-narrow doctrine (AVO-110): without a usable tool_name we cannot attribute the
+      // denial to any specific role — spatial over-claim → NO-OP (no write, no stamp).
       try {
-        const deniedTool = (typeof event.tool_name === 'string' ? event.tool_name : '') || ''
-        role = toolToRole(deniedTool || 'Edit')  // 'Edit' → 'dev' fallback (toolToRole's default)
-        task = deniedTool || 'PermissionDenied'
+        const deniedTool = typeof event.tool_name === 'string' ? event.tool_name.trim() : ''
+        if (!deniedTool) return  // no tool_name → cannot attribute to a role; honest-narrow NO-OP
+        role = toolToRole(deniedTool)
+        task = deniedTool
         status = 'blocked'
         reasonCode = 'permission-denied'
         label = LANG === 'zh-TW' ? '🚫 權限被拒' : '🚫 Permission denied'
@@ -903,7 +908,7 @@ function processEvent(event) {
         } catch {}
 
         let sfData = null
-        try { sfData = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8')) } catch {}
+        try { sfData = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8')) } catch {}
 
         // Mark all CURRENTLY working/planning session agents as blocked.
         // "Session agents" = agents whose role appears in VALID_HOOK_ROLES (the hook's
@@ -915,7 +920,7 @@ function processEvent(event) {
           ? (LANG === 'zh-TW' ? '⏳ API 限流中' : '⏳ API rate-limited')
           : sfReason === 'api-auth-failed'
             ? (LANG === 'zh-TW' ? '🔑 API 認證失敗' : '🔑 API auth failed')
-            : (LANG === 'zh-TW' ? '❌ API 錯誤' : '❌ API error')
+            : (LANG === 'zh-TW' ? '❌ 卡住' : '❌ Blocked')  // floor = blocked-unknown; label must not narrow beyond the token
 
         const updatedAgents = sfAgents.map(a => {
           // Only stamp agents that are actively working or planning — a done/idle agent was
@@ -955,15 +960,15 @@ function processEvent(event) {
             source: 'claude-cli',
           },
         )
-        const sfDir = path.dirname(STATUS_FILE)
+        const sfDir = path.dirname(getStatusFile())
         if (!fs.existsSync(sfDir)) fs.mkdirSync(sfDir, { recursive: true })
         const sfJson = JSON.stringify(sfOutput, null, 2)
-        const sfTmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+        const sfTmp = getStatusFile() + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
         try {
           fs.writeFileSync(sfTmp, sfJson)
-          fs.renameSync(sfTmp, STATUS_FILE)
+          fs.renameSync(sfTmp, getStatusFile())
         } catch {
-          try { fs.writeFileSync(STATUS_FILE, sfJson) } catch {}
+          try { fs.writeFileSync(getStatusFile(), sfJson) } catch {}
           try { fs.unlinkSync(sfTmp) } catch {}
         }
       } catch {
@@ -980,7 +985,7 @@ function processEvent(event) {
       const stopLock = acquireStatusLock()
       try {
         try {
-          const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+          const data = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
           const doneAgents = (Array.isArray(data.agents) ? data.agents : [])
             .filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
             .map(a => ({
@@ -1017,16 +1022,16 @@ function processEvent(event) {
             _preToolPromptId: data._preToolPromptId || null,
             helpers: [],  // turn over — clear all helpers
           }
-          const dir = path.dirname(STATUS_FILE)
+          const dir = path.dirname(getStatusFile())
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
           const json = JSON.stringify(output, null, 2)
-          const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+          const tmp = getStatusFile() + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
           try {
             fs.writeFileSync(tmp, json)
-            fs.renameSync(tmp, STATUS_FILE)
+            fs.renameSync(tmp, getStatusFile())
           } catch {
             // Rename failed (EBUSY / file locked) — write directly as fallback
-            try { fs.writeFileSync(STATUS_FILE, json) } catch {}
+            try { fs.writeFileSync(getStatusFile(), json) } catch {}
             try { fs.unlinkSync(tmp) } catch {}
           }
         } catch {
@@ -1044,16 +1049,16 @@ function processEvent(event) {
             _stoppedAt: Date.now(),
             helpers: [],  // turn over — clear all helpers
           }
-          const dir = path.dirname(STATUS_FILE)
+          const dir = path.dirname(getStatusFile())
           try {
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
             const json = JSON.stringify(output, null, 2)
-            const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+            const tmp = getStatusFile() + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
             try {
               fs.writeFileSync(tmp, json)
-              fs.renameSync(tmp, STATUS_FILE)
+              fs.renameSync(tmp, getStatusFile())
             } catch {
-              try { fs.writeFileSync(STATUS_FILE, json) } catch {}
+              try { fs.writeFileSync(getStatusFile(), json) } catch {}
               try { fs.unlinkSync(tmp) } catch {}
             }
           } catch {}
@@ -1083,7 +1088,7 @@ function processEvent(event) {
   let existingStoppedAt = null
   let existingHelpers = []
   try {
-    const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+    const data = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
     existing = Array.isArray(data.agents)
       ? data.agents
           .filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
@@ -1167,7 +1172,7 @@ function processEvent(event) {
 
   if (hookEvent !== 'UserPromptSubmit') {
     try {
-      const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+      const latest = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
       // Update recheck fields from the freshest read (single consistent snapshot for guard + carry-through).
       recheckStopped = Boolean(latest._stopped)
       recheckStoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : null
@@ -1284,9 +1289,9 @@ function processEvent(event) {
   // tokens (_promptId / _preToolPromptId) that the PostToolUse straggler gate depends on.
   // A dropped PreToolUse write leaves _preToolPromptId stale, causing the next PostToolUse
   // to see a false mismatch and abort as a straggler even though it belongs to this turn.
-  const dir = path.dirname(STATUS_FILE)
+  const dir = path.dirname(getStatusFile())
   const json = JSON.stringify(output, null, 2)
-  const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+  const tmp = getStatusFile() + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
   const writeAttempts = (hookEvent === 'UserPromptSubmit' || hookEvent === 'PreToolUse') ? 3 : 1
   let writeOk = false
   try {
@@ -1297,7 +1302,7 @@ function processEvent(event) {
       // a successful second write would clobber Stop's idle state with stale working data.
       if (i > 0 && hookEvent !== 'UserPromptSubmit') {
         try {
-          const latest = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+          const latest = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
           const sAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
           if (latest._stopped && Number.isFinite(sAt) && Date.now() - sAt < 30_000) {
             try { fs.unlinkSync(tmp) } catch {}
@@ -1314,8 +1319,8 @@ function processEvent(event) {
           if (err.code === 'EBUSY' || err.code === 'EPERM') { try { fs.unlinkSync(tmp) } catch {}; return }
         }
       }
-      try { fs.writeFileSync(tmp, json); fs.renameSync(tmp, STATUS_FILE); writeOk = true } catch {}
-      if (!writeOk) { try { fs.writeFileSync(STATUS_FILE, json); writeOk = true } catch {} }
+      try { fs.writeFileSync(tmp, json); fs.renameSync(tmp, getStatusFile()); writeOk = true } catch {}
+      if (!writeOk) { try { fs.writeFileSync(getStatusFile(), json); writeOk = true } catch {} }
     }
     try { fs.unlinkSync(tmp) } catch {}  // clean up tmp; ENOENT (already renamed) is swallowed
   } catch {}
