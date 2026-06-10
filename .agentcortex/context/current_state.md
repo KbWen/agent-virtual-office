@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T14:15:00Z
-- **Update Sequence**: 68
+- **Last Updated**: 2026-06-11T20:20:00Z
+- **Update Sequence**: 69
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -145,6 +145,14 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-social-chat-feel-2026-06-11 (owner 批次 — 聊天感調校 + 家具障礙補全)
+
+- Branch `feat/social-chat-feel`, quick-win。兩件 owner 直接反饋的事一個 PR 收：
+- **聊天感（遊戲專家處方 + owner 核准）**：社交趨近 30–45 → **50–70px**（1.4–1.8 個 sprite 寬 =「走到你面前」而非「站進你身體」；3/4 視角的垂直視覺重疊**刻意不消除**——owner:「完全不蓋住也很奇怪」）；**到位轉身面向對方**（之前缺這半邊所以沒聊天感）＋ 對方短暫回望（R1 守衛 `shouldFaceBack`：tracked/inGroup 一律跳過；revert 還原先前朝向）。**SAME-PICK 保證**：implementer первоначально雙抽（走向 B 面向 A，8 人下錯臉率 6/7）→ coordinator 加 `socialTargetOverride` 串同一抽選，並以 2 測試釘住。
+- **家具障礙補全（owner 截圖：設計師站進 GATE 櫃台）**：OBSTACLE_RECTS 原來只蓋主辦公區——gate 櫃台（取左 2/3，保留出口巷道；全寬會把 gate 關在自己櫃台後，被測試抓到）、research 三排書櫃、印表機補入；伺服器架（貼牆無逃逸方向）與電話亭（設計上可進入）刻意排除並註記。寵物 segmentWalkable 統一 2px 取樣（picker==複驗，消滅一類潛在 flake）。**新 class-killer 不變量**：所有站立定點必在地板上且不在任何家具內。
+- **Review (fresh)**: PASS — same-pick 全鏈追蹤、stale-ref 路徑閉合、R1 守衛、gate 出口線段、slice 索引不受影響；2 個 MED（守衛顯式清 ref、same-pick 補釘）皆當場處理。
+- **Tests**: 1840 → **1870** (+21 社交模擬 + 9 家具不變量)。稽核註記：raw under-30 率由走廊交會主導（organic 模式高估），站立疊合已由 50–70px 環 + 不變量結構性處理。Tests: Pass
 
 ### Ship-fix-gap-snap-threshold-2026-06-11 (回歸修復 — 我自己的 1.5s 瞬移門檻；owner 不信任直覺命中)
 
