@@ -73,6 +73,29 @@ describe('socialTargetOverride same-pick guarantee', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// (g) Lateral bias (owner: three sprites stacked vertically at the gate): approach
+//     angles come from ±45° cones around horizontal → |dx| ≥ |dy| by construction,
+//     so tall 3/4-view sprites can never line up in a vertical column.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('social approach lateral bias — no vertical stacking', () => {
+  const realRandom = Math.random
+  beforeEach(() => { Math.random = mulberry32(0x1a7e_a1) })
+  afterEach(() => { Math.random = realRandom })
+
+  it('200 seeded approaches: horizontal offset dominates the vertical one', () => {
+    // Peer in open floor far from walls/furniture so clampToFloor is a no-op and the
+    // raw angle geometry is what we measure.
+    const agents = makeAgents({ me: { x: 100, y: 290 }, peer: { x: 300, y: 290 } })
+    for (let i = 0; i < 200; i++) {
+      const dest = getTargetForBehavior('me', 'chat', agents, { targetId: 'peer', position: { x: 300, y: 290 } })
+      const dx = Math.abs(dest.x - 300)
+      const dy = Math.abs(dest.y - 290)
+      expect(dx, `run ${i}: dest (${Math.round(dest.x)},${Math.round(dest.y)}) is vertically aligned (dx=${Math.round(dx)} dy=${Math.round(dy)})`).toBeGreaterThanOrEqual(dy - 2)
+    }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // (a) Raw distance distribution: 500 seeded samples → all ∈ [50, 70]
 // ─────────────────────────────────────────────────────────────────────────────
 describe('social approach distance distribution (seeded 500 samples)', () => {

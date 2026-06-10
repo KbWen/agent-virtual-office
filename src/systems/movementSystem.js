@@ -640,7 +640,15 @@ export function getTargetForBehavior(agentId, behaviorId, allAgents, socialTarge
   if (SOCIAL_BEHAVIORS.has(behaviorId) && allAgents) {
     const picked = socialTargetOverride || pickSocialTarget(agentId, allAgents)
     if (picked) {
-      const angle = Math.random() * Math.PI * 2
+      // Lateral-bias (owner screenshot 2026-06-11: THREE sprites stacked at the gate —
+      // gate + two social visitors): sprites are ~40px TALL in the 3/4 view, so a visitor
+      // landing directly above/below the peer overlaps visually even at the full 70px ring.
+      // Sample the approach angle from two ±45° cones around horizontal (stand BESIDE the
+      // peer — 並肩聊天) instead of uniform 0–2π; the horizontal offset always ≥ the
+      // vertical one by construction, so the tall sprites can never stack into a vertical
+      // column while the distance ring stays 50–70px.
+      const side = Math.random() < 0.5 ? 0 : Math.PI
+      const angle = side + (Math.random() - 0.5) * (Math.PI / 2)
       // Owner-approved 2026-06-10: dist widened 30–45 → 50–70px.
       // Sprite effective width ~35-40px → 1.4–1.8 sprite-widths = "walked up to you"
       // rather than "standing on you". Addresses measured 40–70% rate of pairs under
