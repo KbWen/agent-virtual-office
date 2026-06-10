@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 title: "#20 (H3) — Hook status-file write lock (read-modify-write race fix)"
 created: 2026-06-10
 last_updated: 2026-06-10

@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-10T15:15:00Z
-- **Update Sequence**: 52
+- **Last Updated**: 2026-06-10T17:00:00Z
+- **Update Sequence**: 53
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -76,6 +76,7 @@
   - [multi-agent] docs/specs/pair-programming-huddle.md [Shipped]  *(AVO-106 — co-editing pair OVERLAY (desk-to-desk link); per-agent activeFile, edit-only; redesigned from a huddle per expert panel)*
   - [ci-infra] docs/specs/ci-render-smoke.md [Shipped]  *(AVO-145 / hardening-wave H1 — blocking render-smoke gate; AC-6 test-the-test proven)*
   - [data-path] docs/specs/status-field-schema-unification.md [Shipped]  *(AVO-146 / hardening-wave H2 — AGENT_CARRY_FIELDS canonical schema; 9-site map; drift-guarded)*
+  - [hook-io] docs/specs/hook-status-write-lock.md [Shipped]  *(#20 / hardening-wave H3 — bounded-wait RMW lock; multi-process proof)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -139,6 +140,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-issue-20-hook-write-lock-2026-06-10 (硬化波 H3 — hook STATUS_FILE 寫入鎖)
+
+- Branch `fix/issue-20-hook-write-lock`, quick-win. Closes #20 (reactivated from Deferred). Spec `docs/specs/hook-status-write-lock.md` [shipped]. The hook's read-modify-write window (SubagentStart racing main-session PostToolUse in one cwd) can no longer lose updates.
+- **Shipped**: `acquireStatusLock`/`releaseStatusLock` in `public/hooks/office-status-hook.js` — atomic `mkdirSync` lock dir, 25ms×10 bounded busy-wait (`Atomics.wait`, try/catch-degradable), 2s stale-steal, ENOENT-after-EEXIST retry (coordinator fix), **proceed-unlocked fallback** (liveness sacred: hook runs on every user tool call; worst case = pre-fix behavior). Both RMW sites wrapped in try/finally (Stop handler + main merge span); pure-read sites left unlocked.
+- **Review (fresh)**: PASS — all 5 ACs PROVEN; reviewer NEUTERED the lock to verify AC-4 has teeth (4/5 broken runs fail with lost-update/torn-read); SITE-A-nested-in-SITE-B liveness hazard structurally impossible (Stop returns before SITE-B acquire); no process.exit inside any lock span. 2 LOW accepted (time-based steal under >2s OS pause = spec-accepted availability tradeoff; AC-4 failure-sensitivity probabilistic = spec-waived).
+- **Tests**: 1489 → **1499** (+10: 6-process×15-cycle mutual-exclusion proof counter===90 exact, stale-steal, bounded fallback; ×3 non-flaky). smoke exit 0. Payload/field logic byte-untouched (drift guards green). Tests: Pass
 
 ### Ship-feat-avo-146-status-field-schema-2026-06-10 (硬化波 H2 — status-field schema 統一)
 
