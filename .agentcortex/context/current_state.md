@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-10T19:05:00Z
-- **Update Sequence**: 54
+- **Last Updated**: 2026-06-10T20:15:00Z
+- **Update Sequence**: 55
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -141,6 +141,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-avo-143-skip-noop-agent-realloc-2026-06-10 (硬化波 H6a — poll no-op 不重配置)
+
+- Branch `feat/avo-143-skip-noop-agent-realloc`, quick-win. Closes AVO-143. Coordinator-implemented (identity-sensitive one-function change).
+- **Shipped**: `applyExternalStatus` per-update skip when every written field is provably unchanged (`!sigChanged ∧ status equal ∧ behavior/expression resolve same`), placed AFTER the ext expiry refresh + AVO-117 episode record (both must run every tick); `agentsMutated` flag (seeded by dayChanged; set by creation/reassignment/eviction) → returns the ORIGINAL `s.agents` reference on a pure poll re-apply. AgentCharacter subscribers + Object-level selectors stop re-firing every ~2s for nothing.
+- **Review (focused, fresh)**: PASS — 14-point skip-condition completeness audit all PROVEN (incl. previousStatus read-before-write order, done-growth/blocked-counter gating, occupiedSlots aliasing); sensitivity probe (drop `!sigChanged` → 1 existing test fails) proves the guard load-bearing.
+- **Tests**: 1535 → **1543** (+8 identity tests). The 1535 pre-existing tests passing UNCHANGED is the conservativeness proof. smoke exit 0. Tests: Pass
 
 ### Ship-feat-avo-148-structured-error-reasons-2026-06-10 (硬化波 H5 — 結構化事件 blocked reasons)
 
