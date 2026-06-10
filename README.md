@@ -131,6 +131,18 @@ curl -X POST http://localhost:5174/api/event -d '{"event":"deploy-success"}'
 | `PermissionDenied` *(AVO-148)* | Hooks v1.x+ | Stamps the responsible agent `blocked` with reason `permission-denied` when the permission system denies a tool call. Harmless if your Claude Code version does not emit this event — the handler simply never runs. |
 | `StopFailure` *(AVO-148)* | Hooks v1.x+ | Stamps all currently-working session agents `blocked` with `api-rate-limit` or `api-auth-failed` when the turn ends on a Claude-API error (keyed on the `matcher` enum field — zero text parsing). Harmless if absent. |
 
+### Opt-in capture mode *(AVO-153)*
+
+The hook supports capturing raw hook events for fixture generation and schema validation:
+
+1. **Enable**: `touch ~/.claude/office-hook-capture` (Linux/macOS) or `New-Item ~/.claude/office-hook-capture` (PowerShell)
+2. **Use Claude Code normally** — every tool call appends a JSON line to `~/.claude/office-hook-capture.jsonl`
+3. **Sanitize**: `node scripts/sanitize-hook-capture.mjs` → creates `tests/fixtures/hook-events/*.json`
+4. **Review**: check fixtures for residual sensitive strings before committing
+5. **Disable**: remove the marker file; raw capture stays in `~/.claude` (never committed)
+
+The capture path is fully `try/catch`'d — enabling or disabling it has zero effect on normal hook behavior.
+
 ## Embedding & language
 
 ```

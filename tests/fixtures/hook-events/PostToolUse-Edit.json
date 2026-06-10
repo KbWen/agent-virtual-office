@@ -1,0 +1,47 @@
+{
+  "session_id": "redacted-text",
+  "transcript_path": "/redacted/path.js",
+  "cwd": "/redacted/path.js",
+  "permission_mode": "bypassPermissions",
+  "agent_id": "redacted-text",
+  "agent_type": "redacted-text",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "/redacted/path.js",
+    "old_string": "redacted-text",
+    "new_string": "redacted-text",
+    "replace_all": false
+  },
+  "tool_response": {
+    "filePath": "/redacted/path.js",
+    "oldString": "redacted-text",
+    "newString": "redacted-text",
+    "originalFile": "redacted-text",
+    "structuredPatch": [
+      {
+        "oldStart": 42,
+        "oldLines": 42,
+        "newStart": 42,
+        "newLines": 42,
+        "lines": [
+          "redacted-text",
+          "redacted-text",
+          "redacted-text",
+          "redacted-text",
+          "redacted-text",
+          "redacted-text",
+          "redacted-text",
+          "redacted-text"
+        ]
+      }
+    ],
+    "userModified": false,
+    "replaceAll": false
+  },
+  "tool_use_id": "redacted-text",
+  "duration_ms": 42
+}
