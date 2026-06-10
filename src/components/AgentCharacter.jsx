@@ -36,15 +36,6 @@ const BLUSH = '#FFB6C1'
 // Base character facing down (idle frame 0)
 // Row by row: 0=top of head ... 19=feet
 
-// Fast-forward helper for the walk loop: snap the visual position onto the current leg's
-// target. Returns true so callers can use it inline in a condition (see the hidden-tab /
-// jank fast-forward in animate()). Mutates vp deliberately — it IS the live position ref.
-function dist0FastForward(vp, tp) {
-  vp.x = tp.x
-  vp.y = tp.y
-  return true
-}
-
 function getBaseSprite(hairColor, clothesColor, hairStyle, gender = 'male') {
   // Start with empty grid
   const grid = Array.from({ length: GRID_H }, () => Array(GRID_W).fill(null))
@@ -829,13 +820,11 @@ function AgentCharacter({ agent }) {
       // are being dropped somewhere (tab throttling, HMR, an exception in animate()).
       useOfficeStore.getState().recordWatchdogRestart()
       if (import.meta.env?.DEV) console.warn(`[watchdog] restarted stalled walk loop for "${id}"`)
-      // Fast-forward the frozen leg before restarting (same rationale as the gap snap in
-      // animate): a visible ≥1.5s stall means the sprite has been parked — possibly inside
-      // another frozen walker — so resume FROM the leg target, not with a glide from the pile.
-      if (visualPosRef.current && targetPosRef.current) {
-        dist0FastForward(visualPosRef.current, targetPosRef.current)
-        setRenderPos({ x: targetPosRef.current.x, y: targetPosRef.current.y })
-      }
+      // NO fast-forward here (A/B-proven regression, 2026-06-11): the watchdog fires at
+      // 1.5s, which heavy-load render jank hits constantly on this machine — snapping made
+      // every such stall a visible teleport (20 jumps in a 3-min audit vs 0 on baseline).
+      // A restarted loop resumes the smooth glide; the LONG-freeze case (real tab-hide) is
+      // handled by stepWalkFrame's GAP_SNAP_MS (5s) on the first resumed frame instead.
       startRaf()
     }, 1000)
     return () => clearInterval(watchdog)

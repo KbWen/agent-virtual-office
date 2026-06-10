@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T12:00:00Z
-- **Update Sequence**: 67
+- **Last Updated**: 2026-06-11T14:15:00Z
+- **Update Sequence**: 68
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -145,6 +145,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-gap-snap-threshold-2026-06-11 (回歸修復 — 我自己的 1.5s 瞬移門檻；owner 不信任直覺命中)
+
+- Branch `fix/gap-snap-threshold`, quick-win. Owner「新版還是有問題/人物不連貫/用不信任的角度」→ **A/B 鐵證**：全新頁面 3 分鐘視覺稽核（250ms DOM transform 取樣）新版抓到 **20 次 89–225px 瞬移** vs **d260827 基線 0 次**（平行 worktree :5174、同機同負載）。根因：GAP_SNAP_MS=1500 把這台機器家常便飯的 1.5–5s 重載渲染卡頓全變成可見瞬移；watchdog 快轉（1.5s 觸發）在可見卡頓路徑做了同樣的事。治凍結堆的藥本身成了「不連貫」病。
+- **Shipped**: GAP_SNAP_MS 1500 → **5000**（>5s = 真正的分頁切換 → 歸位瞬移、堆永遠不被看見；1.5–5s = 卡頓 → 恢復原本的平滑滑行）；watchdog 快轉**移除**（重啟即平滑續走）；死代碼清除；+1 jank-range 回歸釘（4.2s gap 必須滑行不瞬移）。`scripts/proximity-audit.mjs` 入庫為常備診斷工具。
+- **Review (fresh)**: PASS — 5 情境凍結真值表全數自洽（hidden>5s snap / hidden≤5s glide / 可見卡頓經 gapMs=0 重置必 glide / 可見>5s 競態兩結果皆可接受 / 邊界嚴格大於）。
+- **重稽核**：**0 瞬移、maxStep 22px**（合法步速內）。Suite **1840**。Proximity 議題（40–70% 樣本存在 <30px 對）另案：主因是社交行為設計（chat/thumbs-up 走到同事 30–45px 內、sprite 寬 35px）——已呈 owner 決定是否調距。Tests: Pass
 
 ### Ship-fix-frozen-walk-pileup-2026-06-11 (owner 回報 bug — 8人只見6人/凍結疊堆)
 

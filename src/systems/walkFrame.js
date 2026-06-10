@@ -11,7 +11,13 @@
 // Mutates vp in place (it is the live position ref) and returns true when the leg ARRIVED
 // (caller advances the waypoint chain).
 
-export const GAP_SNAP_MS = 1500
+// 5000 not 1500 (A/B-proven regression fix, 2026-06-11): at 1500ms every heavy-load render
+// stall (npm test / builds saturate this machine for seconds at a time) converted a walking
+// sprite into a visible TELEPORT — a fresh-page audit caught 20 jumps of 89–225px in 3 min
+// vs ZERO on the pre-fix baseline. 5s cleanly separates the two cases: a real tab-hide is
+// almost always >5s (snap on return — the pile is never seen), while visible jank bursts
+// are 1.5–5s (resume the smooth glide, exactly the pre-existing behavior).
+export const GAP_SNAP_MS = 5000
 export const ARRIVE_EPSILON = 1.5
 
 export function stepWalkFrame(vp, tp, dtSeconds, gapMs, walkSpeed) {

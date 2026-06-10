@@ -46,9 +46,19 @@ describe('stepWalkFrame — normal gliding', () => {
 describe('stepWalkFrame — hidden-tab / jank fast-forward (the owner-bug case)', () => {
   it(`a timestamp gap > ${GAP_SNAP_MS}ms snaps the leg to its target regardless of dt clamp`, () => {
     const vp = { x: 300, y: 180 }                       // the live-captured frozen pixel
-    const arrived = stepWalkFrame(vp, { x: 300, y: 290 }, 0.1, 4200, SPEED)
+    const arrived = stepWalkFrame(vp, { x: 300, y: 290 }, 0.1, GAP_SNAP_MS + 1200, SPEED)
     expect(arrived).toBe(true)
     expect(vp).toEqual({ x: 300, y: 290 })              // AT the leg target, not an 8px glide
+  })
+
+  it('a heavy-load jank gap (1.5–5s) does NOT snap — it resumes the smooth glide (A/B regression pin)', () => {
+    // 2026-06-11 regression: at GAP_SNAP_MS=1500 every CI-load render stall became a
+    // visible teleport (audit: 20 jumps in 3 min vs 0 on baseline). Jank-range gaps must
+    // glide; only real tab-hide-scale gaps (>5s) snap.
+    const vp = { x: 300, y: 180 }
+    const arrived = stepWalkFrame(vp, { x: 300, y: 290 }, 0.1, 4200, SPEED)
+    expect(arrived).toBe(false)
+    expect(vp.y).toBeCloseTo(188, 5)                    // clamped-dt glide, the pre-existing behavior
   })
 
   it('the PRE-FIX behavior is provably different: without the gap rule a 4.2s freeze glides ~8px', () => {
