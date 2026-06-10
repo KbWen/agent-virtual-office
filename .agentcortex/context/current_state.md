@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-10T00:00:00Z
-- **Update Sequence**: 49
+- **Last Updated**: 2026-06-10T10:30:00Z
+- **Update Sequence**: 50
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -137,6 +137,14 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-hardening-h4-zero-noise-2026-06-10 (硬化波 H4 — validator 歸零 + 硬化波 intake)
+
+- Branch `chore/hardening-h4-zero-noise`, quick-win. Opens the owner-selected **Fable-5 hardening wave** (H4→H1→H2→H3→H5→H6; spec-intake decomposition + owner "全做" selection 2026-06-10).
+- **Backlog intake**: AVO-145 (CI render-smoke gate) · AVO-146 (transport whitelist unification) · AVO-147 (this task) · AVO-148 (structured error payload, AVO-110 Phase-2) registered; #20 reactivated P3→P1 Pending (=H3); wave notes section added.
+- **Validator 4 WARN → 1 WARN (pass 105→109, 0 fail)**: the two leftover shipped logs (`feat-office-pet-barometer`, `fix-issue-28-watchdog-diag`) got honest backfills (Test Gate Results + ADR Coverage marked "backfilled at archival", evidence = original 2026-06-08 records, no new claims) and were archived + INDEX.jsonl chain-appended via `append_chain_entry.py` (status ok ×2). Residual 1 WARN = archived-historical-gap (6 logs) — analysed: 1 validator regex false-positive (`Gate: implement (truth-half) |` not matched), 5 true immutable historical gaps; WARN-by-design, accepted floor. Upstream agentic-os candidates: annotated-receipt tolerance + accepted-baseline list.
+- **Repo hygiene**: `.gitignore` now covers `.pet-shots/`, local `scripts/*-shot.mjs` + `pet-*.mjs` (AVO-145 will land ONE tracked harness), `deploy_brain.*` (canonical source = KbWen/agentic-os); `docs/adr|specs/.gitkeep.md` + `work/.gitkeep.md` tracked. git status untracked noise → 0.
+- **Evidence**: no `src/`/`tests/` change (diff --stat verified) → 1462/1462 baseline stands; validator receipts above. Tests: Pass
 
 ### Ship-feat-declutter-glance-layer-2026-06-10 (UX declutter — bubble cap + de-alarm, owner "畫面太亂")
 
