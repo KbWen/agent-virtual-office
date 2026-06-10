@@ -97,6 +97,74 @@ function getSessionSlug() {
 const SESSION_SLUG = getSessionSlug()
 const STATUS_FILE = path.join(os.homedir(), '.claude', `office-status-${SESSION_SLUG}.json`)
 
+// ─── Write-lock helpers (AC-1..AC-3) ───────────────────────────────────────
+// Lock primitive: a DIRECTORY at STATUS_FILE + '.lock' created with mkdirSync.
+// mkdir is atomic on Windows and POSIX: only one caller succeeds; EEXIST = contested.
+//
+// Export the config object so tests can override the lock path and tune constants
+// without forking the hook file.  Tests set OFFICE_STATUS_FILE env var to redirect
+// STATUS_FILE (and the derived LOCK_DIR) to a temp path.
+const STATUS_LOCK_CONFIG = {
+  // Derive at module load time; tests may set process.env.OFFICE_STATUS_FILE before import.
+  get lockDir() {
+    const base = process.env.OFFICE_STATUS_FILE || STATUS_FILE
+    return base + '.lock'
+  },
+  staleMs: 2000,   // lock dir older than this is considered stale → steal
+  waitMs:  25,     // busy-wait sleep per retry (Atomics.wait — synchronous, bounded)
+  maxRetries: 10,  // total retries → worst-case ≤ 10 × 25 ms = 250 ms
+}
+
+// Synchronous sleep via Atomics.wait (no event loop, no setTimeout, bounded exactly).
+function _syncSleep(ms) {
+  try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) } catch {}
+}
+
+/**
+ * Try to acquire the STATUS_FILE write-lock.
+ * Returns { ok: true } on success, { ok: false } after exhausting the retry budget.
+ * NEVER throws — any fs error degrades gracefully to { ok: false }.
+ * Stale lock (mtime older than staleMs) is stolen: rmdir + retry mkdir.
+ */
+function acquireStatusLock() {
+  const { lockDir, staleMs, waitMs, maxRetries } = STATUS_LOCK_CONFIG
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      fs.mkdirSync(lockDir)
+      return { ok: true }   // we own the lock
+    } catch (mkErr) {
+      if (!mkErr || mkErr.code !== 'EEXIST') return { ok: false }  // unexpected error
+      // Lock dir exists — check staleness
+      try {
+        const st = fs.statSync(lockDir)
+        if (Date.now() - st.mtimeMs > staleMs) {
+          // Stale lock: remove it and retry immediately (no sleep).
+          // Two concurrent stealers: mkdirSync atomicity means exactly one wins; the
+          // loser gets EEXIST again and re-enters the retry loop.
+          try { fs.rmdirSync(lockDir) } catch {}
+          continue  // retry without sleeping
+        }
+      } catch (stErr) {
+        // ENOENT = the holder released between our EEXIST and this stat — the lock is
+        // FREE now; retry mkdir immediately instead of giving up.
+        if (stErr && stErr.code === 'ENOENT') continue
+        return { ok: false }  // other stat failure — bail (proceed unlocked)
+      }
+      // Lock is fresh and held by someone else; busy-wait
+      if (attempt < maxRetries) _syncSleep(waitMs)
+    }
+  }
+  return { ok: false }  // budget exhausted — proceed unlocked (availability over consistency)
+}
+
+/**
+ * Release the STATUS_FILE write-lock held by this process.
+ * Only call when lock.ok === true.  NEVER throws.
+ */
+function releaseStatusLock() {
+  try { fs.rmdirSync(STATUS_LOCK_CONFIG.lockDir) } catch {}
+}
+
 // ─── Shared role list — single source for Stop handler and merge logic ───
 const VALID_HOOK_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
 
@@ -800,73 +868,48 @@ function processEvent(event) {
     case 'Stop': {
       // Claude's turn is over — mark all current agents as done.
       // _stopped: true prevents straggler PostToolUse events from overwriting this idle state.
+      // RMW-SITE-A: acquire write-lock for the full read→modify→write span.
+      const stopLock = acquireStatusLock()
       try {
-        const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
-        const doneAgents = (Array.isArray(data.agents) ? data.agents : [])
-          .filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
-          .map(a => ({
-            role: a.role,
-            task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
-            status: 'done',
-            label: pick(LANG === 'en'
-              ? ['✅ All done', '✅ Round complete', '✅ Over to you']
-              : ['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了']),
-            hint: null,
-          }))
-        const output = {
-          _seq: nextSeq(),
-          _stopped: true,
-          _stoppedAt: Date.now(),
-          _cwd: process.cwd(),
-          type: 'office-status',
-          agents: doneAgents,
-          activeCount: 0,
-          // A workflow banner is ONLY ever set by SubagentStart, so any workflow still
-          // present when the turn ends must be cleared — it can never legitimately outlive a
-          // Stop. The previous `_workflowAgentId ? null : workflow` guard leaked a banner
-          // FOREVER when a SubagentStart set a workflow without an agent_id (_workflowAgentId
-          // stays null), then a SubagentStop with a different/absent agent_type failed to
-          // match it (see shouldClearWorkflowOnSubagentStop). Unconditional null is the
-          // correct terminal state; nothing downstream needs a workflow to survive Stop.
-          workflow: null,
-          // Preserve R45/R46 identity fields so a SubagentStop arriving after Stop still
-          // uses the precise _workflowAgentId match rather than falling back to type-string.
-          _workflowAgentId: typeof data._workflowAgentId === 'string' ? data._workflowAgentId : null,
-          _workflowPromptId: typeof data._workflowPromptId === 'string' ? data._workflowPromptId : null,
-          source: 'claude-cli',
-          _promptId: data._promptId || null,
-          _preToolPromptId: data._preToolPromptId || null,
-          helpers: [],  // turn over — clear all helpers
-        }
-        const dir = path.dirname(STATUS_FILE)
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-        const json = JSON.stringify(output, null, 2)
-        const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
         try {
-          fs.writeFileSync(tmp, json)
-          fs.renameSync(tmp, STATUS_FILE)
-        } catch {
-          // Rename failed (EBUSY / file locked) — write directly as fallback
-          try { fs.writeFileSync(STATUS_FILE, json) } catch {}
-          try { fs.unlinkSync(tmp) } catch {}
-        }
-      } catch {
-        // File doesn't exist yet (first-ever Stop) or is invalid — write a clean "idle" state
-        // so the office always receives a response rather than silently getting nothing.
-        const output = {
-          type: 'office-status',
-          agents: [],
-          activeCount: 0,
-          workflow: null,
-          source: 'claude-cli',
-          _cwd: process.cwd(),
-          _seq: nextSeq(),
-          _stopped: true,
-          _stoppedAt: Date.now(),
-          helpers: [],  // turn over — clear all helpers
-        }
-        const dir = path.dirname(STATUS_FILE)
-        try {
+          const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'))
+          const doneAgents = (Array.isArray(data.agents) ? data.agents : [])
+            .filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
+            .map(a => ({
+              role: a.role,
+              task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
+              status: 'done',
+              label: pick(LANG === 'en'
+                ? ['✅ All done', '✅ Round complete', '✅ Over to you']
+                : ['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了']),
+              hint: null,
+            }))
+          const output = {
+            _seq: nextSeq(),
+            _stopped: true,
+            _stoppedAt: Date.now(),
+            _cwd: process.cwd(),
+            type: 'office-status',
+            agents: doneAgents,
+            activeCount: 0,
+            // A workflow banner is ONLY ever set by SubagentStart, so any workflow still
+            // present when the turn ends must be cleared — it can never legitimately outlive a
+            // Stop. The previous `_workflowAgentId ? null : workflow` guard leaked a banner
+            // FOREVER when a SubagentStart set a workflow without an agent_id (_workflowAgentId
+            // stays null), then a SubagentStop with a different/absent agent_type failed to
+            // match it (see shouldClearWorkflowOnSubagentStop). Unconditional null is the
+            // correct terminal state; nothing downstream needs a workflow to survive Stop.
+            workflow: null,
+            // Preserve R45/R46 identity fields so a SubagentStop arriving after Stop still
+            // uses the precise _workflowAgentId match rather than falling back to type-string.
+            _workflowAgentId: typeof data._workflowAgentId === 'string' ? data._workflowAgentId : null,
+            _workflowPromptId: typeof data._workflowPromptId === 'string' ? data._workflowPromptId : null,
+            source: 'claude-cli',
+            _promptId: data._promptId || null,
+            _preToolPromptId: data._preToolPromptId || null,
+            helpers: [],  // turn over — clear all helpers
+          }
+          const dir = path.dirname(STATUS_FILE)
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
           const json = JSON.stringify(output, null, 2)
           const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
@@ -874,16 +917,52 @@ function processEvent(event) {
             fs.writeFileSync(tmp, json)
             fs.renameSync(tmp, STATUS_FILE)
           } catch {
+            // Rename failed (EBUSY / file locked) — write directly as fallback
             try { fs.writeFileSync(STATUS_FILE, json) } catch {}
             try { fs.unlinkSync(tmp) } catch {}
           }
-        } catch {}
+        } catch {
+          // File doesn't exist yet (first-ever Stop) or is invalid — write a clean "idle" state
+          // so the office always receives a response rather than silently getting nothing.
+          const output = {
+            type: 'office-status',
+            agents: [],
+            activeCount: 0,
+            workflow: null,
+            source: 'claude-cli',
+            _cwd: process.cwd(),
+            _seq: nextSeq(),
+            _stopped: true,
+            _stoppedAt: Date.now(),
+            helpers: [],  // turn over — clear all helpers
+          }
+          const dir = path.dirname(STATUS_FILE)
+          try {
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+            const json = JSON.stringify(output, null, 2)
+            const tmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+            try {
+              fs.writeFileSync(tmp, json)
+              fs.renameSync(tmp, STATUS_FILE)
+            } catch {
+              try { fs.writeFileSync(STATUS_FILE, json) } catch {}
+              try { fs.unlinkSync(tmp) } catch {}
+            }
+          } catch {}
+        }
+      } finally {
+        if (stopLock.ok) releaseStatusLock()
       }
       return  // no further processing needed
     }
     default:
       return
   }
+
+  // RMW-SITE-B: acquire write-lock for the full merge-read → build-output → write span.
+  // The try/finally ensures release even when inner guards call `return`.
+  const mainLock = acquireStatusLock()
+  try {
 
   // Read existing status to merge (keep other agents' states + workflow)
   let existing = []
@@ -1132,6 +1211,10 @@ function processEvent(event) {
     }
     try { fs.unlinkSync(tmp) } catch {}  // clean up tmp; ENOENT (already renamed) is swallowed
   } catch {}
+
+  } finally {
+    if (mainLock.ok) releaseStatusLock()
+  }
 }
 
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)
@@ -1141,5 +1224,7 @@ if (typeof module !== 'undefined') {
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
     shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse,
     readLatestTokenUsage, effortLevel, activeFileForTool,
-    helperHash, helperAdd, helperRemove }
+    helperHash, helperAdd, helperRemove,
+    // AC-1 / AC-4: write-lock helpers and configuration (exported for testability)
+    acquireStatusLock, releaseStatusLock, STATUS_LOCK_CONFIG }
 }
