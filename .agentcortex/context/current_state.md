@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T10:25:00Z
-- **Update Sequence**: 66
+- **Last Updated**: 2026-06-11T12:00:00Z
+- **Update Sequence**: 67
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -145,6 +145,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-frozen-walk-pileup-2026-06-11 (owner 回報 bug — 8人只見6人/凍結疊堆)
+
+- Branch `fix/frozen-walk-pileup`, quick-win. 三連報的最深根因。LIVE 量測：pm+dev 距離 0 連續 **96 秒**、isMoving:true、watchdogRestarts=25。機制：**隱藏分頁 rAF 不觸發**（與 preview_screenshot 同根因）→ 使用者切走時所有行進中走路原地凍結（落在共享節點上成堆）→ 切回來第一幀 dt clamp 讓凍結堆「慢慢滑開」——使用者親眼看到的「疊在一起→又分開了」。可見分頁 ≥1.5s 卡頓經 watchdog 重啟也走同樣的滑開路徑。
+- **Shipped**: 純函數 `src/systems/walkFrame.js` `stepWalkFrame`（從 RAF 迴圈萃取的逐幀數學；timestamp gap >1500ms → 該腿直接瞬移到位＋視為抵達）；animate() 委派之；watchdog 重啟前先快轉凍結腿再排 RAF。多腿路徑只快轉凍結那一腿，其餘正常行走（每腿 lastTimeRef 歸零）。
+- **Review (fresh)**: PASS — 萃取對所有正常滑行 case 逐位元等價（一個 1.5px–step 窗口邊緣 case 嚴格變好：少一幀抵達）；首幀/下一腿/重啟後 gap=0 證明無誤觸；敏感度（GAP=∞ → 測試失敗）。
+- **Tests**: 1831 → **1839** (+8 純數學測試，含 pre-fix 差分釘)。實際效果由 owner 日常觀看驗證（切回分頁第一眼應是各就各位）。Tests: Pass
 
 ### Ship-fix-shared-node-stacking-2026-06-11 (owner 回報 bug — 角色在共享節點上精確疊合)
 
