@@ -21,8 +21,10 @@ jobs:
       # npm ci (not install): exact-lockfile reproducible builds — CI must test the
       # tree the lockfile pins, not whatever resolution npm install computes today.
       - run: npm ci
-      - run: npm test
+      # Build BEFORE test: the transport-spine e2e (AVO-150) boots the real
+      # server.mjs, which refuses to start without dist/index.html.
       - run: npm run build
+      - run: npm test
 
   render-smoke:
     runs-on: ubuntu-latest

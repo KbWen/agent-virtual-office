@@ -71,6 +71,15 @@ let statusFilePath
 // ─── lifecycle ────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
+  // FAIL FAST when dist/ is missing: server.mjs refuses to start without
+  // dist/index.html (it serves the bundle). Without this precheck the suite
+  // burns the full 25s readiness budget and reports an opaque timeout —
+  // exactly what happened on the first CI run (test job ran before build;
+  // ci.yml now builds first, this guard keeps the local failure mode clear).
+  const distIndex = join(ROOT, 'dist', 'index.html')
+  if (!existsSync(distIndex)) {
+    throw new Error('dist/index.html not found — run `npm run build` before the transport e2e (server.mjs requires the bundle).')
+  }
   // Create an isolated temp home dir; server writes to tempDir/.claude/office-status.json
   tempDir = mkdtempSync(join(tmpdir(), 'avo-150-e2e-'))
   mkdirSync(join(tempDir, '.claude'), { recursive: true })
