@@ -76,7 +76,7 @@ last_updated: 2026-06-10
 | AVO-151 | npm-pack install smoke: pack tarball → install in temp dir → cli setup + server boot (protects the npx-published artifact) | infra | tech-debt | P1 | docs/specs/npm-pack-install-smoke.md | feature | Done | stability-wave W3; shipped 2026-06-10 |
 | AVO-152 | Bundle-size budget gate in CI (fail on >+10% vs committed baseline) | infra | tech-debt | P2 | — | quick-win | Done | stability-wave W5; shipped 2026-06-10 (baseline 450069 B) |
 | AVO-153 | Hook-runtime payload fixture corpus: record REAL Claude Code hook events as fixtures + contract tests pinning the shapes the hook relies on (is_error era vs PostToolUseFailure era, StopFailure matcher) | infra | observability | P1 | docs/specs/hook-runtime-contract.md | feature | Done | stability-wave W4; shipped 2026-06-10; 14 live fixtures + 143 contract tests |
-| AVO-154 | Reconcile hook result-field reads with runtime truth (W4 found: runtime sends `tool_response`, hook reads `tool_result` → toolResult always empty on this runtime; is_error shape on ERROR events not yet captured) | chore | tech-debt | P1 | — | quick-win | Pending | found by AVO-153's divergence pin; needs an error-event capture first; touches the AVO-110 honesty firewall → own careful pass |
+| AVO-154 | Reconcile hook result-field reads with runtime truth (W4 found: runtime sends `tool_response`, hook reads `tool_result` → toolResult always empty on this runtime; is_error shape on ERROR events not yet captured) | chore | tech-debt | P1 | — | quick-win | Done | shipped 2026-06-11; error events INDUCED+captured (no is_error exists on this runtime → derivation honestly inert); toolResultText dual-read + PowerShell→ops mapping + 26-fixture corpus |
 
 ## Status Key
 
