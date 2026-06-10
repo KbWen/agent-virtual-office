@@ -124,4 +124,17 @@ describe('planted violations are caught', () => {
     const s = timeline(4000, 250, { dev: walk(100, 300, 60, 0, { offFloor: true }) })
     expect(evaluateSoak(s).violations.offFloorRest).toHaveLength(0)
   })
+
+  it('every violation carries a forensic tail (approach trajectory, self-diagnosing)', () => {
+    const s = timeline(8000, 250, { dev: still(95, 100, { offFloor: true }) })
+    const tail = evaluateSoak(s).violations.offFloorRest[0].tail
+    expect(Array.isArray(tail)).toBe(true)
+    expect(tail.length).toBeGreaterThanOrEqual(8)
+    expect(tail[tail.length - 1]).toMatchObject({ x: 95, y: 100, o: 1 })
+
+    const stack = timeline(STACK_SUSTAIN_MS * 4, 250, { pm: still(240, 386), dev: still(240, 396) })
+    const sv = evaluateSoak(stack).violations.sustainedStack[0]
+    expect(sv.tailA.length).toBeGreaterThanOrEqual(8)
+    expect(sv.tailB.length).toBeGreaterThanOrEqual(8)
+  })
 })

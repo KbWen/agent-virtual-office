@@ -36,6 +36,14 @@ export function evaluateSoak(samples) {
   const warnings = { groupStack: [] }
   const push = (kind, entry) => { if (v[kind].length < MAX_VIOLATIONS_PER_KIND) v[kind].push(entry) }
 
+  // Forensic tails: rolling last-N samples per agent, attached to every violation so a
+  // nightly catch self-diagnoses (nightly run #3 caught `res` resting inside the coffee
+  // machine at (67,455) — a single coordinate, mechanism unprovable without the approach
+  // trajectory; never again). Compact: {t,x,y,m,g,o} with rounded coords.
+  const TAIL_LEN = 15
+  const tails = {}       // id -> ring of last TAIL_LEN compact samples
+  const tailOf = (id) => (tails[id] || []).slice()
+
   const prev = {}        // id -> { x, y, t }
   const restSince = {}   // id -> ms since at rest (continuous)
   const stillMovingSince = {} // id -> ms since (moving && at rest) started
@@ -53,9 +61,15 @@ export function evaluateSoak(samples) {
       const dt = p ? s.t - p.t : Infinity
       const step = p ? Math.hypot(a.x - p.x, a.y - p.y) : 0
 
+      // Roll the forensic tail BEFORE any violation can fire this sample, so the tail
+      // includes the violating sample itself.
+      const tail = tails[id] || (tails[id] = [])
+      tail.push({ t: Math.round(s.t / 100) / 10, x: Math.round(a.x), y: Math.round(a.y), m: a.moving ? 1 : 0, g: a.group ? 1 : 0, o: a.offFloor ? 1 : 0 })
+      if (tail.length > TAIL_LEN) tail.shift()
+
       // I2 — teleport: a super-walk-speed jump between two healthy samples.
       if (p && dt < SAMPLE_GAP_SKIP_MS && step > TELEPORT_STEP_PX) {
-        push('teleport', { id, tSec: Math.round(s.t / 1000), step: Math.round(step), from: `${Math.round(p.x)},${Math.round(p.y)}`, to: `${Math.round(a.x)},${Math.round(a.y)}` })
+        push('teleport', { id, tSec: Math.round(s.t / 1000), step: Math.round(step), from: `${Math.round(p.x)},${Math.round(p.y)}`, to: `${Math.round(a.x)},${Math.round(a.y)}`, tail: tailOf(id) })
       }
 
       const resting = p ? step < REST_STEP_PX : false
@@ -72,7 +86,7 @@ export function evaluateSoak(samples) {
       if (a.moving && resting) {
         if (!stillMovingSince[id]) stillMovingSince[id] = p.t
         if (s.t - stillMovingSince[id] >= FROZEN_WALKER_MS) {
-          push('frozenWalker', { id, tSec: Math.round(s.t / 1000), at: `${Math.round(a.x)},${Math.round(a.y)}`, stillForSec: Math.round((s.t - stillMovingSince[id]) / 1000) })
+          push('frozenWalker', { id, tSec: Math.round(s.t / 1000), at: `${Math.round(a.x)},${Math.round(a.y)}`, stillForSec: Math.round((s.t - stillMovingSince[id]) / 1000), tail: tailOf(id) })
           stillMovingSince[id] = s.t // re-arm so one long freeze reports ~once/90s, not per sample
         }
       } else {
@@ -83,7 +97,7 @@ export function evaluateSoak(samples) {
       const bad = resting && !!a.offFloor
       if (bad && restSince[id] && s.t - restSince[id] >= OFF_FLOOR_SUSTAIN_MS) {
         if (!offFloorFired[id]) {
-          push('offFloorRest', { id, tSec: Math.round(s.t / 1000), at: `${Math.round(a.x)},${Math.round(a.y)}` })
+          push('offFloorRest', { id, tSec: Math.round(s.t / 1000), at: `${Math.round(a.x)},${Math.round(a.y)}`, tail: tailOf(id) })
           offFloorFired[id] = true
         }
         offFloorSince[id] = s.t
@@ -108,7 +122,7 @@ export function evaluateSoak(samples) {
           if (!pairClose[k]) pairClose[k] = { since: s.t, fired: false }
           if (!pairClose[k].fired && s.t - pairClose[k].since >= STACK_SUSTAIN_MS) {
             pairClose[k].fired = true
-            const entry = { pair: k, tSec: Math.round(s.t / 1000), dist: Math.round(d), at: `${Math.round(a.x)},${Math.round(a.y)}`, group: !!(a.group || b.group) }
+            const entry = { pair: k, tSec: Math.round(s.t / 1000), dist: Math.round(d), at: `${Math.round(a.x)},${Math.round(a.y)}`, group: !!(a.group || b.group), tailA: tailOf(A), tailB: tailOf(B) }
             if (entry.group) {
               if (warnings.groupStack.length < MAX_VIOLATIONS_PER_KIND) warnings.groupStack.push(entry)
             } else {
