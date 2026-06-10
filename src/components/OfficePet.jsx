@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useOfficeStore } from '../systems/store.js'
-import { clampToFloor } from '../systems/movementSystem.js'
-import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, runTarget, modeEmote, PET_MODES } from '../systems/petState.js'
+import { clampToFloor, isOnFloor, isOnObstacle } from '../systems/movementSystem.js'
+import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, runTarget, modeEmote, pickWanderTarget, PET_MODES } from '../systems/petState.js'
 import PetSprite from './petSprites.jsx'
 import { useTransientFlag } from './useTransientFlag.js'
 
@@ -26,6 +26,21 @@ const PET_BASE_SCALE = 1.7
 function randomFloorTarget() {
   const x = 80 + Math.random() * 670
   const y = 400 + Math.random() * 125
+  return clampToFloor({ x, y })
+}
+
+// Wall-phase fix: a wander hop is only accepted when the straight glide segment is fully
+// walkable (on-floor AND not inside furniture) — the band spans several rooms, and the CSS
+// glide is a straight line, so endpoint-only clamping let the pet phase through walls.
+const petWalkable = (x, y) => isOnFloor(x, y) && !isOnObstacle(x, y)
+
+// Pocket-escape (review MEDIUM): near the lounge's right wall the floor gap to the next room
+// is ~18px, so band-wide far hops fail ~68% of ticks → the pet visibly stalls. After two
+// consecutive empty ticks, sample SHORT hops around the current spot instead — locally open
+// space accepts them readily, and they go through the SAME segment gate (never phasing).
+function nearTarget(from) {
+  const x = Math.min(750, Math.max(80, from.x + (Math.random() - 0.5) * 120))
+  const y = Math.min(525, Math.max(400, from.y + (Math.random() - 0.5) * 80))
   return clampToFloor({ x, y })
 }
 
@@ -87,11 +102,21 @@ export default function OfficePet() {
   const posRef = useRef(START)
 
   const mobile = officePet && !reducedMotion && petIsMobile(mode)
+  const wanderMissesRef = useRef(0)
   useEffect(() => {
     if (!mobile) return
     const interval = (mode === PET_MODES.EXCITED ? 2000 : 3500) * grammar.cadenceMul
     const id = setInterval(() => {
-      const t = randomFloorTarget()
+      // Reject hops whose straight glide would cross a wall/furniture; when no clean hop is
+      // found this tick the pet simply pauses in place (calmer than phasing through a wall).
+      // After 2 consecutive empty ticks, fall back to short near-hops (pocket escape) — same
+      // segment gate, just locally-sampled targets that open spaces accept readily.
+      const sampler = wanderMissesRef.current >= 2
+        ? () => nearTarget(posRef.current)
+        : randomFloorTarget
+      const t = pickWanderTarget(posRef.current, sampler, petWalkable)
+      if (!t) { wanderMissesRef.current++; return }
+      wanderMissesRef.current = 0
       setFacing(t.x >= posRef.current.x ? 1 : -1)
       posRef.current = t
       setPos(t)
