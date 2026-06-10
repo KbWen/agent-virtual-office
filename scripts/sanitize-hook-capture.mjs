@@ -58,6 +58,8 @@ const TOOL_NAMES = new Set([
   'Bash', 'Edit', 'Write', 'Read', 'Glob', 'Grep', 'Agent', 'TodoWrite',
   'WebFetch', 'WebSearch', 'NotebookEdit', 'EnterPlanMode', 'ExitPlanMode',
   'AskUserQuestion', 'Task',
+  // AVO-154: newly observed tool_names from extended capture
+  'PowerShell', 'Skill', 'ToolSearch',
 ])
 const PERMISSION_MODES = new Set(['bypassPermissions', 'plan', 'default', 'auto'])
 const SOURCE_VALUES = new Set(['claude-cli', 'office-hook', 'idle-gap-infer'])

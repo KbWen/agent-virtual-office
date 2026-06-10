@@ -34,12 +34,27 @@ the implementing session generates real events.
 - `PostToolUse-Write.json`
 - `PreToolUse-Edit.json`
 - `PostToolUse-Edit.json`
+- `__noop__-generic.json`
+- `SubagentStop-generic.json`
+- `PostToolUse-Agent.json`
+- `PreToolUse-PowerShell.json`
+- `PostToolUse-PowerShell.json`
+- `PreToolUse-Agent.json`
+- `SubagentStart-generic.json`
+- `PreToolUse-Skill.json`
+- `PostToolUse-Skill.json`
+- `PreToolUse-ToolSearch.json`
+- `PostToolUse-ToolSearch.json`
+
+## Hand-crafted fixtures (not from sanitizer)
+
+- `PostToolUse-PowerShell-failed.json` — AVO-154: sanitized shape of an induced command-not-found
+  failure on PowerShell. Proves: no `is_error` key even for failures on this runtime; tool_response
+  carries error text in stdout. Used by honesty-inertness and toolResultText tests.
 
 ## Not yet captured (event types absent from corpus)
 
 - `UserPromptSubmit`
 - `Stop`
-- `SubagentStart`
-- `SubagentStop`
 - `PermissionDenied`
 - `StopFailure`

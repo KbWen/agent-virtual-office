@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T03:25:00Z
-- **Update Sequence**: 61
+- **Last Updated**: 2026-06-11T05:35:00Z
+- **Update Sequence**: 62
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -145,6 +145,14 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-avo-154-hook-result-reconcile-2026-06-11 (品質波 Q1 — hook 結果欄位對賬)
+
+- Branch `fix/avo-154-hook-result-reconcile`, quick-win. Closes AVO-154. **Runtime truth nailed by coordinator-induced real failures with capture on**: on this runtime, failed tool calls are ORDINARY PostToolUse with `tool_response:{stdout,stderr,interrupted,isImage}` — NO is_error, NO exit code; NO failure-class hook events exist (capture census 219 PostToolUse / 204 PreToolUse / 3 Subagent* / 0 failure events). Conclusion: AVO-110's specific-reason derivation is **honestly inert on this runtime** (gate requires is_error===true; signal never arrives) — and it STAYS that way (no stdout regex; fabrication refused).
+- **Shipped**: `toolResultText(event)` dual-read (tool_result → tool_response.stderr|stdout → ''; future is_error-sending runtimes get working derivation); **PowerShell tool mapped like Bash** (ops role, vibe labels, shell-cmd extraction — 23 real events had been falling to the dev fallback); fixtures 14 → **26** (PowerShell/Agent/Skill/ToolSearch/Subagent* + a hand-crafted failed-command shape), all coordinator privacy-reviewed; divergence pin updated to the PROVEN truth (fails loudly on either reversal). Capture marker left ON (collecting Stop/UserPromptSubmit/StopFailure shapes; delete `~/.claude/office-hook-capture` to stop).
+- **Review (fresh)**: PASS — 8-point burden all PROVEN; honesty firewall verified structurally intact (specific reasons unreachable without is_error===true on every path); honest footnote: the blocked-unknown HEURISTIC path was inert-by-accident (toolResult always '') and is now live as designed — floor stays blocked-unknown, never specific.
+- **Also this session**: preview_screenshot ROOT-CAUSED (preview window `visibilityState:'hidden'` → Chromium parks rendering, rAF never fires → captureScreenshot starves → 30s timeout; eval/console need no frames hence work; Playwright headless unaffected) — recorded in Protected Surfaces memory; environment-level, not repo-fixable.
+- **Tests**: 1705 → **1810** (+105). build + smoke green. Tests: Pass
 
 ### Ship-chore-avo-152-bundle-budget-2026-06-10 (穩定波 W5 — bundle 預算 gate；穩定波收官)
 

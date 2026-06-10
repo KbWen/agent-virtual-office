@@ -1,0 +1,8 @@
+{
+  "session_id": "redacted-text",
+  "transcript_path": "/redacted/path.js",
+  "cwd": "/redacted/path.js",
+  "agent_id": "redacted-text",
+  "agent_type": "redacted-text",
+  "hook_event_name": "SubagentStart"
+}

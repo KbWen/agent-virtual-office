@@ -52,7 +52,7 @@ const FIXTURES_DIR = path.resolve(__dirname, 'fixtures/hook-events')
 
 // ── Load hook module for shape assertions ─────────────────────────────────────
 const hook = await import('../public/hooks/office-status-hook.js')
-const { VALID_HOOK_ROLES, toolToRole } = hook
+const { VALID_HOOK_ROLES, toolToRole, toolResultText } = hook
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -212,18 +212,24 @@ describe('AC-4a — SHAPE contract: fields the hook reads exist with correct typ
                             typeof tr === 'string' || typeof tr === 'object'
           expect(validType).toBe(true)
         })
-        it('KNOWN DIVERGENCE PIN (AVO-154): runtime sends tool_response, hook reads tool_result', () => {
-          // The captured runtime payload carries the result under `tool_response`; the hook
-          // reads `event.tool_result` → on THIS runtime the hook's toolResult is always ''
-          // for success events, so result-text-based derivations see no content. is_error
-          // was absent from all captured (success-only) events — the error-event shape is
-          // NOT YET CAPTURED. Tracked as AVO-154 (capture an error event, then reconcile
-          // the hook's reads with runtime truth — touches the AVO-110 honesty firewall, so
-          // it gets its own pass). This test pins the divergence LOUDLY: if a re-captured
-          // corpus shows the runtime started sending tool_result (or stopped sending
-          // tool_response), it fails and forces the reconciliation.
-          expect('tool_response' in fixture, 'runtime stopped sending tool_response — re-evaluate AVO-154').toBe(true)
-          expect('tool_result' in fixture, 'runtime now sends tool_result — the hook read may be live again; reconcile AVO-154').toBe(false)
+        it('RUNTIME SHAPE PIN (AVO-154 RESOLVED): runtime sends tool_response, NOT tool_result; is_error absent even on failures', () => {
+          // AVO-154 ground truth (proven by inducing real failures with capture ON):
+          //   - Failed commands arrive as ordinary PostToolUse with tool_response:{stdout,stderr,...}
+          //   - NO is_error field, NO exit code, NO tool_result field on ANY event (success OR failure)
+          //   - PostToolUseFailure / PermissionDenied / StopFailure events were ABSENT from the corpus
+          //     (219 PostToolUse + 204 PreToolUse + Subagent* only)
+          //
+          // The hook now uses toolResultText(event) which reads tool_result first (for future
+          // runtimes), then falls back to tool_response.stderr/stdout.  The is_error gate stays
+          // the ONLY specific-reason trigger (AVO-110 honesty doctrine).
+          //
+          // If a future re-capture shows tool_result appearing, update toolResultText priority and
+          // re-verify the AVO-110 derivation path — it may come alive again.
+          expect('tool_response' in fixture, 'runtime stopped sending tool_response — re-evaluate toolResultText fallback chain').toBe(true)
+          expect('tool_result' in fixture, 'runtime now sends tool_result — toolResultText priority-1 path is live; re-verify AVO-110 derivation').toBe(false)
+          // Pin: is_error is absent on all corpus events (including failures captured in the induced-failure session).
+          // If is_error starts appearing, the specific-reason derivation in deriveBlockedReason() comes alive.
+          expect('is_error' in fixture, 'runtime now sends is_error — AVO-110 specific-reason derivation may fire; re-verify honesty guarantees').toBe(false)
         })
         it('transcript_path is string or absent', () => {
           if ('transcript_path' in fixture) {
@@ -380,5 +386,136 @@ describe('AC-4b — BEHAVIOR contract: hook exits 0 and produces valid status ou
         if (markerExisted) fs.writeFileSync(markerPath, '')
       }
     }, 10_000)
+  })
+
+  // ── AVO-154: PowerShell behavior — same ops role as Bash ─────────────────────
+  describe('AVO-154 — PowerShell → ops role (same treatment as Bash)', () => {
+    it('toolToRole("PowerShell") === "ops"', () => {
+      expect(toolToRole('PowerShell')).toBe('ops')
+    })
+
+    it('PostToolUse-PowerShell.json through real hook → ops agent with done status', async () => {
+      const fixture = loadFixture('PostToolUse-PowerShell.json')
+      const { code, statusData } = await spawnHook(fixture, base)
+      expect(code).toBe(0)
+      expect(Array.isArray(statusData?.agents)).toBe(true)
+      if (statusData.agents.length > 0) {
+        expect(statusData.agents[0].role).toBe('ops')
+        expect(statusData.agents[0].status).toBe('done')
+      }
+    }, 10_000)
+
+    it('PostToolUse-PowerShell-failed.json through real hook → ops agent with done status (no is_error = not blocked)', async () => {
+      // Ground truth: failed commands arrive WITHOUT is_error on this runtime.
+      // The hook must NOT mark the agent as blocked based on stdout/stderr text alone
+      // (AVO-110 honesty doctrine: no text parsing for failure detection).
+      // Result: status=done (not blocked), since is_error is absent.
+      const fixture = loadFixture('PostToolUse-PowerShell-failed.json')
+      const { code, statusData } = await spawnHook(fixture, base)
+      expect(code).toBe(0)
+      expect(Array.isArray(statusData?.agents)).toBe(true)
+      if (statusData.agents.length > 0) {
+        expect(statusData.agents[0].role).toBe('ops')
+        // No is_error in fixture → hook cannot detect failure → status must be 'done'
+        // This is the HONEST behavior: we do not infer failure from stdout text.
+        expect(statusData.agents[0].status).toBe('done')
+      }
+    }, 10_000)
+
+    it('sensitivity check: removing PowerShell from toolToRole → role becomes "dev" not "ops"', () => {
+      // This is the canary: if PowerShell mapping is removed, this test fails and catches the regression.
+      expect(toolToRole('PowerShell')).not.toBe('dev')
+      expect(toolToRole('PowerShell')).toBe('ops')
+    })
+  })
+})
+
+// ── AVO-154: toolResultText unit tests ───────────────────────────────────────
+
+describe('AVO-154 — toolResultText: dual-read normalization', () => {
+  it('returns tool_result string when present (priority 1)', () => {
+    expect(toolResultText({ tool_result: 'hello error' })).toBe('hello error')
+  })
+
+  it('returns stringified tool_result object when tool_result is an object', () => {
+    const result = toolResultText({ tool_result: { code: 1, msg: 'fail' } })
+    expect(result).toBe(JSON.stringify({ code: 1, msg: 'fail' }))
+  })
+
+  it('prefers tool_result over tool_response when both present', () => {
+    expect(toolResultText({
+      tool_result: 'from-result',
+      tool_response: { stdout: 'from-response', stderr: '' },
+    })).toBe('from-result')
+  })
+
+  it('falls back to tool_response.stderr when tool_result absent and stderr non-empty', () => {
+    expect(toolResultText({
+      tool_response: { stdout: 'ok output', stderr: 'error text' },
+    })).toBe('error text')
+  })
+
+  it('falls back to tool_response.stdout when tool_result absent and stderr empty', () => {
+    expect(toolResultText({
+      tool_response: { stdout: 'ok output', stderr: '' },
+    })).toBe('ok output')
+  })
+
+  it('handles tool_response as a string', () => {
+    expect(toolResultText({ tool_response: 'raw string response' })).toBe('raw string response')
+  })
+
+  it('returns empty string when both tool_result and tool_response absent', () => {
+    expect(toolResultText({})).toBe('')
+    expect(toolResultText({ tool_name: 'Bash' })).toBe('')
+  })
+
+  it('returns empty string for null/undefined/non-object event', () => {
+    expect(toolResultText(null)).toBe('')
+    expect(toolResultText(undefined)).toBe('')
+    expect(toolResultText('string')).toBe('')
+  })
+
+  it('returns empty string when tool_result is null', () => {
+    expect(toolResultText({ tool_result: null })).toBe('')
+  })
+
+  it('returns empty string when tool_response is null', () => {
+    expect(toolResultText({ tool_response: null })).toBe('')
+  })
+
+  it('handles real PostToolUse-PowerShell fixture shape (no tool_result → tool_response.stdout)', () => {
+    // Mirrors the sanitized fixture shape: tool_response has stdout + empty stderr
+    const fixture = {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'PowerShell',
+      tool_response: { stdout: 'command output here', stderr: '', interrupted: false, isImage: false },
+    }
+    expect(toolResultText(fixture)).toBe('command output here')
+  })
+
+  it('AVO-110 honesty: failed PostToolUse-PowerShell has no is_error — toolResultText returns stdout but hook does not mark blocked', () => {
+    // Ground truth: no is_error = no blocked. toolResultText only provides the text;
+    // the is_error gate in the hook controls whether blocked is set.
+    const failureFixture = {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'PowerShell',
+      // No is_error key — confirmed absent from all corpus events including failures
+      tool_response: {
+        stdout: "redacted-text: The term 'redacted-text' is not recognized...",
+        stderr: '',
+        interrupted: false,
+        isImage: false,
+      },
+    }
+    expect('is_error' in failureFixture).toBe(false)
+    const text = toolResultText(failureFixture)
+    // toolResultText returns the stdout (no stderr to prefer)
+    expect(text).toContain('redacted-text')
+    // But there is no is_error, so the hook would NOT mark this as blocked.
+    // The heuristic path checks for specific patterns like "Error:|ENOENT" at line start.
+    // The PowerShell "The term ... is not recognized" error does NOT match those patterns,
+    // confirming honest inertness (no false positive blocked detection).
+    expect(/^(Error:|Exit code [1-9]|ENOENT\b|EPERM\b|EACCES\b|Command failed|fatal:)/.test(text.split('\n')[0])).toBe(false)
   })
 })

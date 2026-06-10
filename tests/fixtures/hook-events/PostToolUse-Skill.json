@@ -1,0 +1,23 @@
+{
+  "session_id": "redacted-text",
+  "transcript_path": "/redacted/path.js",
+  "cwd": "/redacted/path.js",
+  "permission_mode": "bypassPermissions",
+  "agent_id": "redacted-text",
+  "agent_type": "redacted-text",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Skill",
+  "tool_input": {
+    "skill": "redacted-text",
+    "args": "redacted-text"
+  },
+  "tool_response": {
+    "success": true,
+    "commandName": "redacted-text"
+  },
+  "tool_use_id": "redacted-text",
+  "duration_ms": 42
+}

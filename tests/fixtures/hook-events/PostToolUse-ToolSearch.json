@@ -1,0 +1,26 @@
+{
+  "session_id": "redacted-text",
+  "transcript_path": "/redacted/path.js",
+  "cwd": "/redacted/path.js",
+  "permission_mode": "bypassPermissions",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "ToolSearch",
+  "tool_input": {
+    "query": "redacted-text",
+    "max_results": 42
+  },
+  "tool_response": {
+    "matches": [
+      "redacted-text",
+      "redacted-text",
+      "redacted-text"
+    ],
+    "query": "redacted-text",
+    "total_deferred_tools": 42
+  },
+  "tool_use_id": "redacted-text",
+  "duration_ms": 42
+}

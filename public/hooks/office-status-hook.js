@@ -201,11 +201,16 @@ function toolToRole(tool) {
   const map = {
     Edit: 'dev', Write: 'dev', NotebookEdit: 'dev',
     Bash: 'ops',
+    // AVO-154: PowerShell is the user's primary shell tool on Windows — same ops role as Bash.
+    // tool_input.command carries the command string, identical to Bash shape.
+    PowerShell: 'ops',
     Read: 'res', Glob: 'res', Grep: 'res',
     Agent: 'pm', TodoWrite: 'pm',
     WebFetch: 'res', WebSearch: 'res',
     EnterPlanMode: 'arch', ExitPlanMode: 'arch',
     AskUserQuestion: 'gate',
+    // Skill and ToolSearch are meta-tools — let the unknown-tool fallback ('dev') handle them.
+    // They do not represent user-facing work units; no dedicated role mapping added.
   }
   return map[tool] || 'dev'
 }
@@ -357,6 +362,43 @@ function bashVibeLabel(cmd, lang = LANG) {
   return fallback
 }
 
+// AVO-154: dual-read normalization — the runtime sends `tool_response` (object) on this
+// platform, but the spec / future runtimes may send `tool_result` (string).  This helper
+// returns a plain string for downstream checks (first-line heuristic, label building).
+// Exported for unit tests.
+//
+// Priority:
+//   1. event.tool_result if present (string → as-is; object → JSON.stringify)
+//   2. event.tool_response if present and object → prefer .stderr (non-empty), else .stdout
+//   3. event.tool_response if a string → as-is
+//   4. fallback ''
+//
+// CONTRACT: this function NEVER throws; always returns a string.
+function toolResultText(event) {
+  if (event === null || event === undefined || typeof event !== 'object') return ''
+  // Priority 1: tool_result (legacy / future runtimes)
+  if (event.tool_result !== undefined) {
+    const tr = event.tool_result
+    if (typeof tr === 'string') return tr
+    if (tr !== null && typeof tr === 'object') {
+      try { return JSON.stringify(tr) } catch { return '' }
+    }
+    return ''
+  }
+  // Priority 2: tool_response (this runtime's shape)
+  const resp = event.tool_response
+  if (resp === undefined || resp === null) return ''
+  if (typeof resp === 'string') return resp
+  if (typeof resp === 'object' && !Array.isArray(resp)) {
+    const stderr = typeof resp.stderr === 'string' ? resp.stderr : ''
+    const stdout = typeof resp.stdout === 'string' ? resp.stdout : ''
+    // Prefer stderr when non-empty (shell errors typically land there)
+    return stderr || stdout
+  }
+  // Array or other object: stringify
+  try { return JSON.stringify(resp) } catch { return '' }
+}
+
 // AVO-110 / #29: derive a language-neutral blocked-reason from ONLY the signals the hook
 // can honestly observe. This is the honesty firewall — a specific reason is returned ONLY
 // when the evidence proves it; every ambiguous case falls back to 'blocked-unknown' (the
@@ -409,7 +451,9 @@ function extractContext(tool, toolInput, lang = LANG) {
       case 'Read':
         return shortFile(input.file_path || input.path)
       case 'Bash':
+      case 'PowerShell':
         // AVO-126: never surface a raw shell command/path in a bubble — use an office-vibe noun.
+        // AVO-154: PowerShell shares the same tool_input.command field as Bash.
         return bashVibeLabel(input.command || input.cmd, lang)
       case 'Grep': {
         // Strip leading path components from the pattern so absolute paths don't leak into
@@ -824,9 +868,9 @@ function processEvent(event) {
       const skillCtx = readSkillContext(agentId)
       role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
       task = tool
-      // Detect errors from tool result
-      let toolResult = event.tool_result || ''
-      if (typeof toolResult === 'object') toolResult = JSON.stringify(toolResult)
+      // AVO-154: normalize result text across runtimes (tool_result vs tool_response).
+      // toolResultText() handles both field names; see its doc comment for priority rules.
+      const toolResult = toolResultText(event)
       // Trust event.is_error as primary source of truth.
       // Apply the heuristic ONLY when is_error is undefined (older hook payloads that omit the field).
       // Test only the FIRST line of output so "Error:" or "fatal:" appearing in body prose does not
@@ -834,7 +878,7 @@ function processEvent(event) {
       // Word-boundary anchors (\b) prevent substring matches like "ENOENT means…" in prose.
       const isError = event.is_error !== undefined
         ? Boolean(event.is_error)
-        : (typeof toolResult === 'string' && /^(Error:|Exit code [1-9]|ENOENT\b|EPERM\b|EACCES\b|Command failed|fatal:)/.test(toolResult.split('\n')[0]))
+        : /^(Error:|Exit code [1-9]|ENOENT\b|EPERM\b|EACCES\b|Command failed|fatal:)/.test(toolResult.split('\n')[0])
       status = isError ? 'blocked' : 'done'
       hint = isError ? 'error' : null
       const ctx = extractContext(tool, toolInput)
@@ -844,17 +888,18 @@ function processEvent(event) {
       // a non-error (done) leaves it null. The trusted explicit boolean (event.is_error===true)
       // is what unlocks a SPECIFIC reason; the heuristic path resolves to blocked-unknown.
       if (isError) {
-        let bashCmd = null
-        if (tool === 'Bash') {
+        // AVO-154: PowerShell shares the same tool_input.command field as Bash — treat identically.
+        let shellCmd = null
+        if (tool === 'Bash' || tool === 'PowerShell') {
           try {
             const ti = typeof toolInput === 'string' ? JSON.parse(toolInput) : toolInput
-            bashCmd = (ti && (ti.command || ti.cmd)) || null
+            shellCmd = (ti && (ti.command || ti.cmd)) || null
           } catch {}
         }
         reasonCode = deriveBlockedReason({
           isErrorExplicit: event.is_error === true,
-          command: bashCmd,
-          toolResultFirstLine: typeof toolResult === 'string' ? toolResult.split('\n')[0] : '',
+          command: shellCmd,
+          toolResultFirstLine: toolResult.split('\n')[0],
         })
       }
       break
@@ -1366,5 +1411,7 @@ if (typeof module !== 'undefined') {
     acquireStatusLock, releaseStatusLock, STATUS_LOCK_CONFIG,
     // AVO-148: exported for unit testing of the new event handlers
     processEvent,
+    // AVO-154: dual-read normalization helper
+    toolResultText,
   }
 }

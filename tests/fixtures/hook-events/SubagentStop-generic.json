@@ -1,0 +1,24 @@
+{
+  "session_id": "redacted-text",
+  "transcript_path": "/redacted/path.js",
+  "cwd": "/redacted/path.js",
+  "permission_mode": "bypassPermissions",
+  "agent_id": "redacted-text",
+  "agent_type": "redacted-text",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "SubagentStop",
+  "stop_hook_active": false,
+  "agent_transcript_path": "/redacted/path.js",
+  "last_assistant_message": "redacted-text",
+  "background_tasks": [],
+  "session_crons": [
+    {
+      "id": "redacted-text",
+      "schedule": "redacted-text",
+      "recurring": false,
+      "prompt": "redacted-text"
+    }
+  ]
+}
