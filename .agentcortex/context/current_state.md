@@ -13,7 +13,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-06-11T21:25:00Z
-- **Update Sequence**: 74
+- **Update Sequence**: 75
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -147,6 +147,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-event-arrival-ellipse-2026-06-11 (owner 回貼雙 chip — 事件到場幾何 + 走廊 fallback 加固，soak 閘門回緊)
+
+- Branch `fix/event-arrival-ellipse`, quick-win。Owner 將兩張 chip 內文回貼主對話（spawned sessions 無產出，已驗證無分支/worktree）。
+- **A 走廊 fallback**：`findBestCorridor` 先驗證後抖動卻不重驗——fuzz 爆發观测到的 opsDesk/whiteboard 角削切類；改為抖動候選需通過（地板+家具+雙段）驗證、否則退回精確點；最終 CORRIDORS[2] 中繼文件化＋拷貝（消 aliasing）；死碼 `nearestCorridor` 移除。fuzz 測試全面播種（雙層 RNG 決定化）＋新增「貼角點對」壓力釘（~600 對、每家具角 MARGIN+2）。
+- **B 事件到場幾何（夜跑 #2 的 23px 戰果正式關閉）**：兩個 store 鎖點的 occupied 集合原本**只含 in-group agent**——事件演員可被指到「旁觀者」身上（實測 arch 停在 dev 椅旁 23px 整場）。新 `collectClaimedSpots`（解析序 journeyTarget > groupTarget > targetPosition > position）讓單發與批次鎖點都避所有人；**原地反應者**（groupTarget:null）若觸發瞬間與人重疊改給一步側移（R1 安全：pickParticipants 不選 tracked working）；批次內原地者站位也計入 assigned。
+- **Soak 閘門回緊**：group 疊站恢復為 FAIL（warnings 桶留在報告形狀）；spec DD3 更新含歷史。**Tests: 1898 → 1903**。本地 3 分鐘 soak PASS（705 樣本 0 違規，spawn-server 路徑）。Tests: Pass
 
 ### Ship-fix-research-zone-routing-2026-06-10 (soak 閘門首戰戰果 — research 區避家具走廊)
 

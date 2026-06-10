@@ -80,3 +80,95 @@ describe('store deconflicts gather targets so agents never stack (pile-up / disa
     expect(minPairwise(resolved)).toBeGreaterThanOrEqual(MIN_SEP)
   })
 })
+
+// Nightly soak catch 2026-06-10 (CI run 27287064996): an event participant stood 23px from
+// a NON-participant at dev's chair for the whole event. The chokepoints' occupied set held
+// only IN-GROUP agents — bystanders were invisible. These pin the closed holes.
+describe('event targets respect BYSTANDERS (non-participants) — the 23px soak catch', () => {
+  let _origRandom
+  beforeEach(() => {
+    _origRandom = Math.random
+    Math.random = mulberry32(0xb1ca1c4)
+  })
+  afterEach(() => {
+    Math.random = _origRandom
+    const s = useOfficeStore.getState()
+    Object.keys(s.agents).forEach((id) => s.clearAgentGroupEvent(id))
+  })
+  const ellipseClear = (p, q) => {
+    const nx = (p.x - q.x) / 32, ny = (p.y - q.y) / 44
+    return nx * nx + ny * ny >= 0.94 // small float tolerance
+  }
+
+  it('setAgentGroupEvent: a target ON a working bystander is pushed out of their ellipse', () => {
+    const s = useOfficeStore.getState()
+    const ids = Object.keys(s.agents)
+    const bystander = ids[0], actor = ids[1]
+    const bystanderPos = { x: 340, y: 364 } // dev's chair — the observed catch
+    useOfficeStore.setState((st) => ({
+      agents: { ...st.agents, [bystander]: { ...st.agents[bystander], position: bystanderPos, targetPosition: bystanderPos, isMoving: false, inGroupEvent: false } },
+    }))
+    for (let i = 0; i < 50; i++) {
+      useOfficeStore.getState().setAgentGroupEvent(actor, {
+        behavior: 'pass-document', expression: 'normal', bubble: null,
+        groupTarget: { x: bystanderPos.x + 10, y: bystanderPos.y - 8 }, // jitter(spillerPos,30)-class
+      })
+      const gt = useOfficeStore.getState().agents[actor].groupTarget
+      expect(gt).toBeTruthy()
+      expect(ellipseClear(gt, bystanderPos), `(${gt.x},${gt.y}) inside bystander ellipse`).toBe(true)
+      useOfficeStore.getState().clearAgentGroupEvent(actor)
+    }
+  })
+
+  it('setMultipleAgentGroupEvents: a batch gather beside a bystander clears their ellipse too', () => {
+    const s = useOfficeStore.getState()
+    const ids = Object.keys(s.agents)
+    const bystander = ids[0]
+    const batch = ids.slice(1, 5)
+    const bystanderPos = { x: 320, y: 180 }
+    useOfficeStore.setState((st) => ({
+      agents: { ...st.agents, [bystander]: { ...st.agents[bystander], position: bystanderPos, targetPosition: bystanderPos, isMoving: false, inGroupEvent: false } },
+    }))
+    useOfficeStore.getState().setMultipleAgentGroupEvents(
+      batch.map((id, i) => ({ id, behavior: 'meeting', expression: 'normal', bubble: null, groupTarget: { x: 315 + i * 5, y: 178 } }))
+    )
+    for (const id of batch) {
+      const gt = useOfficeStore.getState().agents[id].groupTarget
+      expect(gt).toBeTruthy()
+      expect(ellipseClear(gt, bystanderPos), `${id} gt (${gt.x},${gt.y}) inside bystander ellipse`).toBe(true)
+    }
+  })
+
+  it('react-in-place participant frozen mid-overlap gets a SIDE-STEP target instead of null', () => {
+    const s = useOfficeStore.getState()
+    const ids = Object.keys(s.agents)
+    const stander = ids[0], reactor = ids[1]
+    const spot = { x: 300, y: 250 }
+    useOfficeStore.setState((st) => ({
+      agents: {
+        ...st.agents,
+        [stander]: { ...st.agents[stander], position: spot, targetPosition: spot, isMoving: false, inGroupEvent: false },
+        [reactor]: { ...st.agents[reactor], position: { x: spot.x + 6, y: spot.y + 10 }, targetPosition: { x: spot.x + 6, y: spot.y + 10 }, isMoving: false, inGroupEvent: false },
+      },
+    }))
+    useOfficeStore.getState().setAgentGroupEvent(reactor, {
+      behavior: 'scratch-head', expression: 'confused', bubble: null, groupTarget: null,
+    })
+    const gt = useOfficeStore.getState().agents[reactor].groupTarget
+    expect(gt, 'overlapped react-in-place participant must receive a side-step target').toBeTruthy()
+    expect(ellipseClear(gt, spot)).toBe(true)
+  })
+
+  it('react-in-place participant with CLEAR surroundings stays put (groupTarget stays null)', () => {
+    const s = useOfficeStore.getState()
+    const ids = Object.keys(s.agents)
+    const reactor = ids[2]
+    useOfficeStore.setState((st) => ({
+      agents: { ...st.agents, [reactor]: { ...st.agents[reactor], position: { x: 100, y: 500 }, targetPosition: { x: 100, y: 500 }, isMoving: false, inGroupEvent: false } },
+    }))
+    useOfficeStore.getState().setAgentGroupEvent(reactor, {
+      behavior: 'scratch-head', expression: 'confused', bubble: null, groupTarget: null,
+    })
+    expect(useOfficeStore.getState().agents[reactor].groupTarget).toBeNull()
+  })
+})

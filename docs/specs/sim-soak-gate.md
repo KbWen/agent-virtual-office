@@ -55,13 +55,15 @@ gate: "以後可能很多類似的視覺改動也會遇到".
 2. **Frozen-walker threshold is 90s** — above stall-watchdog recovery (~3s) and a full
    doSchedule abort cycle (≤65s behavior + 15s retries). A stale `isMoving` from an aborted
    walk self-heals inside that budget; only a genuinely dead chain crosses 90s.
-3. **Group-event stacks are REPORTED but NON-FAILING** *(amended after nightly run #2,
-   2026-06-10: a scripted officeLife "helper rushes over" beat parked two participants
-   23px apart for its 30-60s duration — designed-close theater, a different class from
-   the owner's ambient standing stacks; a nightly that cries on it teaches everyone to
-   ignore the gate)*. They land in `warnings.groupStack` (printed + in the report) so the
-   signal is kept; the event-arrival geometry should still learn the ellipse — tracked as
-   a follow-up chip. AMBIENT stacks remain hard failures.
+3. **Group-event stacks FAIL (re-tightened 2026-06-11).** History: nightly run #2 caught a
+   23px group pair → temporarily demoted to `warnings.groupStack` while the arrival
+   geometry was open; then BOTH mechanisms were closed at the store chokepoints — event
+   targets deconflict against EVERY claimed standing spot (bystanders included; the old
+   occupied set held only in-group agents), and react-in-place participants side-step when
+   an event would freeze them mid-overlap (R1-safe: pickParticipants never selects tracked
+   working agents). A group stack now means a real regression in that machinery; the
+   `group` tag remains for triage, the warnings bucket stays in the report shape (empty
+   unless re-demoted).
 4. **Geometry verdicts are computed in-page** (Vite serves /src; node parses src/*.js as
    CJS). The evaluator consumes a per-sample `offFloor` flag — geometry functions stay
    covered by furnitureObstacleCompleteness.test.js.
