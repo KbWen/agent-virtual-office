@@ -1,0 +1,25 @@
+{
+  "session_id": "redacted-text",
+  "transcript_path": "/redacted/path.js",
+  "cwd": "/redacted/path.js",
+  "permission_mode": "bypassPermissions",
+  "agent_id": "redacted-text",
+  "agent_type": "redacted-text",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "mcp-tool",
+  "tool_input": {
+    "title": "redacted-text",
+    "summary": "redacted-text"
+  },
+  "tool_response": [
+    {
+      "type": "redacted-text",
+      "text": "redacted-text"
+    }
+  ],
+  "tool_use_id": "redacted-text",
+  "duration_ms": 42
+}

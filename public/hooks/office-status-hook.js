@@ -10,6 +10,19 @@
  * what step is happening: "✏️ 改 App.jsx", "⚡ npm test", "📖 讀 store.js"
  *
  * No dependencies — just Node.js (which you already have).
+ *
+ * ── Opt-in capture mode (AVO-153 / AC-1) ─────────────────────────────────────
+ * When the marker file ~/.claude/office-hook-capture EXISTS, every raw stdin
+ * event is appended as one JSON line to ~/.claude/office-hook-capture.jsonl
+ * BEFORE processing.  Fully try/catch'd — a capture failure NEVER affects normal
+ * hook processing.  Zero cost when the marker is absent (one statSync per call).
+ *
+ * To enable:  New-Item ~/.claude/office-hook-capture           (PowerShell)
+ *             touch ~/.claude/office-hook-capture              (POSIX)
+ * To disable: Remove-Item ~/.claude/office-hook-capture
+ * Raw capture: ~/.claude/office-hook-capture.jsonl  (NEVER committed to the repo)
+ * See: scripts/sanitize-hook-capture.mjs  — sanitize raw capture → fixture corpus
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 const HOOK_VERSION = '1.0.0'
@@ -45,6 +58,17 @@ let input = ''
 process.stdin.setEncoding('utf-8')
 process.stdin.on('data', (chunk) => { input += chunk })
 process.stdin.on('end', () => {
+  // AC-1 (AVO-153): opt-in raw-event capture — statSync marker each invocation (cheap);
+  // append raw JSON line to capture.jsonl BEFORE processing. Fully try/catch'd.
+  try {
+    const markerPath = path.join(os.homedir(), '.claude', 'office-hook-capture')
+    try { fs.statSync(markerPath) } catch { /* marker absent — skip capture */ throw new Error('no-marker') }
+    try {
+      const capturePath = path.join(os.homedir(), '.claude', 'office-hook-capture.jsonl')
+      fs.appendFileSync(capturePath, input.trimEnd() + '\n')
+    } catch { /* capture write failed — continue processing normally */ }
+  } catch { /* no-marker sentinel or outer error — zero effect on processing */ }
+
   try {
     const event = JSON.parse(input)
     processEvent(event)

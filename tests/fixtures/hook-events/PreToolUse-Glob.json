@@ -1,0 +1,18 @@
+{
+  "session_id": "redacted-text",
+  "transcript_path": "/redacted/path.js",
+  "cwd": "/redacted/path.js",
+  "permission_mode": "bypassPermissions",
+  "agent_id": "redacted-text",
+  "agent_type": "redacted-text",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Glob",
+  "tool_input": {
+    "pattern": "redacted-text",
+    "path": "/redacted/path.js"
+  },
+  "tool_use_id": "redacted-text"
+}

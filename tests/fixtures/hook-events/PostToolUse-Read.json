@@ -1,0 +1,29 @@
+{
+  "session_id": "redacted-text",
+  "transcript_path": "/redacted/path.js",
+  "cwd": "/redacted/path.js",
+  "permission_mode": "bypassPermissions",
+  "agent_id": "redacted-text",
+  "agent_type": "redacted-text",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/redacted/path.js",
+    "limit": 42
+  },
+  "tool_response": {
+    "type": "redacted-text",
+    "file": {
+      "filePath": "/redacted/path.js",
+      "content": "redacted-text",
+      "numLines": 42,
+      "startLine": 42,
+      "totalLines": 42
+    }
+  },
+  "tool_use_id": "redacted-text",
+  "duration_ms": 42
+}

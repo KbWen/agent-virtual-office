@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T01:00:00Z
-- **Update Sequence**: 59
+- **Last Updated**: 2026-06-11T02:45:00Z
+- **Update Sequence**: 60
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -81,6 +81,7 @@
   - [office-runtime] docs/specs/structured-error-reasons.md [Shipped]  *(AVO-148 / hardening-wave H5 — event-driven permission-denied / api-rate-limit / api-auth-failed)*
   - [ci-infra] docs/specs/npm-pack-install-smoke.md [Shipped]  *(AVO-151 / stability-wave W3 — pack→install→setup/hook/boot smoke gate)*
   - [ci-infra] docs/specs/transport-spine-e2e.md [Shipped]  *(AVO-150 / stability-wave W2 — 19-case real-server API e2e; HOME-override isolation)*
+  - [hook-io] docs/specs/hook-runtime-contract.md [Shipped]  *(AVO-153 / stability-wave W4 — live-captured fixtures + 143 contract tests; found the tool_response/tool_result divergence → AVO-154)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -144,6 +145,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-avo-153-hook-contract-2026-06-10 (穩定波 W4 — hook runtime 契約)
+
+- Branch `feat/avo-153-hook-contract`, feature. Closes AVO-153. Spec `docs/specs/hook-runtime-contract.md` [shipped]. The hook's payload-shape assumptions are now a TESTED CONTRACT built from REAL events instead of hand-written guesses.
+- **Shipped**: (1) opt-in raw-event capture in the hook (marker `~/.claude/office-hook-capture` → jsonl append before processing; fully try/catch'd; zero change when absent; marker removed at ship). (2) `scripts/sanitize-hook-capture.mjs` — shape-preserving sanitizer (default-redact free text; enum allowlist; shape-dedup). (3) **14 REAL fixtures** captured live from THIS session (hook runs from the working tree → the implementing session generated its own corpus: Pre/PostToolUse × 7 tools), coordinator privacy-reviewed clean; absent event types documented NOT fabricated. (4) `tests/hookRuntimeContract.test.js` — **143 tests** (shape contracts mirroring the hook's actual reads with line citations + behavior tests spawning the real hook against an isolated status file).
+- **REAL FINDING (the feature paying for itself on day one)**: the runtime sends the result under **`tool_response`** while the hook reads **`tool_result`** → on this runtime the hook's result text is always empty for success events, and `is_error`'s ERROR-event shape is not yet captured (corpus is success-only). NOT guessed at: a LOUD divergence-pin test (fails if the runtime shape shifts in either direction) + **AVO-154** ticket (capture an error event first; reconciliation touches the AVO-110 honesty firewall → own careful pass).
+- **Review (fresh)**: PASS — capture block proven unable to affect processing; sanitizer default-redact direction verified; privacy scan clean. **Tests**: 1562 → **1705** (+143). build + smoke green. Tests: Pass
 
 ### Ship-feat-avo-150-transport-e2e-2026-06-10 (穩定波 W2 — transport-spine 真實線路 e2e)
 
