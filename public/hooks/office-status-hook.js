@@ -126,6 +126,42 @@ const _STATUS_FILE_DEFAULT = path.join(os.homedir(), '.claude', `office-status-$
 // All read/write call sites use STATUS_FILE as a value; they now call getStatusFile() instead.
 function getStatusFile() { return process.env.OFFICE_STATUS_FILE || _STATUS_FILE_DEFAULT }
 
+// ─── Branch-hop ghost cleanup (owner bug 2026-06-11) ──────────────────────────
+// The session slug embeds the git BRANCH, so switching branches mid-session moves the
+// hook onto a NEW status file and leaves the old one fresh for up to the scanner's 5-min
+// staleness window. scanSessions then sees TWO same-cwd "sessions" → the office flips
+// into multi-session mode: composite slug~role ghosts spawn at the OVERFLOW slots (top
+// hallway) and are evicted again when the old file finally goes stale — the reported
+// "characters yanked to the top / vanish then reappear".
+// One checkout has ONE current branch, and concurrent sessions in the same checkout read
+// the same git HEAD per event — so a SLUGGED sibling claiming OUR cwd can only be this
+// checkout's own pre-switch alias. Delete it at the source.
+// Cheap prefilter: the filename's trailing 4-hex cwd-hash must match ours (readdir only);
+// PROOF before unlink: parse the candidate and require _cwd === process.cwd() exactly,
+// so a 4-hex hash collision with another repo can never delete a foreign live session.
+// The bare office-status.json is NEVER touched (server/POST writes it; scanner has its
+// own bare-file dedup). Fully try/catch'd — cleanup failure never affects processing.
+function cleanupGhostAliases() {
+  try {
+    const own = getStatusFile()
+    const ownName = path.basename(own)
+    const m = ownName.match(/^office-status-.+-([0-9a-f]{4})\.json$/)
+    if (!m) return  // env-overridden / unexpected filename shape → skip the sweep
+    const suffix = `-${m[1]}.json`
+    const dir = path.dirname(own)
+    const cwd = process.cwd()
+    for (const f of fs.readdirSync(dir)) {
+      if (f === ownName || f === 'office-status.json') continue
+      if (!f.startsWith('office-status-') || !f.endsWith(suffix)) continue
+      const full = path.join(dir, f)
+      try {
+        const parsed = JSON.parse(fs.readFileSync(full, 'utf-8'))
+        if (parsed && parsed._cwd === cwd) fs.unlinkSync(full)
+      } catch {}  // unreadable/foreign sibling → leave it; staleness window handles it
+    }
+  } catch {}
+}
+
 // ─── Write-lock helpers (AC-1..AC-3) ───────────────────────────────────────
 // Lock primitive: a DIRECTORY at STATUS_FILE + '.lock' created with mkdirSync.
 // mkdir is atomic on Windows and POSIX: only one caller succeeds; EEXIST = contested.
@@ -786,6 +822,9 @@ function helperRemove(helpers, role, agentId) {
 // ─── Main ───
 
 function processEvent(event) {
+  // Sweep our own pre-branch-switch alias files first, so the very first event after
+  // a `git checkout` removes the ghost before the scanner's next poll can merge it.
+  cleanupGhostAliases()
   const hookEvent = event.hook_event_name
   const tool = event.tool_name || ''
   const agentType = event.agent_type || ''
@@ -1413,5 +1452,7 @@ if (typeof module !== 'undefined') {
     processEvent,
     // AVO-154: dual-read normalization helper
     toolResultText,
+    // Branch-hop ghost cleanup (exported for unit testing)
+    cleanupGhostAliases,
   }
 }
