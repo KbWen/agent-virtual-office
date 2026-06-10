@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-10T17:00:00Z
-- **Update Sequence**: 53
+- **Last Updated**: 2026-06-10T19:05:00Z
+- **Update Sequence**: 54
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -77,6 +77,7 @@
   - [ci-infra] docs/specs/ci-render-smoke.md [Shipped]  *(AVO-145 / hardening-wave H1 — blocking render-smoke gate; AC-6 test-the-test proven)*
   - [data-path] docs/specs/status-field-schema-unification.md [Shipped]  *(AVO-146 / hardening-wave H2 — AGENT_CARRY_FIELDS canonical schema; 9-site map; drift-guarded)*
   - [hook-io] docs/specs/hook-status-write-lock.md [Shipped]  *(#20 / hardening-wave H3 — bounded-wait RMW lock; multi-process proof)*
+  - [office-runtime] docs/specs/structured-error-reasons.md [Shipped]  *(AVO-148 / hardening-wave H5 — event-driven permission-denied / api-rate-limit / api-auth-failed)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -140,6 +141,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-avo-148-structured-error-reasons-2026-06-10 (硬化波 H5 — 結構化事件 blocked reasons)
+
+- Branch `feat/avo-148-structured-error-reasons`, feature. Closes AVO-148 (= AVO-110 Phase-2). Spec `docs/specs/structured-error-reasons.md` [shipped]. 3 new reason tokens, **event-driven = honest by construction**: a token stamps ONLY when the named structured hook event observably fired; older Claude Code without these events → handlers inert, nothing claimed.
+- **Shipped**: `PermissionDenied` event → `permission-denied` (toolToRole attribution; **tool_name-less → NO-OP**, no spatial over-claim per doctrine); `StopFailure` matcher enum → `api-rate-limit` / `api-auth-failed`, any other/absent matcher → `blocked-unknown` floor (turn died = blocked TRUE, cause unclaimed). Tool-level 401/429 REJECTED (rendered text only = the fabrication AVO-110 refused). Both handlers under the H3 write lock. BLOCKED_REASONS +3 in classify.js AND the normalizePost.mjs mirror with a NEW mechanical list-equality guard (first live run of the H2 checklist — it worked). 3 badge glyphs + en/zh-TW labels claiming exactly the proven scope ("API rate-limited", never "tool hit 429"). RECURRING_REASONS now covers all 6 specific tokens. 3 registration surfaces (cli setup idempotent / repo settings / README).
+- **Review (fresh, honesty-critical)**: NOT READY — the project's CLASSIC defect class caught pre-merge this time: handler tests asserted only not.toThrow while the env override redirected the lock dir but NOT STATUS_FILE → seeded fixtures were never read; zero observation of the over-claim wire. + MED recurring omission, MED dev-mis-attribution on tool_name-less denials, LOW floor label. All fixed (4fb4fb0): `getStatusFile()` env-overridable (production byte-identical), tests assert REAL file output incl. negative guards (overloaded/absent → NEVER a specific token) + done-agent invariant + EPHEMERAL 2-event clear; sanity-flip + delta reviewer's live sensitivity probe both prove the tests load-bearing. Delta → **PASS**, 0 UNPROVEN.
+- **Tests**: 1499 → **1535** (+36). smoke exit 0. Tests: Pass
 
 ### Ship-fix-issue-20-hook-write-lock-2026-06-10 (硬化波 H3 — hook STATUS_FILE 寫入鎖)
 

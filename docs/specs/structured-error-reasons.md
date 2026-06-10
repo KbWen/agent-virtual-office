@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 title: AVO-148 — Structured-event blocked reasons (AVO-110 Phase-2)
 created: 2026-06-10
 last_updated: 2026-06-10
