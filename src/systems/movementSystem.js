@@ -48,6 +48,25 @@ const OBSTACLE_RECTS = [
   { x1: 278, y1: 438, x2: 412, y2: 458 },
   // Coffee machine area
   { x1: 15,  y1: 438, x2: 70,  y2: 465 },
+  // ─ Furniture-clipping completion (owner screenshot 2026-06-11: designer standing
+  //   INSIDE the gate booth). These rooms' furniture was never in this list, so
+  //   clampToFloor/isOnObstacle (placement + the pet's segmentWalkable) happily put
+  //   characters inside the graphics. NOT included on purpose: the phone booth (the
+  //   `phone` waypoint (755,480) stands INSIDE it by design — you enter a booth) and
+  //   the entrance barrier arms (3px-thin gate arms; making them solid would wall off
+  //   the entrance). Index-based zone slices above (0-9, 9-12) are unaffected because
+  //   these append at the END.
+  // Gate booth: LEFT 2/3 only — the right strip stays walkable as the gate agent's exit
+  // lane (home (100,80) → entrance door (115,125) crosses x≈103–111 between y 88–114; a
+  // full-width rect walls the agent behind its own counter). Sprites can still slightly
+  // clip the booth's right edge — accepted over trapping the gate.
+  { x1: 84,  y1: 88,  x2: 101, y2: 114 },
+  { x1: 472, y1: 434, x2: 528, y2: 460 },  // research bookshelf A (x2<535 keeps the research door side clear)
+  { x1: 627, y1: 434, x2: 688, y2: 460 },  // research bookshelf B
+  { x1: 702, y1: 434, x2: 763, y2: 460 },  // research bookshelf C
+  // (server rack deliberately NOT an obstacle: flush against the right wall, so
+  //  pushOutOfObstacle has no clean escape direction — and no waypoint places agents there)
+  { x1: 590, y1: 488, x2: 612, y2: 508 },  // printer (researchLib waypoint (620,490) stays clear right)
 ]
 
 // Main-office obstacles for path line-crossing checks.
@@ -505,7 +524,7 @@ const BEHAVIOR_LOCATIONS = {
   'check-phone':         'lounge',
 }
 
-const SOCIAL_BEHAVIORS = new Set(['chat', 'thumbs-up', 'pass-document'])
+export const SOCIAL_BEHAVIORS = new Set(['chat', 'thumbs-up', 'pass-document'])
 
 // Returns true if this behavior requires the character to walk to a specific location
 // (not their desk). Used to defer behavior labels until arrival.
@@ -574,7 +593,21 @@ function jitter(pos, amount = 16) {
   })
 }
 
-export function getTargetForBehavior(agentId, behaviorId, allAgents) {
+// Exported helper: picks a social walk target for agentId from allAgents.
+// Returns { targetId, position } or null when no valid target exists.
+// Separated from getTargetForBehavior so callers (e.g. doSchedule in AgentCharacter)
+// can capture the chosen targetId for facing-on-arrival without a second random pick.
+export function pickSocialTarget(agentId, allAgents) {
+  if (!allAgents) return null
+  const others = Object.keys(allAgents).filter(id => id !== agentId)
+  if (others.length === 0) return null
+  const targetId = others[Math.floor(Math.random() * others.length)]
+  const position = allAgents[targetId]?.position
+  if (!position) return null
+  return { targetId, position }
+}
+
+export function getTargetForBehavior(agentId, behaviorId, allAgents, socialTargetOverride = null) {
   // Lazily resolve the occupied-positions list — getOccupiedPositions scans every
   // agent and allocates an array. The MOST common case is a desk/work behavior
   // (the `work` category carries 65% of the weight in behaviorEngine, and all of
@@ -600,21 +633,24 @@ export function getTargetForBehavior(agentId, behaviorId, allAgents) {
     return clampToFloor(jitter(shuffled[0], 8))
   }
 
-  // Social behaviors: walk toward a random other agent (near them, not on them)
+  // Social behaviors: walk toward a random other agent (near them, not on them).
+  // `socialTargetOverride` (optional 4th param) lets the caller pre-pick the peer and
+  // pass it in, so the WALK destination and the FACE-toward-on-arrival peer are the
+  // SAME agent — two independent random picks would walk to B while facing A.
   if (SOCIAL_BEHAVIORS.has(behaviorId) && allAgents) {
-    const others = Object.keys(allAgents).filter(id => id !== agentId)
-    if (others.length > 0) {
-      const targetId = others[Math.floor(Math.random() * others.length)]
-      const targetPos = allAgents[targetId]?.position
-      if (targetPos) {
-        const angle = Math.random() * Math.PI * 2
-        const dist = 30 + Math.random() * 15  // stay 30-45px away
-        const raw = clampToFloor({
-          x: targetPos.x + Math.cos(angle) * dist,
-          y: targetPos.y + Math.sin(angle) * dist,
-        })
-        return avoidOverlap(raw, occupiedPositions())
-      }
+    const picked = socialTargetOverride || pickSocialTarget(agentId, allAgents)
+    if (picked) {
+      const angle = Math.random() * Math.PI * 2
+      // Owner-approved 2026-06-10: dist widened 30–45 → 50–70px.
+      // Sprite effective width ~35-40px → 1.4–1.8 sprite-widths = "walked up to you"
+      // rather than "standing on you". Addresses measured 40–70% rate of pairs under
+      // 30px in the organic proximity audit (anyUnder30 408/705, 495/705 across runs).
+      const dist = 50 + Math.random() * 20  // stay 50-70px away
+      const raw = clampToFloor({
+        x: picked.position.x + Math.cos(angle) * dist,
+        y: picked.position.y + Math.sin(angle) * dist,
+      })
+      return avoidOverlap(raw, occupiedPositions())
     }
   }
 

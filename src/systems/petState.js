@@ -109,7 +109,7 @@ export function runTarget(pos) {
 // and furniture mid-glide. A hop is now accepted only when EVERY ~stepPx sample along the
 // segment passes the injected walkability check (the same sampling technique the movement
 // pathing tests use). Dependency-injected so these stay pure and unit-testable.
-export function segmentWalkable(from, to, isWalkable, stepPx = 4) {
+export function segmentWalkable(from, to, isWalkable, stepPx = 2) {
   if (!from || !to || typeof isWalkable !== 'function') return false
   const dx = to.x - from.x
   const dy = to.y - from.y
