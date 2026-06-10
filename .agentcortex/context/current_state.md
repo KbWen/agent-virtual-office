@@ -12,12 +12,13 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-10T20:15:00Z
-- **Update Sequence**: 55
+- **Last Updated**: 2026-06-10T21:00:00Z
+- **Update Sequence**: 56
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
   - docs/adr/ADR-003-status-source-parity-for-codex.md — status-source parity for Codex
+  - docs/adr/ADR-004-no-per-frame-agent-separation.md — AVO-144 resolved by decision: per-frame separation rejected (3-lens panel); re-open conditions recorded
   - .agentcortex/adr/ADR-001-vnext-self-managed-architecture.md — framework scaffold mirror of ADR-001
 - **Active Backlog**: `docs/specs/_product-backlog.md`
   - 15 features across 5 themes: 辦公室生命感、資訊密度、互動性、整合延伸、視覺升級
@@ -141,6 +142,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-hardening-wave-closeout-2026-06-10 (硬化波收官 — AVO-144 決策結案 + 穩定波登錄)
+
+- Branch `chore/hardening-wave-closeout`, quick-win. **The Fable-5 hardening wave (H4→H1→H2→H3→H5→H6) is COMPLETE** — 7 PRs merged in one day (#82 #83 #84 #85 #86 #87 + this), tests 1462 → 1543, validator 4 warn → 1 (by-design floor), zero fails throughout.
+- **AVO-144 resolved by DECISION (ADR-004)**: 3-lens expert panel (game-feel · honesty/calm-tech · systems) unanimously rejected per-frame agent separation — doorway geometry (35–48 px vs MIN_AGENT_DIST 35) makes push-oscillation read as a bug; visual position is component-local so store nudges either lie (silent divergence) or relocate (R1-adjacent); the required evidence harness is unbuildable here. Target-time deconfliction already covers every assignment chokepoint. Backlog row → Deferred-by-decision with re-open conditions (lock-step convergence harness + parameter set + URL flag + owner tuning session).
+- **Stability wave registered (W1–W5 = AVO-149..153)**: npm ci reproducibility · npm-pack install smoke · transport-spine e2e · hook-runtime fixture contract · bundle budget gate. None touch agent-os governance (owner brief). Recommended order W1→W3→W2→W4→W5.
+- Tests: Pass (1543/1543 unchanged — docs/governance only)
 
 ### Ship-feat-avo-143-skip-noop-agent-realloc-2026-06-10 (硬化波 H6a — poll no-op 不重配置)
 

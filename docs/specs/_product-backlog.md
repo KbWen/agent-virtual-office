@@ -65,12 +65,17 @@ last_updated: 2026-06-10
 | AVO-141 | Comms / vertical (☰ roster) deeper optimization — "still lots of room" | product | vibe-rebalance | P2 | docs/specs/living-office-events.md | feature | Pending | AVO-140 |
 | AVO-142 | Drag-to-move agents (manual reposition for realer interaction) | product | game-feel | P2 | — | feature | Pending | — |
 | AVO-143 | applyExternalStatus: skip no-op agent re-allocation (don't re-render all agents each poll) | chore | tech-debt | P3 | — | quick-win | Done | hardening-wave H6a; shipped 2026-06-10 |
-| AVO-144 | Sustained inter-agent separation in free movement (agents pass THROUGH each other in transit; RAF loop has no per-frame separation — only gather targets are deconflicted) | product | game-feel | P2 | — | feature | Pending | — |
+| AVO-144 | Sustained inter-agent separation in free movement (agents pass THROUGH each other in transit; RAF loop has no per-frame separation — only gather targets are deconflicted) | product | game-feel | P2 | docs/adr/ADR-004-no-per-frame-agent-separation.md | feature | Deferred | hardening-wave H6b — RESOLVED BY DECISION (3-lens panel unanimous): per-frame separation rejected (doorway geometry + unverifiable visuals + R1); re-open conditions in ADR-004 |
 | #20 | Hook read-modify-write atomic | chore | tech-debt | P1 | docs/specs/hook-status-write-lock.md | quick-win | Done | hardening-wave H3; shipped 2026-06-10 |
 | AVO-145 | CI render-smoke gate (headless load-the-page in ci.yml + consolidate shot scripts into one tracked harness) | infra | tech-debt | P0 | docs/specs/ci-render-smoke.md | feature | Done | hardening-wave H1; shipped 2026-06-10 |
 | AVO-146 | Transport field-whitelist unification (reasonCode/activeFile × 5-6 independent whitelists → one shared schema module) | chore | tech-debt | P0 | docs/specs/status-field-schema-unification.md | feature | Done | hardening-wave H2; shipped 2026-06-10 |
 | AVO-147 | Validator zero-noise + repo hygiene (archive leftover shipped logs, backfill sections, gitignore local tooling) | chore | tech-debt | P1 | — | quick-win | In Progress | hardening-wave H4 (first) |
 | AVO-148 | Structured error payload for blocked reasons (errno/HTTP-status hook field → honest permission-blocked/auth-error/rate-limit) | product | info-density | P1 | docs/specs/structured-error-reasons.md | feature | Done | hardening-wave H5; shipped 2026-06-10 (event-driven: PermissionDenied/StopFailure; tool-level 401/429 rejected as fabrication) |
+| AVO-149 | CI reproducibility: npm install → npm ci in all workflow jobs (lockfile-exact builds) | infra | tech-debt | P0 | — | quick-win | Pending | stability-wave W1 |
+| AVO-150 | Transport-spine e2e in CI: boot real server.mjs, POST /api/status + /api/event → GET round-trip, assert canonical-field survival on the wire | infra | observability | P1 | — | feature | Pending | stability-wave W2; complements AVO-145 (render) with the API spine |
+| AVO-151 | npm-pack install smoke: pack tarball → install in temp dir → cli setup + server boot (protects the npx-published artifact) | infra | tech-debt | P1 | — | feature | Pending | stability-wave W3 |
+| AVO-152 | Bundle-size budget gate in CI (fail on >+10% vs committed baseline) | infra | tech-debt | P2 | — | quick-win | Pending | stability-wave W5 |
+| AVO-153 | Hook-runtime payload fixture corpus: record REAL Claude Code hook events as fixtures + contract tests pinning the shapes the hook relies on (is_error era vs PostToolUseFailure era, StopFailure matcher) | infra | observability | P1 | — | feature | Pending | stability-wave W4; turns the H5 docs-vs-runtime risk into a tested contract |
 
 ## Status Key
 
@@ -187,6 +192,15 @@ last_updated: 2026-06-10
   finer signatures.
 - **H6 = AVO-143 + AVO-144** — sim-layer robustness: skip no-op agent re-allocation per poll;
   per-frame separation in free movement.
+
+### 🧱 Stability Wave (W1–W5 = AVO-149..153, added 2026-06-10)
+> Planned at hardening-wave completion per owner brief: "對專案流程有幫助的，讓專案變得很穩定
+> （不要改到專案內 agent-os 大腦治理本身）". All five target the project's own delivery spine —
+> none touch `.agent/`, `.agentcortex/` governance, or AGENTS.md. Recommended order:
+> **W1 (AVO-149) → W3 (AVO-151) → W2 (AVO-150) → W4 (AVO-153) → W5 (AVO-152)** — reproducibility
+> first, then protect the published artifact, then the API spine, then the runtime contract, then
+> the budget guard. Upstream agentic-os candidates (validator annotated-receipt tolerance +
+> accepted-baseline list, from H4) live in KbWen/agentic-os — out of scope here by owner brief.
 
 ### 🔧 Carried-over from prior wave
 - **#20 Hook read-modify-write atomic** — PID isolation + rename fallback already mitigates risk; full file lock or append-only design would be ideal. *Deferred — current mitigation acceptable; revisit only if state-loss reports surface.*
