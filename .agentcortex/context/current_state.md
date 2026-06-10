@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-10T21:00:00Z
-- **Update Sequence**: 56
+- **Last Updated**: 2026-06-10T22:00:00Z
+- **Update Sequence**: 57
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -142,6 +142,12 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-avo-149-ci-reproducible-2026-06-10 (穩定波 W1 — npm ci 可重現建置)
+
+- Branch `chore/avo-149-ci-reproducible`, quick-win. Closes AVO-149. `npm install` → `npm ci` in both ci.yml jobs (test matrix + render-smoke); security.yml audited (no install step, unchanged). Local clean `npm ci` verified against the lockfile BEFORE the CI change; suite 1543/1543 ×4 post-reinstall.
+- **Flake watch opened** (Drift Log): one unreproduced `1 failed/1542` on the FIRST run after the clean reinstall (name lost; suspected AV-scan I/O contention on a timing-sensitive test — hookWriteLock bounded-wait prime suspect). 4 subsequent runs green. Capture + deflake if it recurs.
+- **Observation ticket-worthy**: ci.yml matrix tests Node 20 while `engines` requires `>=22` — incoherent, future cleanup. Tests: Pass
 
 ### Ship-chore-hardening-wave-closeout-2026-06-10 (硬化波收官 — AVO-144 決策結案 + 穩定波登錄)
 

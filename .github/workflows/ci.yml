@@ -18,7 +18,9 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-      - run: npm install
+      # npm ci (not install): exact-lockfile reproducible builds — CI must test the
+      # tree the lockfile pins, not whatever resolution npm install computes today.
+      - run: npm ci
       - run: npm test
       - run: npm run build
 
@@ -30,7 +32,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm install
+      - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run smoke
