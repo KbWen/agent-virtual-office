@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 title: AVO-151 — npm-pack install smoke (protect the npx-published artifact)
 created: 2026-06-10
 last_updated: 2026-06-10
@@ -21,7 +21,7 @@ caused re-install on every launch).
 - **AC-1 Tracked harness** `scripts/pack-smoke.mjs`: `npm pack` the repo → create a temp dir →
   `npm init -y` + `npm install <tarball>` → then assert, all inside the temp dir:
   1. `npx agent-virtual-office setup` exits 0 AND `.claude/settings.json` registers the hook for
-     ALL 7 events (PreToolUse, PostToolUse, SubagentStart, SubagentStop, UserPromptSubmit, Stop →
+     ALL 8 events (PreToolUse, PostToolUse, SubagentStart, SubagentStop, UserPromptSubmit, Stop →
      verify the actual list in cli.js incl. H5's PermissionDenied + StopFailure) with a hook path
      that EXISTS on disk.
   2. Setup is idempotent: running it twice yields no duplicate entries.

@@ -38,6 +38,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 
 // ── Canonical hook event list (from cli.js line 68) ───────────────────────────
+// SYNC CONTRACT: keep in lockstep with bin/cli.js's event array. A DROPPED event is
+// caught (assertion fails); an ADDED 9th event would NOT be (coverage gap) — update
+// this list whenever cli.js's setup registration changes.
 const HOOK_EVENTS = [
   'PreToolUse',
   'PostToolUse',
