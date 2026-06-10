@@ -743,8 +743,15 @@ export const useOfficeStore = create((set) => ({
 
       // AVO-117: accumulate blocked-episode timestamps across this payload's updates.
       let rfLog = s.recurringFailureLog || {}
+      // AVO-143: track whether ANY agent entry was actually reassigned this update.
+      // A pure poll re-apply (same status/task on every agent) keeps every per-agent
+      // object identity AND the top-level s.agents identity, so per-agent subscribers
+      // and Object-level selectors stop re-firing every tick. dayChanged already
+      // reassigned every entry above, so it seeds the flag.
+      let agentsMutated = dayChanged
       for (const u of updates) {
         const previousStatus = ext[u.agentId]?.status || agents[u.agentId]?.status || 'idle'
+        let createdThisUpdate = false
         if (!agents[u.agentId]) {
           // Dynamic worktree agent — clone base role's visual style, place in overflow spot
           const baseRole = u.agentId.includes('~') ? u.agentId.split('~').pop() : u.agentId
@@ -792,6 +799,8 @@ export const useOfficeStore = create((set) => ({
             deskItemCount: { coffee: 0, sticky: 0, books: 0 },
             groupTarget: null,
           }
+          createdThisUpdate = true
+          agentsMutated = true
         }
         // `changedAt` = when this agent's status/task last MEANINGFULLY changed. Stamped only on a
         // real signature change — NOT on every poll refresh (expiresAt moves each tick, so deriving
@@ -860,11 +869,28 @@ export const useOfficeStore = create((set) => ({
         // Don't overwrite behavior/expression during group events (officeLife controls those)
         const prevAgent = agents[u.agentId]
         const inGroup = prevAgent.inGroupEvent
+        // AVO-143: a pure poll re-apply writes the exact same field values back — skip the
+        // re-allocation entirely so the agent object keeps its identity (no re-render).
+        // Conditions guarantee every write below would be a no-op: !sigChanged → no bubble,
+        // no activity entry; status equal → no done-growth (fresh-transition gated) and no
+        // blocked-counter tick (previousStatus === u.status via prevExt); behavior/expression
+        // resolve to their current values. dayChanged/creation already broke identity above.
+        const nextBehavior = inGroup ? prevAgent.behavior : (bmBehavior || prevAgent.behavior)
+        const nextExpression = inGroup ? prevAgent.expression : (bm.expression || prevAgent.expression)
+        if (
+          !createdThisUpdate && !dayChanged && !sigChanged &&
+          u.status === prevAgent.status &&
+          nextBehavior === prevAgent.behavior &&
+          nextExpression === prevAgent.expression
+        ) {
+          continue
+        }
+        agentsMutated = true
         const nextAgent = {
           ...prevAgent,
           status: u.status,
-          behavior: inGroup ? prevAgent.behavior : (bmBehavior || prevAgent.behavior),
-          expression: inGroup ? prevAgent.expression : (bm.expression || prevAgent.expression),
+          behavior: nextBehavior,
+          expression: nextExpression,
         }
         // Bubble fires only on a REAL status/task change (sigChanged) — NOT on every poll re-apply.
         // A status file re-written each tick (changed timestamp/seq/expiry but SAME status+task) passes
@@ -961,6 +987,7 @@ export const useOfficeStore = create((set) => ({
           if (a && a.session && !present.has(id)) {
             delete agents[id]
             delete ext[id]
+            agentsMutated = true
             // If the inspector had this now-deleted dynamic agent selected, the id would
             // dangle forever: AgentInspector renders nothing (its `agent` lookup is null)
             // but selectedAgent stays set, so a future click on the SAME id toggles the
@@ -1005,7 +1032,11 @@ export const useOfficeStore = create((set) => ({
         integrationPatch.activeWorkflow = meta.workflow ?? null
       }
       return {
-        externalStatus: ext, agents, activityLog: log, eventFeed: feedLog, dailyDoneLedger, dailyBlockedLedger,
+        // AVO-143: when nothing reassigned an agent entry, hand back the ORIGINAL
+        // s.agents reference so Object-level subscribers don't re-fire on a pure
+        // poll re-apply (the `{ ...s.agents }` working copy is discarded).
+        externalStatus: ext, agents: agentsMutated ? agents : s.agents,
+        activityLog: log, eventFeed: feedLog, dailyDoneLedger, dailyBlockedLedger,
         recurringFailureLog: rfLog,
         hasEverReceivedStatus: meta.skipHintDismiss ? s.hasEverReceivedStatus : true,
         ...(evictedSelected ? { selectedAgent: null } : {}),
