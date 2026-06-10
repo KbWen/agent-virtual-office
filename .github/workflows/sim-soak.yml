@@ -1,0 +1,40 @@
+# Nightly sim-soak (AVO-157): run the office headless for 10 minutes and assert world
+# invariants (no teleports, no sustained standing stacks, no frozen walkers, no furniture
+# clipping). These emergent-class bugs only exist across minutes of runtime — unit tests
+# and render-smoke cannot see them. Nightly + manual, NOT a PR gate (10 min is too slow
+# for the PR loop; promote later if it proves stable).
+name: sim-soak
+
+on:
+  schedule:
+    - cron: '0 19 * * *'   # 03:00 Asia/Taipei
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Soak duration in minutes'
+        required: false
+        default: '10'
+
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run soak
+        env:
+          SOAK_REPORT: soak-report.json
+        run: node scripts/sim-soak.mjs --minutes ${{ github.event.inputs.minutes || '10' }}
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soak-report
+          path: soak-report.json
+          if-no-files-found: ignore
