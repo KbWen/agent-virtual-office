@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 title: AVO-146 — Status-field schema unification (kill the N-whitelist drop class)
 created: 2026-06-10
 last_updated: 2026-06-10
