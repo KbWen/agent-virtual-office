@@ -1,0 +1,73 @@
+{
+  "session_id": "redacted-text",
+  "transcript_path": "/redacted/path.js",
+  "cwd": "/redacted/path.js",
+  "permission_mode": "bypassPermissions",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Agent",
+  "tool_input": {
+    "description": "redacted-text",
+    "prompt": "redacted-text",
+    "subagent_type": "redacted-text",
+    "model": "redacted-text"
+  },
+  "tool_response": {
+    "status": "redacted-text",
+    "prompt": "redacted-text",
+    "agentId": "redacted-text",
+    "agentType": "redacted-text",
+    "content": [
+      {
+        "type": "redacted-text",
+        "text": "redacted-text"
+      }
+    ],
+    "totalDurationMs": 42,
+    "totalTokens": 42,
+    "totalToolUseCount": 42,
+    "usage": {
+      "input_tokens": 42,
+      "cache_creation_input_tokens": 42,
+      "cache_read_input_tokens": 42,
+      "output_tokens": 42,
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "redacted-text",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 0,
+        "ephemeral_5m_input_tokens": 42
+      },
+      "inference_geo": "redacted-text",
+      "iterations": [
+        {
+          "input_tokens": 42,
+          "output_tokens": 42,
+          "cache_read_input_tokens": 42,
+          "cache_creation_input_tokens": 42,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 42,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "type": "redacted-text"
+        }
+      ],
+      "speed": "redacted-text"
+    },
+    "toolStats": {
+      "readCount": 42,
+      "searchCount": 42,
+      "bashCount": 42,
+      "editFileCount": 42,
+      "linesAdded": 42,
+      "linesRemoved": 42,
+      "otherToolCount": 42
+    }
+  },
+  "tool_use_id": "redacted-text",
+  "duration_ms": 42
+}

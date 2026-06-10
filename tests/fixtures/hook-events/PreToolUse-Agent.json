@@ -1,0 +1,18 @@
+{
+  "session_id": "redacted-text",
+  "transcript_path": "/redacted/path.js",
+  "cwd": "/redacted/path.js",
+  "permission_mode": "bypassPermissions",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Agent",
+  "tool_input": {
+    "description": "redacted-text",
+    "prompt": "redacted-text",
+    "subagent_type": "redacted-text",
+    "model": "redacted-text"
+  },
+  "tool_use_id": "redacted-text"
+}
