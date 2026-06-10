@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T07:45:00Z
-- **Update Sequence**: 64
+- **Last Updated**: 2026-06-11T09:00:00Z
+- **Update Sequence**: 65
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -145,6 +145,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-pet-wall-phasing-2026-06-11 (owner 回報 bug — 寵物一直穿牆)
+
+- Branch `fix/pet-wall-phasing`, quick-win. Root cause: 寵物漫遊帶 (x 80–750) 橫跨多房間、CSS 直線滑行、`clampToFloor` 只驗端點 → 線段中途自由穿牆/穿家具。
+- **Shipped**: 純函數 `segmentWalkable`（4px 取樣、依賴注入）+ `pickWanderTarget`（重試 ≤8、全敗 = 原地停一拍——比穿牆更 calm 也更誠實）；OfficePet 接 `isOnFloor && !isOnObstacle`。Review 的 MEDIUM（lounge 右牆口袋區 18px 地板縫 → ~68%/tick 全敗 → 視覺卡頓 ~10s）當場加 **pocket-escape**：連續 2 拍落空改抽近距離短跳（同一條 segment 閘門，永不穿牆）。alert 衝刺刻意不閘（罕見、資訊性；記錄於 Drift Log）。
+- **Review (fresh)**: PASS — 10 點舉證全 PROVEN；敏感度（削弱 picker → 500 跳中 372 次穿牆被測試抓到）；口袋逃生 +1 測試（真實地圖 20-tick >15 成功）。
+- **Tests**: 1818 → **1827** (+9：樁牆/薄牆/退化輸入/重試暫停/500 seeded 真實地圖 2px 複驗 0 穿牆且 >300 接受/跨房拒絕含地圖變更防衛/口袋逃生)。smoke 綠。Tests: Pass
 
 ### Ship-fix-branch-hop-ghost-sessions-2026-06-11 (owner 回報 bug — 角色被拉到畫面上方/消失重現)
 

@@ -84,6 +84,25 @@ describe('REAL-WORLD invariant: accepted hops never phase through walls/furnitur
     expect(paused).toBeLessThan(200)
   })
 
+  it('pocket escape: from the lounge right-wall strip, SHORT near-hops are accepted readily', () => {
+    // Review MEDIUM: at (445, 470) band-wide far hops fail ~68% of 8-attempt ticks. The
+    // component falls back to near-hops after 2 empty ticks — prove the fallback actually
+    // works on the real map: short seeded hops around the pocket get accepted within budget.
+    const rand = mulberry32(0xdeadb33f)
+    const from = clampToFloor({ x: 445, y: 470 })
+    const near = () => {
+      const x = Math.min(750, Math.max(80, from.x + (rand() - 0.5) * 120))
+      const y = Math.min(525, Math.max(400, from.y + (rand() - 0.5) * 80))
+      return clampToFloor({ x, y })
+    }
+    let successes = 0
+    for (let tick = 0; tick < 20; tick++) {
+      if (pickWanderTarget(from, near, petWalkable)) successes++
+    }
+    // Near-hops must rescue the pet promptly — the overwhelming majority of ticks succeed.
+    expect(successes).toBeGreaterThan(15)
+  })
+
   it('a known cross-room hop (lounge → research room through the wall) is rejected', () => {
     // Lower-left lounge to lower-right area: the straight line crosses interior walls.
     const from = clampToFloor({ x: 120, y: 512 })
