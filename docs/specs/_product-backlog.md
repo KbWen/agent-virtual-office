@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-06-08
+last_updated: 2026-06-10
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -66,7 +66,11 @@ last_updated: 2026-06-08
 | AVO-142 | Drag-to-move agents (manual reposition for realer interaction) | product | game-feel | P2 | — | feature | Pending | — |
 | AVO-143 | applyExternalStatus: skip no-op agent re-allocation (don't re-render all agents each poll) | chore | tech-debt | P3 | — | quick-win | Pending | — |
 | AVO-144 | Sustained inter-agent separation in free movement (agents pass THROUGH each other in transit; RAF loop has no per-frame separation — only gather targets are deconflicted) | product | game-feel | P2 | — | feature | Pending | — |
-| #20 | Hook read-modify-write atomic | chore | tech-debt | P3 | — | quick-win | Deferred | — |
+| #20 | Hook read-modify-write atomic | chore | tech-debt | P1 | — | quick-win | Pending | reactivated as hardening-wave H3 (2026-06-10) |
+| AVO-145 | CI render-smoke gate (headless load-the-page in ci.yml + consolidate shot scripts into one tracked harness) | infra | tech-debt | P0 | — | feature | Pending | hardening-wave H1 |
+| AVO-146 | Transport field-whitelist unification (reasonCode/activeFile × 5-6 independent whitelists → one shared schema module) | chore | tech-debt | P0 | — | feature | Pending | hardening-wave H2 |
+| AVO-147 | Validator zero-noise + repo hygiene (archive leftover shipped logs, backfill sections, gitignore local tooling) | chore | tech-debt | P1 | — | quick-win | In Progress | hardening-wave H4 (first) |
+| AVO-148 | Structured error payload for blocked reasons (errno/HTTP-status hook field → honest permission-blocked/auth-error/rate-limit) | product | info-density | P1 | — | feature | Pending | hardening-wave H5; AVO-110 Phase-2; upgrades AVO-117 |
 
 ## Status Key
 
@@ -159,6 +163,30 @@ last_updated: 2026-06-08
 - **AVO-137 Density-layer foundation** — formalize the L0/L1/L2 model: glance-L1 default (in-world core always on),
   click-to-inspect = L2 (self-demonstrating, no settings slider), optional `zen` far-view mode for streamer/wall-TV.
   *Architecture-change; build AFTER the cheap wins (126–128) per "fix the default first, ship the dial second".*
+
+### 🛡️ Hardening Wave (H1–H6, added 2026-06-10)
+> Owner-selected "全做，照建議順序" after a Fable-5 baseline audit (1462/1462 tests green, validator
+> 105 pass / 4 warn / 0 fail, main == origin). Theme: make the project 堅不可摧 — structural defenses
+> against the failure classes that have actually bitten (green-CI render crash PR #71; whitelist
+> field-drop HIGHs in AVO-110/106 reviews). Order: **H4 → H1 → H2 → H3 → H5 → H6**.
+
+- **H1 = AVO-145 CI render-smoke gate** — the #71 crash class (app dead, CI green — no jsdom) is
+  currently only defended by a manual habit. Land a headless-Playwright smoke job in `ci.yml`
+  (page loads, office svg renders, 0 console errors) and consolidate the 12 ad-hoc local
+  `scripts/*-shot.mjs` into one tracked harness.
+- **H2 = AVO-146 whitelist unification** — `reasonCode`/`activeFile` each thread through 5–6
+  independently-maintained whitelists (hook ×2 · normalizePost + server.mjs inline copy ·
+  sanitizeAgent · routeExternalAgents · store). Two HIGH review defects came from a copy silently
+  dropping a new field. One shared field-schema module; every transport imports it.
+- **H3 = #20 hook atomic write** — reactivated; file-lock or append-only for the hook's
+  read-modify-write state.
+- **H4 = AVO-147 validator zero-noise** — this wave's opener; 4 WARN → 1 WARN (the by-design
+  archived-historical-gap record), git status untracked noise → 0.
+- **H5 = AVO-148 structured error payload** — AVO-110 Phase-2 boundary: hook emits errno/HTTP-status
+  → honestly unlocks `permission-blocked`/`auth-error`/`rate-limit`; AVO-117 recurrence inherits the
+  finer signatures.
+- **H6 = AVO-143 + AVO-144** — sim-layer robustness: skip no-op agent re-allocation per poll;
+  per-frame separation in free movement.
 
 ### 🔧 Carried-over from prior wave
 - **#20 Hook read-modify-write atomic** — PID isolation + rename fallback already mitigates risk; full file lock or append-only design would be ideal. *Deferred — current mitigation acceptable; revisit only if state-loss reports surface.*
