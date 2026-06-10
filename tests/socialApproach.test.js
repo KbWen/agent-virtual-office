@@ -35,6 +35,44 @@ const makeAgents = (positions) =>
   )
 
 // ─────────────────────────────────────────────────────────────────────────────
+// (f) SAME-PICK guarantee (review MEDIUM → pinned): the walk destination MUST derive
+//     from the socialTargetOverride the caller picked — never from a second internal
+//     pick (that bug made the arriver face peer A while walking to peer B 6/7 of the
+//     time with 8 agents).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('socialTargetOverride same-pick guarantee', () => {
+  const realRandom = Math.random
+  beforeEach(() => { Math.random = mulberry32(0x5a3e_91c) })
+  afterEach(() => { Math.random = realRandom })
+
+  it('the destination orbits the OVERRIDE peer, not whatever an internal pick would choose', () => {
+    // Override peer is far away from every other agent — if the destination lands within
+    // the 50–70px ring of the override, the override was honored; an internal re-pick
+    // would orbit one of the clustered others (≥200px away from the override).
+    const overridePeer = { targetId: 'res', position: { x: 700, y: 300 } }
+    const agents = makeAgents({
+      me: { x: 100, y: 290 },
+      a: { x: 120, y: 290 }, b: { x: 140, y: 290 }, c: { x: 160, y: 290 },
+      res: { x: 700, y: 300 },
+    })
+    for (let i = 0; i < 50; i++) {
+      const dest = getTargetForBehavior('me', 'chat', agents, overridePeer)
+      const dToOverride = Math.hypot(dest.x - 700, dest.y - 300)
+      // clampToFloor/avoidOverlap may nudge a little — allow slack but the destination
+      // must be FAR closer to the override than to the cluster (≥200px away).
+      expect(dToOverride, `run ${i}: dest (${Math.round(dest.x)},${Math.round(dest.y)}) ignored the override`).toBeLessThan(110)
+    }
+  })
+
+  it('without an override the internal pick is used (backward compatible)', () => {
+    const agents = makeAgents({ me: { x: 100, y: 290 }, a: { x: 200, y: 290 } })
+    const dest = getTargetForBehavior('me', 'chat', agents)
+    expect(dest).toBeTruthy()
+    expect(Math.hypot(dest.x - 200, dest.y - 290)).toBeLessThan(110)  // orbits the only peer
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // (a) Raw distance distribution: 500 seeded samples → all ∈ [50, 70]
 // ─────────────────────────────────────────────────────────────────────────────
 describe('social approach distance distribution (seeded 500 samples)', () => {

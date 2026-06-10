@@ -1141,6 +1141,10 @@ function AgentCharacter({ agent }) {
         movingRef.current = false
         movingStuckRef.current = 0
         pendingBehaviorRef.current = null
+        // Explicitly drop any captured social peer — the abandoned walk's facing target
+        // must never be applied to a LATER unrelated arrival (the next doSchedule resets
+        // this anyway; the explicit clear keeps the invariant local and refactor-proof).
+        socialTargetRef.current = null
         if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         setIsWalking(false)
         timerRef.current = setTimeout(doSchedule, 500)
