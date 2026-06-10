@@ -27,7 +27,8 @@ const VALID_MOODS    = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'i
 const MAX_MOOD_DURATION = 3_600_000
 
 // ─── Inlined constants (mirrors src/systems/classify.js BLOCKED_REASONS) ──────
-const BLOCKED_REASONS = ['test-run-failed', 'build-failed', 'deps-failed', 'blocked-unknown']
+// AVO-148: keep in lockstep with BLOCKED_REASON_TABLE in src/systems/classify.js
+const BLOCKED_REASONS = ['test-run-failed', 'build-failed', 'deps-failed', 'blocked-unknown', 'permission-denied', 'api-rate-limit', 'api-auth-failed']
 
 // ─── Inlined AGENT_CARRY_FIELDS + FIELD_SANITIZERS (mirrors src/utils/statusFields.js) ─
 const AGENT_CARRY_FIELDS = ['task', 'label', 'hint', 'reasonCode', 'activeFile']

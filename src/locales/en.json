@@ -349,15 +349,21 @@
     }
   },
   "blockedReason": {
-    "test-run-failed": { "label": "Test run", "a11y": "Blocked on the test run" },
-    "build-failed": { "label": "Build", "a11y": "Blocked on the build" },
-    "deps-failed": { "label": "Install", "a11y": "Blocked on installing dependencies" },
-    "blocked-unknown": { "label": "Blocked", "a11y": "Blocked, cause unknown" }
+    "test-run-failed":  { "label": "Test run",        "a11y": "Blocked on the test run" },
+    "build-failed":     { "label": "Build",            "a11y": "Blocked on the build" },
+    "deps-failed":      { "label": "Install",          "a11y": "Blocked on installing dependencies" },
+    "blocked-unknown":  { "label": "Blocked",          "a11y": "Blocked, cause unknown" },
+    "permission-denied": { "label": "Permission denied", "a11y": "Blocked: permission denied" },
+    "api-rate-limit":    { "label": "API rate-limited",  "a11y": "Blocked: API rate-limited" },
+    "api-auth-failed":   { "label": "API auth failed",   "a11y": "Blocked: API auth failed" }
   },
   "recurringFailure": {
     "test-run-failed": { "label": "Tests keep failing", "a11y": "Recurring: the test run keeps failing for this agent" },
     "build-failed": { "label": "Build keeps failing", "a11y": "Recurring: the build keeps failing for this agent" },
     "deps-failed": { "label": "Installs keep failing", "a11y": "Recurring: installing dependencies keeps failing for this agent" },
+    "permission-denied": { "label": "Permission keeps getting denied", "a11y": "Recurring: permission keeps getting denied for this agent" },
+    "api-rate-limit": { "label": "API keeps rate-limiting", "a11y": "Recurring: the API keeps rate-limiting this agent" },
+    "api-auth-failed": { "label": "API auth keeps failing", "a11y": "Recurring: API authentication keeps failing for this agent" },
     "notifyTitle": "Recurring failure",
     "notifyBody": "{0} keeps hitting the same kind of failure"
   },

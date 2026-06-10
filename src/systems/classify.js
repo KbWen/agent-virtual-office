@@ -284,10 +284,14 @@ export function classifyStatus(status) {
 // the 3rd redundant channel only. `blocked-unknown` is the lowest-chroma, neutral
 // glyph (uncertainty), deliberately NOT a red failure mark.
 const BLOCKED_REASON_TABLE = Object.freeze({
-  'test-run-failed': { iconId: 'beaker-crack', hue: '#d98a2b', a11yKey: 'blockedReason.test-run-failed.a11y' },
-  'build-failed':    { iconId: 'hammer-crack', hue: '#c96f3a', a11yKey: 'blockedReason.build-failed.a11y' },
-  'deps-failed':     { iconId: 'box-open-x',   hue: '#d98a2b', a11yKey: 'blockedReason.deps-failed.a11y' },
-  'blocked-unknown': { iconId: 'q-neutral',    hue: '#8a8f99', a11yKey: 'blockedReason.blocked-unknown.a11y' },
+  'test-run-failed':  { iconId: 'beaker-crack',  hue: '#d98a2b', a11yKey: 'blockedReason.test-run-failed.a11y' },
+  'build-failed':     { iconId: 'hammer-crack',  hue: '#c96f3a', a11yKey: 'blockedReason.build-failed.a11y' },
+  'deps-failed':      { iconId: 'box-open-x',    hue: '#d98a2b', a11yKey: 'blockedReason.deps-failed.a11y' },
+  'blocked-unknown':  { iconId: 'q-neutral',     hue: '#8a8f99', a11yKey: 'blockedReason.blocked-unknown.a11y' },
+  // AVO-148: structured-event reasons (event-driven = honest by construction)
+  'permission-denied': { iconId: 'slash-circle', hue: '#a0522d', a11yKey: 'blockedReason.permission-denied.a11y' },
+  'api-rate-limit':    { iconId: 'hourglass',    hue: '#5b7fa6', a11yKey: 'blockedReason.api-rate-limit.a11y' },
+  'api-auth-failed':   { iconId: 'key-broken',   hue: '#7a5c99', a11yKey: 'blockedReason.api-auth-failed.a11y' },
 })
 
 export const BLOCKED_REASONS = Object.freeze(Object.keys(BLOCKED_REASON_TABLE))

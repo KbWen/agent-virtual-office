@@ -120,6 +120,17 @@ curl -X POST http://localhost:5174/api/event -d '{"event":"deploy-success"}'
 - **Claude Code** → `npx agent-virtual-office setup`, and every tool call routes itself. Done.
 - **Codex CLI / Codex App / Gemini CLI / GitHub Actions / any CI** → see the **[Integration guide](docs/INTEGRATIONS.md)**.
 
+### Hook events registered by `setup`
+
+| Event | Capability needed | What it shows |
+|---|---|---|
+| `PreToolUse` / `PostToolUse` | Core hooks | Per-tool working/done/blocked status |
+| `SubagentStart` / `SubagentStop` | Core hooks | Subagent workflow banners |
+| `UserPromptSubmit` | Core hooks | PM enters planning mode |
+| `Stop` | Core hooks | Turn-end idle state |
+| `PermissionDenied` *(AVO-148)* | Hooks v1.x+ | Stamps the responsible agent `blocked` with reason `permission-denied` when the permission system denies a tool call. Harmless if your Claude Code version does not emit this event — the handler simply never runs. |
+| `StopFailure` *(AVO-148)* | Hooks v1.x+ | Stamps all currently-working session agents `blocked` with `api-rate-limit` or `api-auth-failed` when the turn ends on a Claude-API error (keyed on the `matcher` enum field — zero text parsing). Harmless if absent. |
+
 ## Embedding & language
 
 ```

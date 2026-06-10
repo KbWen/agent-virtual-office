@@ -30,6 +30,8 @@ import {
   AGENT_CARRY_FIELDS as MJS_CARRY_FIELDS,
   FIELD_SANITIZERS as MJS_FIELD_SANITIZERS,
 } from '../src/utils/normalizePost.mjs'
+import { BLOCKED_REASONS } from '../src/systems/classify.js'
+import { BLOCKED_REASONS as MJS_BLOCKED_REASONS } from '../src/utils/normalizePost.mjs'
 import { normalizeStatusMessage } from '../src/inference/inferStatus.js'
 import { routeExternalAgents } from '../src/inference/agentRouter.js'
 import { useOfficeStore } from '../src/systems/store.js'
@@ -101,6 +103,8 @@ describe('normalizePost.mjs runtime copy — drift guard vs canonical (SITE 9)',
     const probes = [
       'plain-string', '', 'x'.repeat(300), 42, null, undefined, {}, [],
       'test-run-failed', 'build-failed', 'deps-failed', 'blocked-unknown', 'not-a-reason',
+      // AVO-148: 3 new structured-event tokens must be accepted by the sanitizer
+      'permission-denied', 'api-rate-limit', 'api-auth-failed',
     ]
     for (const field of AGENT_CARRY_FIELDS) {
       for (const probe of probes) {
@@ -124,6 +128,10 @@ describe('normalizePost.mjs runtime copy — drift guard vs canonical (SITE 9)',
     { type: 'office-status', agents: [{ role: 'nope', status: 'working' }, { role: 'dev', status: 'working' }, { role: 'dev', status: 'done' }] },
     // full format with mood + duration clamp + long workflow
     { type: 'office-status', agents: [], mood: 'rushing', moodDuration: 99999999, workflow: 'w'.repeat(300) },
+    // AVO-148: new structured-event tokens survive both normalizers
+    { type: 'office-status', agents: [{ role: 'dev', status: 'blocked', reasonCode: 'permission-denied' }] },
+    { type: 'office-status', agents: [{ role: 'ops', status: 'blocked', reasonCode: 'api-rate-limit'    }] },
+    { type: 'office-status', agents: [{ role: 'qa',  status: 'blocked', reasonCode: 'api-auth-failed'  }] },
     // shorthand: status value, task value, with top-level carry fields
     { dev: 'working', qa: 'running the tests', reasonCode: 'build-failed', activeFile: '/c/d.js', hint: 'hh' },
     // shorthand: invalid mood ignored, non-string role value skipped
@@ -131,6 +139,12 @@ describe('normalizePost.mjs runtime copy — drift guard vs canonical (SITE 9)',
     // junk
     {}, null, { type: 'office-status', agents: 'not-an-array' },
   ]
+
+  // AVO-148: list equality check — the .mjs mirror must contain the exact same token list
+  // as the canonical classify.js BLOCKED_REASONS (not just probe-subset equivalence).
+  it('inlined BLOCKED_REASONS list equals canonical classify.js list (AVO-148 H2 gate)', () => {
+    expect(MJS_BLOCKED_REASONS).toEqual(BLOCKED_REASONS)
+  })
 
   it('normalizePost behavior is identical between .js (canonical) and .mjs (runtime copy)', () => {
     for (const payload of PARITY_PAYLOADS) {

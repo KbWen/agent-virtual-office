@@ -7,7 +7,12 @@
 // Only AVO-110's SPECIFIC reasons can recur. 'blocked-unknown' is deliberately EXCLUDED — a
 // recurring *unknown* cause is low-actionability noise and would over-claim. (Mirrors the
 // honesty floor: when we don't know the kind, we don't escalate.)
-export const RECURRING_REASONS = Object.freeze(['test-run-failed', 'build-failed', 'deps-failed'])
+// AVO-148 (AC-5): the three new structured-event tokens are specific enough to recur;
+// blocked-unknown stays excluded.
+export const RECURRING_REASONS = Object.freeze([
+  'test-run-failed', 'build-failed', 'deps-failed',
+  'permission-denied', 'api-rate-limit', 'api-auth-failed',
+])
 
 export const RECURRING_THRESHOLD = 3          // distinct blocked episodes…
 export const RECURRING_WINDOW_MS = 600_000    // …within this rolling window (10 min)…

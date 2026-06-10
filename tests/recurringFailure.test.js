@@ -102,8 +102,11 @@ describe('AVO-117 recurringFailure — honesty invariants', () => {
     expect(recurringInfo(log2, { agentId: 'dev', reasonCode: 'test-run-failed', now: T0 }).count).toBe(1)
   })
 
-  it('exports the 3 specific reasons only (blocked-unknown excluded)', () => {
-    expect(RECURRING_REASONS).toEqual(['test-run-failed', 'build-failed', 'deps-failed'])
+  it('exports the 6 specific reasons (3 original + 3 AVO-148); blocked-unknown excluded', () => {
+    expect(RECURRING_REASONS).toEqual([
+      'test-run-failed', 'build-failed', 'deps-failed',
+      'permission-denied', 'api-rate-limit', 'api-auth-failed',
+    ])
     expect(RECURRING_REASONS).not.toContain('blocked-unknown')
     expect(RECURRING_THRESHOLD).toBe(3)
   })

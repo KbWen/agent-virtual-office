@@ -38,6 +38,30 @@ function Glyph({ iconId, hue }) {
           <path d="M3.5,-1 L3.5,3.2 L0,4.4 L0,1 Z" fill={hue} opacity={0.82} />
         </g>
       )
+    case 'slash-circle': // permission-denied — a circle with a diagonal slash (🚫 motif)
+      return (
+        <g stroke={STROKE} strokeWidth={0.7}>
+          <circle cx={0} cy={0} r={4.2} fill={hue} />
+          <line x1={-2.8} y1={-2.8} x2={2.8} y2={2.8} stroke="#fff" strokeWidth={1.4} strokeLinecap="round" />
+        </g>
+      )
+    case 'hourglass': // api-rate-limit — an hourglass silhouette (⏳ throttle motif)
+      return (
+        <g stroke={STROKE} strokeWidth={0.7} strokeLinejoin="round">
+          <path d="M-3.2,-4 L3.2,-4 L0,-0.4 L3.2,4 L-3.2,4 L0,-0.4 Z" fill={hue} />
+          <rect x={-3.2} y={-4.4} width={6.4} height={0.8} rx={0.3} fill={hue} />
+          <rect x={-3.2} y={3.6} width={6.4} height={0.8} rx={0.3} fill={hue} />
+        </g>
+      )
+    case 'key-broken': // api-auth-failed — a key silhouette with a break (🔑 auth motif)
+      return (
+        <g stroke={STROKE} strokeWidth={0.7} strokeLinejoin="round">
+          <circle cx={-1.6} cy={-1.6} r={2.2} fill="none" strokeWidth={1.2} stroke={hue} />
+          <line x1={0.4} y1={0.4} x2={4} y2={4} stroke={hue} strokeWidth={1.4} strokeLinecap="round" />
+          <line x1={2.8} y1={2.8} x2={2.8} y2={4.4} stroke={hue} strokeWidth={1.1} strokeLinecap="round" />
+          <line x1={1.8} y1={3.8} x2={1.8} y2={5} stroke={hue} strokeWidth={1.1} strokeLinecap="round" />
+        </g>
+      )
     default: // 'q-neutral' — honest uncertainty: a hollow '?' in a muted ring (lowest chroma)
       return (
         <g stroke={STROKE} strokeWidth={0.7}>
