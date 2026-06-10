@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-10T22:00:00Z
-- **Update Sequence**: 57
+- **Last Updated**: 2026-06-10T23:55:00Z
+- **Update Sequence**: 58
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -79,6 +79,8 @@
   - [data-path] docs/specs/status-field-schema-unification.md [Shipped]  *(AVO-146 / hardening-wave H2 — AGENT_CARRY_FIELDS canonical schema; 9-site map; drift-guarded)*
   - [hook-io] docs/specs/hook-status-write-lock.md [Shipped]  *(#20 / hardening-wave H3 — bounded-wait RMW lock; multi-process proof)*
   - [office-runtime] docs/specs/structured-error-reasons.md [Shipped]  *(AVO-148 / hardening-wave H5 — event-driven permission-denied / api-rate-limit / api-auth-failed)*
+  - [ci-infra] docs/specs/npm-pack-install-smoke.md [Shipped]  *(AVO-151 / stability-wave W3 — pack→install→setup/hook/boot smoke gate)*
+  - [ci-infra] docs/specs/transport-spine-e2e.md [Draft]  *(AVO-150 / stability-wave W2 — real-server API e2e; next)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -142,6 +144,14 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-avo-151-pack-smoke-2026-06-10 (穩定波 W3 — npm-pack 安裝煙測)
+
+- Branch `feat/avo-151-pack-smoke`, feature. Closes AVO-151. Spec `docs/specs/npm-pack-install-smoke.md` [shipped]. The npx-published tarball (files whitelist / bin entrypoint / hook-in-node_modules — a DIFFERENT artifact than the git checkout) now has a blocking gate.
+- **Shipped**: `scripts/pack-smoke.mjs` — pack → temp-dir install → 4 assertions: 8-event setup + idempotence (no dup entries on re-run), standalone hook exit 0 (zero-dep verified in installed context), Quick-Start dev boot → 200 + app mount (dev mode = Vite, no /api/health — documented). `ci.yml` `pack-smoke` job (timeout-minutes 15). `npm run smoke:pack` local (Windows verified first-hand).
+- **AC-4 test-the-test proven**: removing `public/` from the files whitelist → exit 1 with a diagnostic naming the whitelist. **Review (fresh)**: PASS — false-green analysis: event-DROP caught, event-ADD is a commented sync-contract gap; MED job-timeout + 2 LOW applied in-PR; POSIX grandchild-orphan LOW accepted (CI teardown).
+- **Session process fixes alongside W1/W3**: (a) the W1 PR #89 exposed that branch protection had an EMPTY required-checks list (red PR merged) → `test (20)`/`test (22)`/`render-smoke` are now REQUIRED on main (gh api). (b) The hookWriteLock AC-4 CI flake (budget-exhausted worker writing unlocked on 2-core runners — same mechanism as W1's local post-install flake) deflaked in PR #90: test workers retry-until-held; production untouched.
+- Tests: 1543/1543; pack-smoke first live CI run on its own PR. Tests: Pass
 
 ### Ship-chore-avo-149-ci-reproducible-2026-06-10 (穩定波 W1 — npm ci 可重現建置)
 
