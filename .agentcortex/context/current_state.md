@@ -13,7 +13,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-06-11T21:25:00Z
-- **Update Sequence**: 70
+- **Update Sequence**: 71
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -145,6 +145,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-calm-rhythm-2026-06-10 (owner 雙問 — 躁動步調 + 為何不去其他房間)
+
+- Branch `fix/calm-rhythm`, quick-win。Owner:「一直走動很躁動」+「都不會去茶水間/Research」。**量測先行**：引擎模擬（20k 樣本）+ 3 分鐘 headless zone-audit（`scripts/zone-audit.mjs`，新診斷工具）。根因 = work pool 內的 **solo `meeting`**：多數角色 1/4 的 work 抽選 ≈ 全部 cycle 的 ~20% 是獨自行軍會議室（實測 pm 單獨佔會議室 30% 時間；畫面 ≥1 人在走 83%、≥2 人 46%），把真正的茶水間行程（~8% cycle、12–25s 停留）完全淹沒——owner 兩個感受是同一個根因。
+- **Shipped（純 reduction）**：solo meeting 移出 ambient work pool（officeLife 群體事件仍擁有會議室——合法、有 R1 守衛的管道）；桌面行為 30–65s（原 18–45s）；茶水間停留拉長（transit < dwell，panel 處方）；`WALK_SPEED` 80→60px/s（game-feel panel：80 在 800×560 場景讀作「趕路」）；`WATCHDOG_TIMEOUT` 90→120s（65s 最長行為 + 15s 走路@60 + 15s stuck-slack = 95s 重推導）。
+- **雙專家 panel**（game-feel + honesty, Sonnet）：誠實度淨增（working agent 更常在桌前 = 更貼近其真實狀態）；確認無任何 UI/訊號把 `behavior==='meeting'` 當真實狀態讀；dead-office 門檻（0-walker >80%）遠未觸及。
+- **Live A/B**（各 702 樣本；post run 含 4 個真實 tracked sessions）：≥1 人在走 83→66%、≥2 人 46→24%、會議室獨走 pm-30%→0、lounge 到訪 1→9 人次（dev 在 lounge 19% 時間）+ res 進了 research（角色對味）。引擎模擬：working 48.7→17.6 walks/h（walk-share 38.5→18.2%）。**Tests: 1871 → 1874**。Tests: Pass
 
 ### Ship-fix-social-lateral-bias-2026-06-11 (owner 三疊截圖 — 社交角度側偏 + 兩套件去 flake)
 
