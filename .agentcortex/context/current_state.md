@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-10T12:30:00Z
-- **Update Sequence**: 51
+- **Last Updated**: 2026-06-10T15:15:00Z
+- **Update Sequence**: 52
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -75,6 +75,7 @@
   - [office-runtime] docs/specs/recurring-failure-detection.md [Shipped]  *(AVO-117 — recurring blocked-reason detection; downstream of AVO-110)*
   - [multi-agent] docs/specs/pair-programming-huddle.md [Shipped]  *(AVO-106 — co-editing pair OVERLAY (desk-to-desk link); per-agent activeFile, edit-only; redesigned from a huddle per expert panel)*
   - [ci-infra] docs/specs/ci-render-smoke.md [Shipped]  *(AVO-145 / hardening-wave H1 — blocking render-smoke gate; AC-6 test-the-test proven)*
+  - [data-path] docs/specs/status-field-schema-unification.md [Shipped]  *(AVO-146 / hardening-wave H2 — AGENT_CARRY_FIELDS canonical schema; 9-site map; drift-guarded)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -138,6 +139,14 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-avo-146-status-field-schema-2026-06-10 (硬化波 H2 — status-field schema 統一)
+
+- Branch `feat/avo-146-status-field-schema`, feature. Closes AVO-146. Spec `docs/specs/status-field-schema-unification.md` [shipped, AC-3 amended at review]. Kills the "new field silently dropped by one whitelist copy" HIGH-defect class (AVO-110/AVO-106 history).
+- **Shipped**: `src/utils/statusFields.js` — canonical `AGENT_CARRY_FIELDS` (task/label/hint/reasonCode/activeFile) + `FIELD_SANITIZERS` + 9-site data-path map + new-field checklist. normalizePost (both branches) / sanitizeAgent / routeExternalAgents / applyExternalStatus all iterate the canonical list. `server.mjs` inline normalizePost DELETED → imports `src/utils/normalizePost.mjs` (bare-Node runtime copy; `.js` physically unimportable under `"type":"commonjs"`), **mechanically drift-guarded** (list equality + sanitizer probe table + multi-payload behavioral parity in `tests/statusFieldsDriftGuard.test.js`). Hook (cannot import; standalone CJS) gets a source-level drift-guard: every canonical field must appear in BOTH hook whitelist sites. **AC-6 field-survival e2e loop**: every carry field pushed through the full 4-stage pipeline into the store — future fields auto-covered; silent drops fail by construction.
+- **Bonus fixes surfaced by the ground-truth audit**: (1) LIVE #52 divergence — server path dropped agents with invalid status while src coerced to idle; now unified (coerce) with dual-instance regression tests. (2) `_seq` clock split (review MED-2) — /api/status + /api/event now share one exported `nextSeq` counter (two counters writing one file could trip the cross-channel stale-drop guard). (3) POST shorthand branch now carries reasonCode/activeFile (documented additive).
+- **Review (fresh, truth/data)**: NOT READY — HIGH-1 spec/impl divergence (implementer created the .mjs copy where AC-3 said import .js; reviewer VERIFIED the .js import is impossible and the spec's scanSessions precedent was wrong) + MED-1 (#52 test asserted the wrong module) + MED-2 (_seq split). All fixed (07afa22): spec amended + decision recorded in work log Drift Log; delta reviewer → **PASS** (monotonic nextSeq verified live). Coordinator had also hardened the implementer's comment-only "sync contract" into mechanical SITE 9 tests BEFORE first review.
+- **Tests**: 1462 → **1489** (+27 net: drift guards ×18 + #52 dual ×8 + survival loop; old byte-drift parity internals removed). smoke exit 0. Hook file byte-untouched. Tests: Pass
 
 ### Ship-feat-avo-145-ci-render-smoke-2026-06-10 (硬化波 H1 — CI render-smoke gate)
 

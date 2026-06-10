@@ -1,5 +1,5 @@
 import { VALID_ROLES, VALID_STATUSES, VALID_MOODS, MAX_MOOD_DURATION } from '../systems/constants.js'
-import { BLOCKED_REASONS } from '../systems/classify.js'
+import { AGENT_CARRY_FIELDS, FIELD_SANITIZERS } from './statusFields.js'
 export { VALID_ROLES, VALID_STATUSES, VALID_MOODS, MAX_MOOD_DURATION }
 
 // Monotonic integer seq — prevents duplicate _seq when called multiple times per ms
@@ -46,21 +46,19 @@ export function normalizePost(body) {
         return true
       })
       .slice(0, 50)
-      .map(a => ({
-        role: a.role,
-        // #52 — null/undefined/non-string/unknown status falls back to 'idle' (a known-safe enum
-        // value), so a valid-role agent always renders. The store/roster never receive a raw null.
-        status: VALID_STATUSES.includes(a.status) ? a.status : 'idle',
-        task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
-        label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
-        hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
-        // AVO-110: carry the enum-validated blocked-reason through the POST ingest hop too
-        // (parity with sanitizeAgent); anything else → null (render coerces → blocked-unknown).
-        reasonCode: BLOCKED_REASONS.includes(a.reasonCode) ? a.reasonCode : null,
-        // AVO-106: carry the per-agent active file through the POST /api/status ingest (parity
-        // with sanitizeAgent). String, capped; anything else → null.
-        activeFile: typeof a.activeFile === 'string' ? a.activeFile.slice(0, 200) : null,
-      }))
+      .map(a => {
+        // AVO-146: iterate AGENT_CARRY_FIELDS instead of hand-listing each field.
+        // Semantics preserved byte-identically per AC-1/AC-2 (sanitizers mirror prior inline logic).
+        const carry = {}
+        for (const f of AGENT_CARRY_FIELDS) carry[f] = FIELD_SANITIZERS[f](a[f])
+        return {
+          role: a.role,
+          // #52 — null/undefined/non-string/unknown status falls back to 'idle' (a known-safe enum
+          // value), so a valid-role agent always renders. The store/roster never receive a raw null.
+          status: VALID_STATUSES.includes(a.status) ? a.status : 'idle',
+          ...carry,
+        }
+      })
     const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
     return {
       type: 'office-status',
@@ -79,12 +77,19 @@ export function normalizePost(body) {
     if (val == null) continue
     const isStatus = VALID_STATUSES.includes(val)
     if (!isStatus && typeof val !== 'string') continue
+    // AVO-146: iterate AGENT_CARRY_FIELDS — additive change: shorthand branch now also
+    // carries reasonCode/activeFile (previously silently dropped). task is set specially
+    // (it is the role value when not a status), so apply sanitizer only for the remaining fields.
+    const carry = {}
+    for (const f of AGENT_CARRY_FIELDS) {
+      if (f === 'task') continue  // handled specially below
+      carry[f] = FIELD_SANITIZERS[f](body[f])
+    }
     agents.push({
       role: key,
       task: isStatus ? null : val.slice(0, 200),
       status: isStatus ? val : 'working',
-      label: typeof body.label === 'string' ? body.label.slice(0, 200) : null,
-      hint: typeof body.hint === 'string' ? body.hint.slice(0, 200) : null,
+      ...carry,
     })
   }
   const mood = VALID_MOODS.includes(body.mood) ? body.mood : null

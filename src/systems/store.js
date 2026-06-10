@@ -9,6 +9,7 @@ import { classifyTask, familyToBehavior, decideBehavior } from './classify.js'
 import { FEED_ORIGINS } from './rosterModel.js'
 import { PET_TYPES, nextPetType } from './petState.js'
 import { recordEpisode, isNewBlockedEpisode } from './recurringFailure.js'
+import { AGENT_CARRY_FIELDS } from '../utils/statusFields.js'
 
 export { STATUS_COLORS }
 
@@ -808,13 +809,19 @@ export const useOfficeStore = create((set) => ({
         const activeFileAt = nextActiveFile == null
           ? null
           : (fileChanged ? now : (Number.isFinite(prevExt.activeFileAt) ? prevExt.activeFileAt : now))
+        // AVO-146: iterate AGENT_CARRY_FIELDS for the free-carry fields. activeFile is excluded
+        // here because it carries a DERIVED companion (activeFileAt) computed above — it must be
+        // written as a pair, not as a simple passthrough. Semantics of each field are preserved
+        // byte-identically: task/label/hint/reasonCode all use `u.<field> || null` (same as prior
+        // inline literals); activeFile + activeFileAt remain unchanged.
+        const carryFields = {}
+        for (const f of AGENT_CARRY_FIELDS) {
+          if (f === 'activeFile') continue  // handled separately with its activeFileAt stamp
+          carryFields[f] = u[f] || null
+        }
         ext[u.agentId] = {
           status: u.status,
-          task: u.task,
-          label: u.label,
-          hint: u.hint || null,
-          // AVO-110: blocked-reason token (render maps it to a badge; null → no/blocked-unknown).
-          reasonCode: u.reasonCode || null,
+          ...carryFields,
           // AVO-106: per-agent active file + the freshness stamp the pair-huddle detector reads.
           activeFile: nextActiveFile,
           activeFileAt,

@@ -20,90 +20,18 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 import { scanAndMerge, getSessionStats } from './src/server/scanSessions.mjs'
+// AVO-146: replaced inline normalizePost copy with the canonical src module.
+// This also fixes the #52 divergence: the old inline copy dropped agents with
+// invalid status; the canonical src module coerces them to 'idle' instead.
+// Uses the .mjs extension so Node.js can import it directly at runtime
+// (package "type":"commonjs" prevents importing .js ESM files without transpilation).
+import { normalizePost, nextSeq, VALID_ROLES, VALID_STATUSES } from './src/utils/normalizePost.mjs'
 
-// ─── Inline validation (mirrors src/utils/normalizePost.js + src/systems/constants.js) ─
-// Kept inline so server.mjs has zero dependencies on src/ at runtime for normalizePost.
-// Parity is verified by tests/normalizePost.server.test.js — update BOTH when changing.
-// Note: session scan/merge logic is in src/server/scanSessions.mjs (shared with vite.config.js).
-const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
-const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
-const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
-const MAX_MOOD_DURATION = 3_600_000
-// AVO-110: inlined mirror of classify.js BLOCKED_REASONS (server.mjs keeps zero src/ runtime deps).
-const BLOCKED_REASONS = ['test-run-failed', 'build-failed', 'deps-failed', 'blocked-unknown']
-
-function clampMoodDuration(raw) {
-  if (raw == null) return null
-  const n = Number(raw)
-  return Math.min(Math.max(Number.isFinite(n) ? n : 60000, 1000), MAX_MOOD_DURATION)
-}
-
-// Count working/blocked agents without allocating a throwaway filtered array
-// (mirrors src/utils/normalizePost.js — keep both in sync).
+// Count working/blocked agents — used by the /api/event webhook handler.
 function countActive(agents) {
   let n = 0
   for (const a of agents) if (a.status === 'working' || a.status === 'blocked') n++
   return n
-}
-
-function normalizePost(body) {
-  if (body == null || typeof body !== 'object') body = {}
-  if (body.type === 'office-status') {
-    const seen = new Set()
-    const agents = (Array.isArray(body.agents) ? body.agents : [])
-      .filter(a => {
-        if (!a || typeof a !== 'object') return false
-        if (!VALID_ROLES.includes(a.role) || !VALID_STATUSES.includes(a.status)) return false
-        if (seen.has(a.role)) return false
-        seen.add(a.role)
-        return true
-      })
-      .slice(0, 50)
-      .map(a => ({
-        role: a.role, status: a.status,
-        task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
-        label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
-        hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
-        // AVO-110: parity with src/utils/normalizePost.js — carry the enum-validated blocked-reason.
-        reasonCode: BLOCKED_REASONS.includes(a.reasonCode) ? a.reasonCode : null,
-        // AVO-106: parity with src/utils/normalizePost.js — carry the per-agent active file.
-        activeFile: typeof a.activeFile === 'string' ? a.activeFile.slice(0, 200) : null,
-      }))
-    const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
-    return {
-      type: 'office-status',
-      agents,
-      activeCount: countActive(agents),
-      workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
-      mood,
-      moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
-      source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
-      _seq: nextSeq(),
-    }
-  }
-  const agents = []
-  for (const key of VALID_ROLES) {
-    const val = body[key]
-    if (val == null) continue
-    const isStatus = VALID_STATUSES.includes(val)
-    if (!isStatus && typeof val !== 'string') continue
-    agents.push({
-      role: key,
-      task: isStatus ? null : val.slice(0, 200),
-      status: isStatus ? val : 'working',
-      label: typeof body.label === 'string' ? body.label.slice(0, 200) : null,
-      hint: typeof body.hint === 'string' ? body.hint.slice(0, 200) : null,
-    })
-  }
-  const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
-  return {
-    _seq: nextSeq(), type: 'office-status', agents,
-    activeCount: countActive(agents),
-    workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
-    source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
-    mood,
-    moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
-  }
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -167,14 +95,9 @@ function atomicWrite(filePath, content) {
   }
 }
 
-// Monotonic _seq: plain integer string, always >= the previous value in this process.
-// Number(_seq) / parseInt(_seq,10) both work identically; no suffix to truncate.
-let _seqLast = 0
-function nextSeq() {
-  const now = Date.now()
-  _seqLast = now > _seqLast ? now : _seqLast + 1
-  return String(_seqLast)
-}
+// Monotonic _seq: shared SINGLE counter imported from normalizePost.mjs — /api/status
+// (inside normalizePost) and /api/event (nextSeq below) write the same status file and
+// must ride one clock, or a burst on one endpoint can stale-drop the other's write.
 const isWin = process.platform === 'win32'
 function pathsEqual(a, b) { return isWin ? a.toLowerCase() === b.toLowerCase() : a === b }
 
