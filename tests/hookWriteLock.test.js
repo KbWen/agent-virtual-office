@@ -222,8 +222,23 @@ const { acquireStatusLock, releaseStatusLock } = require('${hookPath}')
 const fs = require('fs')
 const CYCLES = ${CYCLES}
 const FILE   = '${counterFilePath}'
+// CI-flake lesson (2026-06-10, PR #89): production semantics allow acquire to give up
+// after its ~250ms budget and PROCEED UNLOCKED (liveness over consistency). On a 2-core
+// CI runner, 6 workers x 15 cycles exhausts that budget for some worker -> it wrote
+// UNLOCKED -> torn read ("Unexpected end of JSON input") / lost update -> exact-90
+// assertion failed. The property under test is "writes made WHILE HOLDING the lock
+// never lose updates", so the TEST worker retries until it actually holds the lock
+// (10s overall deadline); production keeps its bounded-fallback behavior untouched.
+function acquireOrRetry(deadlineMs) {
+  const deadline = Date.now() + deadlineMs
+  for (;;) {
+    const lock = acquireStatusLock()
+    if (lock.ok) return lock
+    if (Date.now() > deadline) throw new Error('worker: lock not acquired within deadline')
+  }
+}
 for (let i = 0; i < CYCLES; i++) {
-  const lock = acquireStatusLock()
+  const lock = acquireOrRetry(10_000)
   try {
     const data = JSON.parse(fs.readFileSync(FILE, 'utf-8'))
     data.n += 1
