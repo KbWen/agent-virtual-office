@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
-import { getTargetForBehavior, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveFocusFacing } from '../systems/movementSystem'
+import { getTargetForBehavior, pickSocialTarget, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveFocusFacing, SOCIAL_BEHAVIORS } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale, t } from '../i18n'
 import { BlockedReasonBadge } from './blockedReasonBadge'
 import { recurringInfo } from '../systems/recurringFailure'
@@ -9,6 +9,17 @@ import { selectVisibleBubbles, BUBBLE_VISIBLE_CAP } from '../systems/bubbleVisib
 import { stepWalkFrame } from '../systems/walkFrame.js'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
+
+// Pure guard: returns true if a social arriver's TARGET should face back.
+// R1: tracked agents (live externalStatus entry) are NEVER modulated.
+// Also skip agents currently in a group event.
+// Exported for unit-testing without a component mount.
+export function shouldFaceBack(targetExtStatus, targetAgent) {
+  if (targetExtStatus) return false          // R1: tracked → never modulate
+  if (!targetAgent) return false             // agent not in store
+  if (targetAgent.inGroupEvent) return false // group event owns facing
+  return true
+}
 
 // ═══ PIXEL ART SPRITE SYSTEM ═══
 // Each sprite = grid of colored pixels (like RPG Maker / Stardew Valley)
@@ -673,6 +684,7 @@ function AgentCharacter({ agent }) {
   const movingRef = useRef(false)
   const movingStuckRef = useRef(0)
   const pendingBehaviorRef = useRef(null) // deferred behavior for location-based actions
+  const socialTargetRef = useRef(null)   // { targetId, position } captured in doSchedule for social walks; cleared on arrival/abort
   const [walkFrame, setWalkFrame] = useState(0)
   // AVO-128: name tags are revealed only when an agent is active (working/blocked/
   // planning/done) or hovered, and hidden at rest — at idle, identity rides on the
@@ -886,6 +898,36 @@ function AgentCharacter({ agent }) {
           }
         }
       }
+      // Facing-on-arrival: when a SOCIAL walk completes, face toward the social target
+      // (the missing half of chat feel — without this, the arriver keeps the last walk-leg facing).
+      const socialTarget = socialTargetRef.current
+      if (socialTarget && visualPosRef.current) {
+        const facing = calcFacing(
+          visualPosRef.current.x, visualPosRef.current.y,
+          socialTarget.position.x, socialTarget.position.y
+        )
+        store.setAgentFacing(id, facing)
+        // Bonus lever — target faces back: mirror the pass-document foreign-write pattern.
+        // R1 guard: never modulate a tracked agent. Also skip during group events.
+        const s = store
+        const targetAgent = s.agents[socialTarget.targetId]
+        if (shouldFaceBack(s.externalStatus[socialTarget.targetId], targetAgent)) {
+          const priorFacing = targetAgent.facing || 'down'
+          const backFacing = calcFacing(
+            socialTarget.position.x, socialTarget.position.y,
+            visualPosRef.current.x, visualPosRef.current.y
+          )
+          s.setAgentFacing(socialTarget.targetId, backFacing)
+          const duration = pending?.duration ?? 6000
+          scheduleDeferred(() => {
+            const st = useOfficeStore.getState()
+            if (!st.externalStatus[socialTarget.targetId] && !st.agents[socialTarget.targetId]?.inGroupEvent) {
+              st.setAgentFacing(socialTarget.targetId, priorFacing)
+            }
+          }, Math.min(duration * 0.5, 4000))
+        }
+        socialTargetRef.current = null
+      }
     }
   }, [id, startRaf, scheduleDeferred])
 
@@ -950,6 +992,7 @@ function AgentCharacter({ agent }) {
           movingRef.current = false
           movingStuckRef.current = 0
           pendingBehaviorRef.current = null
+          socialTargetRef.current = null  // abort: clear social target so no stale face-on-arrival
           setIsWalking(false)
           if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         } else {
@@ -970,7 +1013,13 @@ function AgentCharacter({ agent }) {
       nextDelay = (Number.isFinite(next.duration) && next.duration > 0) ? next.duration : 8000
 
       // Walk to behavior location
-      const destination = getTargetForBehavior(id, next.behaviorId, store.agents)
+      // For SOCIAL behaviors, pick the peer ONCE here and pass the SAME pick into
+      // getTargetForBehavior (socialTargetOverride) — the walk destination and the
+      // face-toward-on-arrival peer must be the same agent (two independent picks
+      // would walk to B while facing A).
+      const isSocialBehavior = SOCIAL_BEHAVIORS.has(next.behaviorId)
+      const socialPick = isSocialBehavior ? pickSocialTarget(id, store.agents) : null
+      const destination = getTargetForBehavior(id, next.behaviorId, store.agents, socialPick)
       let willWalk = false
       if (destination && visualPosRef.current) {
         const current = visualPosRef.current
@@ -981,10 +1030,14 @@ function AgentCharacter({ agent }) {
             willWalk = true
             movingRef.current = true
             pathRef.current = path.slice(1)
+            // Capture the social target so onWaypointReached can set facing on arrival.
+            socialTargetRef.current = (isSocialBehavior && socialPick) ? socialPick : null
             startWalkTo(path[0])
           }
         }
       }
+      // Walk aborted (same spot or no path) — clear any stale social target ref.
+      if (!willWalk) socialTargetRef.current = null
 
       // For location-based behaviors (coffee, whiteboard, toilet, etc.),
       // defer the behavior label until the character arrives at the destination.
@@ -1050,6 +1103,8 @@ function AgentCharacter({ agent }) {
     if (!sameSpot) {
       const path = calculatePath(current, gt)
       if (path.length > 0) {
+        // Group event hijacks the walk — clear any pending social facing (R1: group event owns behavior)
+        socialTargetRef.current = null
         movingRef.current = true
         pathRef.current = path.slice(1)
         startWalkTo(path[0])
@@ -1086,6 +1141,10 @@ function AgentCharacter({ agent }) {
         movingRef.current = false
         movingStuckRef.current = 0
         pendingBehaviorRef.current = null
+        // Explicitly drop any captured social peer — the abandoned walk's facing target
+        // must never be applied to a LATER unrelated arrival (the next doSchedule resets
+        // this anyway; the explicit clear keeps the invariant local and refactor-proof).
+        socialTargetRef.current = null
         if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         setIsWalking(false)
         timerRef.current = setTimeout(doSchedule, 500)

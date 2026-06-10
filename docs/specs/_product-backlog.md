@@ -77,6 +77,7 @@ last_updated: 2026-06-10
 | AVO-152 | Bundle-size budget gate in CI (fail on >+10% vs committed baseline) | infra | tech-debt | P2 | — | quick-win | Done | stability-wave W5; shipped 2026-06-10 (baseline 450069 B) |
 | AVO-153 | Hook-runtime payload fixture corpus: record REAL Claude Code hook events as fixtures + contract tests pinning the shapes the hook relies on (is_error era vs PostToolUseFailure era, StopFailure matcher) | infra | observability | P1 | docs/specs/hook-runtime-contract.md | feature | Done | stability-wave W4; shipped 2026-06-10; 14 live fixtures + 143 contract tests |
 | AVO-154 | Reconcile hook result-field reads with runtime truth (W4 found: runtime sends `tool_response`, hook reads `tool_result` → toolResult always empty on this runtime; is_error shape on ERROR events not yet captured) | chore | tech-debt | P1 | — | quick-win | Done | shipped 2026-06-11; error events INDUCED+captured (no is_error exists on this runtime → derivation honestly inert); toolResultText dual-read + PowerShell→ops mapping + 26-fixture corpus |
+| AVO-155 | Add same-pick guarantee test for socialTargetOverride | review-finding | social-chat | P2 | — | quick-win | Pending | feat/social-chat-feel review 2026-06-10: `getTargetForBehavior` 4th-param override is untested — flip override to ignore-mode causes 0 test failures; add a test passing a pre-seeded socialTargetOverride and asserting the walk destination orbits that specific peer |
 
 ## Status Key
 
