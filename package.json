@@ -13,6 +13,7 @@
     "start": "node server.mjs",
     "build:single": "vite build --outDir dist-single",
     "serve": "node server.mjs",
+    "smoke": "node scripts/render-smoke.mjs",
     "test": "vitest run",
     "prepublishOnly": "npm test"
   },
@@ -60,6 +61,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "playwright": "^1.60.0",
     "vitest": "^3.2.1"
   }
 }
