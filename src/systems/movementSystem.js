@@ -72,6 +72,12 @@ const OBSTACLE_RECTS = [
 // Main-office obstacles for path line-crossing checks.
 const MAIN_OFFICE_OBSTACLES = OBSTACLE_RECTS.slice(0, 9) // 7 desks + meeting-side whiteboard
 const LOUNGE_OBSTACLES = OBSTACLE_RECTS.slice(9, 12) // WC, bookshelves, coffee machine
+// Research-zone furniture (3 bookshelves + printer), selected by GEOMETRY (inside the
+// research floor band) so the list survives OBSTACLE_RECTS reordering. First soak-gate CI
+// run (2026-06-10) caught designer resting INSIDE bookshelf B: research had no in-zone
+// obstacle routing — straight segments crossed the shelves and any mid-walk pause parked
+// the character inside the graphic (the agent version of the pet wall-phase bug).
+const RESEARCH_OBSTACLES = OBSTACLE_RECTS.filter(r => r.x1 >= 460 && r.y1 >= 424)
 const MEETING_TABLE = OBSTACLE_RECTS[7]
 
 // ─── Walkability functions ──────────────────────────────────────────
@@ -468,6 +474,37 @@ function routeWithinLounge(from, to) {
   return pts
 }
 
+function routeWithinResearch(from, to) {
+  if (!lineHitsAnyRect(from.x, from.y, to.x, to.y, RESEARCH_OBSTACLES)) return [to]
+  // Clear horizontal lane between the bookshelves' bottom (y=460) and the printer's top
+  // (y=488) — mirrors routeWithinLounge's corridor approach. The DESCENT column out of
+  // the lane is obstacle-aware: targets adjacent to furniture (the printer stand spot sits
+  // 2px below the printer body) would otherwise be approached straight through the rect —
+  // shift the column sideways and finish with a horizontal approach at the target's y.
+  const y = 472
+  // Column picker: a vertical column at `cand` between the lane and `targetY` must be
+  // furniture-free AND stay on the research floor — a column shifted past the zone's west
+  // edge (x<469) would be yanked across the office by clampToFloor's zone snapping.
+  const clearColumn = (baseX, targetY) => {
+    for (const dx of [0, -28, 28, -45, 45]) {
+      const cand = baseX + dx
+      if (!isOnFloor(cand, y) || !isOnFloor(cand, targetY)) continue
+      if (getZone(cand, y) !== 'research') continue
+      if (!lineHitsAnyRect(cand, y, cand, targetY, RESEARCH_OBSTACLES)) return cand
+    }
+    return baseX // degraded: direct column (pre-fix behavior)
+  }
+  const pts = []
+  const upX = clearColumn(from.x, from.y)
+  if (upX !== from.x) pts.push(clampToFloor({ x: upX, y: from.y }))
+  pts.push(clampToFloor({ x: upX, y }))
+  const dropX = clearColumn(to.x, to.y)
+  if (dropX !== upX) pts.push(clampToFloor({ x: dropX, y }))
+  if (dropX !== to.x) pts.push(clampToFloor({ x: dropX, y: to.y }))
+  pts.push(to)
+  return pts
+}
+
 function routeWithinMainOffice(from, to) {
   if (!lineHitsAnyDesk(from.x, from.y, to.x, to.y)) return [to]
   const graphPath = findSafePolyline(from, to, MAIN_ROUTE_NODES, MAIN_OFFICE_OBSTACLES)
@@ -482,6 +519,7 @@ function routeWithinZone(from, to, zone) {
   if (zone === 'mainOffice') return routeWithinMainOffice(from, to)
   if (zone === 'meetingRoom') return routeWithinMeetingRoom(from, to)
   if (zone === 'lounge') return routeWithinLounge(from, to)
+  if (zone === 'research') return routeWithinResearch(from, to)
   return [to]
 }
 
