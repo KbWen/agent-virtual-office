@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-10T23:55:00Z
-- **Update Sequence**: 58
+- **Last Updated**: 2026-06-11T01:00:00Z
+- **Update Sequence**: 59
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -80,7 +80,7 @@
   - [hook-io] docs/specs/hook-status-write-lock.md [Shipped]  *(#20 / hardening-wave H3 — bounded-wait RMW lock; multi-process proof)*
   - [office-runtime] docs/specs/structured-error-reasons.md [Shipped]  *(AVO-148 / hardening-wave H5 — event-driven permission-denied / api-rate-limit / api-auth-failed)*
   - [ci-infra] docs/specs/npm-pack-install-smoke.md [Shipped]  *(AVO-151 / stability-wave W3 — pack→install→setup/hook/boot smoke gate)*
-  - [ci-infra] docs/specs/transport-spine-e2e.md [Draft]  *(AVO-150 / stability-wave W2 — real-server API e2e; next)*
+  - [ci-infra] docs/specs/transport-spine-e2e.md [Shipped]  *(AVO-150 / stability-wave W2 — 19-case real-server API e2e; HOME-override isolation)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -144,6 +144,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-avo-150-transport-e2e-2026-06-10 (穩定波 W2 — transport-spine 真實線路 e2e)
+
+- Branch `feat/avo-150-transport-e2e`, feature. Closes AVO-150. Spec `docs/specs/transport-spine-e2e.md` [shipped]. The API 脊柱 (POST /api/status → normalizePost.mjs → 檔案 → GET merge; POST /api/event) now has a REAL-PROCESS gate — the H2 .mjs copy and the _seq single-clock fix live exactly there and were unit-only before.
+- **Shipped**: `tests/serverTransportE2E.test.js` (19 cases, ~300ms, in `npm test`): boots `node server.mjs` with **HOME/USERPROFILE→temp isolation** (zero production change; in-suite assertion proves the temp `.claude/office-status.json` is created and the developer's real file untouched); canonical `AGENT_CARRY_FIELDS` survival LOOP (future fields auto-covered) + 3 H5 reasonCode tokens + full enum cross-check + invalid-token→null; shorthand POST; invalid-role drop; **#52 coerce-to-idle on the real server path**; **_seq strict-monotonic across alternating /api/status + /api/event** (the H2 clock-split regression target); malformed body → 4xx (both bounds) + server-alive follow-up; /api/health.
+- **Review (fresh)**: PASS — all ACs PROVEN; sensitivity probe (flip #52 expectation → explicit failure); 1 MED advisory (Windows SIGTERM coercion — server has no grandchildren, inert) + 2 LOW accepted.
+- **Tests**: 1543 → **1562** (+19); e2e ×3 non-flaky. Tests: Pass
 
 ### Ship-feat-avo-151-pack-smoke-2026-06-10 (穩定波 W3 — npm-pack 安裝煙測)
 

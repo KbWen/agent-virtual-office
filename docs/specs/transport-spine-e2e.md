@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 title: AVO-150 — Transport-spine e2e (real server, real wire)
 created: 2026-06-10
 last_updated: 2026-06-10
