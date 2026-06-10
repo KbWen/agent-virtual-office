@@ -6,6 +6,7 @@ import { eventBubble, charName, useLocale, t } from '../i18n'
 import { BlockedReasonBadge } from './blockedReasonBadge'
 import { recurringInfo } from '../systems/recurringFailure'
 import { selectVisibleBubbles, BUBBLE_VISIBLE_CAP } from '../systems/bubbleVisibility.js'
+import { stepWalkFrame } from '../systems/walkFrame.js'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
 
@@ -34,6 +35,15 @@ const BLUSH = '#FFB6C1'
 
 // Base character facing down (idle frame 0)
 // Row by row: 0=top of head ... 19=feet
+
+// Fast-forward helper for the walk loop: snap the visual position onto the current leg's
+// target. Returns true so callers can use it inline in a condition (see the hidden-tab /
+// jank fast-forward in animate()). Mutates vp deliberately — it IS the live position ref.
+function dist0FastForward(vp, tp) {
+  vp.x = tp.x
+  vp.y = tp.y
+  return true
+}
 
 function getBaseSprite(hairColor, clothesColor, hairStyle, gender = 'male') {
   // Start with empty grid
@@ -768,24 +778,21 @@ function AgentCharacter({ agent }) {
       lastFrameWallTimeRef.current = Date.now()
 
       if (!lastTimeRef.current) lastTimeRef.current = timestamp
-      const dt = Math.min((timestamp - lastTimeRef.current) / 1000, 0.1)
+      const gapMs = timestamp - lastTimeRef.current
+      const dt = Math.min(gapMs / 1000, 0.1)
       lastTimeRef.current = timestamp
 
       const vp = visualPosRef.current
       const tp = targetPosRef.current
-      const dx = tp.x - vp.x
-      const dy = tp.y - vp.y
-      const dist = Math.hypot(dx, dy)
 
-      if (dist > 1.5) {
-        const step = WALK_SPEED * dt
-        if (step >= dist) {
-          vp.x = tp.x
-          vp.y = tp.y
-        } else {
-          vp.x += (dx / dist) * step
-          vp.y += (dy / dist) * step
-        }
+      // Pure per-frame math (src/systems/walkFrame.js) so the hidden-tab / jank
+      // fast-forward semantics are unit-tested: a timestamp gap > GAP_SNAP_MS (rAF was
+      // frozen — hidden tab or main-thread stall) snaps this leg to its target instead of
+      // resuming a slow glide from the frozen pile (owner bug 2026-06-11: "8人只看到6人",
+      // frozen walkers stacked, then visibly drifted apart on tab return).
+      const arrived = stepWalkFrame(vp, tp, dt, gapMs, WALK_SPEED)
+
+      if (!arrived) {
         // Throttle React state updates to every other frame (~30fps)
         frameSkipRef.current = !frameSkipRef.current
         if (frameSkipRef.current) {
@@ -793,9 +800,7 @@ function AgentCharacter({ agent }) {
         }
         rafRef.current = requestAnimationFrame(animate)
       } else {
-        // Arrived — snap and stop RAF
-        vp.x = tp.x
-        vp.y = tp.y
+        // Arrived — snap is already applied by stepWalkFrame; stop RAF and chain on.
         setRenderPos({ x: tp.x, y: tp.y })
         setIsWalking(false)
         rafRef.current = null
@@ -824,6 +829,13 @@ function AgentCharacter({ agent }) {
       // are being dropped somewhere (tab throttling, HMR, an exception in animate()).
       useOfficeStore.getState().recordWatchdogRestart()
       if (import.meta.env?.DEV) console.warn(`[watchdog] restarted stalled walk loop for "${id}"`)
+      // Fast-forward the frozen leg before restarting (same rationale as the gap snap in
+      // animate): a visible ≥1.5s stall means the sprite has been parked — possibly inside
+      // another frozen walker — so resume FROM the leg target, not with a glide from the pile.
+      if (visualPosRef.current && targetPosRef.current) {
+        dist0FastForward(visualPosRef.current, targetPosRef.current)
+        setRenderPos({ x: targetPosRef.current.x, y: targetPosRef.current.y })
+      }
       startRaf()
     }, 1000)
     return () => clearInterval(watchdog)
