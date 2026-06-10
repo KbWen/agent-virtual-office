@@ -67,7 +67,7 @@ last_updated: 2026-06-10
 | AVO-143 | applyExternalStatus: skip no-op agent re-allocation (don't re-render all agents each poll) | chore | tech-debt | P3 | — | quick-win | Pending | — |
 | AVO-144 | Sustained inter-agent separation in free movement (agents pass THROUGH each other in transit; RAF loop has no per-frame separation — only gather targets are deconflicted) | product | game-feel | P2 | — | feature | Pending | — |
 | #20 | Hook read-modify-write atomic | chore | tech-debt | P1 | — | quick-win | Pending | reactivated as hardening-wave H3 (2026-06-10) |
-| AVO-145 | CI render-smoke gate (headless load-the-page in ci.yml + consolidate shot scripts into one tracked harness) | infra | tech-debt | P0 | — | feature | Pending | hardening-wave H1 |
+| AVO-145 | CI render-smoke gate (headless load-the-page in ci.yml + consolidate shot scripts into one tracked harness) | infra | tech-debt | P0 | docs/specs/ci-render-smoke.md | feature | Done | hardening-wave H1; shipped 2026-06-10 |
 | AVO-146 | Transport field-whitelist unification (reasonCode/activeFile × 5-6 independent whitelists → one shared schema module) | chore | tech-debt | P0 | — | feature | Pending | hardening-wave H2 |
 | AVO-147 | Validator zero-noise + repo hygiene (archive leftover shipped logs, backfill sections, gitignore local tooling) | chore | tech-debt | P1 | — | quick-win | In Progress | hardening-wave H4 (first) |
 | AVO-148 | Structured error payload for blocked reasons (errno/HTTP-status hook field → honest permission-blocked/auth-error/rate-limit) | product | info-density | P1 | — | feature | Pending | hardening-wave H5; AVO-110 Phase-2; upgrades AVO-117 |

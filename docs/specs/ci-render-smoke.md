@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 title: AVO-145 — CI render-smoke gate (load-the-page in CI)
 created: 2026-06-10
 last_updated: 2026-06-10
