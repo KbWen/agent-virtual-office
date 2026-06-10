@@ -316,19 +316,21 @@ function findBestCorridor(from, to) {
     const d = Math.hypot(from.x - c.x, from.y - c.y) + Math.hypot(c.x - to.x, c.y - to.y)
     if (d < bestDist) { bestDist = d; best = c }
   }
-  // Add jitter so multiple agents don't stack on the same corridor pixel
-  if (best) return { x: best.x + (Math.random() - 0.5) * CORRIDOR_JITTER, y: best.y + (Math.random() - 0.5) * 12 }
-  return best
-}
-
-// Find the nearest corridor waypoint to a position (for pre-door routing)
-function nearestCorridor(pos) {
-  let best = CORRIDORS[2], bestDist = Infinity  // default to center
-  for (const c of CORRIDORS) {
-    const d = Math.hypot(pos.x - c.x, pos.y - c.y)
-    if (d < bestDist) { bestDist = d; best = c }
+  if (!best) return null
+  // Anti-stack jitter, VALIDATED: the corridor point was chosen because BOTH its segments
+  // clear the desks — an unvalidated jitter (the old code) could push it just enough for a
+  // segment to clip a desk/whiteboard corner (fuzz-observed: "crosses opsDesk", "crosses
+  // whiteboard" — the routeWithinMainOffice fallback's known rare hole). Accept a jittered
+  // candidate only when it keeps the floor, avoids furniture, and BOTH segments stay
+  // clear; otherwise fall back to the exact validated point (never worse than validated).
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const cand = { x: best.x + (Math.random() - 0.5) * CORRIDOR_JITTER, y: best.y + (Math.random() - 0.5) * 12 }
+    if (!isOnFloor(cand.x, cand.y) || isOnObstacle(cand.x, cand.y)) continue
+    if (lineHitsAnyDesk(from.x, from.y, cand.x, cand.y)) continue
+    if (lineHitsAnyDesk(cand.x, cand.y, to.x, to.y)) continue
+    return cand
   }
-  return { x: best.x + (Math.random() - 0.5) * 20, y: best.y + (Math.random() - 0.5) * 10 }
+  return { x: best.x, y: best.y }
 }
 
 function findSafePolyline(from, to, nodes, obstacles) {
@@ -365,7 +367,7 @@ function findSafePolyline(from, to, nodes, obstacles) {
   // Anti-stacking jitter (owner bug 2026-06-11: "研究員跟不知道誰疊在一起"): the Dijkstra
   // nodes are EXACT shared coordinates — two agents traversing the same aisle at the same
   // moment landed on the SAME pixel (live-captured: pm and dev both at (300,180), dist 0).
-  // findBestCorridor/nearestCorridor already jitter; this graph path did not. Offset each
+  // findBestCorridor already jitters (validated, see above); this graph path did not. Offset each
   // INTERMEDIATE node (never the destination), accepting a candidate only when it stays on
   // the floor, off furniture, AND both adjacent segments stay obstacle-free — otherwise
   // fall back to the exact node, so a path is NEVER worse than today's. Chain validation:
@@ -511,8 +513,12 @@ function routeWithinMainOffice(from, to) {
   if (graphPath) return graphPath
   const corridor = findBestCorridor(from, to)
   if (corridor) return [corridor, to]
+  // Last resort — findSafePolyline AND every single-corridor relay failed, meaning the
+  // target is wedged against furniture with no clean route by construction (see the fuzz
+  // test's MARGIN rationale). Relay via the center corridor as before — but as a COPY
+  // (pushing the shared CORRIDORS[2] object into paths was latent aliasing).
   const mid = CORRIDORS[2]
-  return [mid, to]
+  return [{ x: mid.x, y: mid.y }, to]
 }
 
 function routeWithinZone(from, to, zone) {

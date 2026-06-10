@@ -85,16 +85,17 @@ describe('planted violations are caught', () => {
     expect(r.violations.sustainedStack[0].pair).toBe('dev+pm')
   })
 
-  it('group-event stacks are reported as NON-FAILING warnings (designed-close theater)', () => {
+  it('group-event stacks FAIL again and stay group-tagged (arrival geometry fixed 2026-06-11)', () => {
+    // The store chokepoints now deconflict event targets against bystanders AND side-step
+    // react-in-place participants — a group stack therefore means a real regression.
     const s = timeline(STACK_SUSTAIN_MS * 2, 250, {
       pm: still(660, 205, { group: true }),
       dev: still(662, 210, { group: true }),
     })
     const r = evaluateSoak(s)
-    expect(r.violations.sustainedStack).toHaveLength(0)
-    expect(r.warnings.groupStack).toHaveLength(1)
-    expect(r.warnings.groupStack[0].group).toBe(true)
-    expect(r.pass).toBe(true) // warning never fails the gate
+    expect(r.violations.sustainedStack).toHaveLength(1)
+    expect(r.violations.sustainedStack[0].group).toBe(true)
+    expect(r.pass).toBe(false)
   })
 
   it('frozen walker: isMoving=true with still pixels past 90s (the frozen-pm class)', () => {

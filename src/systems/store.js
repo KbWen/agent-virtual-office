@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
-import { HOME_POSITIONS, OVERFLOW_POSITIONS, OVERFLOW_SLOT_BY_XY, clampToFloor, avoidOverlap } from './movementSystem.js'
+import { HOME_POSITIONS, OVERFLOW_POSITIONS, OVERFLOW_SLOT_BY_XY, clampToFloor, avoidOverlap, visuallyOverlapping } from './movementSystem.js'
 import { randomBubble, setNameResolver, behaviorLabel } from '../i18n'
 import { generateContextBubble } from './contextBubble'
 import { detectProjectMode } from './platformDetect'
@@ -272,6 +272,21 @@ const ROLE_GROWTH_ITEMS = {
   gate: 'sticky', designer: 'sticky',
 }
 
+// Every OTHER agent's claimed standing spot, for group-target deconfliction (AVO-156/157
+// follow-up). Resolution mirrors movementSystem.getOccupiedPositions: a walker's journey
+// END > a group destination > the current leg target > the standing position. Excluding
+// only in-group agents (the old behavior) let event actors be parked on BYSTANDERS.
+function collectClaimedSpots(agents, excludeIds) {
+  const spots = []
+  for (const oid of Object.keys(agents)) {
+    if (excludeIds.has(oid)) continue
+    const a = agents[oid]
+    const pos = a.journeyTarget || a.groupTarget || a.targetPosition || a.position
+    if (pos) spots.push(pos)
+  }
+  return spots
+}
+
 
 const initAgents = (mode) => {
   const roster = characters[mode] || characters.agentcortex
@@ -383,16 +398,23 @@ export const useOfficeStore = create((set) => ({
     set((s) => {
       if (!s.agents[id]) return s
       let gt = null
+      const claimed = collectClaimedSpots(s.agents, new Set([id]))
       if (groupTarget) {
-        // clamp to floor, then push off OTHER in-group agents so single-agent event actors
-        // (coffee-spill, food bringer, dog) don't land on a participant already gathered.
-        const occupied = []
-        for (const oid of Object.keys(s.agents)) {
-          if (oid === id) continue
-          const a = s.agents[oid]
-          if (a.inGroupEvent && (a.groupTarget || a.position)) occupied.push(a.groupTarget || a.position)
+        // Clamp to floor, then push the target clear of EVERY other agent's claimed
+        // standing spot — in-group or not. The old occupied set held only in-group agents,
+        // so an event actor could be parked right on a BYSTANDER quietly working at their
+        // desk (nightly soak catch 2026-06-10: an event participant standing 23px from a
+        // non-participant at dev's chair for the whole event — a full visual stack).
+        gt = avoidOverlap(clampToFloor(groupTarget), claimed)
+      } else {
+        // React-in-place participant (spiller, caller, dog-reactor): if the event happens
+        // to FREEZE them mid-transit while visually overlapping someone, give them a short
+        // honest side-step instead of locking the stack in for the event's duration.
+        // R1-safe: pickParticipants never selects tracked working/blocked agents.
+        const myPos = s.agents[id].position
+        if (myPos && claimed.some(p => visuallyOverlapping(myPos, p))) {
+          gt = avoidOverlap({ x: myPos.x, y: myPos.y }, claimed)
         }
-        gt = avoidOverlap(clampToFloor(groupTarget), occupied)
       }
       return {
         agents: {
@@ -484,16 +506,31 @@ export const useOfficeStore = create((set) => ({
       const agents = { ...s.agents }
       // Deconflict gather targets so participants never stack on one cell (the reported "4 agents
       // piled up, one disappeared" — SVG paints opaque sprites in y-order, so an exact overlap fully
-      // hides the lower agent). Clamp to floor, then push each target ≥ MIN_AGENT_DIST off the ones
-      // already assigned in THIS batch (avoidOverlap re-clamps to floor too). One chokepoint covers
-      // every gather event (standup / meetings / tea-break / deploy / boss-visit …).
-      const assigned = []
+      // hides the lower agent). Clamp to floor, then push each target clear of the visual ellipse of
+      // (a) every spot already assigned in THIS batch AND (b) every NON-participant's claimed
+      // standing spot — the old code seeded `assigned` empty, so a gather formed right on top of a
+      // bystander quietly working beside the gather area (same hole as setAgentGroupEvent's, caught
+      // by the nightly soak 2026-06-10). One chokepoint covers every gather event.
+      const batchIds = new Set(updates.map(u => u.id))
+      const assigned = collectClaimedSpots(agents, batchIds)
       for (const { id, behavior, expression, bubble, groupTarget } of updates) {
         if (!agents[id]) continue
         let gt = null
         if (groupTarget) {
           gt = avoidOverlap(clampToFloor(groupTarget), assigned)
           assigned.push(gt)
+        } else {
+          // React-in-place batch participant: side-step if frozen overlapping someone
+          // (mirrors setAgentGroupEvent); either way their spot is CLAIMED so later batch
+          // entries can't be assigned on top of them (batch ids are excluded from the
+          // outsider seed above — without this push they'd be invisible).
+          const myPos = agents[id].position
+          if (myPos && assigned.some(p => visuallyOverlapping(myPos, p))) {
+            gt = avoidOverlap({ x: myPos.x, y: myPos.y }, assigned)
+            assigned.push(gt)
+          } else if (myPos) {
+            assigned.push(myPos)
+          }
         }
         agents[id] = {
           ...agents[id],

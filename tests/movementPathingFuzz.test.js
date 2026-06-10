@@ -1,5 +1,23 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { calculatePath } from '../src/systems/movementSystem.js'
+
+// Seed Math.random (established mulberry32 idiom, cf. movementPathingDeep): calculatePath
+// consumes GLOBAL randomness (corridor/door/polyline jitter), so point pairs were seeded
+// but routes were not — a failure could never be reproduced. One unlucky unseeded jitter
+// burst (2026-06-10) produced "crosses opsDesk/whiteboard" via the then-unvalidated
+// findBestCorridor jitter; with both RNGs deterministic, any future failure replays.
+function __mulberry32(seed) {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+const __realRandom = Math.random
+beforeAll(() => { Math.random = __mulberry32(0xf02baa11) })
+afterAll(() => { Math.random = __realRandom })
 
 // Property-style fuzz over hundreds of randomly generated room points (seeded, so any
 // failure reproduces). The deep test only checks 22 hand-picked anchors; this probes the
@@ -120,5 +138,36 @@ describe('movement pathing fuzz — random room-to-room routes stay walkable', (
 
     expect(checked, 'generated enough clean sample points').toBeGreaterThan(500)
     expect(failures, `pathing violations:\n${failures.join('\n')}`).toEqual([])
+  }, 15_000)
+
+  it('corner-hugging pairs (the corridor-fallback clip class) never cross furniture', () => {
+    // The one observed wild failure clipped desk/whiteboard CORNERS via the then-
+    // unvalidated findBestCorridor jitter. Stress exactly that class: endpoints parked
+    // just outside the safety margin of every main-office furniture corner, all pairs
+    // crossing the room (forcing relay routing), full-segment sampling via firstViolation.
+    const D = MARGIN + 2 // just outside the clean-point margin
+    const corners = []
+    for (const r of OBSTACLE_RECTS.slice(0, 9)) { // the 7 desks + meeting table + whiteboard
+      for (const p of [
+        { x: r.x1 - D, y: r.y1 - D }, { x: r.x2 + D, y: r.y1 - D },
+        { x: r.x1 - D, y: r.y2 + D }, { x: r.x2 + D, y: r.y2 + D },
+      ]) {
+        if (onFloor(p) && !obstacleAt(p)) corners.push(p)
+      }
+    }
+    expect(corners.length).toBeGreaterThan(15)
+    const failures = []
+    for (let i = 0; i < corners.length; i++) {
+      for (let j = 0; j < corners.length; j++) {
+        if (i === j) continue
+        const violation = firstViolation(corners[i], corners[j])
+        if (violation) {
+          failures.push(`(${corners[i].x},${corners[i].y})->(${corners[j].x},${corners[j].y}) ${violation.kind} at (${violation.at.x.toFixed(1)},${violation.at.y.toFixed(1)})`)
+          if (failures.length >= 5) break
+        }
+      }
+      if (failures.length >= 5) break
+    }
+    expect(failures, `corner-pair violations:\n${failures.join('\n')}`).toEqual([])
   }, 15_000)
 })

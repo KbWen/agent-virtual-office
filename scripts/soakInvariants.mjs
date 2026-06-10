@@ -28,12 +28,12 @@ export const MAX_VIOLATIONS_PER_KIND = 20
 
 export function evaluateSoak(samples) {
   const v = { teleport: [], sustainedStack: [], frozenWalker: [], offFloorRest: [] }
-  // Reported but non-failing (nightly run #2, 2026-06-10: a scripted officeLife event —
-  // helper-rushes-over beat — parked two GROUP participants 23px apart for its 30-60s
-  // duration). That is designed-close theater, a different class from the owner's ambient
-  // standing stacks; failing nightly on it would teach everyone to ignore the gate.
-  // The event-arrival geometry should still learn the ellipse — tracked as a chip.
-  const warnings = { groupStack: [] }
+  // GROUP-tagged stacks fail again (re-tightened 2026-06-11): both arrival-geometry holes
+  // behind the nightly-run-#2 catch are closed at the store chokepoints — event targets now
+  // deconflict against EVERY claimed standing spot (bystanders included), and react-in-place
+  // participants side-step when an event would freeze them mid-overlap. A group stack now
+  // means a real regression in that machinery; the `group` tag remains for instant triage.
+  const warnings = { groupStack: [] }  // kept in the report shape; empty unless re-demoted
   const push = (kind, entry) => { if (v[kind].length < MAX_VIOLATIONS_PER_KIND) v[kind].push(entry) }
 
   // Forensic tails: rolling last-N samples per agent, attached to every violation so a
@@ -122,12 +122,7 @@ export function evaluateSoak(samples) {
           if (!pairClose[k]) pairClose[k] = { since: s.t, fired: false }
           if (!pairClose[k].fired && s.t - pairClose[k].since >= STACK_SUSTAIN_MS) {
             pairClose[k].fired = true
-            const entry = { pair: k, tSec: Math.round(s.t / 1000), dist: Math.round(d), at: `${Math.round(a.x)},${Math.round(a.y)}`, group: !!(a.group || b.group), tailA: tailOf(A), tailB: tailOf(B) }
-            if (entry.group) {
-              if (warnings.groupStack.length < MAX_VIOLATIONS_PER_KIND) warnings.groupStack.push(entry)
-            } else {
-              push('sustainedStack', entry)
-            }
+            push('sustainedStack', { pair: k, tSec: Math.round(s.t / 1000), dist: Math.round(d), at: `${Math.round(a.x)},${Math.round(a.y)}`, group: !!(a.group || b.group), tailA: tailOf(A), tailB: tailOf(B) })
           }
         } else if (d >= STACK_RELEASE_PX || !bothAtRest) {
           delete pairClose[k]
