@@ -14,7 +14,7 @@
 import { routeExternalAgents, distributeFallbackCount, routeTaskToAgent } from './agentRouter.js'
 import { pushEventBatch, setMoodOverride, resetMood } from '../systems/moodEngine.js'
 import { VALID_ROLES, VALID_STATUSES, VALID_MOODS, EFFORT_LEVELS, STATUS_POLL_INTERVAL } from '../systems/constants.js'
-import { BLOCKED_REASONS } from '../systems/classify.js'
+import { sanitizeCarryFields } from '../utils/statusFields.js'
 
 // ─── Message normalization ─────────────────────────────────────────────
 
@@ -68,13 +68,10 @@ function sanitizeAgent(a) {
   // and applyExternalStatus / routeExternalAgents both depend on it. Cap it: the
   // slug originates from a filename and is not fully trusted.
   const session = typeof a.session === 'string' ? a.session.slice(0, SLUG_CAP) : null
-  // AVO-110: validate the blocked-reason against the enum at the trust boundary (the status
-  // file is not fully trusted); anything else → null (render coerces null → blocked-unknown).
-  const reasonCode = BLOCKED_REASONS.includes(a.reasonCode) ? a.reasonCode : null
-  // AVO-106: per-agent active file (drives the pair-programming huddle). Untrusted in-browser
-  // channels reach here, so cap it like task/label; non-string → null.
-  const activeFile = capStr(a.activeFile)
-  return { role, status: a.status, task: capStr(a.task), label: capStr(a.label), hint: capStr(a.hint), session, reasonCode, activeFile }
+  // AVO-146: iterate AGENT_CARRY_FIELDS via sanitizeCarryFields — semantics identical to the
+  // prior inline logic (capStr for task/label/hint/activeFile; enum-validate for reasonCode).
+  const carry = sanitizeCarryFields(a)
+  return { role, status: a.status, session, ...carry }
 }
 
 // AVO-108: validate a token-usage object from any channel. Returns {ctx,out,model} with

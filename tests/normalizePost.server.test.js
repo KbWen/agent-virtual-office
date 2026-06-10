@@ -1,9 +1,18 @@
 /**
- * Parity test: server.mjs inline normalizePost vs canonical src/utils/normalizePost.js
+ * AVO-146: server.mjs normalizePost — behavioral regression suite.
  *
- * server.mjs intentionally keeps an inline copy to stay zero-dependency.
- * This file runs the same inputs against both implementations to catch drift.
- * When either copy changes, update BOTH and verify this suite still passes.
+ * Prior to AVO-146, server.mjs kept an inline copy of normalizePost that:
+ *   (a) required a byte-drift guard to stay in sync (fragile),
+ *   (b) had a LIVE #52 divergence: the inline copy dropped agents with an
+ *       invalid/missing status; the canonical src/utils/normalizePost.js coerces
+ *       them to 'idle' instead.
+ *
+ * After AVO-146, server.mjs imports the canonical module directly. This file:
+ *   - Removes the embedded serverNormalizePost copy and byte-drift guard (AC-5).
+ *   - Keeps all behavioral cases, now running against the canonical import (AC-5).
+ *   - Adds an import-presence assertion: verifies server.mjs uses the canonical
+ *     module and does NOT define its own normalizePost (AC-3 + AC-5).
+ *   - Adds an explicit #52 regression test on the server path (AC-3).
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -11,98 +20,8 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { normalizePost as canonical } from '../src/utils/normalizePost.js'
 
-// ── Inline copy from server.mjs ────────────────────────────────────────────
-// MUST stay byte-for-byte identical to the normalizePost function in server.mjs.
-// Differences in _seq format, filter logic, or field handling will be caught
-// by the _seq format assertion below (toMatch(/^\d+$/)) and the toEqual comparison.
-const VALID_ROLES    = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
-const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
-const VALID_MOODS    = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
-const MAX_MOOD_DURATION = 3_600_000
-const BLOCKED_REASONS = ['test-run-failed', 'build-failed', 'deps-failed', 'blocked-unknown']
-
-function clampMoodDuration(raw) {
-  if (raw == null) return null
-  const n = Number(raw)
-  return Math.min(Math.max(Number.isFinite(n) ? n : 60000, 1000), MAX_MOOD_DURATION)
-}
-
-// Mirrors server.mjs's countActive — counts working/blocked agents without
-// allocating a throwaway filtered array.
-function countActive(agents) {
-  let n = 0
-  for (const a of agents) if (a.status === 'working' || a.status === 'blocked') n++
-  return n
-}
-
-let _seqLast = 0
-function nextSeq() {
-  const now = Date.now()
-  _seqLast = now > _seqLast ? now : _seqLast + 1
-  return String(_seqLast)
-}
-
-function serverNormalizePost(body) {
-  if (body == null || typeof body !== 'object') body = {}
-  if (body.type === 'office-status') {
-    const seen = new Set()
-    const agents = (Array.isArray(body.agents) ? body.agents : [])
-      .filter(a => {
-        if (!a || typeof a !== 'object') return false
-        if (!VALID_ROLES.includes(a.role) || !VALID_STATUSES.includes(a.status)) return false
-        if (seen.has(a.role)) return false
-        seen.add(a.role)
-        return true
-      })
-      .slice(0, 50)
-      .map(a => ({
-        role: a.role, status: a.status,
-        task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
-        label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
-        hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
-        // AVO-110: parity with src/utils/normalizePost.js — carry the enum-validated blocked-reason.
-        reasonCode: BLOCKED_REASONS.includes(a.reasonCode) ? a.reasonCode : null,
-        // AVO-106: parity with src/utils/normalizePost.js — carry the per-agent active file.
-        activeFile: typeof a.activeFile === 'string' ? a.activeFile.slice(0, 200) : null,
-      }))
-    const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
-    return {
-      type: 'office-status',
-      agents,
-      activeCount: countActive(agents),
-      workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
-      mood,
-      moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
-      source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
-      _seq: nextSeq(),
-    }
-  }
-  const agents = []
-  for (const key of VALID_ROLES) {
-    const val = body[key]
-    if (val == null) continue
-    const isStatus = VALID_STATUSES.includes(val)
-    if (!isStatus && typeof val !== 'string') continue
-    agents.push({
-      role: key,
-      task: isStatus ? null : val.slice(0, 200),
-      status: isStatus ? val : 'working',
-      label: typeof body.label === 'string' ? body.label.slice(0, 200) : null,
-      hint: typeof body.hint === 'string' ? body.hint.slice(0, 200) : null,
-    })
-  }
-  const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
-  return {
-    _seq: nextSeq(), type: 'office-status', agents,
-    activeCount: countActive(agents),
-    workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
-    source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
-    mood,
-    moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
-  }
-}
-// ── End inline copy ────────────────────────────────────────────────────────
-
+// Behavioral cases — identical to the prior suite but now run against the
+// REAL canonical module (the embedded copy has been removed per AC-5).
 const CASES = [
   { dev: 'working' },
   { dev: 'writing tests' },
@@ -150,60 +69,59 @@ const CASES = [
   { type: 'office-status', agents: [], mood: '<bad>', moodDuration: 30000 },
 ]
 
-describe('normalizePost server/canonical parity', () => {
+describe('normalizePost canonical — behavioral cases (AC-5 regression guard)', () => {
   for (const input of CASES) {
     it(JSON.stringify(input).slice(0, 80), () => {
-      const a = canonical(input)
-      const b = serverNormalizePost(input)
-      const { _seq: _a, ...ra } = a
-      const { _seq: _b, ...rb } = b
-      expect(ra).toEqual(rb)
-      // _seq must be a plain integer string (no '.counter' suffix) in both copies.
-      // This assertion would catch format divergence between server.mjs and src/utils/normalizePost.js.
-      const SEQ_RE = /^\d+$/
-      expect(_a).toMatch(SEQ_RE)
-      expect(_b).toMatch(SEQ_RE)
+      const result = canonical(input)
+      // _seq must be a plain integer string (no suffix).
+      expect(result._seq).toMatch(/^\d+$/)
+      // type is always 'office-status'
+      expect(result.type).toBe('office-status')
+      // agents is always an array
+      expect(Array.isArray(result.agents)).toBe(true)
     })
   }
 })
 
-// ── Source-drift guard ──────────────────────────────────────────────────────
-// The behavioral CASES above only exercise the embedded `serverNormalizePost`
-// copy — if server.mjs's REAL normalizePost drifts but this file's copy is not
-// updated, the behavioral tests silently keep passing against the stale copy.
-// This test reads server.mjs's actual source and asserts the function body is
-// byte-identical (whitespace-normalized) to the embedded copy, closing that gap.
-describe('normalizePost embedded copy matches server.mjs source', () => {
-  function extractFnBody(source, fnName) {
-    const startMarker = `function ${fnName}(`
-    const start = source.indexOf(startMarker)
-    if (start === -1) throw new Error(`${fnName} not found in source`)
-    // Walk braces from the first '{' after the signature to find the matching close.
-    let i = source.indexOf('{', start)
-    if (i === -1) throw new Error(`${fnName} body brace not found`)
-    let depth = 0
-    for (; i < source.length; i++) {
-      const ch = source[i]
-      if (ch === '{') depth++
-      else if (ch === '}') {
-        depth--
-        if (depth === 0) return source.slice(start, i + 1)
-      }
-    }
-    throw new Error(`${fnName} body not balanced`)
-  }
-  // Collapse all runs of whitespace so cosmetic indentation differences between
-  // the two files (test uses different indentation) don't cause false failures —
-  // only real logic differences are flagged.
-  const norm = (s) => s.replace(/\s+/g, ' ').trim()
+// ── AC-3: #52 regression — server path now coerces invalid status → 'idle' ──────────────
+// The old server.mjs inline copy dropped agents whose status was missing/invalid; the
+// canonical src module keeps them and coerces to 'idle'. This test proves the unification.
+describe('normalizePost — #52 regression: invalid status coerced to idle (AC-3)', () => {
+  it('full format: missing status → agent kept with status=idle', () => {
+    const r = canonical({ type: 'office-status', agents: [{ role: 'dev' }] })
+    expect(r.agents).toHaveLength(1)
+    expect(r.agents[0].status).toBe('idle')
+  })
+  it('full format: null status → agent kept with status=idle', () => {
+    const r = canonical({ type: 'office-status', agents: [{ role: 'dev', status: null }] })
+    expect(r.agents).toHaveLength(1)
+    expect(r.agents[0].status).toBe('idle')
+  })
+  it('full format: unknown status string → agent kept with status=idle', () => {
+    const r = canonical({ type: 'office-status', agents: [{ role: 'dev', status: 'hacking' }] })
+    expect(r.agents).toHaveLength(1)
+    expect(r.agents[0].status).toBe('idle')
+  })
+  it('full format: valid role + valid status → kept as-is (no regression)', () => {
+    const r = canonical({ type: 'office-status', agents: [{ role: 'dev', status: 'working' }] })
+    expect(r.agents[0].status).toBe('working')
+  })
+})
 
-  it('serverNormalizePost is logically identical to server.mjs normalizePost', () => {
-    const here = path.dirname(fileURLToPath(import.meta.url))
-    const serverSrc = readFileSync(path.join(here, '..', 'server.mjs'), 'utf-8')
-    const testSrc = readFileSync(fileURLToPath(import.meta.url), 'utf-8')
-    const real = extractFnBody(serverSrc, 'normalizePost')
-    const embedded = extractFnBody(testSrc, 'serverNormalizePost')
-    // Rename the embedded function so only the body (not the name) is compared.
-    expect(norm(embedded.replace('serverNormalizePost', 'normalizePost'))).toBe(norm(real))
+// ── AC-3 + AC-5: server.mjs import-presence assertion ────────────────────────────────────
+// Assert that server.mjs (a) imports the canonical module and (b) does NOT define its own
+// normalizePost function, confirming the inline copy has been deleted.
+describe('server.mjs imports canonical normalizePost (AC-3 + AC-5)', () => {
+  const here = path.dirname(fileURLToPath(import.meta.url))
+  const serverSrc = readFileSync(path.join(here, '..', 'server.mjs'), 'utf-8')
+
+  it('server.mjs contains the canonical import statement', () => {
+    // Accepts both .js and .mjs — the .mjs shim is required for Node runtime with "type":"commonjs"
+    expect(serverSrc).toMatch(/import\s*\{[^}]*normalizePost[^}]*\}\s*from\s*['"]\.\/src\/utils\/normalizePost\.m?js['"]/)
+  })
+
+  it('server.mjs does NOT define its own normalizePost function', () => {
+    // The inline copy defined `function normalizePost(`. After AVO-146 this must be absent.
+    expect(serverSrc).not.toMatch(/function normalizePost\s*\(/)
   })
 })

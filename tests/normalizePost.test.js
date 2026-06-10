@@ -7,14 +7,16 @@ describe('normalizePost', () => {
       const result = normalizePost({ dev: 'working' })
       expect(result.type).toBe('office-status')
       expect(result.agents).toHaveLength(1)
-      // toEqual pins the complete agent shape — label/hint presence is part of the contract
-      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: null, label: null, hint: null })
+      // toEqual pins the complete agent shape — AVO-146: shorthand branch now also carries
+      // reasonCode/activeFile (previously silently dropped); null is the correct default.
+      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: null, label: null, hint: null, reasonCode: null, activeFile: null })
       expect(result.activeCount).toBe(1)
     })
 
     it('treats non-status values as tasks with status "working"', () => {
       const result = normalizePost({ dev: 'writing tests' })
-      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: 'writing tests', label: null, hint: null })
+      // AVO-146: shorthand branch now also carries reasonCode/activeFile (additive change).
+      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: 'writing tests', label: null, hint: null, reasonCode: null, activeFile: null })
     })
 
     it('handles multiple agents', () => {

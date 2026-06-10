@@ -4,6 +4,7 @@
  */
 
 import { VALID_STATUSES } from '../systems/constants.js'
+import { AGENT_CARRY_FIELDS } from '../utils/statusFields.js'
 
 const ROLE_KEYWORDS = {
   pm:       [/plan/i, /spec/i, /bootstrap/i, /manage/i, /schedule/i, /roadmap/i, /sprint/i, /standup/i, /priorit/i, /backlog/i],
@@ -121,15 +122,15 @@ export function routeExternalAgents(agents) {
 
     if (agentId) {
       assigned.add(agentId)
+      // AVO-146: iterate AGENT_CARRY_FIELDS instead of hand-listing each carry field.
+      // session stays bespoke (worktree identity — not a free-carry field).
+      const carry = {}
+      for (const f of AGENT_CARRY_FIELDS) carry[f] = entry[f] || null
       results.push({
         agentId,
         status: VALID_STATUSES.includes(entry.status) ? entry.status : 'working',
-        task: entry.task || null,
-        label: entry.label || null,
-        hint: entry.hint || null,
         session: entry.session || null,
-        reasonCode: entry.reasonCode || null,  // AVO-110: carry the validated blocked-reason through routing
-        activeFile: entry.activeFile || null,  // AVO-106: carry the per-agent active file through routing
+        ...carry,
       })
     }
   }
