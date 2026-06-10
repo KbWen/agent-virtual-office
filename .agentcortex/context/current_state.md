@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T09:00:00Z
-- **Update Sequence**: 65
+- **Last Updated**: 2026-06-11T10:25:00Z
+- **Update Sequence**: 66
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -145,6 +145,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-shared-node-stacking-2026-06-11 (owner 回報 bug — 角色在共享節點上精確疊合)
+
+- Branch `fix/shared-node-stacking`, quick-win. Owner 截圖（研究員與某人疊合）→ LIVE store 抓到現行犯：pm 與 dev 同在 (300,180)「top aisle center」距離 0。根因：`findSafePolyline`（mainOffice Dijkstra 路由）回傳**精確共享節點座標**（且是共享物件參照本身），而 findBestCorridor/nearestCorridor 早有抖動——同走廊同時段必精確重合。與 ADR-004 否決的 per-frame 推擠不同：這是小組預先祝福的「便宜側偏」緩解，由 owner 回報觸發其 owner-call 條件。
+- **Shipped**: route 重建時中途節點抖動候選 ×4（CORRIDOR_JITTER x / ±6 y），候選須在地板上、不在家具內、且**前後兩段皆不撞桌**（鏈式驗證：每段最終線段在其後端點定案時驗證）；全敗回退精確節點（**絕不比現狀差**）；終點永不偏移；路徑改推全新物件（順手關閉共享常數別名風險）。
+- **Review (fresh)**: PASS — 鏈式驗證五個 case 全數成立；全域/區域障礙表以範圍證明 + lineHitsRect 端點內含性證無錯配；deep suite ×3 無 flake；敏感度探針（移除抖動 → spread 測試失敗）。
+- **Tests**: 1827 → **1831** (+4)。484 條深度尋路矩陣現在每跑都在驗證抖動後的路徑。Owner 視覺確認待補（純美觀判斷：±15px 車道散佈是否自然）。Tests: Pass
 
 ### Ship-fix-pet-wall-phasing-2026-06-11 (owner 回報 bug — 寵物一直穿牆)
 
