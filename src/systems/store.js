@@ -531,13 +531,37 @@ export const useOfficeStore = create((set) => ({
       }
     }),
 
+  // Journey END of a multi-waypoint walk (AVO-156). `targetPosition` only ever holds the
+  // CURRENT LEG (a corridor/door node), so other agents' destination pickers were blind to
+  // where a walker would actually LAND — two walks could claim the same spot (forensic
+  // capture 2026-06-10). AgentCharacter publishes this at every walk start and the abort
+  // sites pass null; setAgentArrived clears it on final arrival. Consumed by
+  // movementSystem.getOccupiedPositions, never rendered.
+  setAgentJourney: (id, journeyTarget) =>
+    set((s) => {
+      const agent = s.agents[id]
+      if (!agent) return s
+      // Coordinate-equality no-op guard (NOT reference equality — two {x,y} literals are
+      // never ===): repeated publishes of the same dest (e.g. the groupTarget effect
+      // re-running) must not re-allocate the agent and wake its subscribers.
+      const prev = agent.journeyTarget || null
+      const next = journeyTarget || null
+      if (prev === next || (prev && next && prev.x === next.x && prev.y === next.y)) return s
+      return {
+        agents: {
+          ...s.agents,
+          [id]: { ...agent, journeyTarget: journeyTarget || null },
+        },
+      }
+    }),
+
   setAgentArrived: (id) =>
     set((s) => {
       if (!s.agents[id]) return s
       return {
         agents: {
           ...s.agents,
-          [id]: { ...s.agents[id], isMoving: false, position: { ...s.agents[id].targetPosition } },
+          [id]: { ...s.agents[id], isMoving: false, position: { ...s.agents[id].targetPosition }, journeyTarget: null },
         },
       }
     }),

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
-import { getTargetForBehavior, pickSocialTarget, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveFocusFacing, SOCIAL_BEHAVIORS } from '../systems/movementSystem'
+import { getTargetForBehavior, pickSocialTarget, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveFocusFacing, SOCIAL_BEHAVIORS, visuallyOverlapping, avoidOverlap } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale, t } from '../i18n'
 import { BlockedReasonBadge } from './blockedReasonBadge'
 import { recurringInfo } from '../systems/recurringFailure'
@@ -685,6 +685,7 @@ function AgentCharacter({ agent }) {
   const movingStuckRef = useRef(0)
   const pendingBehaviorRef = useRef(null) // deferred behavior for location-based actions
   const socialTargetRef = useRef(null)   // { targetId, position } captured in doSchedule for social walks; cleared on arrival/abort
+  const nudgeCountRef = useRef(0)        // AVO-156 arrival nudge: max ONE aside-step per journey (no cascade); reset at each new walk start
   const [walkFrame, setWalkFrame] = useState(0)
   // AVO-128: name tags are revealed only when an agent is active (working/blocked/
   // planning/done) or hovered, and hidden at rest — at idle, identity rides on the
@@ -803,9 +804,14 @@ function AgentCharacter({ agent }) {
         }
         rafRef.current = requestAnimationFrame(animate)
       } else {
-        // Arrived — snap is already applied by stepWalkFrame; stop RAF and chain on.
+        // Arrived at THIS LEG — snap is already applied by stepWalkFrame; stop RAF and
+        // chain on. isWalking is deliberately NOT cleared here: this branch fires at every
+        // INTERMEDIATE waypoint too, and the 1.5s stall watchdog below is gated on
+        // isWalking — clearing it here left legs 2..N of every journey unguarded, so a
+        // render-jank rAF stall mid-route froze the walker in place (forensic capture
+        // 2026-06-10: agents frozen at the shared lounge-door node for minutes, pixel-
+        // stacked at 0px). onWaypointReached's FINAL-arrival branch owns the clear.
         setRenderPos({ x: tp.x, y: tp.y })
-        setIsWalking(false)
         rafRef.current = null
         lastTimeRef.current = null
         // Process next waypoint via ref (avoids stale closure)
@@ -852,12 +858,29 @@ function AgentCharacter({ agent }) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null
       }
+      // A mid-walk unmount (roster-mode toggle swaps the office for NarrowRoster while
+      // s.agents persists) must release the journey claim — setAgentArrived will never
+      // fire for the dead walk, and a stale journeyTarget would block that spot for every
+      // picker until this agent's next walk start (AC-2, fresh review 2026-06-10 MED).
+      useOfficeStore.getState().setAgentJourney(id, null)
       // Cancel any in-flight bubble-clear / handoff timers so they don't fire
       // against a torn-down component after unmount.
       for (const handle of deferred) clearTimeout(handle)
       deferred.clear()
     }
   }, [])
+
+  // Move to a new target (called from doSchedule, group walks, and the arrival nudge).
+  // Defined BEFORE onWaypointReached, which lists it as a dependency.
+  const startWalkTo = useCallback((waypoint) => {
+    targetPosRef.current = { ...waypoint }
+    if (visualPosRef.current) {
+      const facing = calcFacing(visualPosRef.current.x, visualPosRef.current.y, waypoint.x, waypoint.y)
+      useOfficeStore.getState().setAgentTarget(id, waypoint, facing)
+    }
+    setIsWalking(true)
+    startRaf()
+  }, [id, startRaf])
 
   // Handle arriving at a waypoint
   const onWaypointReached = useCallback(() => {
@@ -881,7 +904,7 @@ function AgentCharacter({ agent }) {
     } else {
       store.setAgentArrived(id)
       movingRef.current = false
-      setIsWalking(false)
+      setIsWalking(false)  // FINAL arrival — the only legitimate walk-complete clear (see animate())
       // Apply deferred behavior now that character has arrived at destination.
       const pending = pendingBehaviorRef.current
       if (pending) {
@@ -928,22 +951,51 @@ function AgentCharacter({ agent }) {
         }
         socialTargetRef.current = null
       }
+      // AVO-156 F5 — arrival nudge (last-line recovery for stacks the planners could not
+      // prevent: freeze deposits, simultaneous picks). Event-edge only (this exact arrival),
+      // NEVER per-frame (ADR-004). The ARRIVER steps aside; the established stander is
+      // never moved. One nudge per journey (nudgeCountRef), skipped during group events
+      // (officeLife owns those positions).
+      const s2 = useOfficeStore.getState()
+      const me = s2.agents[id]
+      if (me && !me.inGroupEvent && nudgeCountRef.current === 0 && visualPosRef.current) {
+        const myPos = visualPosRef.current
+        // I'm overlapped iff a STANDING agent's body intersects mine. The nudge DESTINATION,
+        // however, must clear every CLAIM — standers' positions AND in-flight walkers'
+        // journey ends — or two recovering agents can re-stack at the same resolved spot
+        // (fresh review 2026-06-10, MED: C nudges onto B's invisible nudge landing).
+        const standing = []
+        const claims = []
+        for (const oid of Object.keys(s2.agents)) {
+          if (oid === id) continue
+          const o = s2.agents[oid]
+          if (!o) continue
+          if (o.position && !o.isMoving) { standing.push(o.position); claims.push(o.position) }
+          else if (o.journeyTarget) claims.push(o.journeyTarget)
+        }
+        if (standing.some(p => visuallyOverlapping(myPos, p))) {
+          const nudged = avoidOverlap({ x: myPos.x, y: myPos.y }, claims)
+          const clear = claims.every(p => !visuallyOverlapping(nudged, p))
+          // Only SPEND the single per-journey nudge on a spot verified clear of all claims;
+          // an unresolvable cluster keeps the attempt for the next arrival instead of
+          // burning it on a sideways hop into another stack.
+          if (clear && Math.hypot(nudged.x - myPos.x, nudged.y - myPos.y) > 2) {
+            const nudgePath = calculatePath(myPos, nudged)
+            if (nudgePath.length > 0) {
+              nudgeCountRef.current = 1
+              movingRef.current = true
+              pathRef.current = nudgePath.slice(1)
+              s2.setAgentJourney(id, nudged)
+              startWalkTo(nudgePath[0])
+            }
+          }
+        }
+      }
     }
-  }, [id, startRaf, scheduleDeferred])
+  }, [id, startRaf, scheduleDeferred, startWalkTo])
 
   // Keep ref in sync
   onWaypointReachedRef.current = onWaypointReached
-
-  // Move to a new target (called from doSchedule)
-  const startWalkTo = useCallback((waypoint) => {
-    targetPosRef.current = { ...waypoint }
-    if (visualPosRef.current) {
-      const facing = calcFacing(visualPosRef.current.x, visualPosRef.current.y, waypoint.x, waypoint.y)
-      useOfficeStore.getState().setAgentTarget(id, waypoint, facing)
-    }
-    setIsWalking(true)
-    startRaf()
-  }, [id, startRaf])
 
   useEffect(() => {
     if (!agentState?.returnHomeOnIdle || agentState.status !== 'idle' || agentState.inGroupEvent || isWalking) return
@@ -957,6 +1009,8 @@ function AgentCharacter({ agent }) {
     if (path.length === 0) return
     movingRef.current = true
     pathRef.current = path.slice(1)
+    nudgeCountRef.current = 0
+    store.setAgentJourney(id, home)  // publish journey END (AVO-156 RC-3)
     startWalkTo(path[0])
   }, [agentState?.returnHomeOnIdle, agentState?.status, agentState?.inGroupEvent, id, isWalking, startWalkTo, visualReady])
 
@@ -993,6 +1047,7 @@ function AgentCharacter({ agent }) {
           movingStuckRef.current = 0
           pendingBehaviorRef.current = null
           socialTargetRef.current = null  // abort: clear social target so no stale face-on-arrival
+          store.setAgentJourney(id, null) // abort: a dead walk must not keep claiming its landing spot
           setIsWalking(false)
           if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         } else {
@@ -1030,8 +1085,10 @@ function AgentCharacter({ agent }) {
             willWalk = true
             movingRef.current = true
             pathRef.current = path.slice(1)
+            nudgeCountRef.current = 0
             // Capture the social target so onWaypointReached can set facing on arrival.
             socialTargetRef.current = (isSocialBehavior && socialPick) ? socialPick : null
+            store.setAgentJourney(id, destination)  // publish journey END (AVO-156 RC-3)
             startWalkTo(path[0])
           }
         }
@@ -1107,6 +1164,8 @@ function AgentCharacter({ agent }) {
         socialTargetRef.current = null
         movingRef.current = true
         pathRef.current = path.slice(1)
+        nudgeCountRef.current = 0
+        useOfficeStore.getState().setAgentJourney(id, gt)  // publish journey END (AVO-156 RC-3)
         startWalkTo(path[0])
       }
     }
@@ -1145,6 +1204,7 @@ function AgentCharacter({ agent }) {
         // must never be applied to a LATER unrelated arrival (the next doSchedule resets
         // this anyway; the explicit clear keeps the invariant local and refactor-proof).
         socialTargetRef.current = null
+        useOfficeStore.getState().setAgentJourney(id, null) // abort: release the claimed landing spot
         if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         setIsWalking(false)
         timerRef.current = setTimeout(doSchedule, 500)

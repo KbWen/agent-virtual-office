@@ -13,7 +13,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-06-11T21:25:00Z
-- **Update Sequence**: 71
+- **Update Sequence**: 72
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -71,6 +71,7 @@
   - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Frozen]  *(AVO-126/127/128/129/131/132 — branch feat/ux-vibe-rebalance, not yet merged)*
   - [living-office] docs/specs/living-office-events.md [DRAFT, review-gated]  *(P1-P4 shipped to branch feat/ux-vibe-rebalance, not merged; AC-3 pixel-dominance pending owner visual confirm)*
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
+  - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
   - [office-runtime] docs/specs/blocked-reason-tags.md [Shipped]  *(AVO-110 / #29 — honest-narrow blocked-reason badge; reasonCode contract)*
   - [office-runtime] docs/specs/recurring-failure-detection.md [Shipped]  *(AVO-117 — recurring blocked-reason detection; downstream of AVO-110)*
@@ -145,6 +146,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-standing-overlap-deconfliction-2026-06-10 (owner 第三次疊圖 — 站立疊合五層根因一次關閉, AVO-156)
+
+- Branch `feat/standing-overlap-deconfliction`, **feature**（owner:「好好規劃再處理」→ spec `docs/specs/standing-overlap-deconfliction.md`）。**法醫式取證先行**：新工具 `scripts/overlap-recorder.mjs`（12 分鐘、200ms 取樣、疊站事件觸發時 dump 雙方 12 秒狀態鏈）→ 基線 **12 個持續疊站事件 / 189 疊秒，其中 10 件在字面座標 (240,386)**＝lounge 門節點原始錨點；tracked 的 pm 在該節點**凍結橫跨 8 分鐘**。
+- **五層根因（RC）/ 五修（F）**：F1 `setIsWalking(false)` 從 animate() 每路點誤清改為僅最終抵達——1.5s rAF 卡頓看門狗從只護第 1 段變全程護航（凍結觸發源）；F2 門錨點每次過門沿門洞軸抖動 ±10（驗證在地板，同 offset 兩側）；F3 `journeyTarget` 入 store（行走終點對所有 picker 可見；arrival/abort/unmount 全清）；F4 圓形 35px → **視覺橢圓 rx32/ry44**（35px 垂直「分離」其實全疊—— #103 幾何教訓全域化）；F5 到站讓位（事件邊緣、一次/旅程、僅 arriver、驗證乾淨才花，ADR-004 合規）。
+- **Fresh adversarial review 抓到 HIGH**：v1 avoidOverlap「設定式」水平解算在雙推手（咖啡機+飲水機同 rank）震盪，12.4%/2000 輸出仍重疊（reviewer 數值實證；舊碼 0%）→ v2 徑向橢圓累積推擠＋環搜備援；複核以 **55 萬次** probe（含病態 clamp 角）0 bad 後 PASS。
+- **Live A/B（12 分鐘協議）**：12 事件/189 疊秒 → **0 事件**/27.8 秒（殘餘皆 <2s 路過擦肩，ADR-004 接受之 transit 交錯）。**Tests: 1874 → 1885**（雙推手 2000 次回歸釘=0、密集三叢集、門抖動分佈、journey 生命週期）。render-smoke PASS。Tests: Pass
 
 ### Ship-fix-calm-rhythm-2026-06-10 (owner 雙問 — 躁動步調 + 為何不去其他房間)
 
