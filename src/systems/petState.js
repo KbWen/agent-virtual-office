@@ -103,6 +103,34 @@ export function runTarget(pos) {
   return { x: pos.x, y: pos.y + 18 }
 }
 
+// segmentWalkable / pickWanderTarget — wall-phase fix (owner bug 2026-06-11: "寵物一直穿牆").
+// The pet glides in a STRAIGHT LINE between wander points; clampToFloor validates only the
+// ENDPOINTS, and the wander band (x 80–750) spans several rooms — so a hop could cross walls
+// and furniture mid-glide. A hop is now accepted only when EVERY ~stepPx sample along the
+// segment passes the injected walkability check (the same sampling technique the movement
+// pathing tests use). Dependency-injected so these stay pure and unit-testable.
+export function segmentWalkable(from, to, isWalkable, stepPx = 4) {
+  if (!from || !to || typeof isWalkable !== 'function') return false
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / stepPx))
+  for (let i = 0; i <= steps; i++) {
+    if (!isWalkable(from.x + (dx * i) / steps, from.y + (dy * i) / steps)) return false
+  }
+  return true
+}
+
+// Try up to `attempts` candidate targets; return the first whose straight segment from `from`
+// is fully walkable, or null when none qualifies — the caller then SKIPS this wander tick
+// (the pet pauses in place: calmer AND more honest than phasing through a wall).
+export function pickWanderTarget(from, sampleTarget, isWalkable, attempts = 8) {
+  for (let i = 0; i < attempts; i++) {
+    const t = sampleTarget()
+    if (t && segmentWalkable(from, t, isWalkable)) return t
+  }
+  return null
+}
+
 // petReadabilityScale — keep the pet legible when the office is docked small WITHOUT lying about
 // size. Partial (√) counter-scale of the live sceneScale, floored at 1 and capped at 1.6, so the
 // pet shrinks WITH the room (stays a believable inhabitant, not a HUD sticker) but never becomes an

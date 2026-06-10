@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useOfficeStore } from '../systems/store.js'
-import { clampToFloor } from '../systems/movementSystem.js'
-import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, runTarget, modeEmote, PET_MODES } from '../systems/petState.js'
+import { clampToFloor, isOnFloor, isOnObstacle } from '../systems/movementSystem.js'
+import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, runTarget, modeEmote, pickWanderTarget, PET_MODES } from '../systems/petState.js'
 import PetSprite from './petSprites.jsx'
 import { useTransientFlag } from './useTransientFlag.js'
 
@@ -28,6 +28,11 @@ function randomFloorTarget() {
   const y = 400 + Math.random() * 125
   return clampToFloor({ x, y })
 }
+
+// Wall-phase fix: a wander hop is only accepted when the straight glide segment is fully
+// walkable (on-floor AND not inside furniture) — the band spans several rooms, and the CSS
+// glide is a straight line, so endpoint-only clamping let the pet phase through walls.
+const petWalkable = (x, y) => isOnFloor(x, y) && !isOnObstacle(x, y)
 
 export default function OfficePet() {
   const officePet = useOfficeStore((s) => s.officePet)
@@ -91,7 +96,10 @@ export default function OfficePet() {
     if (!mobile) return
     const interval = (mode === PET_MODES.EXCITED ? 2000 : 3500) * grammar.cadenceMul
     const id = setInterval(() => {
-      const t = randomFloorTarget()
+      // Reject hops whose straight glide would cross a wall/furniture; when no clean hop is
+      // found this tick the pet simply pauses in place (calmer than phasing through a wall).
+      const t = pickWanderTarget(posRef.current, randomFloorTarget, petWalkable)
+      if (!t) return
       setFacing(t.x >= posRef.current.x ? 1 : -1)
       posRef.current = t
       setPos(t)
