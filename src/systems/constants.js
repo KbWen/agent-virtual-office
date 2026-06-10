@@ -1,7 +1,12 @@
 // ═══ Shared constants — single source of truth for magic numbers ═══
 
 // Animation
-export const WALK_SPEED = 80            // pixels per second
+// 60px/s (was 80): at this ~800x560 scene, 80px/s crossed the office in ~6s and read as
+// "rushing to a meeting" (game-feel panel 2026-06-10, owner: 一直走動很躁動). 60 reads as
+// an amble. Floor: the longest desk→room path (~900px) must finish inside the stuck
+// window — shortest behavior duration (8s) + BEHAVIOR_STUCK retries (~15s) = 23s;
+// 900px / 60 = 15s, comfortable.
+export const WALK_SPEED = 60            // pixels per second
 export const WALK_FRAME_INTERVAL = 250  // ms between leg alternation
 
 // Behavior scheduling
@@ -10,10 +15,12 @@ export const BEHAVIOR_STUCK_RETRY_MS = 1500
 export const WATCHDOG_INTERVAL = 10000     // ms between watchdog checks
 // Must exceed the longest legitimate behavior duration, otherwise the watchdog
 // force-restarts a behavior that is simply still running. The longest behavior
-// is 'meeting' at 50000ms (behaviorEngine.js); add walk-time (~5s) + stuck-retry
-// slack (BEHAVIOR_STUCK_RETRIES × BEHAVIOR_STUCK_RETRY_MS ≈ 15s) for safety.
-// 20s here truncated >half the work/away behaviors mid-action.
-export const WATCHDOG_TIMEOUT = 90000      // ms before watchdog force-restarts behavior chain
+// is 'typing' at 65000ms (behaviorEngine.js calm-rhythm tuning); add walk-time
+// (~15s at 60px/s) + stuck-retry slack (BEHAVIOR_STUCK_RETRIES ×
+// BEHAVIOR_STUCK_RETRY_MS ≈ 15s) ⇒ 95s; 120s leaves real margin.
+// (History: 20s truncated >half the work/away behaviors; 90s was tight once the
+// desk durations were lengthened past 45s.)
+export const WATCHDOG_TIMEOUT = 120000     // ms before watchdog force-restarts behavior chain
 
 // Statuses that mean the agent has an active session. During these, the
 // behavior legitimately stays constant for long stretches (a long-running

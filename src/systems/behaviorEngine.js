@@ -2,7 +2,14 @@ import eventsData from '../config/officeEvents.json'
 import { randomBubble } from '../i18n'
 
 // 70-80% desk time like Stardew Valley NPCs / Pixel-Agents
-// Characters stay at desks 30-120s, walk only occasionally
+// Characters stay at desks 30-120s, walk only occasionally.
+// Calm-rhythm tuning (owner 2026-06-10 "一直走動很躁動 / 都不去其他房間"): the work pool
+// previously contained solo `meeting` — for most roles 1/4 of work picks ≈ 20% of ALL
+// cycles became a lone march to the meeting room, dwarfing break-room trips (live audit:
+// ≥1 walker on screen 83% of samples, pm spent 30% of a 3-min window in the meeting room
+// alone). Solo meeting is removed (officeLife group events still gather agents there —
+// that's the legible, honest channel for meeting-room use); desk durations lengthened so
+// the office reads "alive but calm"; break-room dwells lengthened so visits are SEEN.
 const baseWeights = { work: 65, daily: 12, social: 13, away: 10 }
 
 const statusOverrides = {
@@ -14,24 +21,29 @@ const statusOverrides = {
 
 const behaviors = {
   work: [
-    { id: 'typing', expr: 'focused', msgs: 'typing', duration: [18000, 45000] },
-    { id: 'reading-screen', expr: 'focused', msgs: 'thinking', duration: [15000, 40000] },
-    { id: 'writing-notes', expr: 'normal', msgs: 'thinking', duration: [15000, 35000] },
+    // Desk durations 30-65s (was 18-45s): fewer cycles/hour = fewer walk opportunities.
+    // 65s ceiling is bound by WATCHDOG_TIMEOUT — see constants.js for the math.
+    { id: 'typing', expr: 'focused', msgs: 'typing', duration: [30000, 65000] },
+    { id: 'reading-screen', expr: 'focused', msgs: 'thinking', duration: [25000, 55000] },
+    { id: 'writing-notes', expr: 'normal', msgs: 'thinking', duration: [20000, 50000] },
     { id: 'whiteboard', expr: 'normal', msgs: 'thinking', duration: [20000, 45000], only: ['arch', 'pm'] },
     { id: 'research', expr: 'focused', msgs: 'thinking', duration: [20000, 45000], only: ['res', 'arch'] },
     { id: 'gantt-chart', expr: 'normal', msgs: 'thinking', duration: [15000, 35000], only: ['pm'] },
     { id: 'magnifier', expr: 'focused', msgs: 'thinking', duration: [15000, 35000], only: ['qa'] },
     { id: 'deploy-button', expr: 'happy', msgs: 'done', duration: [10000, 20000], only: ['ops'] },
     { id: 'shield-verify', expr: 'normal', msgs: 'gate-verify', duration: [15000, 30000], only: ['gate'] },
-    { id: 'meeting', expr: 'normal', msgs: 'thinking', duration: [25000, 50000] },
+    // NOTE: no solo 'meeting' here — a lone agent marching to the meeting room every few
+    // cycles was the #1 restlessness source. Group events (officeLife) own that room.
   ],
   daily: [
-    { id: 'drink-coffee', expr: 'happy', msgs: 'coffee', duration: [12000, 25000] },
-    { id: 'drink-water', expr: 'normal', msgs: null, duration: [10000, 20000] },
+    // Break-room dwells lengthened (panel: transit must stay SHORTER than dwell, or the
+    // trip reads as "walked there just to walk back").
+    { id: 'drink-coffee', expr: 'happy', msgs: 'coffee', duration: [18000, 35000] },
+    { id: 'drink-water', expr: 'normal', msgs: null, duration: [15000, 30000] },
     { id: 'stretch', expr: 'happy', msgs: 'stretch', duration: [8000, 15000] },
     { id: 'look-window', expr: 'normal', msgs: null, duration: [15000, 28000] },
-    { id: 'check-phone', expr: 'happy', msgs: null, duration: [12000, 22000] },
-    { id: 'eat-snack', expr: 'happy', msgs: null, duration: [12000, 22000] },
+    { id: 'check-phone', expr: 'happy', msgs: null, duration: [15000, 30000] },
+    { id: 'eat-snack', expr: 'happy', msgs: null, duration: [15000, 30000] },
     { id: 'print', expr: 'normal', msgs: null, duration: [10000, 20000] },
   ],
   social: [
@@ -73,7 +85,7 @@ function weightedRandom(weights) {
 // would make getNextBehavior read behavior.id === undefined and feed a scalar to
 // randomDuration → NaN duration → doSchedule's setTimeout(_, NaN) fires immediately,
 // pinning the CPU in a tight re-schedule loop.
-const FALLBACK_BEHAVIOR = { id: 'typing', expr: 'focused', msgs: 'typing', duration: [18000, 45000] }
+const FALLBACK_BEHAVIOR = { id: 'typing', expr: 'focused', msgs: 'typing', duration: [30000, 65000] }
 
 // Cache of role-filtered behavior pools, keyed "category|baseRole". pickBehavior runs
 // once per agent per behavior cycle; the `.filter(b => !b.only || b.only.includes(...))`

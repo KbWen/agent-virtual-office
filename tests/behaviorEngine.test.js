@@ -15,6 +15,7 @@ const __realRandom = Math.random
 beforeAll(() => { Math.random = __mulberry32(0x0ff1ce) })
 afterAll(() => { Math.random = __realRandom })
 import { getNextBehavior, getHourModifiers } from '../src/systems/behaviorEngine.js'
+import { needsLocationChange } from '../src/systems/movementSystem.js'
 
 // Every VALID_ROLE plus a couple of composite worktree ids — getNextBehavior must
 // produce a well-formed result for all of them, including the fallback path.
@@ -182,5 +183,44 @@ describe('getNextBehavior — blocked biases toward frustration (AVO-133)', () =
       if (getNextBehavior('dev', 'idle', 10, 'normal').category === 'frustrated') frustrated++
     }
     expect(frustrated / 400).toBeLessThan(0.2)
+  })
+})
+
+// Calm-rhythm tuning (owner 2026-06-10: "一直走動很躁動" + "都不去其他房間"). Live audit
+// measured ≥1 walker on screen 83% of samples; root cause was solo `meeting` in the work
+// pool (~20% of ALL cycles became a lone meeting-room march) drowning out break-room trips.
+describe('getNextBehavior — calm rhythm (no solo meeting, bounded walk share)', () => {
+  it('the solo engine NEVER emits `meeting` — that room belongs to officeLife group events', () => {
+    for (const role of [...ROLES, ...COMPOSITES]) {
+      for (const status of STATUSES) {
+        for (let i = 0; i < 60; i++) {
+          expect(getNextBehavior(role, status, 10, 'normal').behaviorId).not.toBe('meeting')
+        }
+      }
+    }
+  })
+
+  it('a WORKING agent walks in at most ~1/5 of cycles (desk time ≈ its real status)', () => {
+    let walks = 0
+    const N = 4000
+    for (let i = 0; i < N; i++) {
+      // hour 10 (no hour modifier), mood normal (no blend) → clean status weights
+      if (needsLocationChange(getNextBehavior('dev', 'working', 10, 'normal').behaviorId)) walks++
+    }
+    // working weights: daily 8 + social 5 + away 5 = 18% walk-capable; pin with slack.
+    // (Pre-fix this measured 38.5% — meeting alone contributed ~20.5%.)
+    expect(walks / N).toBeLessThan(0.22)
+  })
+
+  it('room destinations are still reachable — daily/away behaviors survive the tuning', () => {
+    const seen = new Set()
+    for (let i = 0; i < 3000; i++) {
+      const b = getNextBehavior('dev', 'idle', 10, 'normal')
+      if (needsLocationChange(b.behaviorId)) seen.add(b.behaviorId)
+    }
+    // The break-room cluster must remain in play (lounge/coffee zone visits stay possible).
+    for (const id of ['drink-coffee', 'drink-water', 'goto-coffee-machine']) {
+      expect(seen.has(id), `${id} should still occur for an idle agent`).toBe(true)
+    }
   })
 })
