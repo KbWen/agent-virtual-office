@@ -212,6 +212,19 @@ describe('AC-4a — SHAPE contract: fields the hook reads exist with correct typ
                             typeof tr === 'string' || typeof tr === 'object'
           expect(validType).toBe(true)
         })
+        it('KNOWN DIVERGENCE PIN (AVO-154): runtime sends tool_response, hook reads tool_result', () => {
+          // The captured runtime payload carries the result under `tool_response`; the hook
+          // reads `event.tool_result` → on THIS runtime the hook's toolResult is always ''
+          // for success events, so result-text-based derivations see no content. is_error
+          // was absent from all captured (success-only) events — the error-event shape is
+          // NOT YET CAPTURED. Tracked as AVO-154 (capture an error event, then reconcile
+          // the hook's reads with runtime truth — touches the AVO-110 honesty firewall, so
+          // it gets its own pass). This test pins the divergence LOUDLY: if a re-captured
+          // corpus shows the runtime started sending tool_result (or stopped sending
+          // tool_response), it fails and forces the reconciliation.
+          expect('tool_response' in fixture, 'runtime stopped sending tool_response — re-evaluate AVO-154').toBe(true)
+          expect('tool_result' in fixture, 'runtime now sends tool_result — the hook read may be live again; reconcile AVO-154').toBe(false)
+        })
         it('transcript_path is string or absent', () => {
           if ('transcript_path' in fixture) {
             expect(typeof fixture.transcript_path).toBe('string')

@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 title: AVO-153 — Hook-runtime payload fixture corpus + contract tests
 created: 2026-06-10
 last_updated: 2026-06-10
