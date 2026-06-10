@@ -109,6 +109,9 @@ try {
   if (process.env.SOAK_REPORT) {
     writeFileSync(process.env.SOAK_REPORT, JSON.stringify({ minutes: MINUTES, samples: samples.length, ...result }, null, 1))
   }
+  for (const e of result.warnings?.groupStack || []) {
+    console.log(`sim-soak WARN [groupStack, non-failing] ${JSON.stringify(e)}`)
+  }
   if (result.pass) {
     console.log(`sim-soak PASS — ${samples.length} samples over ${MINUTES} min, 0 invariant violations (teleport/stack/frozen/off-floor)`)
   } else {

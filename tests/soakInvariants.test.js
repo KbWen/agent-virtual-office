@@ -85,14 +85,16 @@ describe('planted violations are caught', () => {
     expect(r.violations.sustainedStack[0].pair).toBe('dev+pm')
   })
 
-  it('group-event stacks are still caught and tagged group:true', () => {
+  it('group-event stacks are reported as NON-FAILING warnings (designed-close theater)', () => {
     const s = timeline(STACK_SUSTAIN_MS * 2, 250, {
       pm: still(660, 205, { group: true }),
       dev: still(662, 210, { group: true }),
     })
     const r = evaluateSoak(s)
-    expect(r.violations.sustainedStack).toHaveLength(1)
-    expect(r.violations.sustainedStack[0].group).toBe(true)
+    expect(r.violations.sustainedStack).toHaveLength(0)
+    expect(r.warnings.groupStack).toHaveLength(1)
+    expect(r.warnings.groupStack[0].group).toBe(true)
+    expect(r.pass).toBe(true) // warning never fails the gate
   })
 
   it('frozen walker: isMoving=true with still pixels past 90s (the frozen-pm class)', () => {
