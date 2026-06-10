@@ -121,6 +121,36 @@ describe('door crossings are jittered per transit (no single shared pixel)', () 
   })
 })
 
+// ── Research-zone routing (first soak-gate CI catch: designer resting inside shelf B) ──
+describe('research-zone paths never cross the bookshelves or printer', () => {
+  const RESEARCH_POINTS = [
+    { x: 535, y: 432 },  // door (research side)
+    { x: 620, y: 490 },  // researchLib waypoint
+    { x: 600, y: 510 },  // printer waypoint (stand spot, below the printer body)
+    { x: 755, y: 480 },  // phone waypoint
+    { x: 480, y: 530 },  // SW corner
+    { x: 770, y: 440 },  // NE strip (right of shelf C)
+  ]
+  it('every 2px sample of every leg is furniture-free (300 seeded pairs)', () => {
+    for (let i = 0; i < 300; i++) {
+      const a = RESEARCH_POINTS[Math.floor(Math.random() * RESEARCH_POINTS.length)]
+      const b = RESEARCH_POINTS[Math.floor(Math.random() * RESEARCH_POINTS.length)]
+      if (a === b) continue
+      const path = calculatePath(a, b)
+      let cursor = a
+      for (const pt of path) {
+        const steps = Math.max(1, Math.ceil(Math.hypot(pt.x - cursor.x, pt.y - cursor.y) / 2))
+        for (let s = 0; s <= steps; s++) {
+          const x = cursor.x + ((pt.x - cursor.x) * s) / steps
+          const y = cursor.y + ((pt.y - cursor.y) * s) / steps
+          expect(isOnObstacle(x, y), `(${Math.round(x)},${Math.round(y)}) on ${JSON.stringify(a)}→${JSON.stringify(b)}`).toBe(false)
+        }
+        cursor = pt
+      }
+    }
+  })
+})
+
 // ── F3: journey publication + picker visibility ────────────────────────────────────────
 describe('journeyTarget — landing spots are visible to other destination pickers', () => {
   it('getTargetForBehavior cannot claim a spot inside a walker\'s journey-end ellipse', () => {

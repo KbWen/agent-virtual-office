@@ -13,7 +13,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-06-11T21:25:00Z
-- **Update Sequence**: 73
+- **Update Sequence**: 74
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -147,6 +147,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-research-zone-routing-2026-06-10 (soak 閘門首戰戰果 — research 區避家具走廊)
+
+- Branch `fix/research-zone-routing`, quick-win。**sim-soak 閘門第一次 CI 實跑就抓到真問題**（run 27285671889）：designer 在 research 書櫃 B 內 (657,459) 站立 ≥2s。根因：research 區沒有 zone 內避障路由（lounge 有）——直線段穿書櫃/印表機，走路中途一停頓就站進家具圖裡（寵物穿牆 bug 的 agent 版）。
+- **修**：`routeWithinResearch` —— 書櫃底(460)與印表機頂(488)之間的走廊帶 y=472；上升/下降欄位避障感知（印表機站位在機體正下方 2px——直降必穿體）且欄位候選必須留在 research 地板/zone 內（v1 曾把欄位移出西界 x<469，被 clampToFloor 的 zone-snap 拉飛到主辦公室——fuzz 抓到）。
+- **Fuzz 烏龍триage**：同輪 5 違規爆發中 3 個（whiteboard/opsDesk 角）為既有未播種 jitter 極稀有洞（fuzz 測試檔頭自註的 corridor-fallback 缺口，≲1/8000）；修後 current/baseline 各 4×1000 對全乾淨 → chip task_47460ed1 追蹤。
+- **新釘**：research 區 300 種子對、每 2px 取樣 0 家具命中。**Tests: 1896 → 1897**。CI soak 重派發綠（見 PR）。Tests: Pass
 
 ### Ship-feat-sim-soak-gate-2026-06-10 (owner 核准 — 一次性取證工具升級為常駐夜間閘門 + v1.4.0, AVO-157)
 
