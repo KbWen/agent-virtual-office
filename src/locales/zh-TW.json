@@ -349,10 +349,13 @@
     }
   },
   "blockedReason": {
-    "test-run-failed": { "label": "測試執行", "a11y": "卡在測試執行" },
-    "build-failed": { "label": "建置", "a11y": "卡在建置" },
-    "deps-failed": { "label": "安裝套件", "a11y": "卡在安裝套件" },
-    "blocked-unknown": { "label": "卡住", "a11y": "卡住，原因未知" }
+    "test-run-failed":  { "label": "測試執行",  "a11y": "卡在測試執行" },
+    "build-failed":     { "label": "建置",      "a11y": "卡在建置" },
+    "deps-failed":      { "label": "安裝套件",  "a11y": "卡在安裝套件" },
+    "blocked-unknown":  { "label": "卡住",      "a11y": "卡住，原因未知" },
+    "permission-denied": { "label": "權限被拒",  "a11y": "被拒：權限被拒" },
+    "api-rate-limit":    { "label": "API 限流中", "a11y": "被擋：API 限流中" },
+    "api-auth-failed":   { "label": "API 認證失敗", "a11y": "被擋：API 認證失敗" }
   },
   "recurringFailure": {
     "test-run-failed": { "label": "反覆卡在測試", "a11y": "重複問題:這個 agent 反覆卡在測試執行" },

@@ -28,10 +28,14 @@ export function blockedReasonLabel(ext) {
 // reasonCode token via classifyBlockedReason; null for any non-blocked agent. Pairs with the i18n
 // text from agentLineLabel so the row is icon + text (never icon-only, never colour-only).
 const REASON_GLYPH = Object.freeze({
-  'test-run-failed': '🧪',
-  'build-failed': '🛠️',
-  'deps-failed': '📦',
-  'blocked-unknown': '❔',
+  'test-run-failed':  '🧪',
+  'build-failed':     '🛠️',
+  'deps-failed':      '📦',
+  'blocked-unknown':  '❔',
+  // AVO-148: structured-event reasons
+  'permission-denied': '🚫',
+  'api-rate-limit':    '⏳',
+  'api-auth-failed':   '🔑',
 })
 export function blockedReasonGlyph(ext) {
   if (!ext || ext.status !== 'blocked') return null

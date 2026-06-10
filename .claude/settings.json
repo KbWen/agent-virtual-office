@@ -59,6 +59,26 @@
           }
         ]
       }
+    ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node public/hooks/office-status-hook.js"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node public/hooks/office-status-hook.js"
+          }
+        ]
+      }
     ]
   }
 }

@@ -62,8 +62,10 @@ if (command === 'setup') {
   const hookEntry = { type: 'command', command: hookCmd }
 
   // Add hooks for all relevant events
+  // AVO-148: PermissionDenied + StopFailure are harmless on older Claude Code versions that
+  // don't emit them — the hook simply never receives those event names and nothing is claimed.
   if (!settings.hooks || typeof settings.hooks !== 'object' || Array.isArray(settings.hooks)) settings.hooks = {}
-  for (const event of ['PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'UserPromptSubmit', 'Stop']) {
+  for (const event of ['PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'UserPromptSubmit', 'Stop', 'PermissionDenied', 'StopFailure']) {
     if (!Array.isArray(settings.hooks[event])) settings.hooks[event] = []
     // Check if already installed (avoid duplicates)
     const existing = settings.hooks[event]
@@ -147,7 +149,7 @@ if (command === 'uninstall') {
     try {
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
       if (settings.hooks) {
-        for (const event of ['PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'UserPromptSubmit', 'Stop']) {
+        for (const event of ['PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'UserPromptSubmit', 'Stop', 'PermissionDenied', 'StopFailure']) {
           if (settings.hooks[event]) {
             settings.hooks[event] = settings.hooks[event].filter(h =>
               !(h.hooks || []).some(hh => hh.command && hh.command.includes('office-status-hook'))

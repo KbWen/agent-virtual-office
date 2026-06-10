@@ -349,10 +349,13 @@
     }
   },
   "blockedReason": {
-    "test-run-failed": { "label": "Test run", "a11y": "Blocked on the test run" },
-    "build-failed": { "label": "Build", "a11y": "Blocked on the build" },
-    "deps-failed": { "label": "Install", "a11y": "Blocked on installing dependencies" },
-    "blocked-unknown": { "label": "Blocked", "a11y": "Blocked, cause unknown" }
+    "test-run-failed":  { "label": "Test run",        "a11y": "Blocked on the test run" },
+    "build-failed":     { "label": "Build",            "a11y": "Blocked on the build" },
+    "deps-failed":      { "label": "Install",          "a11y": "Blocked on installing dependencies" },
+    "blocked-unknown":  { "label": "Blocked",          "a11y": "Blocked, cause unknown" },
+    "permission-denied": { "label": "Permission denied", "a11y": "Blocked: permission denied" },
+    "api-rate-limit":    { "label": "API rate-limited",  "a11y": "Blocked: API rate-limited" },
+    "api-auth-failed":   { "label": "API auth failed",   "a11y": "Blocked: API auth failed" }
   },
   "recurringFailure": {
     "test-run-failed": { "label": "Tests keep failing", "a11y": "Recurring: the test run keeps failing for this agent" },

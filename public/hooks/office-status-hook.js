@@ -865,6 +865,114 @@ function processEvent(event) {
       helperAction = { op: 'remove', role, agentId, agentType }
       break
     }
+    case 'PermissionDenied': {
+      // AVO-148: the permission system denied a tool call. Only fires on a genuine denial —
+      // zero text parsing, zero inference. Stamp the responsible agent (by tool→role mapping)
+      // as blocked with reason 'permission-denied'. Defensive: missing tool_name falls back
+      // to 'dev' (same toolToRole fallback convention); any error → no-op, never throws.
+      try {
+        const deniedTool = (typeof event.tool_name === 'string' ? event.tool_name : '') || ''
+        role = toolToRole(deniedTool || 'Edit')  // 'Edit' → 'dev' fallback (toolToRole's default)
+        task = deniedTool || 'PermissionDenied'
+        status = 'blocked'
+        reasonCode = 'permission-denied'
+        label = LANG === 'zh-TW' ? '🚫 權限被拒' : '🚫 Permission denied'
+        hint = 'error'
+      } catch {
+        // Defensive: malformed event → degrade gracefully, no write (role stays undefined)
+        return
+      }
+      break
+    }
+    case 'StopFailure': {
+      // AVO-148: the turn ended on a Claude-API error. The matcher field carries a structured
+      // enum (rate_limit / authentication_failed / overloaded / …). We key ONLY on that enum —
+      // zero text parsing. Apply to all session agents currently working or planning (they are
+      // genuinely stalled — the turn died). Reuses the Stop handler's session-scoping pattern.
+      //
+      // StopFailure input shape (official docs): { hook_event_name, matcher, ... }
+      // matcher is the string that identifies the failure class. Absent/unrecognized → blocked-unknown.
+      const sfLock = acquireStatusLock()
+      try {
+        let sfReason = 'blocked-unknown'
+        try {
+          const matcher = (event && typeof event.matcher === 'string') ? event.matcher : ''
+          if (matcher === 'rate_limit') sfReason = 'api-rate-limit'
+          else if (matcher === 'authentication_failed') sfReason = 'api-auth-failed'
+          // other matchers (overloaded, billing, …) → blocked-unknown (honest floor)
+        } catch {}
+
+        let sfData = null
+        try { sfData = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8')) } catch {}
+
+        // Mark all CURRENTLY working/planning session agents as blocked.
+        // "Session agents" = agents whose role appears in VALID_HOOK_ROLES (the hook's
+        // own agent space); helpers are separate and not touched here.
+        const sfAgents = sfData && Array.isArray(sfData.agents)
+          ? sfData.agents.filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
+          : []
+        const sfLabel = sfReason === 'api-rate-limit'
+          ? (LANG === 'zh-TW' ? '⏳ API 限流中' : '⏳ API rate-limited')
+          : sfReason === 'api-auth-failed'
+            ? (LANG === 'zh-TW' ? '🔑 API 認證失敗' : '🔑 API auth failed')
+            : (LANG === 'zh-TW' ? '❌ API 錯誤' : '❌ API error')
+
+        const updatedAgents = sfAgents.map(a => {
+          // Only stamp agents that are actively working or planning — a done/idle agent was
+          // already finished before the turn died; stamping them would over-claim.
+          if (a.status !== 'working' && a.status !== 'planning') {
+            return {
+              role: a.role,
+              task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
+              status: a.status,
+              label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
+              hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
+              reasonCode: pickReason(a.status, a.reasonCode),
+              activeFile: typeof a.activeFile === 'string' ? a.activeFile.slice(0, 200) : null,
+            }
+          }
+          return {
+            role: a.role,
+            task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
+            status: 'blocked',
+            label: sfLabel,
+            hint: 'error',
+            reasonCode: sfReason,
+            activeFile: typeof a.activeFile === 'string' ? a.activeFile.slice(0, 200) : null,
+          }
+        })
+
+        // Preserve all metadata from the existing file; only agents array is updated.
+        const sfOutput = Object.assign(
+          {},
+          sfData || {},
+          {
+            _seq: nextSeq(),
+            _cwd: process.cwd(),
+            type: 'office-status',
+            agents: updatedAgents,
+            activeCount: updatedAgents.filter(a => a.status === 'working' || a.status === 'blocked').length,
+            source: 'claude-cli',
+          },
+        )
+        const sfDir = path.dirname(STATUS_FILE)
+        if (!fs.existsSync(sfDir)) fs.mkdirSync(sfDir, { recursive: true })
+        const sfJson = JSON.stringify(sfOutput, null, 2)
+        const sfTmp = STATUS_FILE + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+        try {
+          fs.writeFileSync(sfTmp, sfJson)
+          fs.renameSync(sfTmp, STATUS_FILE)
+        } catch {
+          try { fs.writeFileSync(STATUS_FILE, sfJson) } catch {}
+          try { fs.unlinkSync(sfTmp) } catch {}
+        }
+      } catch {
+        // Defensive: any unexpected error → silent no-op, never throws
+      } finally {
+        if (sfLock.ok) releaseStatusLock()
+      }
+      return  // no further processing needed (wrote directly, like Stop handler)
+    }
     case 'Stop': {
       // Claude's turn is over — mark all current agents as done.
       // _stopped: true prevents straggler PostToolUse events from overwriting this idle state.
@@ -1226,5 +1334,8 @@ if (typeof module !== 'undefined') {
     readLatestTokenUsage, effortLevel, activeFileForTool,
     helperHash, helperAdd, helperRemove,
     // AC-1 / AC-4: write-lock helpers and configuration (exported for testability)
-    acquireStatusLock, releaseStatusLock, STATUS_LOCK_CONFIG }
+    acquireStatusLock, releaseStatusLock, STATUS_LOCK_CONFIG,
+    // AVO-148: exported for unit testing of the new event handlers
+    processEvent,
+  }
 }
