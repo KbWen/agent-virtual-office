@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-10T10:30:00Z
-- **Update Sequence**: 50
+- **Last Updated**: 2026-06-10T12:30:00Z
+- **Update Sequence**: 51
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -74,6 +74,7 @@
   - [office-runtime] docs/specs/blocked-reason-tags.md [Shipped]  *(AVO-110 / #29 — honest-narrow blocked-reason badge; reasonCode contract)*
   - [office-runtime] docs/specs/recurring-failure-detection.md [Shipped]  *(AVO-117 — recurring blocked-reason detection; downstream of AVO-110)*
   - [multi-agent] docs/specs/pair-programming-huddle.md [Shipped]  *(AVO-106 — co-editing pair OVERLAY (desk-to-desk link); per-agent activeFile, edit-only; redesigned from a huddle per expert panel)*
+  - [ci-infra] docs/specs/ci-render-smoke.md [Shipped]  *(AVO-145 / hardening-wave H1 — blocking render-smoke gate; AC-6 test-the-test proven)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -137,6 +138,15 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-avo-145-ci-render-smoke-2026-06-10 (硬化波 H1 — CI render-smoke gate)
+
+- Branch `feat/avo-145-ci-render-smoke`, feature. Closes AVO-145. Spec `docs/specs/ci-render-smoke.md` [shipped]. Wave H1: the PR #71 failure class (render crash, CI green — no jsdom) becomes a **blocking CI gate** instead of a manual habit.
+- **Shipped**: `scripts/render-smoke.mjs` (tracked harness; spawns `node server.mjs` — the real prod artifact, serves /api/* so polling can't 404-noise — against `dist/`, asserts: svg ≤15s · ErrorBoundary fallback absent · ≥100 svg descendants · 0 pageerrors · 0 console errors; NO blind allowlists; every degenerate path — server-not-ready/port-in-use/no-browser/dist-missing — exits loud 1). `ci.yml` `render-smoke` job (ubuntu, Node 22, playwright chromium). `package.json`: playwright devDep + `npm run smoke`. Local fallback to system Chrome so devs skip the browser download.
+- **AC-6 test-the-test PROVEN twice** (coordinator + fresh reviewer independently): top-of-module throw canary → exit 1 (svg-timeout + 0-descendants + pageerror); render-time ReferenceError (the literal #71 class) → exit 1 firing all four assertions incl. "Something went wrong" + `[ErrorBoundary]` console.error. Clean build → exit 0 (≈1900–2100 svg descendants).
+- **Review (fresh acx-reviewer)**: PASS — burden-of-proof AC-1..6 all PROVEN; ground-truthed `server.mjs:119/132/555` (`--port=`/`--no-open`/`/api/health` real, not coincidental defaults); `npm pack --dry-run` confirms harness not shipped. 4 LOW advisories accepted+documented (unawaited browser.close; steady-state-poll-only crashes out of scope per spec Non-Goal; fixed port fails loud; npm install correct for devDeps).
+- **Process note**: implementation delegated to a sonnet acx-implementer which died mid-report → coordinator re-ran ALL verification first-hand before accepting (evidence in archived log, not relayed claims).
+- **Tests**: vitest **1462/1462** unchanged (zero src/ diff); smoke exit 0/1 both demonstrated. CI render-smoke job's first live run happens on this PR itself. Tests: Pass
 
 ### Ship-chore-hardening-h4-zero-noise-2026-06-10 (硬化波 H4 — validator 歸零 + 硬化波 intake)
 
