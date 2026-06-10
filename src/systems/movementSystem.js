@@ -334,10 +334,40 @@ function findSafePolyline(from, to, nodes, obstacles) {
   }
 
   if (!Number.isFinite(dist[1])) return null
-  const route = []
-  for (let cur = 1; cur !== 0 && cur !== -1; cur = prev[cur]) route.push(pts[cur])
-  route.reverse()
-  return route
+  const idxRoute = []
+  for (let cur = 1; cur !== 0 && cur !== -1; cur = prev[cur]) idxRoute.push(cur)
+  idxRoute.reverse()
+  // Anti-stacking jitter (owner bug 2026-06-11: "研究員跟不知道誰疊在一起"): the Dijkstra
+  // nodes are EXACT shared coordinates — two agents traversing the same aisle at the same
+  // moment landed on the SAME pixel (live-captured: pm and dev both at (300,180), dist 0).
+  // findBestCorridor/nearestCorridor already jitter; this graph path did not. Offset each
+  // INTERMEDIATE node (never the destination), accepting a candidate only when it stays on
+  // the floor, off furniture, AND both adjacent segments stay obstacle-free — otherwise
+  // fall back to the exact node, so a path is NEVER worse than today's. Chain validation:
+  // segment (out[i] → out[i+1]) is checked when processing i+1 with both FINAL positions
+  // (prev = already-jittered output; next = exact node now, re-checked at its own turn).
+  // Also stop pushing the SHARED node objects into paths (latent aliasing) — copies only.
+  const out = []
+  for (let i = 0; i < idxRoute.length; i++) {
+    const idx = idxRoute[i]
+    const node = pts[idx]
+    if (idx === 1) { out.push({ x: node.x, y: node.y }); continue }  // destination — exact
+    const prevPt = out.length > 0 ? out[out.length - 1] : pts[0]
+    const nextPt = pts[idxRoute[i + 1]]  // exact next (or the destination)
+    let placed = null
+    for (let attempt = 0; attempt < 4 && !placed; attempt++) {
+      const cand = {
+        x: node.x + (Math.random() - 0.5) * CORRIDOR_JITTER,
+        y: node.y + (Math.random() - 0.5) * 12,
+      }
+      if (!isOnFloor(cand.x, cand.y) || isOnObstacle(cand.x, cand.y)) continue
+      if (lineHitsAnyRect(prevPt.x, prevPt.y, cand.x, cand.y, obstacles)) continue
+      if (nextPt && lineHitsAnyRect(cand.x, cand.y, nextPt.x, nextPt.y, obstacles)) continue
+      placed = cand
+    }
+    out.push(placed || { x: node.x, y: node.y })
+  }
+  return out
 }
 
 export const DOOR_SIDES = {
