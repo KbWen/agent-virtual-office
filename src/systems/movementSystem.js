@@ -413,6 +413,27 @@ function pushPoint(path, pt) {
   if (!last || Math.hypot(last.x - pt.x, last.y - pt.y) > 2) path.push(pt)
 }
 
+// Per-transit door-anchor jitter (forensic capture 2026-06-10: 10/12 standing-stack events
+// sat at the LITERAL coordinate (240,386) = mainToLounge's raw anchor — every cross-zone
+// walk funneled through the same pixel, so any pause/freeze there stacked agents at 0px).
+// One shared offset is applied to BOTH sides of a crossing, PERPENDICULAR to the travel
+// axis (i.e. along the wall opening), keeping the crossing segment parallel to the raw one
+// — it cannot clip the door frame as long as the offset stays inside the passage, which the
+// per-endpoint floor/obstacle validation guarantees (door passages are FLOOR_ZONES). Falls
+// back to the raw anchors when a jittered endpoint would leave the floor.
+function jitterDoorCrossing(fromSide, toSide) {
+  const travelX = Math.abs(toSide.x - fromSide.x) >= Math.abs(toSide.y - fromSide.y)
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const off = (Math.random() - 0.5) * DOOR_JITTER // ±10px along the opening
+    const a = travelX ? { x: fromSide.x, y: fromSide.y + off } : { x: fromSide.x + off, y: fromSide.y }
+    const b = travelX ? { x: toSide.x, y: toSide.y + off } : { x: toSide.x + off, y: toSide.y }
+    if (isOnFloor(a.x, a.y) && !isOnObstacle(a.x, a.y) && isOnFloor(b.x, b.y) && !isOnObstacle(b.x, b.y)) {
+      return [a, b]
+    }
+  }
+  return [fromSide, toSide]
+}
+
 function routeWithinMeetingRoom(from, to) {
   if (!lineHitsRect(from.x, from.y, to.x, to.y, MEETING_TABLE)) return [to]
 
@@ -481,9 +502,10 @@ export function calculatePath(from, to) {
 
   if (exitDoor) {
     const sides = DOOR_SIDES[exitDoor]
-    const fromSide = sides?.[fromZone] || DOORS[exitDoor]
+    const rawFromSide = sides?.[fromZone] || DOORS[exitDoor]
     const exitToZone = toZone === 'mainOffice' || fromZone === 'mainOffice' ? toZone : 'mainOffice'
-    const toSide = sides?.[exitToZone] || DOORS[exitDoor]
+    const rawToSide = sides?.[exitToZone] || DOORS[exitDoor]
+    const [fromSide, toSide] = jitterDoorCrossing(rawFromSide, rawToSide)
     appendZoneRoute(path, from, fromSide, fromZone)
     pushPoint(path, toSide)
   }
@@ -493,8 +515,9 @@ export function calculatePath(from, to) {
     const entryDoor = ROUTE.mainOffice?.[toZone]
     if (entryDoor && entryDoor !== exitDoor) {
       const sides = DOOR_SIDES[entryDoor]
-      const mainSide = sides?.mainOffice || DOORS[entryDoor]
-      const toSide = sides?.[toZone] || DOORS[entryDoor]
+      const rawMainSide = sides?.mainOffice || DOORS[entryDoor]
+      const rawToSide = sides?.[toZone] || DOORS[entryDoor]
+      const [mainSide, toSide] = jitterDoorCrossing(rawMainSide, rawToSide)
       const prevPt = path[path.length - 1] || from
       appendZoneRoute(path, prevPt, mainSide, 'mainOffice')
       pushPoint(path, toSide)
@@ -535,9 +558,16 @@ export function needsLocationChange(behaviorId) {
 }
 
 // ─── Anti-overlap system ──────────────────────────────────────────────
-import { MIN_AGENT_DIST, OBSTACLE_PUSH_PX, CORRIDOR_JITTER, DOOR_JITTER } from './constants.js'
+// (MIN_AGENT_DIST no longer consumed here — the separation contract is the visual ellipse
+// below; the constant stays in constants.js for external readers.)
+import { OBSTACLE_PUSH_PX, CORRIDOR_JITTER, DOOR_JITTER } from './constants.js'
 
-// Get all other agents' current and target positions
+// Get all other agents' claimed standing spots. Resolution order matters (forensic
+// capture 2026-06-10, RC-3 "leg-target blindness"): `targetPosition` is only the CURRENT
+// LEG of a multi-waypoint walk (a corridor/door node) — while A crosses the office, a
+// picker that read targetPosition saw A "at the corridor" and happily claimed A's actual
+// landing spot. `journeyTarget` (published by AgentCharacter at walk start, cleared on
+// arrival/abort) is the walk's END — the spot A will actually occupy.
 function getOccupiedPositions(agentId, allAgents) {
   const positions = []
   if (!allAgents) return positions
@@ -546,43 +576,68 @@ function getOccupiedPositions(agentId, allAgents) {
   for (const id of Object.keys(allAgents)) {
     if (id === agentId) continue
     const agent = allAgents[id]
-    // Use target position if moving, else current position
-    const pos = agent.targetPosition || agent.position
+    const pos = agent.journeyTarget || agent.targetPosition || agent.position
     if (pos) positions.push(pos)
   }
   return positions
 }
 
-// Push a position away from all occupied positions
+// Visual-footprint overlap predicate. Sprites are ANISOTROPIC in the 3/4 view — ~32px wide
+// but ~44px tall (body + head + label) — so the old circular MIN_AGENT_DIST=35 check let two
+// agents stand 35px apart VERTICALLY and still read as a full stack (the PR #103 gate-stack
+// geometry lesson, previously applied only to the social branch). Elliptical metric: overlap
+// iff (dx/rx)² + (dy/ry)² < 1 with rx=32, ry=44. Pure → unit-testable.
+export const SPRITE_CLEAR_RX = 32
+export const SPRITE_CLEAR_RY = 44
+export function visuallyOverlapping(a, b, rx = SPRITE_CLEAR_RX, ry = SPRITE_CLEAR_RY) {
+  const nx = (a.x - b.x) / rx
+  const ny = (a.y - b.y) / ry
+  return nx * nx + ny * ny < 1
+}
+
+// Push a position away from all occupied positions until it clears the visual ellipse of
+// every one of them. The push is RADIAL and CUMULATIVE — the current offset from the
+// pusher is SCALED out to the ellipse boundary (+5-9px margin), preserving its direction,
+// so pushes from multiple occupants COMPOSE the way the old circular code did. (A first
+// draft SET x relative to whichever pusher it overlapped; with two standers in the same
+// horizontal band — coffee machine + water cooler — it oscillated between them and
+// returned a still-overlapping spot 12.4% of the time. Fresh review 2026-06-10, HIGH.)
 export function avoidOverlap(pos, occupied, maxAttempts = 8) {
   let { x, y } = pos
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    let tooClose = false
+    let pushed = false
     for (const other of occupied) {
-      const dx = x - other.x, dy = y - other.y
-      const dist = Math.hypot(dx, dy)
-      if (dist < MIN_AGENT_DIST) {
-        tooClose = true
-        // Push away from the other agent
-        if (dist < 1) {
-          // Nearly identical — push in random direction
-          const angle = Math.random() * Math.PI * 2
-          x += Math.cos(angle) * MIN_AGENT_DIST
-          y += Math.sin(angle) * MIN_AGENT_DIST
-        } else {
-          // Push along the vector away from the other agent
-          const push = (MIN_AGENT_DIST - dist) + 5
-          x += (dx / dist) * push
-          y += (dy / dist) * push
-        }
+      if (!visuallyOverlapping({ x, y }, other)) continue
+      pushed = true
+      let dx = x - other.x, dy = y - other.y
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) {
+        // Nearly identical — pick a random escape direction, horizontally weighted
+        // (sideways needs less distance AND reads naturally, 並肩).
+        dx = (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random())
+        dy = (Math.random() - 0.5)
       }
+      // Current elliptical radius (<1 means inside); scale the offset to land on the
+      // boundary plus margin. One step fully escapes THIS pusher along the existing
+      // direction — cumulative across pushers, no teleport-oscillation.
+      const k = Math.hypot(dx / SPRITE_CLEAR_RX, dy / SPRITE_CLEAR_RY)
+      const grow = (1 + (5 + Math.random() * 4) / SPRITE_CLEAR_RX) / Math.max(k, 0.05)
+      x = other.x + dx * grow
+      y = other.y + dy * grow
     }
-    if (!tooClose) break
-    // Re-clamp after push
     const clamped = clampToFloor({ x, y })
     x = clamped.x; y = clamped.y
+    if (!pushed && !occupied.some(o => visuallyOverlapping({ x, y }, o))) return { x, y }
   }
-  return clampToFloor({ x, y })
+  // Iterations exhausted (dense cluster / clamp keeps re-entering an ellipse): ring search
+  // around the SEED for the nearest spot clear of EVERYONE — horizontal directions first.
+  const ANGLES = [0, Math.PI, Math.PI / 6, Math.PI - Math.PI / 6, -Math.PI / 6, Math.PI + Math.PI / 6, Math.PI / 2, -Math.PI / 2]
+  for (const r of [SPRITE_CLEAR_RX + 8, SPRITE_CLEAR_RX + 22, SPRITE_CLEAR_RX + 38]) {
+    for (const a of ANGLES) {
+      const cand = clampToFloor({ x: pos.x + Math.cos(a) * r, y: pos.y + Math.sin(a) * r * 0.8 })
+      if (!occupied.some(o => visuallyOverlapping(cand, o))) return cand
+    }
+  }
+  return clampToFloor({ x, y })  // degraded fallback (matches the old code's last-resort behavior)
 }
 
 // Add jitter then clamp to walkable floor

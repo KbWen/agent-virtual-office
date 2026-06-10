@@ -171,9 +171,10 @@ describe('social approach distance distribution (seeded 500 samples)', () => {
 // (b) With an occupied neighbour, final target ≥ MIN_AGENT_DIST
 // ─────────────────────────────────────────────────────────────────────────────
 describe('avoidOverlap: final target separated from occupied neighbours', () => {
-  const MIN_AGENT_DIST = 35 // mirrors movementSystem.js constant
-
-  it('does not land closer than MIN_AGENT_DIST to any occupied position', () => {
+  // AVO-156: the separation contract is now the VISUAL ELLIPSE (rx=32, ry=44 — sprites are
+  // ~32px wide × ~44px tall in 3/4 view), replacing the old circular MIN_AGENT_DIST=35.
+  // A 35px VERTICAL gap still rendered as a full stack; the ellipse forbids exactly that.
+  it('never lands inside the visual ellipse of any occupied position', () => {
     // Place occupied agents in a ring — the social pick target is 'target'.
     const agents = makeAgents({
       self:    { x: 200, y: 300 },
@@ -193,9 +194,10 @@ describe('avoidOverlap: final target separated from occupied neighbours', () => 
         // Check against all OTHER agents (not self)
         for (const [aid, a] of Object.entries(agents)) {
           if (aid === 'self') continue
-          const d = Math.hypot(dest.x - a.position.x, dest.y - a.position.y)
-          // Allow 1px tolerance for floating-point / jitter resolution
-          expect(d).toBeGreaterThanOrEqual(MIN_AGENT_DIST - 1)
+          const nx = (dest.x - a.position.x) / 32
+          const ny = (dest.y - a.position.y) / 44
+          // Allow a small tolerance for floating-point / clampToFloor nudges
+          expect(nx * nx + ny * ny, `${behavior} dest inside ${aid}'s ellipse`).toBeGreaterThanOrEqual(0.94)
         }
       }
     }
