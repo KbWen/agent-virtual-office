@@ -25,7 +25,7 @@ import { scanAndMerge, getSessionStats } from './src/server/scanSessions.mjs'
 // invalid status; the canonical src module coerces them to 'idle' instead.
 // Uses the .mjs extension so Node.js can import it directly at runtime
 // (package "type":"commonjs" prevents importing .js ESM files without transpilation).
-import { normalizePost, VALID_ROLES, VALID_STATUSES } from './src/utils/normalizePost.mjs'
+import { normalizePost, nextSeq, VALID_ROLES, VALID_STATUSES } from './src/utils/normalizePost.mjs'
 
 // Count working/blocked agents — used by the /api/event webhook handler.
 function countActive(agents) {
@@ -95,14 +95,9 @@ function atomicWrite(filePath, content) {
   }
 }
 
-// Monotonic _seq: plain integer string, always >= the previous value in this process.
-// Number(_seq) / parseInt(_seq,10) both work identically; no suffix to truncate.
-let _seqLast = 0
-function nextSeq() {
-  const now = Date.now()
-  _seqLast = now > _seqLast ? now : _seqLast + 1
-  return String(_seqLast)
-}
+// Monotonic _seq: shared SINGLE counter imported from normalizePost.mjs — /api/status
+// (inside normalizePost) and /api/event (nextSeq below) write the same status file and
+// must ride one clock, or a burst on one endpoint can stale-drop the other's write.
 const isWin = process.platform === 'win32'
 function pathsEqual(a, b) { return isWin ? a.toLowerCase() === b.toLowerCase() : a === b }
 

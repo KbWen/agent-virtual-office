@@ -19,6 +19,10 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { normalizePost as canonical } from '../src/utils/normalizePost.js'
+// The instance server.mjs ACTUALLY runs (bare-Node runtime copy, drift-guarded in
+// statusFieldsDriftGuard.test.js). The #52 block below asserts BOTH instances so a
+// server-only drift cannot hide behind the canonical module's green tests (review MED-1).
+import { normalizePost as serverRuntime } from '../src/utils/normalizePost.mjs'
 
 // Behavioral cases — identical to the prior suite but now run against the
 // REAL canonical module (the embedded copy has been removed per AC-5).
@@ -87,25 +91,31 @@ describe('normalizePost canonical — behavioral cases (AC-5 regression guard)',
 // The old server.mjs inline copy dropped agents whose status was missing/invalid; the
 // canonical src module keeps them and coerces to 'idle'. This test proves the unification.
 describe('normalizePost — #52 regression: invalid status coerced to idle (AC-3)', () => {
-  it('full format: missing status → agent kept with status=idle', () => {
-    const r = canonical({ type: 'office-status', agents: [{ role: 'dev' }] })
-    expect(r.agents).toHaveLength(1)
-    expect(r.agents[0].status).toBe('idle')
-  })
-  it('full format: null status → agent kept with status=idle', () => {
-    const r = canonical({ type: 'office-status', agents: [{ role: 'dev', status: null }] })
-    expect(r.agents).toHaveLength(1)
-    expect(r.agents[0].status).toBe('idle')
-  })
-  it('full format: unknown status string → agent kept with status=idle', () => {
-    const r = canonical({ type: 'office-status', agents: [{ role: 'dev', status: 'hacking' }] })
-    expect(r.agents).toHaveLength(1)
-    expect(r.agents[0].status).toBe('idle')
-  })
-  it('full format: valid role + valid status → kept as-is (no regression)', () => {
-    const r = canonical({ type: 'office-status', agents: [{ role: 'dev', status: 'working' }] })
-    expect(r.agents[0].status).toBe('working')
-  })
+  // Run every #52 case against BOTH the canonical module AND the server-runtime .mjs
+  // instance — the server path is where the divergence lived, so asserting only the
+  // canonical module would test the wrong code (review MED-1).
+  const IMPLS = [['canonical .js', canonical], ['server-runtime .mjs', serverRuntime]]
+  for (const [name, impl] of IMPLS) {
+    it(`[${name}] full format: missing status → agent kept with status=idle`, () => {
+      const r = impl({ type: 'office-status', agents: [{ role: 'dev' }] })
+      expect(r.agents).toHaveLength(1)
+      expect(r.agents[0].status).toBe('idle')
+    })
+    it(`[${name}] full format: null status → agent kept with status=idle`, () => {
+      const r = impl({ type: 'office-status', agents: [{ role: 'dev', status: null }] })
+      expect(r.agents).toHaveLength(1)
+      expect(r.agents[0].status).toBe('idle')
+    })
+    it(`[${name}] full format: unknown status string → agent kept with status=idle`, () => {
+      const r = impl({ type: 'office-status', agents: [{ role: 'dev', status: 'hacking' }] })
+      expect(r.agents).toHaveLength(1)
+      expect(r.agents[0].status).toBe('idle')
+    })
+    it(`[${name}] full format: valid role + valid status → kept as-is (no regression)`, () => {
+      const r = impl({ type: 'office-status', agents: [{ role: 'dev', status: 'working' }] })
+      expect(r.agents[0].status).toBe('working')
+    })
+  }
 })
 
 // ── AC-3 + AC-5: server.mjs import-presence assertion ────────────────────────────────────

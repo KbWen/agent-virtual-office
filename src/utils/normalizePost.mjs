@@ -53,8 +53,12 @@ function countActive(agents) {
   return n
 }
 
+// Single monotonic clock for the whole server process. Exported so server.mjs's
+// /api/event writer shares THIS counter — two independent counters writing the same
+// status file can emit a lower _seq after a same-ms burst, tripping the cross-channel
+// stale-drop guard (inferStatus.js high-water mark). One process = one clock.
 let _seqLast = 0
-function nextSeq() {
+export function nextSeq() {
   const now = Date.now()
   _seqLast = now > _seqLast ? now : _seqLast + 1
   return String(_seqLast)

@@ -29,10 +29,20 @@ coerces an invalid status to `'idle'`, the server copy still **drops the whole a
   documents this explicitly. Header carries the full data-path map + new-field checklist.
 - **src ESM sites import it** (all 4 already live in `src/`): `normalizePost.js`, `sanitizeAgent`,
   `routeExternalAgents`, `applyExternalStatus` iterate `AGENT_CARRY_FIELDS` instead of hand-listing.
-- **server.mjs imports `src/utils/normalizePost.js` and deletes its inline copy.** Precedent: it
-  ALREADY imports `src/server/scanSessions.mjs` at runtime, and `src/` ships in the npm `files`
-  whitelist — the "zero deps on src/" comment is already false in reality. This change also FIXES
-  the #52 divergence (server path now coerces invalid status → idle).
+- **server.mjs deletes its inline copy and imports `src/utils/normalizePost.mjs` — a bare-Node
+  runtime copy that is MECHANICALLY drift-guarded.** *(Amended at review: the original AC-3 said
+  "import `normalizePost.js`", but that is physically impossible — `package.json`
+  `"type":"commonjs"` makes bare Node parse `.js` as CJS, so the ESM `.js` src chain cannot be
+  imported by `node server.mjs`. The earlier-cited `scanSessions.mjs` "precedent" was wrong: that
+  file imports only node builtins, never `src/*.js`. Decision: keep ONE canonical schema
+  (`statusFields.js`) and ship a self-contained `.mjs` runtime copy whose inlined constants,
+  sanitizers, AND full normalizePost behavior are enforced identical to the canonical module by
+  tests — list equality, a sanitizer probe table, and a multi-payload behavioral parity suite in
+  `tests/statusFieldsDriftGuard.test.js`. The drop-class is contained by mechanical guard rather
+  than eliminated by construction; this is the strongest design `type:commonjs` permits without a
+  build step for the server.)* This change also FIXES the #52 divergence (server path now coerces
+  invalid status → idle), and `/api/status` + `/api/event` share ONE `_seq` clock (exported
+  `nextSeq`) so cross-endpoint writes cannot stale-drop each other.
 - **The hook cannot import** (standalone CJS run inside user projects, zero-dep by design) → a
   **drift-guard test** driven by the canonical list: reads the hook source and asserts every carry
   field appears in BOTH hook whitelist sites (payload build + merge); failure message names the
@@ -49,9 +59,13 @@ coerces an invalid status to `'idle'`, the server copy still **drops the whole a
   remain in those sites. Existing behavior byte-identical for current fields (regression-proven by
   the untouched existing tests). Documented additive change: the POST **shorthand** branch now
   carries the same fields as the full branch (previously silently dropped reasonCode/activeFile).
-- **AC-3** `server.mjs`: inline normalizePost DELETED, replaced by
-  `import { normalizePost } from './src/utils/normalizePost.js'`. The #52 behavior unification
-  (drop→coerce-idle on the server path) gets an explicit regression test.
+- **AC-3** *(amended at review — see §Design)* `server.mjs`: inline normalizePost DELETED,
+  replaced by `import { normalizePost, nextSeq } from './src/utils/normalizePost.mjs'` (bare-Node
+  runtime copy; `.js` import impossible under `"type":"commonjs"`). The `.mjs` copy MUST be
+  mechanically drift-guarded against the canonical module (field list + sanitizer probes +
+  behavioral payload parity). The #52 behavior unification (drop→coerce-idle on the server path)
+  gets an explicit regression test asserting BOTH the canonical `.js` AND the server-runtime
+  `.mjs` instances. `/api/event` and `/api/status` share the exported `nextSeq` clock.
 - **AC-4** Hook drift-guard test: walks `AGENT_CARRY_FIELDS`, asserts each field name appears in
   the hook's payload-build site AND merge site (source-level check); failing output names
   field + site. Hook file itself UNCHANGED in this PR.
