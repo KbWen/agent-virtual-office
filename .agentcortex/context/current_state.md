@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T06:45:00Z
-- **Update Sequence**: 63
+- **Last Updated**: 2026-06-11T07:45:00Z
+- **Update Sequence**: 64
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -145,6 +145,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-branch-hop-ghost-sessions-2026-06-11 (owner 回報 bug — 角色被拉到畫面上方/消失重現)
+
+- Branch `fix/branch-hop-ghost-sessions`, quick-win. Owner-reported live bugs root-caused: session slug 內嵌 git branch → 換分支後舊 slug 檔殘留（5 分鐘新鮮窗內）→ scanSessions 把同一 checkout 當兩個 session 合併 → composite `slug~role` 幽靈生成在 OVERFLOW 位（畫面上方 y≈50–80）、舊檔過期再被 eviction 收走（消失/重現）。今天的 16-branch session 在 ~/.claude 累積了 **43 個幽靈檔**。
+- **Shipped（源頭修復）**: hook 的 `cleanupGhostAliases()`（processEvent 開頭）— 檔名 4-hex cwd-hash 尾碼做 readdir 便宜預過濾，unlink 前 **parse 證明 `_cwd === process.cwd()`**（跨 repo hash 碰撞永不誤殺）；bare 檔絕不碰；全 try/catch。**COURSE CORRECTION 記錄**：第一版做在 scanner 端（同 _cwd 去重）— 弄壞 11 個 multi-session 測試且會從側門殺掉已出貨的合併機制 → 還原，改 hook 端（一個 checkout 一個 HEAD → 同 cwd 異 slug 必為自己的舊化名）。
+- **Review（fresh）**: PASS — 8 點舉證全 PROVEN；reviewer 親自做突變測試（拆 _cwd 防護 → 碰撞測試失敗）；Windows 大小寫不一致的失敗方向是 KEEP（漏清交給 5 分鐘過期，安全方向）。
+- **LIVE 鐵證**：修復在本 session 即時生效（hook 從工作樹執行）— ~/.claude **43 → 1 檔**、GET /api/status **0 composite**。**Tests**: 1810 → **1818** (+8)。Tests: Pass
 
 ### Ship-chore-q2-q3-security-ci-coherence-2026-06-11 (品質波 Q2+Q3 — 漏洞修補 + CI 一致性)
 
