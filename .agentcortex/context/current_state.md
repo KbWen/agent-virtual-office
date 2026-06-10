@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T20:20:00Z
-- **Update Sequence**: 69
+- **Last Updated**: 2026-06-11T21:25:00Z
+- **Update Sequence**: 70
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -145,6 +145,12 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-social-lateral-bias-2026-06-11 (owner 三疊截圖 — 社交角度側偏 + 兩套件去 flake)
+
+- Branch `fix/social-lateral-bias`, quick-win。Owner 指正夜景截圖是**三個 sprite 疊在 gate**（非僅家具問題）。查證入口**沒有任何事件聚集點** → 機制 = gate 本尊 + 兩個社交拜訪者：均勻 0–2π 拜訪角度讓訪客落在 ~40px 高的 sprite **正上/正下方**——3/4 視角下垂直對齊即使隔滿 70px 環也完全疊住。
+- **Shipped**: 拜訪角度改抽 **水平 ±45° 雙錐**（並肩聊天；構造上 |dx| ≥ |dy| → 垂直成列不可能）+ 200 樣本分佈釘。順手 deflake：movementPathingDeep 與 behaviorEngine 加 seeded RNG（無種子下 ~1/500 全套件閃失敗，本輪實際撞到）。
+- Review 右尺寸化：3 行幾何 + 構造性證明測試 = self-review（同表面今日已兩度 fresh review）。**Tests: 1870 → 1871**。Tests: Pass
 
 ### Ship-feat-social-chat-feel-2026-06-11 (owner 批次 — 聊天感調校 + 家具障礙補全)
 
