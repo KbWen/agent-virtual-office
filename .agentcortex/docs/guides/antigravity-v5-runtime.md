@@ -2,8 +2,13 @@
 
 ## Antigravity Hard-Path Enforcement Overlay
 
-Version: v1.2.0
+Engine generation: v5 (anti-drift overlay) · Canonical contract: AGENTS.md §Agentic OS Runtime v1
 Date: 2026-04-17
+
+> **Two version axes — do not conflate.** "Runtime v5" throughout this file is this
+> anti-drift *engine spec's* own generation number; the canonical Antigravity runtime
+> **contract** version is **Runtime v1** (see `AGENTS.md §Agentic OS Runtime v1`). The
+> framework release version (v1.5.1) is tracked separately in `CHANGELOG.md`.
 Scope: **Antigravity environments** (token-generation agents where shell exit codes don’t halt execution)
 
 ### Why v5 exists
@@ -48,7 +53,7 @@ flowchart LR
     %% ==========================================
     subgraph GOV ["GOVERNANCE SHELL (Constraint Layer)"]
         direction TB
-        A1["AGENTS.md<br/>Runtime v4 Minimal Contract"]:::gov
+        A1["AGENTS.md<br/>Runtime v1 (Antigravity Contract)"]:::gov
         A2[".agent/rules<br/>engineering_guardrails.md + others"]:::gov
         A3["Write Isolation<br/>SSoT controlled writes"]:::gov
     end
@@ -86,7 +91,7 @@ flowchart LR
         WL[".agentcortex/context/work/&lt;worklog-key&gt;.md<br/>Work Log + Drift + Evidence"]:::art
         SSOT[".agentcortex/context/current_state.md<br/>SSoT (controlled writes)"]:::art
         CODE["src/** + tests/**"]:::art
-        GUIDE["docs/guides/antigravity-anti-drift.md"]:::art
+        GUIDE[".agentcortex/docs/guides/antigravity-v5-runtime.md"]:::art
     end
 
     %% ==========================================

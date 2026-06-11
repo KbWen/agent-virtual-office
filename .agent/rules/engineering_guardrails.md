@@ -7,7 +7,7 @@ Global (applies to all projects using template).
 ## Reading Mode
 
 - **Full Mode** (default for `feature`, `architecture-change`, `hotfix`): Read core sections first, then load conditional sections per the Heading-Scoped Read rules below.
-- **Quick Mode** (for `quick-win`): Do NOT read this file. Essential quick-win rules (Confidence Gate, Bug Fix Protocol, Doc Integrity) are embedded in `bootstrap.md` §7 quick-win classification. If the task escalates beyond quick-win, switch to Full Mode.
+- **Quick Mode** (for `quick-win`): Do NOT read this file. Essential quick-win rules (Confidence Gate, Bug Fix Protocol, Doc Integrity) are embedded in `bootstrap.md` §1 Classification Tiers. If the task escalates beyond quick-win, switch to Full Mode.
 - **Skip Mode** (for `tiny-fix` ONLY): Do NOT read this file. `AGENTS.md` §Core Directives provides sufficient governance for tiny-fix tasks (scope discipline, evidence requirement, fast-path rules). If the task escalates beyond tiny-fix, switch to Quick or Full Mode and read this file at that point.
 
 ### Heading-Scoped Read (Full Mode Optimization)
@@ -28,11 +28,7 @@ The following sections are **conditional** (load only when triggered):
 - §9 Intent Safety Rules → already internalized by AI at session start; re-read only on ambiguity (per AGENTS.md Read-Once Discipline)
 - §11 Multi-Person Collaboration → only when Work Log lock conflict detected or multi-person scenario
 - §12 Data & Code Integrity Protection → load at `/implement` entry (not at `/bootstrap` or `/plan`)
-
-> **Token budget estimate** (1 line ≈ 15 tokens):
-> Core sections (§1, §2, §4, §7, §8.1, §10) ≈ 170 lines ≈ **2,550 tokens**
-> Conditional sections (§3, §5, §6, §8.2, §9, §11, §12) ≈ 156 lines ≈ **2,340 tokens**
-> Skipping all conditional sections saves up to **~2,340 tokens** per Full Mode session when none are triggered.
+- §13 Governance Change Norms → only when the change modifies `AGENTS.md`, `.agent/rules/*`, `.agent/workflows/*`, `.agent/config.yaml`, or adds a new imperative rule or gate
 
 ### Loaded-Sections Receipt (Agent-Facing Signal)
 
@@ -104,7 +100,7 @@ Before emitting any verdict (phase pass/fail, classification, completion claim),
 ### 4.2 Spec Freezing (SSoT Protection)
 
 - Whenever a Spec is approved or the task transitions to implementation, the Spec MUST be marked as **FROZEN** (e.g., via YAML frontmatter `status: frozen`).
-- **Shipped Status**: After `/ship` delivers a spec's feature, `/ship` sets `status: shipped` on the spec frontmatter. Shipped specs are **historical reference only** — they document past decisions. For current system design, read the corresponding Domain Doc L1 (`docs/architecture/<domain>.md`) instead. Shipped specs MUST NOT be cited as authoritative current design.
+- **Shipped Status**: After `/ship` delivers a spec's feature, `/ship` sets `status: shipped` on the spec frontmatter. Shipped specs are **historical reference only** — they document past decisions. For current system design, read the corresponding Domain Doc L1 (`docs/architecture/<domain>.md`) instead, when present — `docs/architecture/` is created on demand by `/app-init` (capability-by-presence; absent on a fresh project until the first domain doc is written). Shipped specs MUST NOT be cited as authoritative current design.
 - AI agents MUST NOT modify, review, or suggest refactoring for any document marked as `FROZEN` or `Finalized` during normal tasks.
 - **Exception (AI-Initiated Unfreeze)**: If the AI discovers that a FROZEN spec must be changed (due to a bug or requirement change), the AI MUST:
   1. **STOP** and surface the issue explicitly: "⚠️ [Filename] is FROZEN but requires update: [Reason]. Approve to unfreeze and continue? (yes/no)"
@@ -191,7 +187,6 @@ To prevent Work Log bloat and premature context compaction, agents MUST NOT past
 **Spec Drift Prevention**
 - Before implementing any feature, the agent MUST read the corresponding Spec file in `docs/specs/`. Missing spec for a non-trivial feature = **Bootstrap Gate FAIL**.
 - If implementation deviates from the spec (even slightly), STOP and report the deviation before proceeding. Silent scope expansion or shrinkage = **Gate FAIL**.
-- Never silently expand or shrink scope — surface every delta to the user and obtain confirmation before continuing.
 
 **Test Quality**
 - Unit tests MUST cover: happy path, error path, and at least one boundary condition. A test asserting only `expect(result, isNotNull)` is insufficient — test actual values.
@@ -339,6 +334,7 @@ If a section is not applicable, write `none` instead of omitting it. This keeps 
   - `docs/specs/_product-backlog.md` — route to `/spec-intake` instead of tiny-fix
   - Any file with `status: frozen` frontmatter — frozen files require unfreeze approval (§4.2)
   - `AGENTS.md`, `.agent/rules/*.md`, `.agent/config.yaml` — framework governance files affect all agents globally
+  - `CLAUDE.md`, `GEMINI.md` — platform adapter entry files; they `@import AGENTS.md` and carry governance dispatch, so adapter edits are governance-semantic and must escalate
   - `.agentcortex/templates/*` — template changes propagate to all downstream projects via `deploy.sh`
   - `.agentcortex/bin/validate.*` — validator changes are governance-critical (affect CI gate verdicts)
 
@@ -424,3 +420,16 @@ Never silently overwrite an existing file.
 Every implementation task MUST include in the Work Log:
 > **"Rollback plan: How do I undo this if it breaks production?"**
 Acceptable answers: revert commit SHA, feature-flag toggle, migration rollback steps. "Delete the file" is not sufficient.
+
+## 13. Governance Change Norms (Deletion-First + ADD-Gate)
+
+**Applies to**: changes that modify `AGENTS.md`, `.agent/rules/*`, `.agent/workflows/*`, `.agent/config.yaml`, or add any MUST/NEVER/gate. Conditional read — skip for all other work.
+
+- **Deletion-First Norm**: a change to an always-loaded instruction surface (`AGENTS.md`, `.agent/rules/*.md`, `.agent/workflows/shared-contracts.md`) MUST cite a deletion/trim in the same change, OR record a 1-line net-add justification in the Work Log. Every line on these surfaces costs tokens in every future session.
+- **ADD-Gate**: a NEW rule (MUST/NEVER/gate) anywhere under `.agent/**` requires a declared signal tier — pick the STRONGEST feasible:
+  - **T1 machine-enforced**: a validator/test/hook exists or is added in the same change.
+  - **T2 eval-backed**: a guarding case is added to `.agentcortex/eval/governance.yaml` (the eval coverage WARN then tracks it). Available only for rules inside the eval harness's governance files; workflow gates use T1.
+  - **T3 named human observer**: name the consumer + record a 1-line unmeasurable-rationale.
+- External citations (standards, research) are supporting metadata on any tier — never a tier by themselves. No feasible tier → do NOT add the rule; prefer deletion.
+- Governance-rule-introducing specs declare `signal_tier:` in frontmatter (`none` when the spec adds no new rule) — an advisory validator WARN checks presence.
+- Existing rules are grandfathered; retrofit opportunistically (use `docs/guides/delete-bias-workflow.md` to prove a rule is load-bearing before deleting it).

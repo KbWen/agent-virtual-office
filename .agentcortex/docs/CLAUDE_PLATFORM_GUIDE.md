@@ -36,9 +36,9 @@ Handoff timing is governed by the cross-platform SSoT — `AGENTS.md §Context P
 | Shim | Phase | Skills injected | Model |
 |---|---|---|---|
 | `acx-implementer.md` | /implement | verification-before-completion | sonnet |
-| `acx-reviewer.md` | /review | requesting-code-review, red-team-adversarial | opus |
+| `acx-reviewer.md` | /review | red-team-adversarial | opus |
 | `acx-tester.md` | /test | verification-before-completion, test-driven-development | sonnet |
-| `acx-handoff.md` | /handoff | finishing-a-development-branch | sonnet |
+| `acx-handoff.md` | /handoff | verification-before-completion | sonnet |
 | `acx-shipper.md` | /ship | production-readiness | sonnet |
 
 **Design rule**: shim bodies are ≤5 lines pointing to the canonical workflow file. All logic lives in `.agent/workflows/`. If phase rules change, update the workflow — not the shim.

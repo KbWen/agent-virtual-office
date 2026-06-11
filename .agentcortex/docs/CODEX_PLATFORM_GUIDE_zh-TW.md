@@ -35,6 +35,18 @@
 3. 每次實作後跑 `/review` 與 `/test`。
 4. 提交前跑 `./.agentcortex/bin/validate.sh`。
 
+## GitHub Contributors 歸屬
+
+GitHub repo 右側的 `Contributors` 來自預設分支上的 commit attribution，不是 repository collaborator invitation。若專案希望 Codex 執行的工作在 Contributors 面板顯示為 `codex`，至少要有一個合併到預設分支的 commit 使用 GitHub `codex` 帳號可識別的作者或共同作者 email。
+
+Codex App/Web authored commit 建議使用：
+
+```text
+Codex <267193182+codex@users.noreply.github.com>
+```
+
+合併 Codex-authored PR 時，優先使用會保留 individual commit authors 的 merge 或 rebase merge。若使用 squash merge，請在最終 squash commit 保留 `Co-authored-by: Codex <267193182+codex@users.noreply.github.com>` trailer。
+
 ## Handoff Hard Gate（非 tiny-fix）
 
 在 `/ship` 之前，必須先有 `/handoff`，且 References 最低要求：

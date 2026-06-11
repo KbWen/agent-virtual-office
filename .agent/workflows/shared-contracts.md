@@ -12,6 +12,29 @@ At every phase entry (`/plan`, `/implement`, `/review`, `/test`, `/handoff`, `/s
 - **Conflict Resolution**: Reuse `## Conflict Resolution` from bootstrap if multiple skills need precedence or scoping boundaries.
 - **Exception**: `tiny-fix` has no Work Log — skip this check entirely.
 
+## Phase-Entry Lock (single-writer per Work Log)
+
+At every non-`tiny-fix` phase entry (`/plan`, `/implement`, `/review`, `/test`, `/handoff`, `/ship`), acquire or refresh the Work Log lock BEFORE the first Work Log write of that phase:
+
+```bash
+python .agentcortex/tools/recover_worklog_lock.py ensure \
+  --lock .agentcortex/context/work/<worklog-key>.lock.json \
+  --worklog .agentcortex/context/work/<worklog-key>.md \
+  --owner "<owner>" --session "<session>" \
+  --branch "<branch>" --phase <entering-phase>
+```
+
+Consume the exit code per `.agent/config.yaml §worklog_lock.mode`:
+
+- **Exit 0** (`created` / `updated` / `recovered`): proceed. A recovery already appended its own Drift Log line.
+- **Exit 2** (`active` — held by another live session) under `mode: blocking` (default): **Gate FAIL**. Output the holder (owner / session / updated_at) and STOP with exactly these options: (a) wait until the lock goes stale (`stale_timeout_minutes`), (b) ask the user to approve a takeover, then re-run `ensure` with `--takeover` (requires `--worklog`; appends an audit line to the Work Log Drift Log), (c) continue on a different branch. Do NOT write to the Work Log while this gate is failed.
+- **Exit 2** under `mode: advisory`: warn with holder details and ask the user to confirm before proceeding (legacy behavior).
+- **Exit 3** (persistent filesystem failure): surface the error and retry once; do NOT misreport it as a held lock.
+
+At `/ship` and `/handoff` completion, attempt `release` (steps live in those workflows; failure → WARN, never gate-fail — staleness self-heals). `tiny-fix` is exempt (no Work Log). **Python-unavailable fallback**: blocking enforcement requires the helper; without Python the lock degrades to the manual advisory checklist in `bootstrap.md §2a` — stated honestly, no fake MUST.
+
+Enforcement teeth (per the [enforcement] Global Lesson): the tool's exit codes are tested in `tests/guard/test_worklog_lock_blocking.py`, and `validate.sh`/`validate.ps1` WARN when a non-stale lock's owner/phase mismatches the Work Log header — the signature of a session that skipped this contract.
+
 ## Verification Before Completion (5-Gate Sequence)
 
 When `verification-before-completion` is active and completion is claimed for any non-`tiny-fix` phase, execute these gates IN ORDER before proceeding:

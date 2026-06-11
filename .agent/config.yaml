@@ -40,22 +40,35 @@ skill_cache_policy:
   min_body_chars: 50
   # NOTE: prefer_hash_when_available was removed in 2026-04-25 cleanup.
   # No validator computed cached_hash in practice; the structural check
-  # above (1-4) is the actual cache predicate. See AGENTS.md §Skill Safety #7.
+  # above (1-4) is the actual cache predicate. See AGENTS.md §Skill Safety & Precedence.
 
-# Advisory Work Log locking — prevents accidental concurrent edits.
+# Work Log locking — single-writer guarantee per branch Work Log.
 # Contract: AGENTS.md §Multi-Person / Multi-Session Collaboration.
+# Phase-entry consumption: .agent/workflows/shared-contracts.md §Phase-Entry Lock.
 worklog_lock:
   # Lock file: .agentcortex/context/work/<worklog-key>.lock.json
-  # Schema: { "owner", "session", "branch", "phase", "updated_at", "stale_timeout_minutes" }
+  # Schema: { "owner", "session", "branch", "phase", "updated_at", "stale_timeout_minutes", "pid"? }
   stale_timeout_minutes: 60
+  # NOTE: lock refresh is phase-granular. A single phase that runs longer than
+  # stale_timeout_minutes opens a mid-phase staleness window in which another
+  # session may legitimately recover the lock. Documented limitation.
+  #
+  # mode governs how workflows consume the tool's exit code 2 (active other-holder).
+  # The tool itself is mode-independent: it never overwrites an active
+  # other-holder lock and exits 2 in both modes.
+  #   blocking (default) — phase entry treats exit 2 as Gate FAIL; options are
+  #     wait-for-staleness, user-approved `ensure --takeover`, or another branch.
+  #   advisory — legacy behavior: warn with holder details + ask confirmation.
+  mode: blocking
   # Behavior:
-  #   - bootstrap and phase entry WARN when a non-stale lock belongs to another session.
-  #   - Solo workflow remains smooth (lock is auto-created/updated, never blocks).
-  #   - validate can detect obviously stale or conflicting lock states.
+  #   - Solo single-session flow never hits exit 2 (lock auto-created/refreshed).
+  #   - /ship and /handoff attempt `release` at phase exit (failure → WARN; staleness self-heals).
+  #   - validate.sh/.ps1 WARN on stale/unreadable locks AND on non-stale locks whose
+  #     owner/phase mismatch the Work Log header (detects sessions that skipped phase-entry ensure).
   enabled: true
 
 # Domain Doc governance — two-layer Architecture (Synthesis L1 + Decision Log L2).
-# Contract: AGENTS.md §Document Lifecycle Governance.
+# Contract: .agentcortex/docs/guides/doc-governance.md (AGENTS.md §References → Doc Lifecycle).
 domain_doc:
   # Maximum lines for a Domain Doc Layer 1 (Synthesis) file.
   # Exceeding this cap should trigger /govern-docs --restructure.
@@ -72,7 +85,7 @@ domain_doc:
 # User Skill Preferences — per-user persistent skill pinning/disabling.
 # Capability-by-presence: if the preferences file does not exist, this
 # entire feature is inert. Zero cost.
-# See: AGENTS.md §Skill Safety & Precedence item 8.
+# See: AGENTS.md §Skill Safety & Precedence (items 5–9 deferred to bootstrap.md §3.6).
 user_preferences:
   # Path (relative to repo root) where the user's personal preferences
   # file is read. This path MUST be gitignored.

@@ -35,6 +35,18 @@ Use the canonical state machine:
 3. Run `/review` and `/test` after every implementation.
 4. Run `./.agentcortex/bin/validate.sh` before submission.
 
+## GitHub Contributor Attribution
+
+GitHub repository `Contributors` are derived from commit attribution on the default branch, not from repository collaborator invitations. If a project wants Codex-authored work to appear as `codex` in the Contributors panel, keep at least one merged commit authored or co-authored with the GitHub-linked no-reply address for the `codex` account.
+
+Recommended author identity for Codex App/Web-authored commits:
+
+```text
+Codex <267193182+codex@users.noreply.github.com>
+```
+
+When merging a Codex-authored PR, prefer a merge or rebase merge that preserves individual commit authors. If using squash merge, preserve a `Co-authored-by: Codex <267193182+codex@users.noreply.github.com>` trailer in the final squash commit.
+
 ## Handoff Hard Gate (Non-tiny-fix)
 
 Before `/ship`, you must have a `/handoff`. Minimum reference requirements:

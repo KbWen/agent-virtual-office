@@ -88,6 +88,16 @@ Files the next agent can SKIP (already processed, no changes expected):
 ```
 This makes the `TESTED → HANDEDOFF → SHIPPED` chain auditable — the validator's STRICT progression check (`test → handoff → ship`) can only fire when handoff emits this receipt.
 
+**Lock Release**: After the Gate Receipt is written, MUST attempt to release the Work Log lock so the resuming session can acquire it immediately (the post-handoff window is exactly when another session arrives within the staleness timeout):
+
+```bash
+python .agentcortex/tools/recover_worklog_lock.py release \
+  --lock .agentcortex/context/work/<worklog-key>.lock.json \
+  --owner "<owner>" --session "<session>"
+```
+
+Failure or refusal → WARN only (staleness self-heals); never a gate fail. Skip when Python is unavailable.
+
 > **Why Read Map + Skip List?** The biggest cross-session token waste is the next agent re-reading files the previous agent already processed. The Read Map tells it exactly where to look; the Skip List prevents redundant reads. Together they can cut handoff bootstrap tokens by 40-60%.
 
 ## 3a. Skill-Aware Handoff (Auto-Enforced)

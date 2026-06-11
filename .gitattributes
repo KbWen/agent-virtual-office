@@ -15,10 +15,14 @@
 *.py text eol=lf
 *.json text eol=lf
 
-# Markdown and YAML always text
-*.md text
-*.yaml text
-*.yml text
+# Markdown and YAML: always text, always LF.
+# LF is mandatory so that deploy.sh's EOL-normalized hashing and the manifest
+# hash entries agree with the source repo's checked-out file content.
+# Without eol=lf, git autocrlf=true would check out CRLF .md/.yaml files,
+# causing every unmodified deployed file to appear hash-mismatched.
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
 
 # Keep binary files as-is
 *.png binary

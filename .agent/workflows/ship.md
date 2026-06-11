@@ -262,6 +262,16 @@ Before proceeding with ship, check `docs/reviews/` for any review snapshots that
 
 8. **SSoT Heartbeat Update** (AC-25): As the final step of State Update & Archival, increment the `Update Sequence` by 1 in `current_state.md` and set `Last Updated` to the current ISO timestamp. This runs after all other ship writes (SSoT, archive, backlog, freeze, knowledge consolidation) are complete. Use guard_context_write.py for this write.
 
+9. **Lock Release**: After archival completes, MUST attempt to release the Work Log lock (the branch is closed; a lingering lock only false-blocks the next session on this key until staleness):
+
+   ```bash
+   python .agentcortex/tools/recover_worklog_lock.py release \
+     --lock .agentcortex/context/work/<worklog-key>.lock.json \
+     --owner "<owner>" --session "<session>"
+   ```
+
+   Failure or refusal → WARN only (staleness self-heals); never a gate fail. Skip when Python is unavailable.
+
 ## Post-Ship Lifecycle Suggestions (Advisory)
 
 > **Output format**: Single line appended to ship chat block. Emit ONLY triggered items. **Never blocks.**

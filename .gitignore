@@ -57,28 +57,6 @@ dist/
 # End AgentCortex Template - Downstream Ignore Defaults
 
 
-# Agentic OS Template - Downstream Ignore Defaults
-
-# Runtime State (work logs are session-local; private is never committed)
-.agentcortex/context/work/*.md
-.agentcortex/context/work/*.lock.json
-!.agentcortex/context/work/.gitkeep.md
-.agentcortex/context/.guard_receipt.json
-.agentcortex/context/.guard_locks/
-.agentcortex/context/private/
-.agent/private/
-
-# Deploy Artifacts
-.agentcortex-src/
-*.acx-incoming
-
-# Third-party AI Tool Local State
-.openrouter/
-.claude-chat/
-.cursor/
-.antigravity/scratch/
-
-# End Agentic OS Template - Downstream Ignore Defaults
 
 
 # Python bytecode
@@ -107,3 +85,29 @@ deploy_brain.sh
 # Sanitized fixtures live in tests/fixtures/hook-events/ and ARE committed.
 office-hook-capture
 office-hook-capture.jsonl
+
+
+# Agentic OS Template - Downstream Ignore Defaults
+
+# Runtime State (work logs are session-local; private is never committed)
+.agentcortex/context/work/*.md
+.agentcortex/context/work/*.lock.json
+!.agentcortex/context/work/.gitkeep.md
+.agentcortex/context/.guard_receipt.json
+.agentcortex/context/.guard_locks/
+.agentcortex/context/private/
+.agent/private/
+
+# Deploy Artifacts
+.agentcortex-src/
+*.acx-incoming
+*.acx-local
+
+# Third-party AI Tool Local State
+.openrouter/
+.claude-chat/
+.cursor/
+.antigravity/scratch/
+
+# End Agentic OS Template - Downstream Ignore Defaults
+

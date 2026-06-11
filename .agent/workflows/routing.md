@@ -132,6 +132,18 @@ It does NOT contain governance rules — those remain in `AGENTS.md`.
 | "查文件", "check docs", "查官方文檔", "read the docs", "看文件再做" | `doc-lookup` |
 | "執行計畫" / "execute the plan" / "完成分支" / "merge 準備" / "請求 review" / "接收 review" / "寫計畫" | inlined into `/plan`, `/implement`, `/handoff`, `/ship`, `/review` workflows — no skill load needed |
 
+### 3a. Framework Skill Namespace & Downstream `custom-*` Reservation (Ref: ADR-005)
+
+The framework owns exactly these **14** skill names (do not reuse them for downstream-custom skills):
+
+`api-design`, `auth-security`, `database-design`, `dispatching-parallel-agents`, `doc-lookup`, `frontend-patterns`, `karpathy-principles`, `production-readiness`, `red-team-adversarial`, `subagent-driven-development`, `systematic-debugging`, `test-driven-development`, `using-git-worktrees`, `verification-before-completion`.
+
+**Reserved downstream namespace** — the framework guarantees it will **never** ship a skill whose name begins with `custom-`. Downstream projects (fork or clone) SHOULD name their own skills `custom-<name>` under `.agents/skills/custom-<name>/` (full body) + `.agent/skills/custom-<name>` (metadata). This guarantees:
+
+- **No collision on upgrade**: an upstream skill can never later claim a `custom-*` name.
+- **Preservation on deploy**: `custom-*` skills are net-new to the framework source, so `deploy.sh` never touches them; even a same-named framework skill edit is sidecar-protected, not silently overwritten (Ref: ADR-005, `deploy.sh get_tier` → scaffold for `.agent/skills/*`,`.agents/skills/*`).
+- **Additive-fork cleanliness**: because `custom-*` files are disjoint from the framework's file set, `git pull upstream` stays conflict-free for forks that only *add* skills (never edit framework skills in place).
+
 ---
 
 ## 4. Ambiguity Rules
@@ -140,7 +152,7 @@ It does NOT contain governance rules — those remain in `AGENTS.md`.
 
 2. **Optional module ambiguity**: A phrase like "用 claude" requires clear delegation intent. Ambiguous phrasing (e.g., "can Claude do this?") does NOT trigger `/claude-cli`. Require explicit delegation request before routing to any optional module.
 
-3. **tiny-fix vs quick-win escalation**: Modifying `docs/specs/`, `docs/architecture/`, any file with `status: frozen`, `AGENTS.md`, `.agent/rules/*.md`, `.agent/config.yaml`, `.agentcortex/templates/*`, or `.agentcortex/bin/validate.*` always escalates to quick-win minimum — even if fewer than 3 files are touched. (Authoritative rule in AGENTS.md §Agentic OS Runtime v1 rule 2.)
+3. **tiny-fix vs quick-win escalation**: Modifying `docs/specs/`, `docs/architecture/`, any file with `status: frozen`, `AGENTS.md`, `.agent/rules/*.md`, `.agent/config.yaml`, `.agentcortex/templates/*`, `.agentcortex/bin/validate.*`, or platform adapter entry files (`CLAUDE.md`, `GEMINI.md`) always escalates to quick-win minimum — even if fewer than 3 files are touched. (Authoritative rule in AGENTS.md §Agentic OS Runtime v1 rule 2.)
 
 4. **Skill vs workflow**: If a user's request matches both a skill phrase (§3) and a workflow route (§1), route to the workflow phase first and activate the skill within that phase. Skills do not replace phase routing.
 
@@ -186,7 +198,7 @@ All commands are dispatched per `AGENTS.md §Agentic OS Runtime v1` and execute 
 | `/ask-openrouter` | `.agent/workflows/ask-openrouter.md` | **optional**: OpenRouter model |
 | `/codex-cli` | `.agent/workflows/codex-cli.md` | **optional**: Codex CLI delegation |
 | `/claude-cli` | `.agent/workflows/claude-cli.md` | **optional**: Claude CLI delegation |
-| `/new-feature` | `.agent/workflows/new-feature.md` | **deprecated**: use `feature` + `/bootstrap` |
-| `/medium-feature` | `.agent/workflows/medium-feature.md` | **deprecated**: use `feature`/`architecture-change` + `/bootstrap` |
-| `/small-fix` | `.agent/workflows/small-fix.md` | **deprecated**: use `quick-win` + `/bootstrap` |
+| `/new-feature` | — *(removed)* | **deprecated**: use `feature` + `/bootstrap` |
+| `/medium-feature` | — *(removed)* | **deprecated**: use `feature`/`architecture-change` + `/bootstrap` |
+| `/small-fix` | — *(removed)* | **deprecated**: use `quick-win` + `/bootstrap` |
 | `/other-custom` | `.agent/workflows/other-custom.md` | **deprecated**: custom/experimental flow |
