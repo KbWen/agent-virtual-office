@@ -278,25 +278,31 @@ export const MAIN_ROUTE_NODES = [
 
 // ─── Path calculation ───────────────────────────────────────────────
 
-function lineHitsRect(ax, ay, bx, by, r) {
+export function lineHitsRect(ax, ay, bx, by, r) {
   const dx = bx - ax, dy = by - ay
   let tMin = 0, tMax = 1
   // Order the slab intersection bounds with a scalar temp instead of a destructuring
   // swap `[t1, t2] = [t2, t1]` — the latter allocates a 2-element array literal each
   // time the line runs backward through a slab. lineHitsRect is called per desk per
   // line-segment inside calculatePath's corridor routing.
+  // Near-axis branches test the segment's coordinate RANGE, not just the start point:
+  // a start-only check missed near-vertical segments drifting <0.1px across an edge
+  // plane (jittered Dijkstra nodes produced real 0.005–0.3px furniture grazes at ~0.3%
+  // of pairs — chip task_4be9264a). Range check is conservative: it never misses a real
+  // hit and may over-flag by ≤0.1px, which only makes a jitter candidate fall back to
+  // its exact node.
   if (Math.abs(dx) > 0.1) {
     let t1 = (r.x1 - ax) / dx, t2 = (r.x2 - ax) / dx
     if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp }
     tMin = Math.max(tMin, t1); tMax = Math.min(tMax, t2)
     if (tMin > tMax) return false
-  } else if (ax < r.x1 || ax > r.x2) return false
+  } else if (Math.max(ax, bx) < r.x1 || Math.min(ax, bx) > r.x2) return false
   if (Math.abs(dy) > 0.1) {
     let t1 = (r.y1 - ay) / dy, t2 = (r.y2 - ay) / dy
     if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp }
     tMin = Math.max(tMin, t1); tMax = Math.min(tMax, t2)
     if (tMin > tMax) return false
-  } else if (ay < r.y1 || ay > r.y2) return false
+  } else if (Math.max(ay, by) < r.y1 || Math.min(ay, by) > r.y2) return false
   return true
 }
 
