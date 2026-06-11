@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T15:45:00Z
-- **Update Sequence**: 80
+- **Last Updated**: 2026-06-11T17:05:00Z
+- **Update Sequence**: 81
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -147,6 +147,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-semgrep-baseline-gate-2026-06-11 (#126 — Semgrep ERROR 級轉阻擋,baseline 三角化)
+
+- Branch `chore/semgrep-baseline-gate`, quick-win。**確認先行**(semgrep 無法在 Windows 跑):從 main 最新 SAST log 抽出完整 baseline——20 findings = 13 rule×file 組:ERROR×2、WARNING×10 組(全屬設計接受:localhost 傳輸契約、操作者自選路徑、bundled 翻譯表、opt-in CORS allowlist、範例 nginx)、INFO×1。
+- **兩個 ERROR 當場解決**:sim-soak.yml dispatch input 改走 `env: SOAK_MINUTES` 間接化(真修);sim-soak.mjs `spawn shell:true` 範圍化 nosemgrep + 理由(Windows npx .cmd shim 需 shell;PORT 為 parseInt 驗證的模組常數)。
+- **閘門語意**:security.yml 全掃描維持 report-only + 新增 `--severity ERROR --error` 阻擋 pass;新 ERROR(程式碼或 `--config auto` registry 漂移)按設計 FAIL CI,註解明示「三角化、不放鬆」。Baseline 快照:`docs/reviews/2026-06-11-semgrep-baseline.md`(doc_state: snapshot,13 組處置表)。
+- **Evidence**:PR #136 SAST 自證——report pass 18 findings(20→18,兩 ERROR 消失)、**阻擋 pass 0 findings(172 條 ERROR 級規則/407 檔)**;7/7 checks 綠;audit/TruffleHog 未動仍綠。合併後 `gh workflow run sim-soak -f minutes=1` 驗 dispatch 路徑。Tests: Pass
 
 ### Ship-chore-dependency-wave-minor-2026-06-11 (#125 依賴維護波 — patch/minor 車道)
 
