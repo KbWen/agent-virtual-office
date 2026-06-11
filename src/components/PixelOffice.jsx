@@ -889,20 +889,17 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       setSceneBounds(parts[0], parts[2])
     }
   }, [viewBox, setSceneBounds])
-  // Office (non-panel) FILLS THE WIDTH at every pane shape: the svg is width-driven via aspect-ratio
-  // (800/560), so the scene ALWAYS spans the full browser width — no left/right whitespace, ever.
-  // Its height follows the ratio; the wrapper centers + clips, so a wide-short pane trims the empty
-  // ceiling/floor symmetrically (no side gaps) while a tall pane just gets vertical breathing room.
-  // Panel mode keeps its own crop+fit (w-full h-full + meet).
-  const svgStyle = isPanel ? {} : { aspectRatio: '800 / 560' }
+  // Full-office mode must fit the whole authored 800x560 scene inside the available pane.
+  // Let the SVG viewport take the container box and rely on `meet` so wide panes letterbox
+  // horizontally instead of cropping the entrance/lounge edges.
+  const svgClassName = isPanel ? 'w-full h-full' : 'w-full h-full'
 
   const svgElement = (
     <svg
       ref={svgRef}
       viewBox={viewBox}
       xmlns="http://www.w3.org/2000/svg"
-      className={isPanel ? 'w-full h-full' : 'w-full'}
-      style={svgStyle}
+      className={svgClassName}
       preserveAspectRatio="xMidYMid meet"
     >
       <defs>
@@ -1258,9 +1255,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
   // Office-primary: the full scene by default at every size. The roster is shown ONLY when the user
   // manually toggles it (store.rosterMode) — an optional lens, never an automatic size-based switch.
-  // Office branch CENTERS + CLIPS: the width-driven svg spans the full width, so vertical overflow on
-  // a wide-short pane is clipped symmetrically (no left/right whitespace) and vertical slack on a tall
-  // pane is centered. Roster branch keeps its own internal scroll.
+  // Office branch centers the complete scene inside the available pane. Roster branch keeps its own
+  // internal scroll.
   return rosterMode ? (
     <div ref={containerRef} className="w-full flex-1 overflow-hidden min-h-0">
       <NarrowRoster />

@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T22:40:00Z
-- **Update Sequence**: 76
+- **Last Updated**: 2026-06-11T11:50:00Z
+- **Update Sequence**: 77
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -147,6 +147,15 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-tech-debt-remediation-2026-06-11 (Codex tech-debt 波接手收尾 — viewport fit + bridge 加固 + routing docs)
+
+- Branch `fix/tech-debt-remediation`, quick-win。**Codex session 實作（額度耗盡）、claude-fable-5 接手收尾**：兩個 commit 落錯分支（local main + 他人分支）→ cherry-pick（保留 Codex 署名）到合法分支重出。
+- **`72ff117`（app code）**：#120 `prepublishOnly` 改 build-before-test；#123 bridge UI 自 inline script 抽出為 CSP 相容 `public/bridge-ui.js`（DOM node 取代 innerHTML、移除 inline handlers）+ `tests/bridgeHtmlSafety.test.js` 回歸釘；**full-mode viewport fit 修復**（`preserveAspectRatio="xMidYMid meet"`，800×560 完整入框；owner 截圖回報的裁切回歸）；render-smoke 升級 4-viewport 矩陣 + 垂直裁切斷言。
+- **`706cc88`（docs）**：#121 monolith extraction map、#124 silent-catch policy、#127 ARCHITECTURE.md 現況更新、#128 routing_actions 全數 merged。
+- **接手修正（`e28b166`）**：audit 檔 frontmatter `status: review` 非法（validator routing_actions 檢查掃全檔 status: 行，僅容 pending|merged|rejected）→ 改 `doc_state: snapshot`（比照 2026-06-05 audit 慣例）。bash validator 此 FAIL 消除。
+- **Issue 帳務**：#120/#121/#123/#124/#127/#128 已由 Codex 關閉，本 ship 使其成立；#122/#125/#126 留待後續。研究/issue 整併（#48/#49/#51 併入 #40/#31/#41、新增 #112–#119）為 GitHub 端操作、已 live。
+- Evidence: takeover 分支上 `npm test` 1905/1905 綠、build 5.79s 乾淨、routing_actions 掃描零違規；Codex 原 4-viewport smoke + bridge-smoke 證據保留於 work log。Tests: Pass
 
 ### Ship-chore-github-seo-aeo-2026-06-11 (GitHub 曝光度 — SEO / AEO / 描述與 topics 優化)
 
