@@ -52,9 +52,12 @@ Owner request: improve GitHub discoverability (SEO / AEO / repo description). Sc
 
 ## Gate Evidence
 
-- Gate: implement | Verdict: PASS | Classification: quick-win | Timestamp: 2026-06-11T22:30:00Z
-- Gate: review | Verdict: PASS | Classification: quick-win | Timestamp: 2026-06-11T22:35:00Z
-- Gate: ship | Verdict: PASS | Classification: quick-win | Timestamp: 2026-06-11T22:40:00Z
+- Gate: bootstrap | Verdict: PASS | Classification: quick-win | Transition: NEW→CLASSIFIED | Timestamp: 2026-06-11T10:25:00Z
+- Gate: plan | Verdict: PASS | Classification: quick-win | Transition: CLASSIFIED→PLANNED | Timestamp: 2026-06-11T10:30:00Z
+- Gate: implement | Verdict: PASS | Classification: quick-win | Transition: PLANNED→IMPLEMENTED | Timestamp: 2026-06-11T10:45:00Z
+- Gate: review | Verdict: PASS | Classification: quick-win | Transition: IMPLEMENTED→REVIEWED | Timestamp: 2026-06-11T10:50:00Z
+- Gate: test | Verdict: PASS | Classification: quick-win | Transition: REVIEWED→TESTED | Timestamp: 2026-06-11T11:05:00Z
+- Gate: ship | Verdict: PASS | Classification: quick-win | Transition: TESTED→SHIPPED | Timestamp: 2026-06-11T11:10:00Z
 
 ---
 
@@ -84,4 +87,5 @@ none
 - Pre-change repo metadata (rollback reference): description = "Pixel-art virtual office that visualizes AI agent activity in real-time. Works with Claude Code, Gemini CLI, Codex, and any tool that can POST status." · topics = ai-agents, claude-code, devtool, gemini, pixel-art, react, status-api, virtual-office, visualization, vite · homepage = repo #readme
 - `node -e "JSON.parse(...)"` → `package.json OK` (valid JSON after keyword expansion).
 - `gh repo view --json description,repositoryTopics` post-edit → new description live; topics = 18 incl. claude/codex/gemini-cli/anthropic/llm/svg/coding-agents/developer-tools.
-- `git diff --stat` (staged scope) → README.md +39/−2, README.zh-TW.md +36/−2, package.json +13/−2; zero app code. Docs-only → no test-suite delta; `npm test` not run (no code path touched).
+- `git diff --stat` (staged scope) → README.md +39/−2, README.zh-TW.md +36/−2, package.json +13/−2; zero app code. Docs-only → no test-suite delta locally.
+- Test gate satisfied via PR #129 CI: test(22) PASS, test(24) PASS, render-smoke PASS, pack-smoke PASS, SAST PASS, secret-detection PASS, npm-audit PASS.
