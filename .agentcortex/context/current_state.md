@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T14:50:00Z
-- **Update Sequence**: 79
+- **Last Updated**: 2026-06-11T15:45:00Z
+- **Update Sequence**: 80
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -147,6 +147,12 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-dependency-wave-minor-2026-06-11 (#125 依賴維護波 — patch/minor 車道)
+
+- Branch `chore/dependency-wave-minor`, quick-win。依 #125 自身 AC「patch/minor 與 major 分開落地」只做小版本:react/react-dom 19.2.4→**19.2.7**、tailwindcss + @tailwindcss/vite 4.2.1→**4.3.0**、zustand 5.0.12→**5.0.14**。
+- **驗收電池全綠**:`npm test` 1913/1913;bundle-budget PASS 455,872 bytes(+1.29% vs 基線;更新本身僅 +1,059 bytes ≈ +0.23pp,基線不動);`npm audit --audit-level=high` 0 漏洞;render-smoke 4-viewport PASS;pack-smoke 全斷言 PASS。
+- **Major 拆出**:Vite 8 / Vitest 4 / plugin-react 6 → issue **#134**(三件一起版本配套,遷移指南逐項核對)。#125 於合併時關閉。Tests: Pass
 
 ### Ship-fix-door-strip-floor-routing-2026-06-11 (門廊帶地板路由洞關閉 — #27 review Finding 2 後續)
 
