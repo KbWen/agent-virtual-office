@@ -17,7 +17,7 @@
     "smoke:pack": "node scripts/pack-smoke.mjs",
     "soak": "node scripts/sim-soak.mjs",
     "test": "vitest run",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
     "virtual-office",

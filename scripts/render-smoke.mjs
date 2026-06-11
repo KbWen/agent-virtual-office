@@ -40,6 +40,12 @@ const READY_TIMEOUT_MS = 20_000   // server readiness poll deadline
 const SVG_TIMEOUT_MS = 15_000     // AC-1: svg must appear within 15s
 const POLL_INTERVAL_MS = 250
 const SVG_MIN_DESCENDANTS = 100   // AC-2: render-richness floor (heuristic)
+const VIEWPORTS = [
+  { name: 'wide-desktop', width: 2048, height: 1024 },
+  { name: 'desktop', width: 1280, height: 800 },
+  { name: 'tablet', width: 1024, height: 768 },
+  { name: 'mobile-tall', width: 390, height: 844 },
+]
 
 // ── Spawn server ───────────────────────────────────────────────────────────────
 const serverProc = spawn(
@@ -119,7 +125,7 @@ try {
     }
   }
 
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+  const page = await browser.newPage()
 
   // Collect errors from the very first navigation
   const pageErrors = []
@@ -139,49 +145,97 @@ try {
     try { localStorage.setItem('office-onboarded', '1') } catch {}
   })
 
-  // 3. Navigate and wait for the SVG (AC-1: 15s timeout)
-  await page.goto(`${BASE_URL}/?lang=en`, { waitUntil: 'domcontentloaded' })
-  try {
-    await page.waitForSelector('svg', { timeout: SVG_TIMEOUT_MS })
-  } catch {
-    diagnostics.push(`AC-1 FAIL: office <svg> did not appear within ${SVG_TIMEOUT_MS}ms`)
-    exitCode = 1
+  let minSvgDescendants = Infinity
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+
+    // 3. Navigate and wait for the SVG (AC-1: 15s timeout)
+    await page.goto(`${BASE_URL}/?lang=en&smoke=${viewport.name}`, { waitUntil: 'domcontentloaded' })
+    try {
+      await page.waitForSelector('svg', { timeout: SVG_TIMEOUT_MS })
+    } catch {
+      diagnostics.push(`AC-1 FAIL [${viewport.name}]: office <svg> did not appear within ${SVG_TIMEOUT_MS}ms`)
+      exitCode = 1
+      continue
+    }
+
+    // Allow a brief settle for console errors/layout to flush.
+    await new Promise(r => setTimeout(r, 500))
+
+    const metrics = await page.evaluate(() => {
+      const svg = document.querySelector('svg')
+      const bodyText = document.body.innerText || ''
+      if (!svg) return { hasSvg: false, bodyText }
+
+      function visibleText(pattern) {
+        const nodes = Array.from(svg.querySelectorAll('text'))
+          .filter((node) => pattern.test(node.textContent || ''))
+        return nodes.some((node) => {
+          const r = node.getBoundingClientRect()
+          return r.bottom >= 0 && r.top <= window.innerHeight && r.right >= 0 && r.left <= window.innerWidth
+        })
+      }
+
+      const r = svg.getBoundingClientRect()
+      return {
+        hasSvg: true,
+        bodyText,
+        descendants: svg.querySelectorAll('*').length,
+        svgTop: r.top,
+        svgBottom: r.bottom,
+        svgHeight: r.height,
+        windowHeight: window.innerHeight,
+        hasVisibleTopLabel: visibleText(/WELCOME|MEETING/i),
+        hasVisibleBottomLabel: visibleText(/LOUNGE|RESEARCH|WC/i),
+      }
+    })
+
+    // 4. AC-1: ErrorBoundary fallback NOT rendered
+    if (metrics.bodyText.includes('Something went wrong')) {
+      diagnostics.push(`AC-1 FAIL [${viewport.name}]: ErrorBoundary fallback is rendered`)
+      exitCode = 1
+    }
+
+    // 5. AC-2: SVG descendant count >= 100
+    minSvgDescendants = Math.min(minSvgDescendants, metrics.descendants || 0)
+    if ((metrics.descendants || 0) < SVG_MIN_DESCENDANTS) {
+      diagnostics.push(
+        `AC-2 FAIL [${viewport.name}]: svg has only ${metrics.descendants || 0} descendants ` +
+        `(floor: ${SVG_MIN_DESCENDANTS}) — likely a blank/minimal render`
+      )
+      exitCode = 1
+    }
+
+    // 6. AC-3: the SVG viewport itself must fit in the visible app window.
+    // Regression guard: a width-driven SVG can render lots of descendants while the authored
+    // 800x560 office is vertically cropped out of the pane.
+    if (!metrics.hasSvg || metrics.svgTop < -1 || metrics.svgBottom > metrics.windowHeight + 1) {
+      diagnostics.push(
+        `AC-3 FAIL [${viewport.name}]: office svg viewport is clipped vertically ` +
+        `(top=${metrics.svgTop}, bottom=${metrics.svgBottom}, windowHeight=${metrics.windowHeight})`
+      )
+      exitCode = 1
+    }
+
+    // 7. AC-4: top and bottom scene anchors are visibly inside the viewport.
+    // This catches future viewBox/slice regressions even when the <svg> box itself fits.
+    if (!metrics.hasVisibleTopLabel || !metrics.hasVisibleBottomLabel) {
+      diagnostics.push(
+        `AC-4 FAIL [${viewport.name}]: full office anchors not visible ` +
+        `(topLabel=${metrics.hasVisibleTopLabel}, bottomLabel=${metrics.hasVisibleBottomLabel})`
+      )
+      exitCode = 1
+    }
   }
 
-  // Allow a brief settle for console errors to flush
-  await new Promise(r => setTimeout(r, 500))
-
-  // 4. AC-1: ErrorBoundary fallback NOT rendered
-  //    Stable marker: the fallback div contains "Something went wrong" (t('errors.title') fallback)
-  const errorBoundaryText = await page.evaluate(() => {
-    return document.body.innerText || ''
-  })
-  if (errorBoundaryText.includes('Something went wrong')) {
-    diagnostics.push('AC-1 FAIL: ErrorBoundary fallback is rendered (found "Something went wrong")')
-    exitCode = 1
-  }
-
-  // 5. AC-2: SVG descendant count >= 100
-  const svgDescendants = await page.evaluate(() => {
-    const svg = document.querySelector('svg')
-    if (!svg) return 0
-    return svg.querySelectorAll('*').length
-  })
-  if (svgDescendants < SVG_MIN_DESCENDANTS) {
-    diagnostics.push(
-      `AC-2 FAIL: svg has only ${svgDescendants} descendants (floor: ${SVG_MIN_DESCENDANTS}) — likely a blank/minimal render`
-    )
-    exitCode = 1
-  }
-
-  // 6. AC-1: zero pageerrors
+  // 7. AC-1: zero pageerrors
   if (pageErrors.length > 0) {
     diagnostics.push(`AC-1 FAIL: ${pageErrors.length} pageerror(s):`)
     pageErrors.forEach(e => diagnostics.push(`  pageerror: ${e}`))
     exitCode = 1
   }
 
-  // 7. AC-1: zero console errors
+  // 8. AC-1: zero console errors
   if (consoleErrors.length > 0) {
     diagnostics.push(`AC-1 FAIL: ${consoleErrors.length} console error(s):`)
     consoleErrors.forEach(e => diagnostics.push(`  console.error: ${e}`))
@@ -189,7 +243,8 @@ try {
   }
 
   if (exitCode === 0) {
-    console.log(`render-smoke PASS — svg rendered (${svgDescendants} descendants), 0 pageerrors, 0 console errors`)
+    const matrix = VIEWPORTS.map(v => `${v.name}:${v.width}x${v.height}`).join(', ')
+    console.log(`render-smoke PASS — ${VIEWPORTS.length} viewports (${matrix}), min svg descendants ${minSvgDescendants}, 0 pageerrors, 0 console errors`)
   } else {
     for (const line of diagnostics) process.stderr.write(line + '\n')
     process.stderr.write('render-smoke FAIL — see diagnostics above\n')
