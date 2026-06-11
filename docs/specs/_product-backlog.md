@@ -78,6 +78,15 @@ last_updated: 2026-06-10
 | AVO-153 | Hook-runtime payload fixture corpus: record REAL Claude Code hook events as fixtures + contract tests pinning the shapes the hook relies on (is_error era vs PostToolUseFailure era, StopFailure matcher) | infra | observability | P1 | docs/specs/hook-runtime-contract.md | feature | Done | stability-wave W4; shipped 2026-06-10; 14 live fixtures + 143 contract tests |
 | AVO-154 | Reconcile hook result-field reads with runtime truth (W4 found: runtime sends `tool_response`, hook reads `tool_result` → toolResult always empty on this runtime; is_error shape on ERROR events not yet captured) | chore | tech-debt | P1 | — | quick-win | Done | shipped 2026-06-11; error events INDUCED+captured (no is_error exists on this runtime → derivation honestly inert); toolResultText dual-read + PowerShell→ops mapping + 26-fixture corpus |
 | AVO-155 | Add same-pick guarantee test for socialTargetOverride | review-finding | social-chat | P2 | — | quick-win | Pending | feat/social-chat-feel review 2026-06-10: `getTargetForBehavior` 4th-param override is untested — flip override to ignore-mode causes 0 test failures; add a test passing a pre-seeded socialTargetOverride and asserting the walk destination orbits that specific peer |
+| #120 | Prepublish build-before-test contract | chore | tech-debt | P0 | docs/reviews/2026-06-11-tech-debt-audit.md | quick-win | Done | shipped 2026-06-11 in `0a1aa93`; `prepublishOnly` now runs build before test |
+| #121 | Monolith extraction map | chore | tech-debt | P1 | docs/architecture/monolith-extraction-map.md | quick-win | Done | doc-only guard for future seam extraction; no runtime refactor |
+| #122 | normalizePost.mjs runtime mirror | chore | tech-debt | P2 | docs/reviews/2026-06-11-tech-debt-audit.md | feature | Pending | defer until transport fields change again; current drift guards are green |
+| #123 | Bridge dynamic rendering hardening | chore | tech-debt | P0 | docs/reviews/2026-06-11-tech-debt-audit.md | quick-win | Done | shipped 2026-06-11 in `0a1aa93`; external `bridge-ui.js`, no inline handlers or dynamic `innerHTML` |
+| #124 | Silent catch observability classification | chore | tech-debt | P1 | docs/architecture/silent-catch-policy.md | quick-win | Done | classification policy + current inventory; hook crash-proof paths preserved |
+| #125 | Dependency maintenance wave | chore | tech-debt | P2 | docs/reviews/2026-06-11-tech-debt-audit.md | quick-win | Pending | schedule separately; no audit vulnerabilities |
+| #126 | Semgrep baseline and fail-on-new serious findings | infra | tech-debt | P1 | docs/reviews/2026-06-11-tech-debt-audit.md | feature | Pending | security hardening lane; requires baseline triage |
+| #127 | Architecture overview refresh | chore | tech-debt | P1 | docs/ARCHITECTURE.md | quick-win | Done | current runtime spine refreshed 2026-06-11 |
+| #128 | Resolve audit routing_actions | chore | tech-debt | P0 | docs/reviews/2026-06-11-tech-debt-audit.md | quick-win | Done | audit findings routed into backlog and architecture decision logs |
 
 ## Status Key
 

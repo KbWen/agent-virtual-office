@@ -107,14 +107,14 @@ Action: Implemented locally in this session by making full-office mode fit the c
 
 1. #120 prepublish/build-test contract: small, high developer-experience leverage. Implemented locally in this session.
 2. #123 bridge rendering hardening: small, bounded integration hardening. Implemented locally in this session.
-3. #124 silent catch classification: improves observability without changing behavior.
-4. #128 resolve routing actions: keeps audit findings from becoming stale.
+3. #124 silent catch classification: improves observability without changing behavior. Implemented locally in this session.
+4. #128 resolve routing actions: keeps audit findings from becoming stale. Implemented locally in this session.
 5. #126 Semgrep baseline triage: security hardening once current findings are reviewed.
 6. #125 dependency maintenance lane: scheduled upgrade work, not urgent.
 7. TD-10 viewport-fit smoke hardening: implemented locally after the wide-screen clipping regression was reproduced.
 8. #122 normalizePost runtime mirror: medium refactor only when transport fields change again.
-9. #121 monolith extraction map: do after AVO-137/#119 and replay/#115 so refactors have better visual/runtime evidence.
-10. #127 architecture overview refresh: valuable docs cleanup, lower runtime risk.
+9. #121 monolith extraction map: implemented locally as a refactor guard, not a broad refactor.
+10. #127 architecture overview refresh: implemented locally in this session.
 
 ## routing_actions
 
@@ -122,18 +122,22 @@ Action: Implemented locally in this session by making full-office mode fit the c
 routing_actions:
   - finding: "Publish guard has implicit build-before-test precondition"
     target_doc: "docs/specs/_product-backlog.md"
-    status: pending
+    status: merged
     owner: "codex-app"
+    note: "Backlog row #120 marks the contract Done; implementation shipped in local commit 0a1aa93."
   - finding: "High-blast-radius runtime/rendering files need extraction map before opportunistic refactor"
-    target_doc: "docs/architecture/office-runtime.log.md"
-    status: pending
+    target_doc: "docs/architecture/monolith-extraction-map.md"
+    status: merged
     owner: "codex-app"
+    note: "Office runtime log links the extraction map and records the reversible-refactor constraint."
   - finding: "Bridge integration dynamic rendering should avoid manual innerHTML escaping"
     target_doc: "docs/architecture/hook-integration.log.md"
-    status: pending
+    status: merged
     owner: "codex-app"
+    note: "Hook integration log records the bridge-ui.js split and no-inline-handler constraint."
   - finding: "Silent catch blocks need observability classification"
-    target_doc: "docs/architecture/office-runtime.log.md"
-    status: pending
+    target_doc: "docs/architecture/silent-catch-policy.md"
+    status: merged
     owner: "codex-app"
+    note: "Office runtime log links the policy and records the catch-classification review gate."
 ```
