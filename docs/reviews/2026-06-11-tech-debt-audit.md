@@ -1,5 +1,5 @@
 ---
-status: review
+doc_state: snapshot
 title: Technical Debt Audit
 date: 2026-06-11
 scope: post-optimization technical debt scan
