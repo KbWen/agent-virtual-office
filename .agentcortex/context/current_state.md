@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T13:30:00Z
-- **Update Sequence**: 78
+- **Last Updated**: 2026-06-11T14:50:00Z
+- **Update Sequence**: 79
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -147,6 +147,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-door-strip-floor-routing-2026-06-11 (門廊帶地板路由洞關閉 — #27 review Finding 2 後續)
+
+- Branch `fix/door-strip-floor-routing`, quick-win。Chip task_2b246e48 由 owner 回貼主對話執行(驗證無 spawned worktree)。**既有洞**(早於 #132):zone router 的 early-return `[to]` 不驗證線段內部的地板歸屬——`getZone` 把門洞地板點劃進相鄰區(如 door-lounge y 418–424 → lounge),無家具阻擋的斜線直接切穿牆帶(量測 130/720 對 off-floor);五個區全有同型 strip。
+- **修(單一接點)**:`ZONE_FLOOR_RECTS` + `zoneMouth` —— on-floor 但在區凸地板矩形外的端點(⇒必在門洞地板上)先走「mouth」(夾至矩形的投影,沿門洞軸、構造上必在門洞地板),內部 router 只在凸矩形內運作(其「家具矩形驗證即足夠」的凸性假設恢復成立)。in-rect 與 off-floor 輸入 byte-identical 保留。
+- **Fresh review PASS(窮舉級)**:0.25px 全畫布網格 101,332 個矩形外地板點 → 0 個壞 stub、0 個真實地板雙軸 clamp;1,537 對 in-rect 差分探針與 HEAD byte-identical;门側錨點 ±jitter 全數在矩形內(mouth 絕不在跨區腿觸發);496k 對 fuzz 僅 1 命中＝**既有** `lineHitsRect` 軸向 epsilon 洞(~0.3px 擦邊,main 上可復現)→ chip task_4be9264a。
+- **Tests: 1913**(門廊帶網格解除 Finding-2 守衛恢復全配對 + 六區 strip 釘;修復前 2 測試 FAIL 四個區證敏感度)。2 分鐘 soak PASS(471 樣本 0 違規)。Tests: Pass
 
 ### Ship-fix-wedged-endpoint-routing-2026-06-11 (issue #27 — 楔形端點路由加固,fuzz 盲區帶關閉)
 
