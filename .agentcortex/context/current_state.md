@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T11:50:00Z
-- **Update Sequence**: 77
+- **Last Updated**: 2026-06-11T13:30:00Z
+- **Update Sequence**: 78
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -147,6 +147,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-wedged-endpoint-routing-2026-06-11 (issue #27 — 楔形端點路由加固,fuzz 盲區帶關閉)
+
+- Branch `fix/wedged-endpoint-routing`, quick-win。Owner:「先確認問題→再處理」。**確認先行**:種子化探針證實 #27 是真缺陷且觸及日常路徑——楔形距 1–7px 穩定產生 ~5% 穿桌路徑(52/880 @d=1),**含 d=6 = `OBSTACLE_PUSH_PX`(`clampToFloor` 的日常輸出距離)**;fuzz MARGIN=8 剛好全帶排除(#27 所述盲區屬實)。根因:桌間峽谷端點從 9 個固定 Dijkstra 節點全部不可達 → `findSafePolyline` null → `routeWithinMainOffice` 最後一招 `[CORRIDORS[2], to]`(自註已知洞)直接穿桌;lounge 單 lane 降柱同型洞。
+- **修(永不變差構造)**:(A) `wedgeEscapeNodes` —— 貼身家具四邊法向投影 10px 的逃逸候選,floor/obstacle 過濾後**純增量**加入 Dijkstra 節點集(每條邊仍走原驗證);(B) lounge 改雙 lane(南 520 / 北 430)全驗證圖路由 + **凸地板矩形閘門**,門廊帶端點與圖失敗一律退回原 lane 路徑逐字保留。
+- **Fresh review(無實作者敘事)抓到 1 HIGH**:lounge 圖對門廊帶端點(y 418–424,getZone=lounge 但地板僅門洞)發穿南牆斜線,量測 104/720 對新增 off-floor——按 reviewer 最小修法加閘,反例 (218,418.5)→(430,470) ×25 釘住。Reviewer 獨立復現敏感度:HEAD 154/3516 fail → 修後 0/3516。Finding 2(**既有** early-return 門廊帶洞,130/720,新舊相同)→ chip task_2b246e48 追蹤。
+- **Tests: 1905 → 1912**(楔形矩陣 d∈{1,2,4,6,7} 修復前 5/5 FAIL 證敏感度 + 門廊帶閘門 2 測試);探針全矩陣 0 違規;2 分鐘 soak PASS(469 樣本 0 違規)。Issue #27 三項 asks 全數回應後關閉。Tests: Pass
 
 ### Ship-fix-tech-debt-remediation-2026-06-11 (Codex tech-debt 波接手收尾 — viewport fit + bridge 加固 + routing docs)
 
