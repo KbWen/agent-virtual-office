@@ -8,7 +8,7 @@
 
 **A tiny pixel office where your coding agents come to life.**
 
-![Virtual Office Screenshot](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.png)
+![Agent Virtual Office — pixel-art virtual office visualizing AI coding agents (Claude Code, Codex, Gemini CLI) working, blocked, and shipping in real time](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.png)
 
 <sub><i>The whole office, mid-session — someone heads-down, someone blocked, someone just shipped. All live.</i></sub>
 
@@ -19,7 +19,7 @@ Point it at your Claude Code / Codex / CI session and your agents clock in for r
 
 It's not a dashboard. It's useful for approximately nothing, and you'll leave it open all day anyway.
 
-[Quick Start](#quick-start) · [Meet the Team](#meet-the-team) · [中文版](README.zh-TW.md)
+[Quick Start](#quick-start) · [Meet the Team](#meet-the-team) · [FAQ](#faq) · [中文版](README.zh-TW.md)
 
 </div>
 
@@ -198,6 +198,41 @@ v1.4.0 started from one of these captures.
 Full notes in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 </details>
+
+## FAQ
+
+### What is Agent Virtual Office?
+
+Agent Virtual Office is an open-source, pixel-art visualization of AI coding agents. It turns a live
+Claude Code, Codex, or Gemini CLI session into a tiny office where each agent is a character that
+visibly works, gets blocked, and ships — in real time, driven only by real signals from your session.
+Built with React and pure SVG, it runs entirely on your machine with no backend.
+
+### How do I visualize Claude Code activity?
+
+Run `npx github:KbWen/agent-virtual-office setup` once. It registers Claude Code hooks so every tool
+call, subagent, and turn updates the office automatically — no manual wiring, no API keys.
+
+### Does it work with Codex, Gemini CLI, or CI pipelines?
+
+Yes. Anything that can send an HTTP POST can drive the office — Codex CLI / Codex App, Gemini CLI,
+GitHub Actions, or your own scripts. See the [Integration guide](docs/INTEGRATIONS.md).
+
+### Is it a dashboard or a token/cost tracker?
+
+No. It doesn't chart tokens, spend, or productivity. It's an honest visualization: an agent's status
+is shown only when a real signal proves it, and activity is never faked. Think desk toy, not metrics.
+
+### Does it send my code or data anywhere?
+
+No. There is no backend, no database, no telemetry, and no external service. Status updates travel
+over HTTP on your own machine — localhost by default, with optional LAN exposure you can turn off
+via `--no-host`.
+
+### Do I need to install anything?
+
+No. `npx github:KbWen/agent-virtual-office` runs it straight from the public GitHub repo. The only
+requirement is Node.js ≥ 22.
 
 ## Tech stack
 

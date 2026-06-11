@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T21:25:00Z
-- **Update Sequence**: 75
+- **Last Updated**: 2026-06-11T22:40:00Z
+- **Update Sequence**: 76
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -147,6 +147,15 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-github-seo-aeo-2026-06-11 (GitHub 曝光度 — SEO / AEO / 描述與 topics 優化)
+
+- Branch `chore/github-seo-aeo`, quick-win, docs/metadata-only（README ×2 + package.json + GitHub repo 中繼資料，零 app code）。
+- **README en/zh AEO**：各加 6 題直接回答式 FAQ（What is / 怎麼接 Claude Code / 支援 Codex·Gemini CLI·CI / 不是儀表板·不追蹤 token 成本 / 資料不外傳 / 免安裝）＋導覽列 FAQ 連結＋截圖 alt text 關鍵字化。FAQ 措辭全部對齊已出貨行為（signal-driven 誠實、零後端、`--no-host`、Node ≥ 22），守住「不是 cost dashboard」定位。
+- **package.json**：description 重寫（關鍵字前置：AI coding agents / Claude Code / Codex / Gemini CLI / pure SVG / zero backend）；keywords 9 → 18（補 claude-code、claude-code-hooks、gemini-cli、ai-agents、coding-agent、llm、developer-tools、svg、react）。
+- **GitHub repo（gh repo edit，立即生效、git 外）**：description 換新（🏢 開頭、關鍵字密度提高）；topics 10 → 18（+claude、codex、gemini-cli、anthropic、llm、svg、coding-agents、developer-tools）；`gh repo view` 回讀複驗。舊值已記錄於 work log Evidence 供回滾。
+- **留給 owner（UI-only，API 做不到）**：Settings → Social preview 上傳 `docs/screenshot.png`（1280×640）— 社群分享卡片是 GitHub SEO 最大單一槓桿之一。
+- Evidence: package.json JSON parse OK；gh 回讀確認 18 topics；diff 僅 3 檔零程式碼。Tests: Pass（docs-only，無程式碼路徑變更）
 
 ### Ship-chore-upgrade-agentic-os-v1.5.1-2026-06-11 (governance brain 升級 v1.2.0 → v1.5.1)
 
