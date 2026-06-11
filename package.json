@@ -1,7 +1,7 @@
 {
   "name": "agent-virtual-office",
   "version": "1.4.0",
-  "description": "Pixel-art virtual office that visualizes AI agent activity in real-time. Works with Claude Code, Gemini CLI, Codex, and any tool that can POST status.",
+  "description": "Pixel-art virtual office that visualizes your AI coding agents in real time — Claude Code, Codex, Gemini CLI, or any tool that can POST status. Pure SVG, zero backend, runs locally.",
   "main": "bin/cli.js",
   "bin": {
     "agent-virtual-office": "./bin/cli.js"
@@ -23,12 +23,21 @@
     "virtual-office",
     "agent",
     "ai",
+    "ai-agents",
+    "coding-agent",
     "pixel-art",
     "claude",
+    "claude-code",
+    "claude-code-hooks",
     "gemini",
+    "gemini-cli",
     "codex",
+    "llm",
     "visualization",
-    "status"
+    "status",
+    "developer-tools",
+    "svg",
+    "react"
   ],
   "author": "KbWen",
   "license": "MIT",
