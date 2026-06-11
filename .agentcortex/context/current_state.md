@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T17:05:00Z
-- **Update Sequence**: 81
+- **Last Updated**: 2026-06-11T17:55:00Z
+- **Update Sequence**: 82
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -147,6 +147,12 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-line-hits-rect-epsilon-2026-06-11 (chip task_4be9264a — lineHitsRect 軸向 epsilon 洞)
+
+- Branch `fix/line-hits-rect-epsilon`, quick-win。Chip 由 owner 回貼主對話執行(zone-mouth review 的 reviewer 自行開的 chip)。**既有精度洞**:`lineHitsRect` 對 |dx|≤0.1(或 |dy|≤0.1)的近軸線段只用**起點**做 slab 檢查——x 漂移 <0.1px 跨過家具邊緣平面的近垂直線段被誤判為 miss;jittered Dijkstra 節點據此產生 0.005–0.3px 真實擦邊(隨機 in-rect 對 ~0.3% 率,reviewer 於 main 復現)。視覺上 sub-pixel,但屬種子化尋路 oracle 的潛在 flake 源。
+- **修(2 行,保守方向)**:近軸分支改測**兩端點座標範圍**(min/max vs slab)——絕不漏報真相交;≤0.1px 級過度標記只會讓 jitter 候選退回精確節點(該鏈本有的 fallback)。函數 export 供直接單元釘。
+- **Tests: 1913 → 1920**:7 釘含兩個 pre-fix 必敗的洞釘(漂移方向不對稱與機制吻合:起點在內側的方向 pre-fix 本來就過)+ 楔形峽谷類「必須仍為 miss」防回歸釘;全部種子化尋路套件(deep 484 對/fuzz 1000 對/楔形矩陣/門廊網格)在更嚴格偵測下全綠。2 分鐘 soak PASS。Tests: Pass
 
 ### Ship-chore-semgrep-baseline-gate-2026-06-11 (#126 — Semgrep ERROR 級轉阻擋,baseline 三角化)
 
