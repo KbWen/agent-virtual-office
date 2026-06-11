@@ -30,7 +30,10 @@ jobs:
       - name: Run soak
         env:
           SOAK_REPORT: soak-report.json
-        run: node scripts/sim-soak.mjs --minutes ${{ github.event.inputs.minutes || '10' }}
+          # Workflow-dispatch input routed through env (NOT inline ${{ }} in run:) so a
+          # crafted input can never be interpreted as shell — Semgrep run-shell-injection.
+          SOAK_MINUTES: ${{ github.event.inputs.minutes || '10' }}
+        run: node scripts/sim-soak.mjs --minutes "$SOAK_MINUTES"
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4

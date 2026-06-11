@@ -28,11 +28,20 @@ jobs:
       - name: Install Semgrep
         run: pip install semgrep==1.123.0
 
-      # Report-only on introduction (no --error): surfaces findings as annotations
-      # without retroactively failing CI on a Node/JSX codebase. Tighten to --error
-      # once the baseline is triaged.
-      - name: Run Semgrep
+      # Two passes since 2026-06-11 (#126 — baseline triaged, see
+      # docs/reviews/2026-06-11-semgrep-baseline.md):
+      #  1. Full scan stays REPORT-ONLY — WARNING/INFO findings surface as annotations
+      #     without failing CI (all current ones are triaged-accepted by design).
+      #  2. ERROR-severity scan BLOCKS (--error): the 2 baseline ERROR findings were
+      #     fixed (workflow env indirection) or scope-suppressed with justification
+      #     (sim-soak spawn), so any NEW ERROR-severity finding fails this job.
+      # `--config auto` tracks the registry — a registry-added ERROR rule failing here
+      # is the intended "new serious finding" tripwire; triage it, don't loosen the gate.
+      - name: Run Semgrep (full, report-only)
         run: semgrep --config auto .
+
+      - name: Run Semgrep (ERROR severity, blocking)
+        run: semgrep --config auto --severity ERROR --error .
 
   trufflehog:
     name: Secret Detection (TruffleHog)
