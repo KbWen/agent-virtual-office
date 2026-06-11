@@ -148,6 +148,14 @@
 
 ## Ship History
 
+### Ship-chore-upgrade-agentic-os-v1.5.1-2026-06-11 (governance brain 升級 v1.2.0 → v1.5.1)
+
+- Branch `chore/upgrade-agentic-os-v1.5.1`, quick-win, governance-only（53 檔 +2685/−645，零 app code）。`.agentcortex-manifest` `1.2.0` → `1.5.1`（canonical upstream `KbWen/agentic-os` tag v1.5.1 / `0a75067`）。
+- **5 個 upstream-retired skills 刪除**（writing-plans、executing-plans、finishing-a-development-branch、requesting/receiving-code-review；邏輯已內聯進 plan/implement/ship/handoff/review workflows）— git 史證明全部 stock（#32 後零團隊 commit），`.agent/skills/` + `.agents/skills/` 兩處共 10 路徑；operational configs 無懸空引用。GEMINI.md 平台入口新增。
+- **Sidecar 處置**：4 個框架持有 skip（AGENTS.md/CLAUDE.md/.gitattributes/.githooks sample）轉正（live 證明為 stock v1.2.0）＋二次 deploy 收斂 manifest hash（`186 updated / 2 skipped / 0 new / 0 removed`）；2 個團隊持有檔保留 live（`current_state.md` SSoT、`.claude/settings.json` office-hook 管線）；31 個 `.acx-local` 備份刪除（內容＝快照 commit `1d18b3a`）。
+- **Incident（已完全恢復、零損失）**：`.agentcortex-src` 快取 remote 殘留指向已死 AgentCortex repo（5.x 線）險些部署錯版（owner 即時糾正）；修快取時部分失敗的**未經批准 `rm -rf`** 留下無 `.git` 的鎖死目錄 → 後續 git 指令穿透到主 repo（forced checkout 換掉 working tree、tags 被蓋）。`main` ref 未受損，全量恢復並逐路徑稽核。違反 Destructive Command Blocking（規則只在 non-loaded reference docs — README↔rules drift）；三個 upstream 修正候選已備好 prompt 交 owner（destructive 規則移入 always-loaded 面 / deploy_brain 核對 cache remote URL / manifest LF pin）。
+- Evidence: validator `pass=91 warn=3 fail=0`（WARN 全 advisory）；app suite **82 files / 1903 tests 全綠**（含 hook 行為契約測試）。Tests: Pass
+
 ### Ship-fix-event-arrival-ellipse-2026-06-11 (owner 回貼雙 chip — 事件到場幾何 + 走廊 fallback 加固，soak 閘門回緊)
 
 - Branch `fix/event-arrival-ellipse`, quick-win。Owner 將兩張 chip 內文回貼主對話（spawned sessions 無產出，已驗證無分支/worktree）。

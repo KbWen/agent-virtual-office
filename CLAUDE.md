@@ -6,7 +6,7 @@
 
 ## Startup (every conversation)
 
-1. Governance rules from `AGENTS.md` are loaded — follow them exactly.
+1. **At the start of a task, enter the governed flow in `AGENTS.md` before any file edit or completion claim — decide up front, not at the edit moment. No silent direct edits.**
 2. Classify task scope from the user's message:
    - `tiny-fix` (< 3 files, no semantic change) → skip to Step 5.
    - `quick-win` (1–2 modules, clear scope) → read SSoT (Step 3), skip Step 4.

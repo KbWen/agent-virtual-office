@@ -21,13 +21,13 @@ Before loading any context, walk the decision table below top-to-bottom — **fi
 |---|---|
 | modifies `docs/specs/_product-backlog.md` | route to `/spec-intake` (not bootstrap) |
 | modifies any file in `docs/specs/` or `docs/architecture/` | minimum `quick-win` — continue to Step 1 |
-| modifies `AGENTS.md`, `.agent/rules/*`, or `.agent/config.yaml` | minimum `quick-win` — continue to Step 1 |
+| modifies `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.agent/rules/*`, or `.agent/config.yaml` | minimum `quick-win` — continue to Step 1; read `engineering_guardrails.md §13` (Deletion-First / ADD-Gate) before editing |
 | modifies `.agentcortex/templates/*` or `.agentcortex/bin/validate.*` | minimum `quick-win` — continue to Step 1 |
 | modifies any file with `status: frozen` frontmatter | minimum `quick-win` — continue to Step 1 |
 | modifies <3 files (PR-scope, NOT per-logical-change) AND is non-semantic (typo, docs, non-functional config) AND scope is unambiguous AND target paths do NOT match any ADR's `applies_to:` glob | **tiny-fix** — skip Steps 1–6, inline plan + execute + evidence (Work Log skipped per §5). **Misclassification checkpoint**: if during the inline edit the change proves semantic, crosses a module boundary, or exceeds 3 files — STOP immediately, escalate to `quick-win`, create a Work Log, and re-enter from §1. |
 | scope is unclear or multi-module | continue to Step 1 for full context loading |
 
-**TOKEN LEAK BLOCK**: If the task is ultimately classified as `tiny-fix` or `quick-win`, reading `engineering_guardrails.md` at any point is a structural Token Leak violation. Rely purely on AGENTS.md §Core Directives and bypass full guardrails. Rationale: loading SSoT + specs + archives for a typo fix wastes ~2,500 tokens (P6).
+**TOKEN LEAK BLOCK**: If the task is ultimately classified as `tiny-fix` or `quick-win`, reading `engineering_guardrails.md` at any point is a structural Token Leak violation. Rely purely on AGENTS.md §Core Directives and bypass full guardrails. Rationale: loading SSoT + specs + archives for a typo fix wastes ~2,500 tokens (P6). **Sole exemption**: a quick-win that edits governance paths (the rows above) MAY do a heading-scoped read of `§13 Governance Change Norms` ONLY — the norm would otherwise be unreadable on the most common governance-edit flow.
 
 ## 0b. Reading Mode Table (Token Efficiency Index)
 
@@ -44,7 +44,7 @@ Each classification reads ONLY the rows marked REQUIRED. Skip rows marked SKIP �
 | §1 Step 2b Domain Doc Context Loading | SKIP | SKIP | REQUIRED | SKIP |
 | §1 Steps 3–6 (private, migration, backlog, raw material) | SKIP | conditional | conditional | conditional |
 | §2 Work Log Header Setup | SKIP | REQUIRED | REQUIRED | REQUIRED |
-| §2a Advisory Work Log Lock | SKIP | REQUIRED | REQUIRED | REQUIRED |
+| §2a Work Log Lock | SKIP | REQUIRED | REQUIRED | REQUIRED |
 | §2b Phase Tracking Contract | SKIP | REQUIRED | REQUIRED | REQUIRED |
 | §3 Expected Output Format | inline only | REQUIRED | REQUIRED | REQUIRED |
 | §3.6 / §3.6a Recommended Skills | SKIP | REQUIRED | REQUIRED | REQUIRED |
@@ -104,6 +104,12 @@ Tool exit codes:
    - **Staleness Check**: After reading SSoT, check `Last Verified` field. If today's date minus `Last Verified` > 14 days, output advisory: `"⚠️ SSoT last verified <N> days ago. Consider running /govern-docs to refresh."` Do NOT block — advisory only.
    - **Last Verified Update**: After successfully reading SSoT, update the `Last Verified` field to today's ISO date via `guard_context_write.py` (or direct write if Python unavailable).
    - **ADR Auto-Discovery** (capability-by-presence): If `docs/adr/` exists AND classification is `feature` or `architecture-change`, scan filenames only (no body reads). If any ADR files are found, output advisory: `"📋 Found [N] ADR(s) in docs/adr/. Review relevant ones before planning."` Advisory only — does not block.
+
+1a. **Load Override Layer** (capability-by-presence — Ref: ADR-004, `.agentcortex/docs/guides/doc-governance.md §Override Layer`). MUST read override files at session start **when present**; absence is not an error and costs zero reads.
+   - Check, in precedence order (later overrides earlier): (1) project-root `AGENTS.override.md`, (2) `~/.agentcortex/AGENTS.override.md`. Skip silently any that do not exist.
+   - For each present override, apply its `> Overrides: AGENTS.md §<section>` directives, EXCEPT: a directive citing `§Delivery Gates`, `§Core Directives`, or the No-Bypass Rule MUST NOT be applied — these are framework invariants. On such a directive, emit `"⚠️ Override [<file>] cites framework-invariant [<section>]; cannot relax gates — ignored."`, record `"Override rejected: <file> §<section> (framework-invariant)"` in the Work Log `## Drift Log`, and continue. Do NOT hard-block.
+   - Record the result in the Work Log `## Session Info`: `Override: <filename(s) + source>` or `Override: none`.
+   - **Read-Once**: load overrides once here at session start; later phases trust the recorded result and MUST NOT re-read. This step is lazy (present-only) — it never eager-imports an override into the context prefix.
 2. READ/CREATE `.agentcortex/context/work/<worklog-key>.md` (Work Log).
    - **Work Log Resolution**: Resolve a filesystem-safe `<worklog-key>` from the current branch before any path check. Store the raw git branch string in `Branch:`.
      **Normalization algorithm** (canonical — all agents/platforms MUST use this exact rule):
@@ -120,7 +126,7 @@ Tool exit codes:
      - If `Current Phase: test` AND classification is `feature` or `architecture-change`: output `Next: /handoff` — the formal handoff step is required before ship.
      - If `Current Phase: handoff` (HANDEDOFF state — handoff completed, ship pending): output `Next: /ship` immediately. This is the only legal continuation; do NOT re-bootstrap from scratch.
      - If `Current Phase: ship`: output `Next: /ship — previously started, check Work Log ## Gate Evidence for completion status`.
-     - If metadata differs (another agent/user owns it) → **WARN the user AND require confirmation before proceeding** ("⚠️ Concurrent session detected. Proceed?").
+     - If metadata differs (another agent/user owns it) → note the differing owner/session in chat, but do NOT prompt here — the §2a lock verdict is the single authoritative concurrency check (under `worklog_lock.mode: blocking`, an active other-holder lock is a Gate FAIL at §2a; duplicate prompts with different semantics are prohibited). If the lock verdict permits proceeding (stale/recovered/takeover), use the multi-person variant `<owner>-<worklog-key>.md` instead of writing to another session's log.
      - If metadata is missing → warn "⚠️ Legacy Work Log detected, verify ownership".
    - If Work Log has `## Lessons` block (from prior retro): acknowledge relevant patterns in your bootstrap output.
    - If Work Log has `## Risks` block: include in your bootstrap context summary.
@@ -217,6 +223,7 @@ Write `## Session Info` and `## Drift Log` blocks immediately after header:
 - Session: [timestamp]
 - Platform: [Antigravity / Codex Web / Codex App]
 - Guardrails loaded: [§ list — e.g., "§1, §2, §4, §7, §8.1, §10 (core)" | "skipped (quick-win)" | "skipped (tiny-fix)"]
+- Override: [loaded override filename(s) + source per §1a | none]
 
 ## Drift Log
 - Skip Attempt: NO
@@ -255,9 +262,9 @@ none
 - Pending: bootstrap only; no implementation evidence yet.
 ```
 
-## 2a. Advisory Work Log Lock
+## 2a. Work Log Lock (single-writer)
 
-When creating or resuming a Work Log (non-`tiny-fix`), write or update an advisory lock file at `.agentcortex/context/work/<worklog-key>.lock.json`:
+When creating or resuming a Work Log (non-`tiny-fix`), acquire the Work Log lock at `.agentcortex/context/work/<worklog-key>.lock.json`. Lock semantics are governed by `.agent/config.yaml §worklog_lock.mode` (`blocking` by default; `advisory` = legacy warn-and-confirm). Phase-entry refresh and exit-code consumption rules: `shared-contracts.md §Phase-Entry Lock`. Lock file schema:
 
 ```json
 {
@@ -266,17 +273,36 @@ When creating or resuming a Work Log (non-`tiny-fix`), write or update an adviso
   "branch": "<branch-name>",
   "phase": "bootstrap",
   "updated_at": "<ISO-timestamp>",
-  "stale_timeout_minutes": 60
+  "stale_timeout_minutes": 60,
+  "pid": "<optional-process-id>"
 }
 ```
 
-**On resume**: If a lock file exists and belongs to another session:
+Preferred command:
+
+```bash
+python .agentcortex/tools/recover_worklog_lock.py ensure \
+  --lock .agentcortex/context/work/<worklog-key>.lock.json \
+  --worklog .agentcortex/context/work/<worklog-key>.md \
+  --owner "<user-name or session-id>" \
+  --session "<ISO-timestamp>" \
+  --branch "<branch-name>" \
+  --phase bootstrap
+```
+
+The helper classifies the lock as `missing`, `active`, or `recoverable`, checks optional `pid` liveness, atomically acquires missing/recoverable locks (`O_CREAT|O_EXCL`; racing recoverers serialize via unlink + exclusive create), and records recoveries in the Work Log `## Drift Log`. Exit code `2` means a non-stale lock is active for another owner/session: under `worklog_lock.mode: blocking` (default) this is a **Gate FAIL** — STOP and offer wait-for-staleness / user-approved `ensure --takeover` / switch branch; under `mode: advisory` surface it and ask confirmation before continuing. Exit code `3` is a filesystem failure, not a held lock.
+
+The CLI intentionally omits `pid` by default because the helper process exits immediately after writing the lock; a short-lived helper PID does not represent the owning agent session. Only pass `--pid <owner-pid>` from a long-lived process that truly owns the lock.
+
+**Python-unavailable fallback / manual resume**: Blocking enforcement requires the helper; without Python the lock degrades to this manual advisory checklist (stated honestly — no fake MUST). If the helper cannot run and a lock file exists that belongs to another session:
 
 - Check `updated_at` + `stale_timeout_minutes`. If stale (expired), warn and overwrite.
+- If `pid` is present and not alive, warn, overwrite, and record the recovery in the Work Log `## Drift Log`.
+- If the lock JSON is corrupted or lacks a parseable `updated_at`, warn, overwrite, and record the recovery in the Work Log `## Drift Log`.
 - If non-stale, output: `"⚠️ Active lock held by [owner] since [updated_at]. Concurrent edit risk. Proceed? (yes/no)"`.
-- This is advisory — it warns but does not hard-block.
+- This manual fallback path is advisory — it warns but does not hard-block (no Python = no machine verdict to gate on).
 
-**On phase transitions**: Each workflow SHOULD update the lock file's `phase` and `updated_at` when entering a new phase.
+**On phase transitions**: Each non-`tiny-fix` workflow MUST re-run `ensure` with the entering phase name (refreshes `phase` + `updated_at`) — per `shared-contracts.md §Phase-Entry Lock`. Without per-phase refresh, a long session's lock goes stale mid-work and another session can legitimately recover it.
 
 Lock file schema and timeout are defined in `.agent/config.yaml §worklog_lock`.
 

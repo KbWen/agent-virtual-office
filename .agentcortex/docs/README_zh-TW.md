@@ -1,25 +1,47 @@
-# Agentic OS v1.2.0 (Runtime v1.1 Anti-Drift Edition)
+# Agentic OS v1.5.1 (Runtime v1.1 Anti-Drift Edition)
 
 [English Version](../README.md)
 
-> **從「流程驅動」進化到「自我管理」的專業級 AI Agent 核心架構。**
+> 一套給 AI coding agent 的治理框架：用工作流程、交付閘門與工程護欄，讓 agent 的行為可預期、可驗證。
 
-## 🎯 專案定位
+## 專案定位
 
-**Agentic OS** 是一個專為頂尖開發者（使用 Gemini、Claude、或 GPT 等主流模型）設計的高效能**結構化認知框架**。它能幫助 AI Agent 深度理解代碼庫、嚴格遵守工程護欄，並以極高的 Token 效率執行複雜任務。
+**Agentic OS** 是一套可攜的治理框架，適用於 Gemini、Claude、GPT 等主流模型。它讓 AI agent 在理解代碼庫、遵守工程護欄的同時，以較低的 token 成本穩定執行複雜任務。
 
 我們對齊並優化了 Google Antigravity / Codex Web / Codex App 的使用情境：
 
 - **Self-Managed**：AI 自行分類任務並套用對應的治理閘門。
-- **Anti-Drift Engine**：具備強制防跳步驟的 `Gate Engine` 與 `Handshake` 交握機制，封鎖幻覺越權。
-- **Concurrency & Migration Safe**：內建衝突感知的 optimistic multi-session 保護、多人協作 Metadata 防撞車，以及舊專案無痛導入的 `/audit` 工作流。
+- **Anti-Drift Engine**：強制防跳步驟的 `Gate` 與交握機制，防止 AI 略過流程或宣稱未經驗證的完成。
+- **Concurrency & Migration Safe**：衝突感知的多 session 保護、多人協作的 metadata 防衝突，以及既有專案無痛導入的 `/audit` 工作流。
 - **Token Optimized**：針對不同風險等級自動調整治理強度，`tiny-fix` 走 fast-path 以節省成本。
 - **Command-first**：用標準化指令觸發 Agent 能力，確保行為一致性。
 - **10 不可違反原則**：[設計哲學](../.agentcortex/docs/AGENT_PHILOSOPHY_zh-TW.md)定義 P1-P10 核心信條 — AI 主導、不跳步驟、憲法高於任務、無證據不完成、跨模型合規。
 - **命名空間隔離**：下游專案可自由添加自定義 skill 和 workflow，框架用 `.agentcortex-manifest` 區分管理範圍，用戶指令永遠優先。
 - **14 項專業技能**：每個 skill metadata 都宣告在哪個 phase 自動啟用，AI 不需要人類提示就知道何時使用。
 
-## 🚀 三條起點路徑
+## 運作原理
+
+每個階段的核心信條都一樣：沒有可驗證的證據，任務就不算完成 —— 而 Gate 會強制執行這件事，而不是信任 AI 自行誠實回報。
+
+```mermaid
+flowchart LR
+    U["使用者<br/>提出需求"] --> G{"Gate<br/>引擎"}
+    G -->|通過| W["工作流程<br/>+ 技能"]
+    W --> E{"證據<br/>要求"}
+    E -->|通過| S["交付<br/>→ SSoT"]
+    G -->|未過| X1["⛔ 停止"]
+    E -->|未過| X2["⛔ 停止"]
+
+    style U fill:#8b5cf6,color:#fff,stroke:none
+    style G fill:#f59e0b,color:#fff,stroke:none
+    style W fill:#3b82f6,color:#fff,stroke:none
+    style E fill:#22c55e,color:#fff,stroke:none
+    style S fill:#06b6d4,color:#fff,stroke:none
+    style X1 fill:#ef4444,color:#fff,stroke:none
+    style X2 fill:#ef4444,color:#fff,stroke:none
+```
+
+## 三條起點路徑
 
 依你的專案狀態挑一條（詳細開場提示見「快速開始 §3」）：
 
@@ -31,7 +53,7 @@
 
 詳見 [生命週期基準測試](LIFECYCLE_BENCHMARK_zh-TW.md)（[English](LIFECYCLE_BENCHMARK.md)）— 6 個真實場景的 token 消耗數據。
 
-## 🔗 參考來源
+## 參考來源
 
 - Superpowers 專案（理念參考）：<https://github.com/obra/superpowers>
 - 專案導入範例：`.agentcortex/docs/PROJECT_EXAMPLES_zh-TW.md`
@@ -40,7 +62,7 @@
 - Token 優化快速指南：[token-optimization-quickstart_zh-TW.md](guides/token-optimization-quickstart_zh-TW.md)（[English](guides/token-optimization-quickstart.md)）
 - 生命週期基準測試：[LIFECYCLE_BENCHMARK_zh-TW.md](LIFECYCLE_BENCHMARK_zh-TW.md)
 
-## 📦 目錄總覽
+## 目錄總覽
 
 - `.agent/rules/engineering_guardrails.md`：工程憲法（含分類規則與 Gate 標準）
 - `.agent/workflows/*.md`：單檔工作流程（bootstrap, plan, implement, handoff, ship 等）
@@ -51,7 +73,7 @@
 - `.agentcortex/docs/CODEX_PLATFORM_GUIDE_zh-TW.md`：Codex 平台指南
 - `AGENTS.md`：跨平台長期指令入口
 
-## 🧩 系列功能對照 (Superpowers Based)
+## 系列功能對照 (Superpowers Based)
 
 | 功能 | 指令 | 對應檔案 | 目的 |
 | :--- | :--- | :--- | :--- |
@@ -72,13 +94,13 @@
 | 外部委派 (自然語言) | `ask-openrouter` | `.agent/workflows/ask-openrouter.md` | [可選] 將任務委派給 OpenRouter 模型 |
 | Codex CLI 執行 | `codex-cli` | `.agent/workflows/codex-cli.md` | [可選] 透過 Codex CLI 安全執行任務 |
 
-## 🔀 Antigravity / Codex 路徑差異
+## Antigravity / Codex 路徑差異
 
 - Antigravity 主要讀取：`.agent/skills` (Native Agent 核心能力)
 - Codex 主要掃描：`.agents/skills` (Codex App 專屬能力)
 - **注意**：兩者目錄獨立存在以適應不同平台配置。若需共用，請根據需求手動鏡像或建立軟連結。
 
-## 🛡️ 規則檔與安全邊界
+## 規則檔與安全邊界
 
 - `.antigravity/rules.md`：Antigravity 優先讀取的規則總表。
 - `codex/rules/default.rules`：Codex 規則擴充入口。
@@ -115,7 +137,7 @@ flowchart LR
 - `rm -rf`、`git reset --hard`、`git clean -fdx`
 - `docker system prune -a`、`chown -R`、`curl ... | bash`、`chmod -R 777`
 
-## 🚀 快速開始
+## 快速開始
 
 ### 1) 部署到專案
 
@@ -136,6 +158,18 @@ flowchart LR
 
 > [!TIP]
 > 部署腳本會自動將 Agent 相關暫存檔（如 `work/`, `skills/` 等）加入 `.gitignore`，防止其被上傳到遠端倉庫。
+
+### 1a) 客製化而不衝突（Fork 或 Clone）
+
+無論你用 **fork**（再 `git pull upstream`）或 **clone + `deploy_brain.sh`** 導入，同一條規則讓升級無痛：**只「加」你自己的檔，絕不原地編輯框架檔。** 把客製放在框架保證永不觸碰的地方，它就能同時撐過 `git pull upstream`（fork）與下次 `deploy`（clone）：
+
+| 你想要… | 放這裡 | 為何升級不會壞 |
+|---|---|---|
+| 加專案治理（narrow/停用某指令） | `AGENTS.override.md`（專案根）或 `~/.agentcortex/AGENTS.override.md`（個人） | session 起始 present-only 載入；框架永不 ship 這些檔。MAY narrow/disable，但**不得**放寬 delivery gates。 |
+| 加你自己的 skill | `.agents/skills/custom-<name>/SKILL.md`（+ `.agent/skills/custom-<name>` metadata） | `custom-*` 是框架永不 ship 的保留 namespace → 零碰撞、不被覆寫。 |
+| 調整 skill 啟用（pin/排除） | `.agentcortex/context/private/user-preferences.yaml` | gitignored、個人、bootstrap 載入。 |
+
+**不要做的事**：原地編輯框架檔（`AGENTS.md`、`.agent/rules/*`、`.agent/workflows/*`、已 ship 的 skill body）會在 `git pull upstream`（fork）造成 merge 衝突、在下次 `deploy`（clone）被強制更新。框架 **skill** 是唯一寬容的例外——你若改了，`deploy` 會把你的版本保留成可見的 `<file>.acx-incoming` sidecar，而非靜默覆寫——但更乾淨的做法永遠是複製成 `custom-<name>` skill 再改。治理、安全、workflow 檔一律強制更新，確保你持續收到修補。
 
 ### 2) Codex / Antigravity 開場
 
@@ -225,7 +259,7 @@ Fetch and follow instructions from <your-raw-url>/.codex/INSTALL.md
 6. `/handoff`：跨回合交接（非 tiny-fix 必須）
 7. `/ship`：整理 commit / 變更摘要 / 測試結果
 
-## ⚙️ 建議節奏
+## 建議節奏
 
 ```mermaid
 flowchart LR
@@ -243,14 +277,25 @@ flowchart LR
 - **架構調整（architecture-change）**：`/bootstrap → /adr → /spec → /plan → /implement → /review → /test → /handoff → /ship`
 - **緊急修復（hotfix）**：`/bootstrap → /research → /plan → /implement → /review → /test → /ship`
 
-## 🧠 Token Hygiene（避免小任務放大成本）
+## Token Hygiene（避免小任務放大成本）
 
 - 任務啟動只讀：`.agentcortex/context/current_state.md` 與 `.agentcortex/context/work/<worklog-key>.md`（worklog-key = branch name 的 filesystem-safe 正規化，例如 `/` 換 `-`）。
 - 優先精準檢索（`rg <keyword> <path>`），避免全樹掃描。
 - 先用 `/plan` 收斂檔案範圍，再進入 `/implement`，降低來回修正。
 - 小型任務沿用 Fast Lane；若變更開始影響狀態/策略，立即升級流程，避免返工。
 
-## ✅ 自我驗證
+## 文件導覽
+
+| 目標 | 先讀這裡 | 用途 |
+|:---|:---|:---|
+| 安裝或升級 Agentic OS | [快速開始](#快速開始)、[遷移與整合指南](../.agentcortex/docs/guides/migration_zh-TW.md) | 部署指令、更新流程、既有專案導入 |
+| 選擇合適模型 | [模型選擇指南](AGENT_MODEL_GUIDE_zh-TW.md)、[生命週期基準測試](LIFECYCLE_BENCHMARK_zh-TW.md) | 模型取捨與實測 token 成本 |
+| 跑穩定的 agent 工作流 | [設計哲學](../.agentcortex/docs/AGENT_PHILOSOPHY_zh-TW.md)、[測試協議](../.agentcortex/docs/TESTING_PROTOCOL_zh-TW.md) | 核心規則、證據要求、驗證標準 |
+| 使用特定平台 | [Codex 平台指南](../.agentcortex/docs/CODEX_PLATFORM_GUIDE_zh-TW.md)、[Antigravity v5 Runtime](../.agentcortex/docs/guides/antigravity-v5-runtime.md) | 平台載入、交接、相容性注意事項 |
+| 理解治理內部機制 | [文件治理](../.agentcortex/docs/guides/doc-governance.md)、[非線性情境](../.agentcortex/docs/NONLINEAR_SCENARIOS_zh-TW.md) | 狀態、交接、復原與文件生命週期 |
+| 安全擴充技能 | [Skill Ecosystem](architecture/skill-ecosystem.md)、[Token 治理指南](../.agentcortex/docs/guides/token-governance_zh-TW.md) | skill 封裝、觸發策略、context 預算控制 |
+
+## 自我驗證
 
 ```bash
 .agentcortex/bin/validate.sh

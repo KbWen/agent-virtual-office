@@ -521,6 +521,16 @@ else
     "antigravity rules missing rollback reminder"
 fi
 
+# ADR-004: bootstrap MUST ship the override-layer load step. Structural
+# enforcement only — the framework ships the instruction; per-agent compliance
+# ("did this agent actually read the override") is honor-system like the
+# Sentinel and is NOT falsely claimed as test-enforced.
+check_contains_literal \
+  "$WORKFLOWS_DIR/bootstrap.md" \
+  'Load Override Layer' \
+  "bootstrap ships override-layer load step (ADR-004 §1a)" \
+  "bootstrap missing override-layer load step (ADR-004 §1a)"
+
 ACTIVE_CODEX_RULES="$ROOT/codex/rules/default.rules"
 [[ -f "$ACTIVE_CODEX_RULES" ]] || ACTIVE_CODEX_RULES="$CODEX_RULES"
 if [[ -f "$ACTIVE_CODEX_RULES" ]]; then
@@ -770,7 +780,7 @@ domain_doc_frontmatter_warn=0
 shopt -s nullglob
 for spec in "$ROOT"/docs/specs/*.md; do
   [[ -f "$spec" ]] || continue
-  if grep -Eq '^primary_domain:\s*[^[:space:]]+' "$spec"; then
+  if grep -Eq '^primary_domain:[[:space:]]*[^[:space:]]+' "$spec"; then
     if ! grep -F -q '## Domain Decisions' "$spec"; then
       printf '  spec with primary_domain missing Domain Decisions: %s\n' "$spec"
       document_governance_spec_errors=$((document_governance_spec_errors + 1))
@@ -794,7 +804,7 @@ if [[ -d "$ROOT/docs/architecture" ]]; then
   for domain_doc in "$ROOT"/docs/architecture/*.md; do
     [[ -f "$domain_doc" ]] || continue
     [[ "$domain_doc" == *.log.md ]] && continue
-    if ! grep -Eq '^status:\s*living$' "$domain_doc" || ! grep -Eq '^domain:\s*[^[:space:]]+' "$domain_doc"; then
+    if ! grep -Eq '^status:[[:space:]]*living$' "$domain_doc" || ! grep -Eq '^domain:[[:space:]]*[^[:space:]]+' "$domain_doc"; then
       printf '  domain doc candidate missing full L1 contract (status: living + domain:): %s\n' "$domain_doc"
       domain_doc_frontmatter_warn=$((domain_doc_frontmatter_warn + 1))
     fi
@@ -925,14 +935,14 @@ if [[ "$IS_SOURCE_REPO" -eq 1 ]]; then
   if [[ -f "$ROOT/docs/README_zh-TW.md" ]]; then
     check_contains_literal \
       "$ROOT/docs/README_zh-TW.md" \
-      '從「流程驅動」進化到「自我管理」的專業級 AI Agent 核心架構。' \
+      '用工作流程、交付閘門與工程護欄' \
       "README_zh-TW.md encoding looks healthy" \
       "README_zh-TW.md appears mojibaked or re-encoded"
   fi
   if [[ -f "$ROOT/README.md" ]]; then
     check_contains_literal \
       "$ROOT/README.md" \
-      'governance-first operating system for AI coding agents' \
+      'governance-first layer for AI coding agents' \
       "README.md encoding looks healthy" \
       "README.md appears mojibaked or re-encoded"
   fi
@@ -1354,7 +1364,7 @@ PYEOF
       wl_class="$(printf '%s' "$wl_content" | sed -n 's/^- \(**\)\?Classification\1\?:[[:space:]]*//p' | head -n 1 | tr -d '\r\`')"
     fi
     if [[ "$wl_class" == "feature" || "$wl_class" == "architecture-change" ]]; then
-      if printf '%s' "$wl_content" | grep -q 'Gate: implement'; then
+      if printf '%s' "$wl_content" | grep -qi 'Gate: implement'; then
         if ! printf '%s' "$wl_content" | grep -qiE '^#+[[:space:]]+Test Gate Results'; then
           test_gate_results_missing=$((test_gate_results_missing + 1))
         fi
@@ -1399,7 +1409,7 @@ PYEOF
     # "Reclassification:" but Classification header was never reset to CLASSIFIED,
     # leaving downstream agents with a stale classification tier.
     if printf '%s' "$wl_content" | grep -q '## Drift Log' \
-       && printf '%s' "$wl_content" | grep -qiE '^\s*-\s+Reclassif'; then
+       && printf '%s' "$wl_content" | grep -qiE '^[[:space:]]*-[[:space:]]+Reclassif'; then
       cls_hdr="$(printf '%s' "$wl_content" | grep -m1 -iE '^-[[:space:]]*\*?\*?Classification\*?\*?:' \
         | sed 's/.*Classification[^:]*:[[:space:]]*//' | tr -d '`\r' | tr '[:upper:]' '[:lower:]' | xargs)" || true
       if [[ -n "$cls_hdr" && "$cls_hdr" != "classified" ]]; then
@@ -1436,7 +1446,7 @@ PYEOF
     # bootstrap should have run the ADR Coverage Check and recorded the result (yes/skip)
     # in ## Drift Log. Missing record means the check was silently bypassed.
     if [[ "$wl_class" == "feature" || "$wl_class" == "architecture-change" ]]; then
-      if printf '%s' "$wl_content" | grep -q 'Gate: plan\|Gate: implement'; then
+      if printf '%s' "$wl_content" | grep -qi 'Gate: plan\|Gate: implement'; then
         if ! printf '%s' "$wl_content" | grep -qiE 'ADR.*[Cc]overage|[Cc]overage.*ADR|adr.*check|no.*adr.*found'; then
           adr_coverage_undocumented=$((adr_coverage_undocumented + 1))
         fi
@@ -1606,6 +1616,70 @@ PYEOF
       record_result WARN "advisory lock staleness check -- python unavailable (install Python 3.9+ for full validation)"
     fi
   fi
+  # Work Log lock owner/phase mismatch checks — WARN only, never FAIL.
+  # Skips stale and unreadable locks (already covered above); skips orphan locks
+  # (no matching Work Log .md).  JSON parsing uses Python (same as stale check).
+  owner_phase_mismatches=0
+  if [[ -n "$PYTHON_BIN" ]]; then
+    _acx_lockfields_py=$(cat <<'PYEOF'
+import json, sys, datetime
+try:
+    with open(sys.argv[1]) as f:
+        d = json.load(f)
+    ua = d.get('updated_at', '')
+    tm = int(d.get('stale_timeout_minutes', 60))
+    if not ua:
+        print('unreadable'); sys.exit(0)
+    dt = datetime.datetime.fromisoformat(ua)
+    now = datetime.datetime.now(dt.tzinfo or datetime.timezone.utc)
+    age_min = (now - dt).total_seconds() / 60
+    if age_min > tm:
+        print('stale'); sys.exit(0)
+    owner = d.get('owner', '')
+    phase = d.get('phase', '')
+    print('ok|' + owner + '|' + phase)
+except Exception:
+    print('unreadable')
+PYEOF
+)
+    for lockf in "$WORKLOG_DIR"/*.lock.json; do
+      [[ -f "$lockf" ]] || continue
+      _fields="$("$PYTHON_BIN" -c "$_acx_lockfields_py" "$lockf" 2>/dev/null)" || true
+      case "$_fields" in
+        stale|unreadable) continue ;;
+        ok\|*)
+          _lock_owner="$(printf '%s' "$_fields" | cut -d'|' -f2)"
+          _lock_phase="$(printf '%s' "$_fields" | cut -d'|' -f3)"
+          ;;
+        *) continue ;;
+      esac
+      # Derive Work Log path from lock filename: strip .lock.json -> .md
+      _lockbase="$(basename "$lockf" .lock.json)"
+      _wl="$WORKLOG_DIR/${_lockbase}.md"
+      [[ -f "$_wl" ]] || continue  # orphan lock — not this check's job
+      # Extract Owner: strip backticks and whitespace; handle list form and table form
+      _wl_owner="$(grep -m1 -iE '^\-[[:space:]]+Owner[[:space:]]*:|^\|[[:space:]]*Owner[[:space:]]*\|' "$_wl" 2>/dev/null \
+        | sed -E 's/.*Owner[[:space:]]*:[[:space:]]*//; s/.*\|[[:space:]]*Owner[[:space:]]*\|[[:space:]]*([^|]+)\|.*/\1/' \
+        | tr -d '`\r' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')" || true
+      # Extract Current Phase: same stripping
+      _wl_phase="$(grep -m1 -iE '^\-[[:space:]]+Current Phase[[:space:]]*:|^\|[[:space:]]*Current Phase[[:space:]]*\|' "$_wl" 2>/dev/null \
+        | sed -E 's/.*Current Phase[[:space:]]*:[[:space:]]*//; s/.*\|[[:space:]]*Current Phase[[:space:]]*\|[[:space:]]*([^|]+)\|.*/\1/' \
+        | tr -d '`\r' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')" || true
+      if [[ -n "$_wl_owner" && "$_lock_owner" != "$_wl_owner" ]]; then
+        printf '  worklog lock owner mismatch: %s owner=%s worklog Owner=%s\n' \
+          "$(basename "$lockf")" "$_lock_owner" "$_wl_owner"
+        owner_phase_mismatches=$((owner_phase_mismatches + 1))
+      fi
+      if [[ -n "$_wl_phase" && "$_lock_phase" != "$_wl_phase" ]]; then
+        printf '  worklog lock phase mismatch: %s phase=%s worklog Current Phase=%s\n' \
+          "$(basename "$lockf")" "$_lock_phase" "$_wl_phase"
+        owner_phase_mismatches=$((owner_phase_mismatches + 1))
+      fi
+    done
+  fi
+  if [[ "$owner_phase_mismatches" -gt 0 ]]; then
+    record_result WARN "work log lock owner/phase mismatches detected: ${owner_phase_mismatches}"
+  fi
 else
   record_result SKIP "active work log directory not present"
 fi
@@ -1639,14 +1713,17 @@ phase_summary_violations=0
 phase_summary_violation_list=""
 if [[ -d "$ARCHIVE_DIR" ]]; then
   while IFS= read -r -d '' wl; do
-    classification="$(grep -m1 -E '^- \*?\*?Classification\*?\*?:' "$wl" 2>/dev/null | sed -E 's/.*Classification[^:]*:\s*`?//; s/`.*//; s/\s*$//')" || true
+    classification="$(grep -m1 -E '^- \*?\*?Classification\*?\*?:' "$wl" 2>/dev/null | sed -E 's/.*Classification[^:]*:[[:space:]]*`?//; s/`.*//; s/[[:space:]]*$//')" || true
     [[ "$classification" == "tiny-fix" ]] && continue
     summary_body="$(awk '/^## Phase Summary/{found=1; next} found && /^## /{exit} found{print}' "$wl" 2>/dev/null | tr -d '[:space:]')"
     if [[ -z "$summary_body" || "$summary_body" == "none" ]]; then
       phase_summary_violations=$((phase_summary_violations + 1))
       phase_summary_violation_list="${phase_summary_violation_list}  empty Phase Summary: ${wl#$ROOT/}\n"
     fi
-  done < <(find "$ARCHIVE_DIR" -name '*.md' -not -name '.gitkeep*' -print0 2>/dev/null || true)
+  # Exclude ship-history-*.md (case-insensitive `-iname` for parity with the PS
+  # `-notlike` filter): compacted ship-history archives are not Work Logs and
+  # carry no `## Phase Summary` contract (#171).
+  done < <(find "$ARCHIVE_DIR" -name '*.md' -not -name '.gitkeep*' -not -iname 'ship-history-*' -print0 2>/dev/null || true)
 fi
 if [[ "$phase_summary_violations" -gt 0 ]]; then
   record_result WARN "archived Work Logs with empty Phase Summary: ${phase_summary_violations}"
@@ -1664,7 +1741,7 @@ if [[ -d "$ARCHIVE_DIR" ]]; then
   while IFS= read -r -d '' wl; do
     wl_content="$(cat "$wl" 2>/dev/null)"
     [[ -z "$wl_content" ]] && continue
-    arc_class="$(printf '%s' "$wl_content" | grep -m1 -E '^- \*?\*?[Cc]lassification\*?\*?:' | sed -E 's/.*[Cc]lassification[^:]*:\s*`?//; s/`.*//; s/\s*$//' | tr '[:upper:]' '[:lower:]')" || true
+    arc_class="$(printf '%s' "$wl_content" | grep -m1 -E '^- \*?\*?[Cc]lassification\*?\*?:' | sed -E 's/.*[Cc]lassification[^:]*:[[:space:]]*`?//; s/`.*//; s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')" || true
     [[ "$arc_class" == "tiny-fix" ]] && continue
     if printf '%s' "$wl_content" | grep -qiE 'Gate:[[:space:]]*ship[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS'; then
       arc_has_plan=$(printf '%s' "$wl_content" | grep -ciE 'Gate:[[:space:]]*plan[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS') || true
@@ -1803,7 +1880,11 @@ if [[ -f "$CURRENT_STATE" ]]; then
   cs_content="$(cat "$CURRENT_STATE" 2>/dev/null)" || { record_result WARN "cannot read current_state.md — skipping state checks"; }
 
   # ADR Index completeness
-  adr_index_section="$(printf '%s' "$cs_content" | awk '/\*\*ADR Index\*\*:/{found=1; next} found && /^- \*\*/{exit} found{print}')"
+  # NOTE: feed awk via here-string, NOT `printf | awk`. awk's `exit` closes the
+  # pipe early; with set -o pipefail the upstream printf's SIGPIPE (141) would
+  # fail the whole script intermittently when $cs_content is large. <<< reads a
+  # temp file, so early exit cannot break a pipe.
+  adr_index_section="$(awk '/\*\*ADR Index\*\*:/{found=1; next} found && /^- \*\*/{exit} found{print}' <<<"$cs_content")"
   adr_missing_count=0
   adr_missing_list=""
   adr_phantom_count=0
@@ -1844,7 +1925,7 @@ if [[ -f "$CURRENT_STATE" ]]; then
   fi
 
   # Spec Index completeness
-  spec_index_section="$(printf '%s' "$cs_content" | awk '/\*\*Spec Index\*\*/{found=1; next} found && /^- \*\*/{exit} found{print}')"
+  spec_index_section="$(awk '/\*\*Spec Index\*\*/{found=1; next} found && /^- \*\*/{exit} found{print}' <<<"$cs_content")"
   spec_missing_count=0
   spec_missing_list=""
   for spec_dir in "$ROOT/docs/specs" "$ROOT/.agentcortex/specs"; do
@@ -1960,7 +2041,7 @@ if [[ -f "$BACKLOG_FILE" ]]; then
 
     # L-3: Kind distribution sanity — warn if all non-— rows have Kind=feature (no review-finding/hotfix-spawn ever written)
     if [[ "$total_pending" -gt 9 ]]; then
-      kind_variety=$(grep '| Pending' "$BACKLOG_FILE" 2>/dev/null | awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $4); print $4}' | grep -vE '^\s*(—)?\s*$' | sort -u | wc -l | tr -d '[:space:]')
+      kind_variety=$(grep '| Pending' "$BACKLOG_FILE" 2>/dev/null | awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $4); print $4}' | grep -vE '^[[:space:]]*(—)?[[:space:]]*$' | sort -u | wc -l | tr -d '[:space:]')
       kind_variety=${kind_variety:-0}
       if [[ "$kind_variety" -eq 1 ]]; then
         record_result WARN "backlog Kind diversity: all assigned pending items share the same Kind value — review-finding and hotfix-spawn entries may not be reaching the backlog"
@@ -2142,17 +2223,21 @@ if [[ -d "$ROOT/docs/specs" ]]; then
   fi
 fi
 
-# Project spec template check: if /app-init has run (at least one docs/adr/ADR-*.md
-# exists) but no project-customized spec template was created, WARN so the user
-# knows spec-intake will fall back to the generic template instead of the
-# project-specific one.
-adr_count=0
+# Project spec template check (#172): detect a genuine downstream app that has
+# run /app-init by the presence of its project-architecture ADR
+# (docs/adr/ADR-00N-project-architecture.md, created by app-init.md §4). The
+# framework's own governance ADRs (ADR-001-governance-friction-tuning, ..) do
+# NOT match this pattern, so these app-init-derived checks never false-fire on
+# the framework repo itself. This signal is deploy-independent, so it also
+# covers fork/clone adopters (README §Additive Fork) that never run deploy.sh.
+# If app-init ran but the template / Project Name is missing, WARN.
+app_init_adr_count=0
 for adr_dir in "$ROOT/docs/adr" "$ROOT/.agentcortex/adr"; do
   if [[ -d "$adr_dir" ]]; then
-    for f in "$adr_dir"/ADR-*.md; do [[ -f "$f" ]] && adr_count=$((adr_count + 1)); done
+    for f in "$adr_dir"/*-project-architecture.md; do [[ -f "$f" ]] && app_init_adr_count=$((app_init_adr_count + 1)); done
   fi
 done
-if [[ "$adr_count" -gt 0 ]]; then
+if [[ "$app_init_adr_count" -gt 0 ]]; then
   has_project_template=0
   for tmpl in "$ROOT"/.agentcortex/templates/spec-app-feature-*.md; do
     [[ -f "$tmpl" ]] && has_project_template=1 && break
@@ -2212,6 +2297,11 @@ if [[ -d "$ROOT/docs/specs" ]]; then
     [[ -f "$spec" ]] || continue
     # Skip .gitkeep.md placeholder files
     [[ "$(basename "$spec")" == ".gitkeep.md" ]] && continue
+    # Skip underscore-prefixed meta/index files (_product-backlog*, _research-*):
+    # not governed specs; they use their own lifecycle states (archive/research)
+    # and are exempt from the spec-status enum, matching the `_*` skip convention
+    # already used for the Spec Index completeness check above (#170).
+    [[ "$(basename "$spec")" == _* ]] && continue
     # Check YAML frontmatter presence (first line must be ---)
     first_line="$(head -n1 "$spec" 2>/dev/null | tr -d '\r')"
     if [[ "$first_line" != "---" ]]; then
@@ -2284,6 +2374,85 @@ if [[ -d "$AGENTS_DIR" ]]; then
   fi
 else
   record_result SKIP "acx phase shim skill check -- .claude/agents/ not present"
+fi
+
+# Governance eval coverage advisory (AC-7): capability-by-presence.
+# If .agentcortex/eval/governance.yaml exists AND python is available, run
+# run_governance_eval.py --coverage --format json and WARN with the count of
+# MUST-rule sections that have zero guarding cases. Never FAIL; silent skip
+# when the eval file or python is absent. Zero zero-coverage rules → PASS.
+ACX_EVAL_YAML="$ROOT/.agentcortex/eval/governance.yaml"
+ACX_EVAL_RUNNER="$ROOT/.agentcortex/tools/run_governance_eval.py"
+if [[ -f "$ACX_EVAL_YAML" ]]; then
+  if [[ -z "${PYTHON_BIN:-}" ]]; then
+    record_result SKIP "governance eval coverage -- python unavailable (install Python 3.9+ for full validation)" || true
+  elif [[ ! -f "$ACX_EVAL_RUNNER" ]]; then
+    record_result SKIP "governance eval coverage -- runner not present (run_governance_eval.py missing)" || true
+  else
+    # Coverage mode emits text; parse the "Zero-coverage rules:" line.
+    _eval_cov_text="$("$PYTHON_BIN" "$ACX_EVAL_RUNNER" --coverage 2>&1)" || true
+    _eval_zero_count="$(printf '%s' "$_eval_cov_text" | grep -oE 'Zero-coverage rules: [0-9]+' | grep -oE '[0-9]+' | head -1)"
+    _eval_zero_count="${_eval_zero_count:-0}"
+    if [[ "$_eval_zero_count" -gt 0 ]]; then
+      record_result WARN "governance eval coverage: ${_eval_zero_count} MUST-rule section(s) without eval cases (tier-blind: includes machine-enforced and principle-tier rules; see guardrails s13)" || true
+      print_indented_output "$(printf '%s' "$_eval_cov_text" | grep -A9999 'Rules with zero guarding cases:' | head -20)" || true
+    else
+      record_result PASS "governance eval coverage: 0 MUST-rule section(s) with zero guarding cases" || true
+    fi
+  fi
+fi
+
+# AC-6: governance specs missing signal_tier frontmatter (guardrails §13 ADD-Gate).
+# Advisory WARN only — never FAIL. Checks docs/specs/*.md (skips _* meta/index
+# files). Conditions to WARN (ALL must hold):
+#   1. frontmatter primary_domain: contains "governance" (case-insensitive).
+#   2. frontmatter created: >= 2026-06-10 (ISO, lexical compare). Missing = skip.
+#   3. frontmatter status: is NOT shipped or cancelled.
+#   4. frontmatter has NO signal_tier: line (any value silences).
+_st_warn_count=0
+_st_warn_files=()
+shopt -s nullglob
+for _st_spec in "$ROOT"/docs/specs/*.md; do
+  [[ -f "$_st_spec" ]] || continue
+  _st_base="$(basename "$_st_spec")"
+  # Skip underscore-prefixed meta/index specs (_*.md).
+  [[ "$_st_base" == _* ]] && continue
+  # Extract YAML frontmatter (between first pair of --- lines); strip \r.
+  _st_fm="$(awk '/^---/{if(found){exit}else{found=1;next}} found{print}' "$_st_spec" | tr -d '\r')"
+  # Condition 1: primary_domain contains "governance" (case-insensitive).
+  # Use || true on grep to avoid set -e exit when grep finds no match.
+  _st_domain="$(printf '%s' "$_st_fm" | grep -i '^primary_domain:' | head -1 | sed 's/^[^:]*:[[:space:]]*//' || true)"
+  if ! printf '%s' "$_st_domain" | grep -qi 'governance'; then
+    continue
+  fi
+  # Condition 2: created: >= 2026-06-10 (lexical). Missing = grandfathered, skip.
+  _st_created="$(printf '%s' "$_st_fm" | grep '^created:' | head -1 | sed 's/^[^:]*:[[:space:]]*//' || true)"
+  if [[ -z "$_st_created" ]]; then
+    continue
+  fi
+  if [[ "$_st_created" < "2026-06-10" ]]; then
+    continue
+  fi
+  # Condition 3: status not shipped or cancelled.
+  _st_status="$(printf '%s' "$_st_fm" | grep '^status:' | head -1 | sed 's/^[^:]*:[[:space:]]*//' || true)"
+  if [[ "$_st_status" == "shipped" ]] || [[ "$_st_status" == "cancelled" ]]; then
+    continue
+  fi
+  # Condition 4: no signal_tier: line present.
+  if printf '%s' "$_st_fm" | grep -q '^signal_tier:'; then
+    continue
+  fi
+  _st_warn_files+=("$_st_base")
+  _st_warn_count=$((_st_warn_count + 1))
+done
+shopt -u nullglob
+if [[ "$_st_warn_count" -gt 0 ]]; then
+  record_result WARN "governance specs missing signal_tier frontmatter (guardrails §13 ADD-Gate): ${_st_warn_count}" || true
+  for _st_f in "${_st_warn_files[@]}"; do
+    printf '  governance spec missing signal_tier: %s\n' "$_st_f"
+  done
+else
+  record_result PASS "governance-rule specs declare signal_tier (or none apply)" || true
 fi
 
 echo ""

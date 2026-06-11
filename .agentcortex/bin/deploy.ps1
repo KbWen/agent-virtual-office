@@ -13,8 +13,21 @@ function Normalize-PathString {
 
 function Resolve-BashLauncher {
     $candidates = @()
-    $bashCmd = Get-Command bash -ErrorAction SilentlyContinue
-    if ($bashCmd) { $candidates += $bashCmd.Source }
+
+    # Prefer real Git Bash over PATH bash. On Windows, PATH may expose
+    # WindowsApps\bash.exe, which is only a WSL placeholder when no distro is
+    # installed.
+    $gitCmd = Get-Command git -ErrorAction SilentlyContinue
+    if ($gitCmd) {
+        $gitDir = Split-Path -Parent $gitCmd.Source
+        $gitRoot = Split-Path -Parent $gitDir
+        if ($gitRoot) {
+            $candidates += @(
+                (Join-Path $gitRoot 'bin\bash.exe'),
+                (Join-Path $gitRoot 'usr\bin\bash.exe')
+            )
+        }
+    }
 
     $candidates += @(
         'C:\Program Files\Git\bin\bash.exe',
@@ -22,8 +35,14 @@ function Resolve-BashLauncher {
         'C:\Program Files (x86)\Git\bin\bash.exe'
     )
 
-    foreach ($candidate in $candidates) {
+    $bashCmd = Get-Command bash -ErrorAction SilentlyContinue
+    if ($bashCmd) { $candidates += $bashCmd.Source }
+
+    foreach ($candidate in $candidates | Select-Object -Unique) {
         if (-not (Test-Path -Path $candidate -PathType Leaf)) {
+            continue
+        }
+        if ($candidate -like '*\WindowsApps\bash.exe') {
             continue
         }
         & $candidate --version *> $null

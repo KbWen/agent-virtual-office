@@ -340,10 +340,17 @@ $deprecatedWorkflowFiles = @(
     (Join-NormalPath $workflowsDir 'medium-feature.md'),
     (Join-NormalPath $workflowsDir 'small-fix.md')
 )
+# Emit FAIL-on-present / PASS-on-absent to match validate.sh exactly (F4 parity:
+# the bash side records a PASS when none are present, so without this else the
+# two validators differed by one PASS).
+$deprecatedFound = @()
 foreach ($df in $deprecatedWorkflowFiles) {
-    if (Test-Path -Path $df -PathType Leaf) {
-        Add-Result -Level 'FAIL' -Message "deprecated workflow file still present: $df -- remove with git rm"
-    }
+    if (Test-Path -Path $df -PathType Leaf) { $deprecatedFound += (Split-Path -Leaf $df) }
+}
+if ($deprecatedFound.Count -gt 0) {
+    Add-Result -Level 'FAIL' -Message "deprecated workflow files still present (remove them): $($deprecatedFound -join ', ')"
+} else {
+    Add-Result -Level 'PASS' -Message 'deprecated workflow files absent (new-feature, medium-feature, small-fix)'
 }
 
 if ($isSourceRepo) {
@@ -423,8 +430,9 @@ if (Test-Path -Path $archiveIndexJsonl -PathType Leaf) {
 # chain cannot detect TAIL-TRUNCATION; git's merge-base with origin/main is used
 # as an EXTERNAL append-only witness (committed baseline must be a line-prefix of
 # the working copy). Tamper-EVIDENCE, not prevention. Degrades to WARN (never
-# silent PASS) when git / origin/main / baseline is unavailable. PowerShell reads
-# `git show` / Get-Content as string arrays, so CRLF is stripped naturally.
+# silent PASS) when git / origin/main / baseline is unavailable. Use cmd.exe
+# redirection for the git blob so Windows PowerShell 5.1 cannot mis-decode UTF-8
+# JSONL through its native pipeline.
 $indexRel = '.agentcortex/context/archive/INDEX.jsonl'
 if (Test-Path -Path $archiveIndexJsonl -PathType Leaf) {
     $gitPresent = [bool](Get-Command git -ErrorAction SilentlyContinue)
@@ -443,20 +451,31 @@ if (Test-Path -Path $archiveIndexJsonl -PathType Leaf) {
             if ($LASTEXITCODE -ne 0) {
                 Add-Result -Level 'WARN' -Message 'INDEX.jsonl append-only witness -- not present at merge-base (new log surface)'
             } else {
-                $baseLines = @(git -C $root show "${witnessBase}:$indexRel" 2>$null | Where-Object { $_ -ne '' })
-                $localLines = @(Get-Content -LiteralPath $archiveIndexJsonl | Where-Object { $_ -ne '' })
-                if ($localLines.Count -lt $baseLines.Count) {
-                    Add-Result -Level 'FAIL' -Message "INDEX.jsonl append-only witness -- local has $($localLines.Count) entries, fewer than baseline $($baseLines.Count) at merge-base (tail-truncation?)"
-                } else {
-                    $prefixOk = $true
-                    for ($i = 0; $i -lt $baseLines.Count; $i++) {
-                        if ($localLines[$i] -ne $baseLines[$i]) { $prefixOk = $false; break }
-                    }
-                    if (-not $prefixOk) {
-                        Add-Result -Level 'FAIL' -Message 'INDEX.jsonl append-only witness -- committed baseline is not a prefix of local (a previously-published audit entry was edited or deleted)'
+                $baseTmp = New-TemporaryFile
+                try {
+                    $objectName = "${witnessBase}:$indexRel"
+                    & cmd.exe /c "git -C `"$root`" show `"$objectName`" > `"$($baseTmp.FullName)`""
+                    if ($LASTEXITCODE -ne 0) {
+                        Add-Result -Level 'WARN' -Message 'INDEX.jsonl append-only witness -- unable to read baseline blob'
                     } else {
-                        Add-Result -Level 'PASS' -Message 'INDEX.jsonl append-only witness -- baseline is a prefix of local (append-only invariant holds)'
+                        $baseLines = @(Get-Content -LiteralPath $baseTmp.FullName -Encoding UTF8 | Where-Object { $_ -ne '' })
+                        $localLines = @(Get-Content -LiteralPath $archiveIndexJsonl -Encoding UTF8 | Where-Object { $_ -ne '' })
+                        if ($localLines.Count -lt $baseLines.Count) {
+                            Add-Result -Level 'FAIL' -Message "INDEX.jsonl append-only witness -- local has $($localLines.Count) entries, fewer than baseline $($baseLines.Count) at merge-base (tail-truncation?)"
+                        } else {
+                            $prefixOk = $true
+                            for ($i = 0; $i -lt $baseLines.Count; $i++) {
+                                if ($localLines[$i] -ne $baseLines[$i]) { $prefixOk = $false; break }
+                            }
+                            if (-not $prefixOk) {
+                                Add-Result -Level 'FAIL' -Message 'INDEX.jsonl append-only witness -- committed baseline is not a prefix of local (a previously-published audit entry was edited or deleted)'
+                            } else {
+                                Add-Result -Level 'PASS' -Message 'INDEX.jsonl append-only witness -- baseline is a prefix of local (append-only invariant holds)'
+                            }
+                        }
                     }
+                } finally {
+                    Remove-Item -LiteralPath $baseTmp.FullName -Force -ErrorAction SilentlyContinue
                 }
             }
         }
@@ -618,6 +637,8 @@ else {
 }
 
 Test-ContainsLiteral -Path (Join-NormalPath $workflowsDir 'bootstrap.md') -Pattern 'Recommended Skills' -SuccessMessage 'bootstrap includes Recommended Skills contract' -FailureMessage 'bootstrap missing Recommended Skills contract'
+# ADR-004: bootstrap MUST ship the override-layer load step (structural enforcement only; per-agent compliance is honor-system, not falsely test-enforced).
+Test-ContainsLiteral -Path (Join-NormalPath $workflowsDir 'bootstrap.md') -Pattern 'Load Override Layer' -SuccessMessage 'bootstrap ships override-layer load step (ADR-004 §1a)' -FailureMessage 'bootstrap missing override-layer load step (ADR-004 §1a)'
 $phaseSkillFiles = @(
     (Join-NormalPath $workflowsDir 'plan.md'),
     (Join-NormalPath $workflowsDir 'implement.md'),
@@ -850,13 +871,13 @@ else {
 if ($isSourceRepo) {
     $readmeZhTw = Join-NormalPath $root 'docs/README_zh-TW.md'
     if (Test-Path -Path $readmeZhTw -PathType Leaf) {
-        Test-ContainsLiteral -Path $readmeZhTw -Pattern '從「流程驅動」進化到「自我管理」的專業級 AI Agent 核心架構。' -SuccessMessage 'README_zh-TW.md encoding looks healthy' -FailureMessage 'README_zh-TW.md appears mojibaked or re-encoded'
+        Test-ContainsLiteral -Path $readmeZhTw -Pattern '用工作流程、交付閘門與工程護欄' -SuccessMessage 'README_zh-TW.md encoding looks healthy' -FailureMessage 'README_zh-TW.md appears mojibaked or re-encoded'
     }
     $readmeEn = Join-NormalPath $root 'README.md'
     if (Test-Path -Path $readmeEn -PathType Leaf) {
         $params = @{
             Path = $readmeEn
-            Pattern = 'governance-first operating system for AI coding agents'
+            Pattern = 'governance-first layer for AI coding agents'
             SuccessMessage = 'README.md encoding looks healthy'
             FailureMessage = 'README.md appears mojibaked or re-encoded'
         }
@@ -1417,6 +1438,61 @@ if (Test-Path -Path $worklogDir -PathType Container) {
     if ($staleLocks -gt 0) {
         Add-Result -Level 'WARN' -Message "stale advisory work log locks detected: $staleLocks"
     }
+
+    # Work Log lock owner/phase mismatch checks — WARN only, never FAIL.
+    # Skips stale and unreadable locks (already covered above); skips orphan locks
+    # (no matching Work Log .md).
+    $ownerPhaseMismatches = 0
+    foreach ($lockf in $lockFiles) {
+        $lockData = $null
+        try {
+            $lockData = Get-Content -Path $lockf.FullName -Raw | ConvertFrom-Json
+        } catch {
+            continue  # unreadable — already covered
+        }
+        $updatedAt = $lockData.updated_at
+        if (-not $updatedAt) { continue }  # unreadable — already covered
+        $timeoutMin = if ($lockData.stale_timeout_minutes) { [int]$lockData.stale_timeout_minutes } else { 60 }
+        try {
+            $lockTime = [DateTimeOffset]::Parse($updatedAt)
+            $ageMin = ((Get-Date) - $lockTime.LocalDateTime).TotalMinutes
+            if ($ageMin -gt $timeoutMin) { continue }  # stale — already covered
+        } catch {
+            continue  # unparseable timestamp — already covered
+        }
+        $lockOwner = if ($lockData.owner) { $lockData.owner } else { '' }
+        $lockPhase = if ($lockData.phase) { $lockData.phase } else { '' }
+        # Derive Work Log path: strip .lock.json -> .md
+        $wlName = $lockf.BaseName -replace '\.lock$', ''
+        $wlPath = Join-NormalPath $worklogDir "$wlName.md"
+        if (-not (Test-Path -Path $wlPath -PathType Leaf)) { continue }  # orphan lock
+        $wlContent = Get-Content -Path $wlPath -Raw -Encoding utf8
+        # Extract Owner: list form "- Owner: `x`" or table form "| Owner | x |"
+        $wlOwner = ''
+        if ($wlContent -match '(?m)^-\s+Owner\s*:\s*`?([^`\r\n]+)`?\s*$') {
+            $wlOwner = $Matches[1].Trim().TrimStart('`').TrimEnd('`').Trim()
+        } elseif ($wlContent -match '(?m)^\|\s*Owner\s*\|\s*([^|\r\n]+)\|') {
+            $wlOwner = $Matches[1].Trim().TrimStart('`').TrimEnd('`').Trim()
+        }
+        # Extract Current Phase: list form or table form
+        $wlPhase = ''
+        if ($wlContent -match '(?m)^-\s+Current Phase\s*:\s*`?([^`\r\n]+)`?\s*$') {
+            $wlPhase = $Matches[1].Trim().TrimStart('`').TrimEnd('`').Trim()
+        } elseif ($wlContent -match '(?m)^\|\s*Current Phase\s*\|\s*([^|\r\n]+)\|') {
+            $wlPhase = $Matches[1].Trim().TrimStart('`').TrimEnd('`').Trim()
+        }
+        if ($wlOwner -and $lockOwner -ne $wlOwner) {
+            Write-Output "  worklog lock owner mismatch: $($lockf.Name) owner=$lockOwner worklog Owner=$wlOwner"
+            $ownerPhaseMismatches++
+        }
+        if ($wlPhase -and $lockPhase -ne $wlPhase) {
+            Write-Output "  worklog lock phase mismatch: $($lockf.Name) phase=$lockPhase worklog Current Phase=$wlPhase"
+            $ownerPhaseMismatches++
+        }
+    }
+    if ($ownerPhaseMismatches -gt 0) {
+        Add-Result -Level 'WARN' -Message "work log lock owner/phase mismatches detected: $ownerPhaseMismatches"
+    }
 }
 else {
     Add-Result -Level 'SKIP' -Message 'active work log directory not present'
@@ -1453,8 +1529,10 @@ $archiveDir = Join-NormalPath $root '.agentcortex/context/archive'
 $phaseSummaryViolations = 0
 $phaseSummaryViolationList = New-Object System.Collections.Generic.List[string]
 if (Test-Path -Path $archiveDir -PathType Container) {
+    # Exclude ship-history-*.md: compacted ship-history archives are not Work
+    # Logs and have no '## Phase Summary' contract (#171).
     $archivedLogs = Get-ChildItem -Path $archiveDir -Filter '*.md' -File -Recurse -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -notlike '.gitkeep*' }
+        Where-Object { $_.Name -notlike '.gitkeep*' -and $_.Name -notlike 'ship-history-*' }
     foreach ($wl in $archivedLogs) {
         $content = Get-Content -Path $wl.FullName -Raw -Encoding utf8
         $classification = ''
@@ -1956,7 +2034,7 @@ if (Test-Path -Path $githubWorkflowsDir -PathType Container) {
 # Document lifecycle bloat checks
 $globalLessonsMax = if ($env:GLOBAL_LESSONS_MAX) { [int]$env:GLOBAL_LESSONS_MAX } else { 20 }
 if (Test-Path -Path $currentStatePath -PathType Leaf) {
-    $lessonsCount = @([regex]::Matches($csContent, '(?m)^- \[Category:') | Measure-Object).Count
+    $lessonsCount = ([regex]::Matches($csContent, '(?m)^- \[Category:')).Count
     if ($lessonsCount -gt $globalLessonsMax) {
         Add-Result -Level 'WARN' -Message "Global Lessons exceeds cap ($lessonsCount > $globalLessonsMax); run /retro to archive LOW-severity entries"
     }
@@ -1974,14 +2052,18 @@ if (Test-Path -Path $specsDir -PathType Container) {
     }
 }
 
-# Project spec template check (parity with validate.sh)
-$adrCount = 0
+# Project spec template check (#172) (parity with validate.sh): detect a genuine
+# downstream app that ran /app-init by its project-architecture ADR
+# (ADR-00N-project-architecture.md). The framework's own governance ADRs do not
+# match this pattern, so these checks never false-fire on the framework repo;
+# the signal is deploy-independent so it also covers fork/clone adopters.
+$appInitAdrCount = 0
 foreach ($adrDir in @((Join-NormalPath $root 'docs/adr'), (Join-NormalPath $root '.agentcortex/adr'))) {
     if (Test-Path -Path $adrDir -PathType Container) {
-        $adrCount += @(Get-ChildItem -Path $adrDir -Filter 'ADR-*.md' -File -ErrorAction SilentlyContinue).Count
+        $appInitAdrCount += @(Get-ChildItem -Path $adrDir -Filter '*-project-architecture.md' -File -ErrorAction SilentlyContinue).Count
     }
 }
-if ($adrCount -gt 0) {
+if ($appInitAdrCount -gt 0) {
     $projectTemplates = @(Get-ChildItem -Path (Join-NormalPath $root '.agentcortex/templates') -Filter 'spec-app-feature-*.md' -File -ErrorAction SilentlyContinue)
     if ($projectTemplates.Count -eq 0) {
         Add-Result -Level 'WARN' -Message "project spec template missing: docs/adr/ has ADR(s) but no .agentcortex/templates/spec-app-feature-<project>.md found -- run /app-init to create one, or spec-intake will use the generic template"
@@ -2040,12 +2122,23 @@ $specsDir = Join-NormalPath $root 'docs/specs'
 if (Test-Path -Path $specsDir -PathType Container) {
     foreach ($specFile in (Get-ChildItem -Path $specsDir -Filter '*.md' -File -ErrorAction SilentlyContinue)) {
         if ($specFile.Name -eq '.gitkeep.md') { continue }  # skip placeholder
+        # Skip _-prefixed meta/index files (_product-backlog*, _research-*): not
+        # governed specs; exempt from the status enum, parity with validate.sh (#170).
+        if ($specFile.Name -like '_*') { continue }
         $specFileCount++
         $specLines = Get-Content -Path $specFile.FullName -Encoding UTF8 -ErrorAction SilentlyContinue
         if (-not $specLines -or $specLines[0].TrimEnd() -ne '---') {
             $specMissingFrontmatter++; continue
         }
-        $statusLine = $specLines | Select-Object -Skip 1 | Where-Object { $_ -match '^status:\s*' } | Select-Object -First 1
+        # Scan for status: ONLY within the frontmatter block — from line 1 until
+        # the closing `---` (or EOF if unclosed) — mirroring validate.sh's awk
+        # `/^---/{if(n++) exit}` scoping so a body line `status: x` cannot be
+        # misread as frontmatter (F2 parity).
+        $statusLine = $null
+        for ($i = 1; $i -lt $specLines.Count; $i++) {
+            if ($specLines[$i].TrimEnd() -eq '---') { break }
+            if ($specLines[$i] -match '^status:\s*') { $statusLine = $specLines[$i]; break }
+        }
         if (-not $statusLine) { $specMissingFrontmatter++; continue }
         $statusVal = ($statusLine -replace '^status:\s*','').Trim()
         if ($validStatuses -notcontains $statusVal) { $specBadStatus++ }
@@ -2096,6 +2189,96 @@ if (Test-Path -Path $agentsDir -PathType Container) {
     }
 } else {
     Add-Result -Level 'SKIP' -Message 'acx phase shim skill check -- .claude/agents/ not present'
+}
+
+# Governance eval coverage advisory (AC-7): capability-by-presence.
+# If .agentcortex/eval/governance.yaml exists AND python is available, run
+# run_governance_eval.py --coverage and WARN with the count of MUST-rule
+# sections that have zero guarding cases. Never FAIL; silent skip when the
+# eval file or python is absent. Zero zero-coverage rules -> PASS.
+$acxEvalYaml   = Join-NormalPath $root '.agentcortex/eval/governance.yaml'
+$acxEvalRunner = Join-NormalPath $root '.agentcortex/tools/run_governance_eval.py'
+if (Test-Path -Path $acxEvalYaml -PathType Leaf) {
+    if (-not $script:PythonCommand) {
+        Add-Result -Level 'SKIP' -Message 'governance eval coverage -- python unavailable (install Python 3.9+ for full validation)'
+    } elseif (-not (Test-Path -Path $acxEvalRunner -PathType Leaf)) {
+        Add-Result -Level 'SKIP' -Message 'governance eval coverage -- runner not present (run_governance_eval.py missing)'
+    } else {
+        $prevEA = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $evalCovText = & $script:PythonCommand.Source $acxEvalRunner --coverage 2>&1 | Out-String
+        $ErrorActionPreference = $prevEA
+        $zeroMatch = [regex]::Match($evalCovText, 'Zero-coverage rules:\s*(\d+)')
+        $zeroCnt = if ($zeroMatch.Success) { [int]$zeroMatch.Groups[1].Value } else { 0 }
+        if ($zeroCnt -gt 0) {
+            Add-Result -Level 'WARN' -Message "governance eval coverage: $zeroCnt MUST-rule section(s) without eval cases (tier-blind: includes machine-enforced and principle-tier rules; see guardrails s13)"
+            $zeroLines = ($evalCovText -split "`r?`n") | Where-Object { $_ -match '^\s+-\s+' } | Select-Object -First 20
+            foreach ($zl in $zeroLines) { Write-Output "  $zl" }
+        } else {
+            Add-Result -Level 'PASS' -Message 'governance eval coverage: 0 MUST-rule section(s) with zero guarding cases'
+        }
+    }
+}
+
+# AC-6: governance specs missing signal_tier frontmatter (guardrails §13 ADD-Gate).
+# Advisory WARN only — never FAIL. Checks docs/specs/*.md (skips _* meta/index
+# files). Conditions to WARN (ALL must hold):
+#   1. frontmatter primary_domain: contains "governance" (case-insensitive).
+#   2. frontmatter created: >= 2026-06-10 (ISO, lexical compare). Missing = skip.
+#   3. frontmatter status: is NOT shipped or cancelled.
+#   4. frontmatter has NO signal_tier: line (any value silences).
+$stWarnCount = 0
+$stWarnFiles = @()
+$stSpecDir = Join-NormalPath $root 'docs/specs'
+if (Test-Path -Path $stSpecDir -PathType Container) {
+    foreach ($stSpec in Get-ChildItem -Path $stSpecDir -Filter '*.md' -File -ErrorAction SilentlyContinue) {
+        # Skip underscore-prefixed meta/index specs (_*.md).
+        if ($stSpec.Name -like '_*') { continue }
+        $stRaw = Get-Content -LiteralPath $stSpec.FullName -Raw -Encoding utf8 -ErrorAction SilentlyContinue
+        if ($null -eq $stRaw) { continue }
+        # Normalize line endings, then extract YAML frontmatter between first --- pair.
+        $stNorm = $stRaw -replace "`r`n", "`n" -replace "`r", "`n"
+        $stLines = $stNorm -split "`n"
+        $stFmLines = @()
+        $stInFm = $false
+        $stFmDone = $false
+        foreach ($stLine in $stLines) {
+            if (-not $stFmDone) {
+                if ($stLine -eq '---') {
+                    if (-not $stInFm) { $stInFm = $true; continue }
+                    else { $stFmDone = $true; break }
+                }
+                if ($stInFm) { $stFmLines += $stLine }
+            }
+        }
+        $stFm = $stFmLines -join "`n"
+        # Condition 1: primary_domain contains "governance" (case-insensitive).
+        $stDomainMatch = [regex]::Match($stFm, '(?m)^primary_domain:\s*(.+)$')
+        if (-not $stDomainMatch.Success) { continue }
+        $stDomain = $stDomainMatch.Groups[1].Value.Trim()
+        if ($stDomain -notmatch '(?i)governance') { continue }
+        # Condition 2: created: >= 2026-06-10 (lexical). Missing = grandfathered, skip.
+        $stCreatedMatch = [regex]::Match($stFm, '(?m)^created:\s*(.+)$')
+        if (-not $stCreatedMatch.Success) { continue }
+        $stCreated = $stCreatedMatch.Groups[1].Value.Trim()
+        if ($stCreated -lt '2026-06-10') { continue }
+        # Condition 3: status not shipped or cancelled.
+        $stStatusMatch = [regex]::Match($stFm, '(?m)^status:\s*(\S+)')
+        $stStatus = if ($stStatusMatch.Success) { $stStatusMatch.Groups[1].Value.Trim() } else { '' }
+        if ($stStatus -eq 'shipped' -or $stStatus -eq 'cancelled') { continue }
+        # Condition 4: no signal_tier: line present.
+        if ($stFm -match '(?m)^signal_tier:') { continue }
+        $stWarnFiles += $stSpec.Name
+        $stWarnCount++
+    }
+}
+if ($stWarnCount -gt 0) {
+    Add-Result -Level 'WARN' -Message "governance specs missing signal_tier frontmatter (guardrails §13 ADD-Gate): $stWarnCount"
+    foreach ($stF in $stWarnFiles) {
+        Write-Output "  governance spec missing signal_tier: $stF"
+    }
+} else {
+    Add-Result -Level 'PASS' -Message 'governance-rule specs declare signal_tier (or none apply)'
 }
 
 Write-Output ''

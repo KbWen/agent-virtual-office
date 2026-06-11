@@ -1,23 +1,19 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Agentic OS-v1.2.0-blueviolet?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMThjLTQuNDEgMC04LTMuNTktOC04czMuNTktOCA4LTggOCAzLjU5IDggOC0zLjU5IDgtOCA4eiIvPjwvc3ZnPg==" alt="Agentic OS v1.2.0"/>
+  <img src="https://img.shields.io/badge/Agentic%20OS-v1.5.1-blueviolet?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMThjLTQuNDEgMC04LTMuNTktOC04czMuNTktOCA4LTggOCAzLjU5IDggOC0zLjU5IDgtOCA4eiIvPjwvc3ZnPg==" alt="Agentic OS v1.5.1"/>
 </p>
 
 <h1 align="center">Agentic OS</h1>
 
 <p align="center">
-  <strong>The governance-first operating system for AI coding agents.</strong><br/>
-  Structured workflows, delivery gates, engineering guardrails, and 14 professional skills<br/>
-  that work across Claude Code, Cursor, GitHub Copilot, Google Antigravity, and Codex.
+  <strong>A governance-first layer for AI coding agents.</strong><br/>
+  Portable workflows, delivery gates, engineering guardrails, and 14 professional skills<br/>
+  for Claude Code, OpenAI Codex, Google Antigravity, Cursor, GitHub Copilot, and other coding agents.
 </p>
 
 <p align="center">
   <a href="https://github.com/KbWen/agentic-os/actions/workflows/validate.yml"><img src="https://img.shields.io/github/actions/workflow/status/KbWen/agentic-os/validate.yml?branch=main&style=flat-square&label=CI" alt="CI Status"/></a>
   <a href="https://github.com/KbWen/agentic-os/actions/workflows/security.yml"><img src="https://img.shields.io/github/actions/workflow/status/KbWen/agentic-os/security.yml?branch=main&style=flat-square&label=Security" alt="Security Scan"/></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-22c55e?style=flat-square" alt="MIT License"/></a>
-  <img src="https://img.shields.io/badge/Claude_Code-Ready-8b5cf6?style=flat-square" alt="Claude Code"/>
-  <img src="https://img.shields.io/badge/Antigravity-Compatible-3b82f6?style=flat-square" alt="Antigravity"/>
-  <img src="https://img.shields.io/badge/Codex-Ready-f59e0b?style=flat-square" alt="Codex"/>
-  <img src="https://img.shields.io/badge/Cursor-Compatible-ec4899?style=flat-square" alt="Cursor"/>
 </p>
 
 <p align="center">
@@ -30,7 +26,7 @@
 
 ## The Problem
 
-AI coding agents are powerful but undisciplined. Without structure, they:
+AI coding agents are powerful, but they need shared operating rules. Without structure, they can:
 
 - **Skip steps** — jump straight to code without planning or reviewing
 - **Hallucinate completion** — claim "done" without verifiable evidence
@@ -40,26 +36,33 @@ AI coding agents are powerful but undisciplined. Without structure, they:
 
 ## The Solution
 
-**Agentic OS** is a drop-in governance framework that makes any AI agent follow professional engineering workflows. Install it into your project, and your AI agents gain:
+**Agentic OS** is a portable governance framework that gives AI agents a repeatable engineering workflow. Install it into your project, and your AI agents gain:
 
-```
-   Intent          Gate           Workflow         Evidence        Ship
-  ┌──────┐      ┌──────┐       ┌──────────┐     ┌──────────┐   ┌──────┐
-  │ User │ ───▸ │ Gate │ ───▸  │ Workflow  │ ──▸ │ Evidence │ ─▸│ Ship │
-  │ says │      │Engine│       │ + Skills  │     │ Required │   │ SSoT │
-  └──────┘      └──────┘       └──────────┘     └──────────┘   └──────┘
-                  │ FAIL                           │ FAIL
-                  ▼                                ▼
-               ⛔ STOP                          ⛔ STOP
+```mermaid
+flowchart LR
+    U["User<br/>says"] --> G{"Gate<br/>Engine"}
+    G -->|PASS| W["Workflow<br/>+ Skills"]
+    W --> E{"Evidence<br/>Required"}
+    E -->|PASS| S["Ship<br/>→ SSoT"]
+    G -->|FAIL| X1["⛔ STOP"]
+    E -->|FAIL| X2["⛔ STOP"]
+
+    style U fill:#8b5cf6,color:#fff,stroke:none
+    style G fill:#f59e0b,color:#fff,stroke:none
+    style W fill:#3b82f6,color:#fff,stroke:none
+    style E fill:#22c55e,color:#fff,stroke:none
+    style S fill:#06b6d4,color:#fff,stroke:none
+    style X1 fill:#ef4444,color:#fff,stroke:none
+    style X2 fill:#ef4444,color:#fff,stroke:none
 ```
 
-**No evidence = no completion. No gate = no progression. No exceptions.**
+The idea behind every phase is the same: if there's no verifiable evidence, the task isn't done — and the gates enforce that, instead of trusting the agent to self-report honestly.
 
 ---
 
 ## Features
 
-### 🔒 Gate Engine & Phase System
+### Gate Engine & Phase System
 
 Every task flows through mandatory phases. The AI cannot skip ahead.
 
@@ -87,7 +90,7 @@ flowchart LR
 | **hotfix** | Bootstrap → Research → Plan → Implement → Review → Test → Ship |
 | **architecture-change** | Bootstrap → ADR → Spec → Plan → Implement → Review → Test → Handoff → Ship |
 
-### 🛡️ Engineering Guardrails
+### Engineering Guardrails
 
 A constitution for AI behavior — loaded automatically, enforced at every phase:
 
@@ -97,7 +100,7 @@ A constitution for AI behavior — loaded automatically, enforced at every phase
 - **OWASP Top 10 Auto-Scan** — security checks run during `/implement` and `/review`
 - **Confidence Gate** — AI must declare confidence level; low confidence triggers escalation
 
-### ⚡ 14 Professional Skills
+### 14 Professional Skills
 
 Skills auto-activate based on task classification and workflow phase:
 
@@ -118,7 +121,7 @@ Skills auto-activate based on task classification and workflow phase:
 | Git Worktrees | parallel branches | Worktree isolation workflows |
 | Doc Lookup | documentation needed | Documentation retrieval strategy |
 
-### 🧠 Single Source of Truth (SSoT)
+### Single Source of Truth (SSoT)
 
 Every project has one canonical state file. AI agents read it first, write to it last.
 
@@ -133,16 +136,16 @@ Every project has one canonical state file. AI agents read it first, write to it
 - **SSoT** tracks global decisions, lessons, and ship history
 - **Handoff** enables seamless AI-to-AI continuity across conversations
 
-### 👥 Multi-Agent Collaboration
+### Multi-Agent Collaboration
 
 Built for teams where multiple AI sessions work on the same codebase:
 
 - **One Branch = One Owner** — prevents concurrent Work Log corruption
-- **Advisory Locking** — lock files signal active sessions without blocking
+- **Single-Writer Locking** — atomic lock files block concurrent sessions per branch (configurable back to advisory)
 - **Ship Guard** — checks for SSoT conflicts before merging
 - **Session Identity** — every AI session writes its model name and timestamp
 
-### 🚀 Three Entry Paths
+### Three Entry Paths
 
 Pick the one that matches your starting point (full opener templates in **Quick Start §2**):
 
@@ -154,7 +157,7 @@ Pick the one that matches your starting point (full opener templates in **Quick 
 
 See the [Lifecycle Benchmark](https://github.com/KbWen/agentic-os/blob/main/docs/LIFECYCLE_BENCHMARK.md) ([繁體中文](https://github.com/KbWen/agentic-os/blob/main/docs/LIFECYCLE_BENCHMARK_zh-TW.md)) for real token consumption data across 6 development scenarios.
 
-### 📉 Token Efficiency
+### Token Efficiency
 
 Designed for cost-effective models (Gemini Flash, Haiku, etc.):
 
@@ -205,6 +208,23 @@ bash installers/deploy_brain.sh .
 
 > **AI-agent install:** If you're asking an AI assistant to install Agentic OS, point it to this README. The commands above are deterministic — no platform-specific heuristics required.
 
+**Optional local pre-commit validation:** enable the bundled Git hook sample to run Agentic OS validation before each commit.
+
+```bash
+cp .githooks/pre-commit.guard-ssot.sample .githooks/pre-commit
+chmod +x .githooks/pre-commit
+git config core.hooksPath .githooks
+```
+
+On Windows, run the setup from PowerShell:
+
+```powershell
+Copy-Item .githooks\pre-commit.guard-ssot.sample .githooks\pre-commit
+git config core.hooksPath .githooks
+```
+
+The hook runs `validate.ps1` from Git Bash on Windows when PowerShell is available, otherwise it runs `validate.sh`. Validator failures block the commit; guarded SSoT receipt warnings remain advisory.
+
 <details>
 <summary><b>Windows (PowerShell / CMD)</b></summary>
 
@@ -223,6 +243,7 @@ powershell -ExecutionPolicy Bypass -File .\agentic-os\installers\deploy_brain.ps
 ```
 
 Use the PowerShell entrypoint when possible. It resolves Git Bash directly and does not require a WSL distro.
+Git Bash is still required on Windows for shell-based deploy and validation scripts; the PowerShell entrypoint simply locates and invokes it for you.
 
 ```powershell
 # Already installed? Run from your project root to update:
@@ -232,6 +253,9 @@ powershell -ExecutionPolicy Bypass -File .\installers\deploy_brain.ps1 .
 powershell -ExecutionPolicy Bypass -File .\.agentcortex\bin\validate.ps1
 
 # Lightweight validation when Python is not installed
+powershell -ExecutionPolicy Bypass -File .\.agentcortex\bin\validate.ps1 -NoPython
+
+# (Git Bash equivalent)
 bash ./.agentcortex/bin/validate.sh --no-python
 ```
 
@@ -247,6 +271,18 @@ If you only want the governance templates (Markdown files) without running any t
 3. No Python, Bash, or other tools are needed — all governance is plain Markdown
 
 </details>
+
+### 1a. Customizing Without Conflicts (Fork or Clone)
+
+However you adopt Agentic OS — **fork** the repo, or **clone + `deploy_brain.sh`** into your project — the same rule keeps upgrades painless: **add your own files; never edit framework-owned files in place.** Put your customizations where the framework guarantees never to touch them, and they survive both `git pull upstream` (fork) and the next `deploy` (clone):
+
+| You want to… | Put it here | Why it survives upgrades |
+|---|---|---|
+| Add project governance (narrow/disable a directive) | `AGENTS.override.md` (project root) or `~/.agentcortex/AGENTS.override.md` (personal) | Loaded present-only at session start; framework never ships these files. MAY narrow/disable directives but **cannot** relax delivery gates. |
+| Add your own skills | `.agents/skills/custom-<name>/SKILL.md` (+ `.agent/skills/custom-<name>` metadata) | `custom-*` is a reserved namespace the framework never ships → zero collision, never overwritten. |
+| Adjust skill activation (pin/exclude) | `.agentcortex/context/private/user-preferences.yaml` | Gitignored, personal, loaded by bootstrap. |
+
+**What NOT to do:** editing a framework file in place (`AGENTS.md`, `.agent/rules/*`, `.agent/workflows/*`, a shipped skill body) causes merge conflicts on `git pull upstream` (fork) and is force-updated on the next `deploy` (clone). Framework **skills** are the one tolerant exception — if you edit one, `deploy` preserves your copy as a visible `<file>.acx-incoming` sidecar rather than silently overwriting it — but the cleaner pattern is always to copy it to a `custom-<name>` skill and edit that. Governance, security, and workflow files always force-update so you keep receiving fixes.
 
 ### 2. Start Working — Pick Your Entry Point
 
@@ -368,12 +404,12 @@ your-project/
 
 | Platform | Status | Integration |
 |:---|:---|:---|
-| **Claude Code** | Full support | `CLAUDE.md` auto-loads governance |
-| **Google Antigravity** | Full support | Intent router + Antigravity runtime |
-| **OpenAI Codex** | Full support | Platform guide + CLI delegation |
-| **Cursor** | Compatible | Reads `AGENTS.md` as project rules |
-| **GitHub Copilot** | Compatible | Follows guardrails via `AGENTS.md` |
-| **Any LLM Agent** | Compatible | Model-agnostic governance language |
+| **Claude Code** | Native support | `CLAUDE.md` entrypoint + Claude platform guide |
+| **OpenAI Codex** | Native support | `AGENTS.md`, Codex platform guide, and CLI delegation workflow |
+| **Google Antigravity** | Native support | Intent router + Antigravity runtime guidance |
+| **Cursor** | Compatible | Uses `AGENTS.md` / project-rule style guidance |
+| **GitHub Copilot** | Compatible | Uses repository instructions and guardrail docs |
+| **Any LLM Agent** | Compatible | Model-agnostic Markdown workflows and evidence rules |
 
 ---
 
@@ -397,6 +433,17 @@ Agentic OS is built on [10 non-negotiable principles](.agentcortex/docs/AGENT_PH
 ---
 
 ## Documentation
+
+Start with the document that matches what you are trying to do:
+
+| Goal | Start Here | Why |
+|:---|:---|:---|
+| Install or upgrade Agentic OS | [Quick Start](#quick-start), [Migration Guide](.agentcortex/docs/guides/migration.md) | Deployment commands, update flow, and existing-project guidance |
+| Choose the right AI model | [Model Selection Guide](docs/AGENT_MODEL_GUIDE.md), [Lifecycle Benchmark](docs/LIFECYCLE_BENCHMARK.md) | Practical model tradeoffs and measured token costs |
+| Run disciplined agent workflows | [Agent Philosophy](.agentcortex/docs/AGENT_PHILOSOPHY.md), [Testing Protocol](.agentcortex/docs/TESTING_PROTOCOL.md) | Core rules, evidence expectations, and verification standards |
+| Use a specific platform | [Codex Platform Guide](.agentcortex/docs/CODEX_PLATFORM_GUIDE.md), [Claude Platform Guide](.agentcortex/docs/CLAUDE_PLATFORM_GUIDE.md) | Platform-specific loading, handoff, and compatibility notes |
+| Understand governance internals | [Document Governance](.agentcortex/docs/guides/doc-governance.md), [Nonlinear Scenarios](.agentcortex/docs/NONLINEAR_SCENARIOS.md) | State, handoff, recovery, and documentation lifecycle rules |
+| Extend skills safely | [Skill Ecosystem](docs/architecture/skill-ecosystem.md), [Token Governance](.agentcortex/docs/guides/token-governance.md) | Skill packaging, trigger policy, and context budget control |
 
 | Document | Description |
 |:---|:---|
@@ -427,5 +474,5 @@ MIT License. See [LICENSE](LICENSE) for details.
 ---
 
 <p align="center">
-  <sub>Built for developers who demand discipline from their AI agents.</sub>
+  <sub>An open-source governance layer for AI coding agents. Contributions and feedback are welcome.</sub>
 </p>

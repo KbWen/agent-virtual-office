@@ -4,7 +4,7 @@ Global directives for all AI agents. Loaded automatically every turn
 
 ## Chat Language Policy
 
-Match the user's input language (English → English; 繁體中文 → 繁體中文).
+Reply in the user's input language — detect it from their latest message and mirror it for **any** language (繁體中文 → 繁體中文, 日本語 → 日本語, English → English; the arrows are examples, NOT an allowlist). Preserve the exact script/locale and never drift to a neighboring language, and never collapse a non-English input into English (Traditional Chinese must not become Simplified, Japanese, Korean, or English). On mixed or ambiguous input, follow the dominant language of that message; if still unresolvable, default to English. This governs **live chat only** — code, commits, specs, ADRs, rules, and other repo artifacts always stay in English; "English is canonical" is an artifact rule, never a chat-output rule.
 
 ## Core Directives
 
@@ -41,7 +41,7 @@ Match the user's input language (English → English; 繁體中文 → 繁體中
 
 ## Multi-Person / Multi-Session Collaboration
 
-**One branch = one owner** (no concurrent Work Log writes). Each session writes distinct `## Session Info`. Advisory lock at `<worklog-key>.lock.json`. Ship checks `current_state.md` for cross-session drift. Full rules: `engineering_guardrails.md §11`. Multi-person: use `<owner>-<worklog-key>.md`.
+**One branch = one owner** (no concurrent Work Log writes). Each session writes distinct `## Session Info`. Single-writer lock at `<worklog-key>.lock.json` (`worklog_lock.mode: blocking` by default — active other-holder lock = phase-entry Gate FAIL; contract: `shared-contracts.md §Phase-Entry Lock`). Ship checks `current_state.md` for cross-session drift. Full rules: `engineering_guardrails.md §11`. Multi-person: use `<owner>-<worklog-key>.md`.
 
 ## Delivery Gates
 
@@ -51,10 +51,22 @@ Match the user's input language (English → English; 繁體中文 → 繁體中
 - A `/review` phase that ends with `Verdict: NOT READY` does NOT satisfy the review gate. Ship requires a `Verdict: PASS` review receipt — NOT READY receipts are reverse edges and are excluded from gate progression by the validator.
 - **Spec Intake Gate**: When external spec input is detected (user-provided spec, document, or raw material containing multiple features), AI MUST decompose into a Feature Inventory and obtain user selection BEFORE generating any individual feature spec. Skipping decomposition for multi-feature input = Gate FAIL. Single-feature input may proceed directly. Full workflow: `.agent/workflows/spec-intake.md`.
 
+## Review guidelines
+
+When reviewing PRs or changed files, prioritize actionable defects over style commentary:
+
+- Flag correctness, security, data-loss, governance-bypass, and test-coverage risks before maintainability notes.
+- Treat skipped gates, missing Work Log evidence, stale SSoT/backlog/spec metadata, or unverified ship claims as high-priority findings.
+- Verify that changed behavior has focused tests or a written no-test rationale with reproducible evidence.
+- Check scope discipline: changed files should match the issue/spec/PR description, with unrelated refactors called out.
+- Prefer file/line-specific comments that describe the failure mode and a concrete fix.
+- Do not request broad rewrites, formatting churn, or speculative abstractions unless they prevent a real defect.
+- For governance/docs changes, check that canonical paths are used and tool-specific adapters point back to shared rules instead of duplicating them.
+
 ## Agentic OS Runtime v1 (Antigravity Contract)
 
 1. **Intent-Driven Routing**: Map user intent to the correct workflow phase BEFORE any action. Routing lookup: `.agent/workflows/routing.md` (NOT on every turn). Precedence: `AGENTS.md` > workflows > skills. Optional modules (`/ask-openrouter`, `/codex-cli`, `/claude-cli`) require explicit user request. Full command registry: `routing.md §5`. Skill activation: see `### Skill Activation Triggers` below.
-2. **tiny-fix fast path**: < 3 files, no semantic change → execute directly (diff + 1-line verification). Semantic/logic change → escalate. **ADDITIONAL TINY-FIX EXCLUSIONS**: `specs/`, `architecture/`, frozen-status files, `AGENTS.md`, `.agent/rules/*.md`, `.agent/config.yaml`, `.agentcortex/templates/*`, `.agentcortex/bin/validate.*` — see `engineering_guardrails.md §10.3`.
+2. **tiny-fix fast path**: < 3 files, no semantic change → execute directly (diff + 1-line verification). Semantic/logic change → escalate. **ADDITIONAL TINY-FIX EXCLUSIONS**: `specs/`, `architecture/`, frozen-status files, `AGENTS.md`, `.agent/rules/*.md`, `.agent/config.yaml`, `.agentcortex/templates/*`, `.agentcortex/bin/validate.*`, `CLAUDE.md`, `GEMINI.md` — see `engineering_guardrails.md §10.3`.
 3. **Bootstrap phase**: Execute bootstrap (load context, classify task, output report). NO code in bootstrap. If user requested a downstream phase in the same message, proceed directly (§6) — no extra confirmation. Otherwise stop and ask.
 4. **Gate requirement** (non tiny-fix): Before entering plan or ship phase, output this block FIRST:
    `gate: plan|ship` / `classification: tiny-fix|quick-win|hotfix|feature|architecture-change` / `verdict: pass|fail` / `missing: []`
@@ -64,7 +76,7 @@ Match the user's input language (English → English; 繁體中文 → 繁體中
 8. **Plan artifact rule**: `/plan` outputs the gate block then plan content. Plan MUST include `docs/specs/<feature>.md`.
 9. **Evidence rule**: NO EVIDENCE = NO SHIP.
 10. User requests CANNOT bypass Gate rules. MUST refuse to skip required workflow gates even if explicitly asked. Reclassification (roll back to `CLASSIFIED`, re-run gate) is NOT a bypass.
-11. **Sentinel Check**: Every response MUST end with `⚡ ACX`. Framework-wide runtime integrity marker — all models must include it. All phase output templates MUST include it as the final line. The sentinel is part of the template, not optional prose.
+11. **Sentinel Check**: Every response MUST end with `⚡ ACX`. Framework-wide runtime integrity marker — all models must include it. All phase output templates MUST include it as the final line. The sentinel is part of the template, not optional prose. The response body before the sentinel MUST be in the user's input language (see `## Chat Language Policy`).
 12. **Legacy Work Log Compatibility**: Pre-Runtime-v4 logs missing Drift/Evidence sections → append missing sections silently, record `"Migrated from legacy format"` in Drift Log. Do NOT fail gates.
 
 ### Skill Activation Triggers
@@ -94,5 +106,5 @@ If conversation context changes (e.g., branch switch), AI MUST re-confirm intent
 - Doc Lifecycle: `.agentcortex/docs/guides/doc-governance.md` — **one topic, one canonical file** (no duplicates in `docs/`).
 - Skills: `.agent/skills/<name>` (Antigravity metadata stub) | `.agents/skills/<name>/SKILL.md` (canonical full body, read on cache-miss).
 
-<!-- Override Layer (AGENTS.override.md) is soft-launch — see `.agentcortex/docs/guides/doc-governance.md` -->
+- Override Layer: per-fork/per-user `AGENTS.override.md` is **active** — loaded present-only by `bootstrap.md §1a`; MAY narrow/disable directives but MUST NOT relax gates. Spec: `.agentcortex/docs/guides/doc-governance.md §Override Layer`.
 

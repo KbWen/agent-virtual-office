@@ -13,6 +13,18 @@ Conduct strict review of current changes.
 
 Before review, check the active Work Log size. If it exceeds compaction thresholds (see `.agent/config.yaml` §worklog), compact per `/handoff` §6 BEFORE proceeding. This prevents bloated logs from inflating token costs during the review phase.
 
+## Spec Drift Advisory
+
+If the active Work Log references a `docs/specs/<feature>.md` file, run the advisory spec drift linter before the Burden of Proof table:
+
+```sh
+python .agentcortex/tools/lint_spec_drift.py --worklog .agentcortex/context/work/<worklog-key>.md --base <Checkpoint SHA> --head HEAD
+```
+
+Use the pre-implementation `Checkpoint SHA` recorded in the Work Log so the linter compares the implemented branch diff instead of only uncommitted working-tree changes.
+
+This check is advisory and non-blocking. Warnings can inform review questions, but they do NOT change the review verdict rules; AC proof still comes from the Burden of Proof Protocol below.
+
 ## Skill-Aware Review (Pre-Check)
 
 Apply the Phase-Entry Skill-Loading Protocol (shared-contracts.md §Phase-Entry Skill Loading) for all skills listing `/review` in their phases. Read `Recommended Skills` from the active Work Log before selecting which skill guidance to apply in this phase. Then apply each skill's **"During /review:"** checklist items as additional review criteria. Explicitly state: "Reviewing with [skill-name] checklist applied."
@@ -55,6 +67,8 @@ Apply the **5-Axis Quality Standard** across ALL changed files (block on any axi
 | **Architecture** | Right abstraction level? Consistent with existing patterns? Coupling minimized? | Medium |
 
 **Sizing guideline**: Review effectiveness drops sharply above ~100 changed lines. If a diff exceeds 100 lines, flag for splitting into smaller reviewable units.
+
+**Governance-doc diffs** (advisory): verify Deletion-First compliance (a deletion cited in the change, or a 1-line net-add justification in the Work Log) and that any NEW MUST/NEVER/gate declares its signal tier — per `engineering_guardrails.md §13`.
 
 **Feedback categorization**: Blocking (correctness/security/stability) → must fix before merge. Non-blocking → advisory. Question → needs design context.
 
