@@ -333,8 +333,37 @@ function findBestCorridor(from, to) {
   return { x: best.x, y: best.y }
 }
 
+// Wedge-escape candidates (issue #27): an endpoint parked in the 1–7px band off a
+// furniture rect (clampToFloor's 6px standoff lives in this band) can be unreachable
+// from the FIXED node set — desk "canyons" (e.g. the 50px pm/arch gap) open along one
+// axis only, so every fixed-node segment crosses a desk, findSafePolyline returns null,
+// and the caller's last-resort relay emits a crossing segment (fuzz suite never saw it:
+// its clean points keep an 8px margin by design). For each rect hugging the endpoint,
+// project just past each of the rect's four edges through the endpoint's own coordinate
+// — a surviving candidate is, by construction, connectable to the endpoint along the
+// open axis. Pure ADDITION to the Dijkstra node set: every edge still passes the same
+// validation, so a found path is never worse — only previously-null routes gain an exit.
+const WEDGE_NEAR_PX = 12   // covers the sub-MARGIN band incl. OBSTACLE_PUSH_PX + jitter slack
+const WEDGE_ESCAPE_PX = 10 // lands the candidate just outside the wedge band
+function wedgeEscapeNodes(p, obstacles) {
+  const out = []
+  for (const r of obstacles) {
+    if (p.x < r.x1 - WEDGE_NEAR_PX || p.x > r.x2 + WEDGE_NEAR_PX) continue
+    if (p.y < r.y1 - WEDGE_NEAR_PX || p.y > r.y2 + WEDGE_NEAR_PX) continue
+    for (const c of [
+      { x: p.x, y: r.y1 - WEDGE_ESCAPE_PX },
+      { x: p.x, y: r.y2 + WEDGE_ESCAPE_PX },
+      { x: r.x1 - WEDGE_ESCAPE_PX, y: p.y },
+      { x: r.x2 + WEDGE_ESCAPE_PX, y: p.y },
+    ]) {
+      if (isOnFloor(c.x, c.y) && !isOnObstacle(c.x, c.y)) out.push(c)
+    }
+  }
+  return out
+}
+
 function findSafePolyline(from, to, nodes, obstacles) {
-  const pts = [from, to, ...nodes]
+  const pts = [from, to, ...nodes, ...wedgeEscapeNodes(from, obstacles), ...wedgeEscapeNodes(to, obstacles)]
   const n = pts.length
   const dist = Array(n).fill(Infinity)
   const prev = Array(n).fill(-1)
@@ -465,8 +494,32 @@ function routeWithinMeetingRoom(from, to) {
   return best || [{ x: 640, y: from.y }, { x: 640, y: to.y }, to]
 }
 
+// Lounge route nodes (issue #27): the single south lane (y=520) descended straight
+// columns into wedged targets — a point 1–7px ABOVE the WC/shelves/coffee row was
+// approached vertically THROUGH the rect. Two clear lanes instead: the original south
+// lane (all lounge furniture ends by y≤502) and the north strip y=430 (all lounge
+// furniture starts at y≥438), routed via the same fully edge-validated Dijkstra as the
+// main office; wedge-escape augmentation connects sub-margin endpoints. The pre-fix
+// lane path is kept verbatim as the degraded fallback, so no input routes worse.
+const LOUNGE_ROUTE_NODES = [
+  { x: 40, y: 520 }, { x: 120, y: 520 }, { x: 200, y: 520 }, { x: 240, y: 520 }, { x: 300, y: 520 }, { x: 430, y: 520 },
+  { x: 90, y: 430 }, { x: 200, y: 430 }, { x: 240, y: 430 }, { x: 300, y: 430 }, { x: 430, y: 430 },
+]
+
 function routeWithinLounge(from, to) {
   if (!lineHitsAnyRect(from.x, from.y, to.x, to.y, LOUNGE_OBSTACLES)) return [to]
+  // Graph routing ONLY when both endpoints sit inside the lounge's convex floor rect:
+  // findSafePolyline validates furniture rects, never floor membership of segment
+  // interiors — that is safe inside one convex floor rect, but an endpoint in the door
+  // strip (getZone says lounge from y≥418 while the floor there is only the passage
+  // x 215–266) admits a diagonal through the south wall (fresh-review HIGH, measured:
+  // 104/720 door-strip pairs went off-floor). Door-strip endpoints keep the pre-fix
+  // lane path verbatim, so no input routes worse than before this change.
+  const inLoungeRect = (p) => p.x >= 15 && p.x <= 451 && p.y >= 424 && p.y <= 545
+  if (inLoungeRect(from) && inLoungeRect(to)) {
+    const graphPath = findSafePolyline(from, to, LOUNGE_ROUTE_NODES, LOUNGE_OBSTACLES)
+    if (graphPath) return graphPath
+  }
   const y = 520
   const pts = [
     clampToFloor({ x: from.x, y }),
