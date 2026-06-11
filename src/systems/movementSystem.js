@@ -574,12 +574,52 @@ function routeWithinMainOffice(from, to) {
   return [{ x: mid.x, y: mid.y }, to]
 }
 
+// Convex floor rect per zone — matches FLOOR_ZONES' room rects (not the door passages).
+const ZONE_FLOOR_RECTS = {
+  entrance:    { x1: 15,  y1: 15,  x2: 593, y2: 133 },
+  mainOffice:  { x1: 15,  y1: 168, x2: 593, y2: 394 },
+  meetingRoom: { x1: 628, y1: 15,  x2: 785, y2: 413 },
+  lounge:      { x1: 15,  y1: 424, x2: 451, y2: 545 },
+  research:    { x1: 469, y1: 424, x2: 785, y2: 545 },
+}
+
+// Zone-mouth stub (issue-#27 review Finding 2): every zone router validates segments
+// against furniture rects only — floor membership of segment INTERIORS is implied by
+// both endpoints sitting inside the zone's convex floor rect. getZone, however, also
+// assigns the door strips to a zone (e.g. door-lounge passage y 418–424 → lounge), so a
+// strip endpoint admitted a furniture-free diagonal straight through the wall band
+// (measured 130/720 door-strip pairs off-floor). For an ON-FLOOR endpoint outside the
+// convex rect (⇒ it is on door-passage floor), route via its "mouth": the projection
+// onto the rect. The endpoint→mouth stub runs along the passage axis, on passage floor
+// by construction; past the mouth the routers' convexity assumption holds again.
+// Off-floor (bogus) inputs and in-rect inputs keep pre-fix behavior byte-identical.
+function zoneMouth(p, zone) {
+  const r = ZONE_FLOOR_RECTS[zone]
+  if (!r) return null
+  if (p.x >= r.x1 && p.x <= r.x2 && p.y >= r.y1 && p.y <= r.y2) return null
+  if (!isOnFloor(p.x, p.y)) return null
+  return {
+    x: Math.max(r.x1, Math.min(r.x2, p.x)),
+    y: Math.max(r.y1, Math.min(r.y2, p.y)),
+  }
+}
+
 function routeWithinZone(from, to, zone) {
-  if (zone === 'mainOffice') return routeWithinMainOffice(from, to)
-  if (zone === 'meetingRoom') return routeWithinMeetingRoom(from, to)
-  if (zone === 'lounge') return routeWithinLounge(from, to)
-  if (zone === 'research') return routeWithinResearch(from, to)
-  return [to]
+  const inner = (a, b) => {
+    if (zone === 'mainOffice') return routeWithinMainOffice(a, b)
+    if (zone === 'meetingRoom') return routeWithinMeetingRoom(a, b)
+    if (zone === 'lounge') return routeWithinLounge(a, b)
+    if (zone === 'research') return routeWithinResearch(a, b)
+    return [b]
+  }
+  const fromMouth = zoneMouth(from, zone)
+  const toMouth = zoneMouth(to, zone)
+  if (!fromMouth && !toMouth) return inner(from, to)
+  const pts = []
+  if (fromMouth) pts.push(fromMouth)
+  for (const pt of inner(fromMouth || from, toMouth || to)) pts.push(pt)
+  if (toMouth) pts.push(to)
+  return pts
 }
 
 function appendZoneRoute(path, from, to, zone) {

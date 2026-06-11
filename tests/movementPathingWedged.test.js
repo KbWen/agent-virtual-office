@@ -124,27 +124,15 @@ describe('door-strip endpoints keep an on-floor route (lounge graph gate)', () =
   })
 
   it('a grid of door-strip → lounge pairs stays on-floor both directions', () => {
-    // Only pairs whose DIRECT line hits lounge furniture are pinned — those engage the
-    // router (and the gate under test). Furniture-free pairs take the pre-existing
-    // early-return direct path, whose own door-strip gap predates this change (review
-    // Finding 2, tracked as follow-up) and is deliberately not pinned here.
-    const directHitsFurniture = (a, b) => {
-      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 2))
-      for (let i = 0; i <= n; i++) {
-        const t = i / n
-        if (obstacleAt({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t })) return true
-      }
-      return false
-    }
+    // FULL grid — furniture-free pairs included. The early-return direct path used to
+    // cut the wall band for these (review Finding 2: 130/720 pairs); the zone-mouth
+    // stub in routeWithinZone now walks the passage axis onto the convex floor rect
+    // before any straight-line shortcut is taken.
     const failures = []
-    let pinned = 0
     for (const sx of [216, 230, 240, 255, 265]) {
       for (const sy of [410, 416, 420, 423]) {
-        for (const t of [{ x: 430, y: 470 }, { x: 300, y: 535 }]) {
-          const s = { x: sx, y: sy }
-          if (!directHitsFurniture(s, t)) continue
-          pinned++
-          for (const [from, to] of [[s, t], [t, s]]) {
+        for (const t of [{ x: 430, y: 470 }, { x: 300, y: 535 }, { x: 40, y: 480 }]) {
+          for (const [from, to] of [[{ x: sx, y: sy }, t], [t, { x: sx, y: sy }]]) {
             const v = firstViolation(from, to)
             if (v) failures.push(`(${from.x},${from.y})->(${to.x},${to.y}) ${v.kind} at (${v.at.x.toFixed(1)},${v.at.y.toFixed(1)})`)
             if (failures.length >= 5) break
@@ -152,8 +140,38 @@ describe('door-strip endpoints keep an on-floor route (lounge graph gate)', () =
         }
       }
     }
-    expect(pinned, 'enough router-engaging pairs in the grid').toBeGreaterThan(10)
     expect(failures, `door-strip violations:\n${failures.join('\n')}`).toEqual([])
+  })
+
+  it('door-strip endpoints in EVERY zone route on-floor (same-zone journeys)', () => {
+    // One on-passage-floor endpoint per zone strip (getZone classifies it into the zone,
+    // but it sits outside the zone's convex floor rect), paired with in-room targets.
+    const cases = [
+      // mainOffice strips: below-floor band y 394–418 (lounge + research passages), east band x 593–598 (meeting passage)
+      [{ x: 240, y: 400 }, { x: 520, y: 310 }],
+      [{ x: 537, y: 400 }, { x: 60, y: 300 }],
+      [{ x: 595, y: 210 }, { x: 60, y: 300 }],
+      // entrance strip y 133–148 (entrance passage)
+      [{ x: 115, y: 140 }, { x: 400, y: 60 }],
+      // meetingRoom strip x 598–628 (meeting passage)
+      [{ x: 610, y: 210 }, { x: 700, y: 350 }],
+      // research strip y 418–424 (research passage)
+      [{ x: 537, y: 420 }, { x: 740, y: 520 }],
+    ]
+    const failures = []
+    for (const [a, b] of cases) {
+      for (const [from, to] of [[a, b], [b, a]]) {
+        for (let i = 0; i < 10; i++) {
+          const v = firstViolation(from, to)
+          if (v) {
+            failures.push(`(${from.x},${from.y})->(${to.x},${to.y}) ${v.kind} at (${v.at.x.toFixed(1)},${v.at.y.toFixed(1)}) via ${JSON.stringify(v.path)}`)
+            break
+          }
+        }
+        if (failures.length >= 5) break
+      }
+    }
+    expect(failures, `zone-strip violations:\n${failures.join('\n')}`).toEqual([])
   })
 })
 
