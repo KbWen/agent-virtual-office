@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-13T06:30:00Z
-- **Update Sequence**: 84
+- **Last Updated**: 2026-06-13T07:00:00Z
+- **Update Sequence**: 85
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -72,6 +72,7 @@
   - [living-office] docs/specs/living-office-events.md [DRAFT, review-gated]  *(P1-P4 shipped to branch feat/ux-vibe-rebalance, not merged; AC-3 pixel-dominance pending owner visual confirm)*
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
   - [vibe-rebalance] docs/specs/control-bar-reduction.md [Shipped]  *(AVO-130 / #116 — 4 health pills→1 expandable health dot; lang/run/view/help/platform demoted into ⚙ menu / info popover)*
+  - [real-ai-behavior] docs/specs/skill-activation-badge.md [Shipped]  *(AVO-104 / #30 — transient skill bubble on SubagentStart via existing bubble cap (working-tier); panel Option B, honest no-over-head-element)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
@@ -610,3 +611,11 @@
 - Spec: docs/specs/control-bar-reduction.md (status: shipped; §4.4 DSoT for procedural UI). Commit 8947d3e.
 - SSoT written directly (not via guard_context_write.py) to avoid the known stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions` block + this is an incremental UI re-layer covered by existing `ui-rendering` L1 — no new domain decision; consolidation skipped with justification.
 - Tests: Pass (6 new healthDotState unit tests; full suite 1943; vite build clean 460.88 kB; render-smoke PASS 4 viewports / 0 errors; live preview + Playwright responsive checks).
+
+### Ship-feat-avo-104-skill-activation-badge-2026-06-13 (#30 — skill activation badge: transient skill bubble)
+- Feature shipped: AVO-104. Claude skill activation (SubagentStart: /review, /plan, /implement, /test, /ship, /research) now surfaces per-agent as a transient skill speech-bubble ("🧐 Reviewing") routed through the EXISTING bubble system — the honest Option B chosen by a 4-lens game-design panel (cozy/systemic/juice/calm-tech) over re-adding over-head chrome (AVO-131 declutter line held). One registry change: `skill` added to `AGENT_CARRY_FIELDS` + `FIELD_SANITIZERS` (statusFields.js), auto-propagating through inferStatus/agentRouter/store/normalizePost (AVO-146). `skillBubbleText` + a skill branch in contextBubble.js (gated on working — never blocked/done). i18n `skillBubbles` map en+zh. Hook stamps `skill` on SubagentStart, clears for other agents (transient).
+- Honesty guard: skill = working-tier priority (below blocked/done in the existing cap); never suppresses the AVO-110 reason glyph; auto-expires on the existing bubble timer; no new over-head element; optional field (absent = byte-identical). Store→bubble link proven by a deterministic store test.
+- Spec: docs/specs/skill-activation-badge.md (status: shipped; §4.4 DSoT + panel). Commits ce7aaf0 (spec) + 4636c92 (impl).
+- **Branch note**: this branch was rebased `--onto main` to drop two AVO-130/#116 commits it had inadvertently inherited (cut from the #116 branch) — it is now independent. #116 (PR #142) and this PR both touch SSoT seq + Ship History + backlog; whichever merges second must rebase (trivial: distinct rows/sections, seq line + INDEX chain re-stitch).
+- SSoT written directly (not guard) to avoid the known stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions` block; incremental client bubble feature covered by existing `hook-integration`/`ui-rendering` L1 — consolidation skipped with justification.
+- Tests: Pass (13 new incl. store→bubble + drift-guard skill survival; suite 1952; build 462.08 kB; render-smoke PASS).

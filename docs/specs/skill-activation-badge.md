@@ -1,6 +1,6 @@
 ---
 title: AVO-104 Skill Activation Badge (transient skill bubble — honest version)
-status: draft
+status: shipped
 created: 2026-06-13
 signal_tier: none
 backlog: AVO-104
