@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore } from '../systems/store'
 import { getLightingOverlay } from '../systems/lighting'
+import { startAmbientSound } from '../systems/ambientSound'
 import { startOfficeLife, triggerInteractiveEvent } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
 import { startDesktopNotifier } from '../inference/desktopNotifier'
@@ -719,6 +720,13 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
   useEffect(() => {
     const cleanup = startStatusIntegration(useOfficeStore)
+    return cleanup
+  }, [])
+
+  // AVO-122: ambient soundscape engine. Subscribes to the store but creates NO audio until the
+  // user opts in via the ⚙ toggle (autoplay-safe; off by default). cleanup tears down the ctx.
+  useEffect(() => {
+    const cleanup = startAmbientSound(useOfficeStore)
     return cleanup
   }, [])
 

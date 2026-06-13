@@ -350,6 +350,18 @@ export const useOfficeStore = create((set) => ({
       return v !== 'off'
     } catch { return true }
   })(),
+  // AVO-122: ambient soundscape on/off. Default OFF (audio is the most intrusive output — opt-in
+  // only); forced OFF under prefers-reduced-motion regardless of a stale 'on'. Persisted via a
+  // dedicated localStorage key. The ambientSound.js engine subscribes to this flag and creates its
+  // AudioContext only inside the toggle-ON user gesture (autoplay-safe). Mirrors initSoundscapeEnabled.
+  soundscapeEnabled: typeof window === 'undefined' ? false : (() => {
+    try {
+      const v = localStorage.getItem('avo.sound.enabled')
+      if (v === null) return false
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return false
+      return v === 'on'
+    } catch { return false }
+  })(),
   // #39: ambient office pet (signal-driven barometer). Default ON; persisted via a dedicated
   // localStorage key (same lightweight pattern as weatherEffects). OFF → no pet rendered (zero cost).
   officePet: typeof window === 'undefined' ? true : (() => { try { return localStorage.getItem('office-pet') !== 'off' } catch { return true } })(),
@@ -706,6 +718,14 @@ export const useOfficeStore = create((set) => ({
     const next = !s.lightingEnabled
     try { if (typeof window !== 'undefined') localStorage.setItem('avo.lighting.enabled', next ? 'on' : 'off') } catch {}
     return { lightingEnabled: next }
+  }),
+  // AVO-122: flip the ambient-soundscape preference and persist it ('on'/'off'; absent reads OFF).
+  // The flag flip runs inside the ControlPanel click handler, so ambientSound.js's store
+  // subscription fires synchronously within the user gesture → its AudioContext is autoplay-allowed.
+  toggleSoundscape: () => set((s) => {
+    const next = !s.soundscapeEnabled
+    try { if (typeof window !== 'undefined') localStorage.setItem('avo.sound.enabled', next ? 'on' : 'off') } catch {}
+    return { soundscapeEnabled: next }
   }),
   // #39: flip the office-pet preference and persist it ('off' stored explicitly so default reads ON).
   toggleOfficePet: () => set((s) => {

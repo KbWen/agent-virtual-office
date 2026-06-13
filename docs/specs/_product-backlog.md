@@ -43,7 +43,7 @@ last_updated: 2026-06-10
 | AVO-119 | Language / file-type breakdown | product | info-density | P2 | — | feature | Pending | — |
 | AVO-120 | Daily MVP / productivity leaderboard | product | brand | P2 | — | feature | Pending | — |
 | AVO-121 | Office pet (ambient companion) | product | game-feel | P3 | — | feature | Done | reframed as signal-driven barometer; docs/specs/office-pet-barometer.md (PR #62) |
-| AVO-122 | Ambient soundscape (toggle) | product | game-feel | P2 | — | feature | Pending | — |
+| AVO-122 | Ambient soundscape (toggle) | product | game-feel | P2 | docs/specs/ambient-soundscape.md | feature | Done | chill-fun wave; 100% procedural Web Audio (0 KB), off-by-default; clatter∝teamPulse + double-gated rain; coffee gurgle dropped (honesty — tea-break isn't a real signal) |
 | AVO-123 | Office theme / skin selector | product | brand | P2 | — | feature | Pending | — |
 | AVO-124 | Agent appearance customization | product | brand | P3 | — | feature | Pending | — |
 | AVO-125 | Cozy micro-interactions | product | game-feel | P3 | — | feature | Pending | AVO-111 |
