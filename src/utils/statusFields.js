@@ -46,7 +46,7 @@ import { BLOCKED_REASONS } from '../systems/classify.js'
  * Consumers that need the list for iteration import this.
  * Consumers that need sanitization call sanitizeCarryFields().
  */
-export const AGENT_CARRY_FIELDS = ['task', 'label', 'hint', 'reasonCode', 'activeFile']
+export const AGENT_CARRY_FIELDS = ['task', 'label', 'hint', 'reasonCode', 'activeFile', 'skill']
 
 /**
  * Per-field sanitizer functions.
@@ -64,6 +64,9 @@ export const FIELD_SANITIZERS = {
   hint:       (v) => typeof v === 'string' ? v.slice(0, 200) : null,
   reasonCode: (v) => BLOCKED_REASONS.includes(v) ? v : null,
   activeFile: (v) => typeof v === 'string' ? v.slice(0, 200) : null,
+  // AVO-104: raw skill / subagent name, set only on SubagentStart. capStr(200) like task/label —
+  // untrusted-length bound; client re-derives the localized bubble from this raw name.
+  skill:      (v) => typeof v === 'string' ? v.slice(0, 200) : null,
 }
 
 /**

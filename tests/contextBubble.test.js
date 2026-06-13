@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractContext, toolToAction, generateContextBubble } from '../src/systems/contextBubble.js'
+import { extractContext, toolToAction, generateContextBubble, skillBubbleText } from '../src/systems/contextBubble.js'
 
 describe('extractContext', () => {
   it('returns null for null/empty input', () => {
@@ -158,4 +158,51 @@ describe('generateContextBubble — {ctx} substitution safety (R64)', () => {
       expect(bubble).not.toContain('{ctx}')
     })
   }
+})
+
+describe('skillBubbleText (AVO-104)', () => {
+  it('maps each skill family to its localized bubble (en)', () => {
+    expect(skillBubbleText('plan')).toBe('📊 Planning')
+    expect(skillBubbleText('review')).toBe('🧐 Reviewing')
+    expect(skillBubbleText('test')).toBe('🧪 Testing')
+    expect(skillBubbleText('implement')).toBe('⌨️ Coding')
+    expect(skillBubbleText('ship')).toBe('🚀 Deploying')
+    expect(skillBubbleText('bootstrap')).toBe('📋 Writing spec')
+    expect(skillBubbleText('research')).toBe('🔬 Researching')
+    expect(skillBubbleText('security')).toBe('🛡️ Security check')
+  })
+  it('falls back to generic with the raw skill name', () => {
+    const b = skillBubbleText('some-custom-agent')
+    expect(b).toBe('💼 some-custom-agent')
+    expect(b).not.toContain('{ctx}')
+  })
+  it('returns null for missing / non-string skill', () => {
+    expect(skillBubbleText(null)).toBeNull()
+    expect(skillBubbleText(undefined)).toBeNull()
+    expect(skillBubbleText(123)).toBeNull()
+  })
+  it('keeps $-sequences in a raw name literal (no replace-pattern injection)', () => {
+    expect(skillBubbleText('$&-weird')).toBe('💼 $&-weird')
+  })
+})
+
+describe('generateContextBubble — skill branch (AVO-104)', () => {
+  it('fires a skill bubble on a working activation', () => {
+    const b = generateContextBubble('qa', { status: 'working', task: 'review', label: null, hint: null, skill: 'review' }, {})
+    expect(b).toBe('🧐 Reviewing')
+  })
+  it('does NOT emit a skill bubble for a blocked update (honesty: skill is working-phase only)', () => {
+    const b = generateContextBubble('qa', { status: 'blocked', task: 'review', label: null, hint: null, skill: 'review' }, {})
+    // blocked → error/colleague bubble path, never the skill text
+    expect(b).not.toBe('🧐 Reviewing')
+  })
+  it('does NOT emit a skill bubble for a done update', () => {
+    const b = generateContextBubble('qa', { status: 'done', task: 'review', label: null, hint: null, skill: 'review' }, {})
+    expect(b).not.toBe('🧐 Reviewing')
+  })
+  it('no skill field → ordinary bubble path (byte-identical behavior)', () => {
+    const withSkill = generateContextBubble('dev', { status: 'working', task: 'Edit', label: '✏️ App.jsx', hint: null }, {})
+    expect(withSkill).toBeTruthy()
+    expect(withSkill).not.toBe('🧐 Reviewing')
+  })
 })

@@ -132,6 +132,19 @@
     "awaiting-approval": "等待核准",
     "thinking": "思考中"
   },
+  "skillBubbles": {
+    "plan": "📊 規劃中",
+    "spec": "📋 寫規格中",
+    "review": "🧐 Review 中",
+    "test": "🧪 跑測試中",
+    "implement": "⌨️ 開發中",
+    "fix": "🔧 修 bug 中",
+    "ship": "🚀 部署中",
+    "research": "🔬 研究中",
+    "architect": "🏗️ 設計架構中",
+    "security": "🛡️ 安全檢查中",
+    "generic": "💼 {ctx}"
+  },
   "contextBubbles": {
     "dev-edit": ["{ctx} 這段...嗯讓我想想", "改 {ctx} 中，手感不錯", "{ctx} 又要動刀了", "嗯 {ctx} 這裡可以更好", "{ctx} 重構一下~", "動 {ctx}，別催我"],
     "dev-write": ["來寫 {ctx}！", "新檔案 {ctx}，從零開始", "{ctx} 我來搞定"],
