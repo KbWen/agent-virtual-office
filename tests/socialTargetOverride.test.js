@@ -1,0 +1,42 @@
+﻿import { describe, it, expect, vi, afterEach } from 'vitest'
+import * as movementSystem from '../src/systems/movementSystem.js'
+
+describe('getTargetForBehavior socialTargetOverride', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('correctly uses an agent object as socialTargetOverride', () => {
+    const pmAgent = { 
+      id: 'pm', 
+      position: { x: 500, y: 500 } 
+    }
+    const agents = {
+      dev: { id: 'dev', position: { x: 100, y: 100 } },
+      pm: pmAgent
+    }
+
+    // ارسال آبجکت کامل (مطابق انتظار کد اصلی)
+    const target = movementSystem.getTargetForBehavior('dev', 'chat', agents, pmAgent)
+
+    expect(target).toBeDefined()
+    // مختصات هدف باید نزدیک به مختصات pm (یعنی 500) باشد (با احتساب فاصله 50-70 پیکسلی)
+    expect(target.x).toBeGreaterThan(400)
+    expect(target.x).toBeLessThan(600)
+    expect(target.y).toBeGreaterThan(400)
+    expect(target.y).toBeLessThan(600)
+  })
+
+  it('fails when socialTargetOverride is just a string ID (Documenting current behavior)', () => {
+    const agents = {
+      dev: { id: 'dev', position: { x: 100, y: 100 } },
+      pm: { id: 'pm', position: { x: 500, y: 500 } }
+    }
+
+    // این تست تایید می‌کند که اگر فقط ID بفرستیم، کد کرش می‌کند
+    // این برای مستندسازی رفتار فعلی سیستم در تست‌ها عالی است
+    expect(() => {
+      movementSystem.getTargetForBehavior('dev', 'chat', agents, 'pm')
+    }).toThrow()
+  })
+})
