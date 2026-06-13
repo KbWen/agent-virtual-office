@@ -32,7 +32,7 @@ last_updated: 2026-06-10
 | AVO-108 | Token & cost meter | product | info-density | P0 | — | feature | Done | — |
 | AVO-109 | Recent-files heatmap | product | info-density | P2 | — | feature | Pending | — |
 | AVO-110 | Blocked-reason tags | product | info-density | P1 | docs/specs/blocked-reason-tags.md | feature | Done | unblocks AVO-117; Phase-2 (permission/auth/rate-limit) deferred |
-| AVO-111 | Time-of-day lighting | product | game-feel | P2 | — | feature | Pending | — |
+| AVO-111 | Time-of-day lighting | product | game-feel | P2 | — | quick-win | Done | chill-fun wave; smooth 24h color-grade in `src/systems/lighting.js` (replaced 9 discrete steps); desk-lamp halos split to AVO-125 |
 | AVO-112 | Eureka cascade | product | game-feel | P3 | — | feature | Pending | — |
 | AVO-113 | OpenTelemetry GenAI export | infra | observability | P1 | — | feature | Pending | — |
 | AVO-114 | Event-stream replay scrubber | product | observability | P2 | — | feature | Pending | — |
@@ -120,7 +120,7 @@ last_updated: 2026-06-10
 - **AVO-110 Blocked-reason tags** — Classifier extension → `blocked.reason` enum, colored sub-icon on status bubble (auth-error vs test-fail vs waiting-on-human). Extend `classifyStatus` with sub-reason; OpenTelemetry GenAI error taxonomy as reference.
 
 ### 🎨 Game Feel / Ambient
-- **AVO-111 Time-of-day lighting** — Global color-grade layer shifting with wall-clock time (warm dawn / neutral noon / blue evening / dim night with desk-lamp halos). Existing `getLightingOverlay` (PixelOffice.jsx) handles night; extend to full day cycle.
+- **AVO-111 Time-of-day lighting** — Global color-grade layer shifting with wall-clock time (warm dawn / neutral noon / blue evening / dim night with desk-lamp halos). Existing `getLightingOverlay` (PixelOffice.jsx) handles night; extend to full day cycle. *Shipped (chill-fun wave): extracted to pure module `src/systems/lighting.js` — smooth keyframe-interpolated 24h grade (deep-night→purple-dawn→amber-morning→clear-noon→golden-hour→sunset→blue-dusk) replacing the 9 hard steps; hour-granular (keeps PixelOffice's hour-only subscription). 6 unit tests (`lighting.test.js`) + 4-hour visual proof (`scripts/lighting-shot.mjs`). Desk-lamp halos at night carried to AVO-125.*
 - **AVO-112 Eureka cascade** — 2+ eurekas within 10s → confetti cascade across the whole office. Hook into existing eureka handler; tiny SVG particle system.
 
 ### 📈 Performance / Observability

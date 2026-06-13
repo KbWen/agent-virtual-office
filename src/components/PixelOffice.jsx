@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore } from '../systems/store'
+import { getLightingOverlay } from '../systems/lighting'
 import { startOfficeLife, triggerInteractiveEvent } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
 import { startDesktopNotifier } from '../inference/desktopNotifier'
@@ -228,18 +229,6 @@ function WhiteboardAnimation() {
       )}
     </g>
   )
-}
-
-function getLightingOverlay(hour) {
-  if (hour >= 22) return { fill: '#050510', opacity: 0.45 }
-  if (hour >= 20) return { fill: '#0a0a2e', opacity: 0.38 }
-  if (hour >= 19) return { fill: '#0f1040', opacity: 0.30 }
-  if (hour >= 18) return { fill: '#1a1040', opacity: 0.18 }
-  if (hour >= 17) return { fill: '#ff6622', opacity: 0.08 }
-  if (hour >= 9 && hour < 17) return { fill: '#fff', opacity: 0.0 }
-  if (hour >= 7) return { fill: '#ffd080', opacity: 0.07 }
-  if (hour >= 6) return { fill: '#FFD093', opacity: 0.05 }
-  return { fill: '#050510', opacity: 0.45 }
 }
 
 // ─── Clock widget — isolates the per-minute subscription ──────────────────
