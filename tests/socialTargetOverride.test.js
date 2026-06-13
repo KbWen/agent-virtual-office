@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as movementSystem from '../src/systems/movementSystem.js'
 
 describe('getTargetForBehavior socialTargetOverride', () => {
