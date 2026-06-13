@@ -24,6 +24,12 @@
 *.yaml text eol=lf
 *.yml text eol=lf
 
+# Deployed manifest and git hooks are parsed line-by-line by deploy.sh /
+# validate.sh — a CRLF rewrite (autocrlf on extensionless files) would make
+# manifest hash fields carry a stray \r. Pin LF in the deployed scaffold.
+.agentcortex-manifest text eol=lf
+.githooks/** text eol=lf
+
 # Keep binary files as-is
 *.png binary
 *.jpg binary
