@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-13T07:30:00Z
-- **Update Sequence**: 86
+- **Last Updated**: 2026-06-13T08:00:00Z
+- **Update Sequence**: 87
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -74,6 +74,7 @@
   - [vibe-rebalance] docs/specs/control-bar-reduction.md [Shipped]  *(AVO-130 / #116 — 4 health pills→1 expandable health dot; lang/run/view/help/platform demoted into ⚙ menu / info popover)*
   - [real-ai-behavior] docs/specs/skill-activation-badge.md [Shipped]  *(AVO-104 / #30 — transient skill bubble on SubagentStart via existing bubble cap (working-tier); panel Option B, honest no-over-head-element)*
   - [game-feel] docs/specs/event-juice-pass.md [Shipped]  *(AVO-136 / #117 — rare-event juice: deploy confetti + eureka sparkle + desk-slam local shake; pure juiceForEvent resolver, reduced-motion-safe, never occludes status)*
+  - [multi-agent] docs/specs/review-gate-waiting.md [Shipped]  *(AVO-107 / #112 — honest reframe: gate-desk "waiting" in-tray driven by awaiting-approval only; no queue/type fabrication; complements AVO-105 arrows; panel-decided)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
@@ -627,3 +628,10 @@
 - Spec: docs/specs/event-juice-pass.md (status: shipped; §4.4 DSoT). Commits 2dfd670 (spec) + 1ce15b0 (impl). Built on main AFTER #116/#30 merged (no SSoT conflict).
 - SSoT written directly (not guard) to avoid the known stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions`; incremental cosmetic overlay covered by existing `ui-rendering` L1 — skipped with justification.
 - Tests: Pass (6 new eventJuice unit tests; suite 1963; build clean; render-smoke PASS 4 viewports / 0 errors; live — deploy GO click rendered 14 office-confetti particles, 0 errors).
+
+### Ship-feat-avo-107-review-gate-queue-2026-06-13 (#112 — gate "waiting" in-tray: honest reframe of review-gate queue)
+- Feature shipped: AVO-107. A 4-lens office/management-sim game panel (office-sim · cozy · calm-tech honesty skeptic · multi-agent-studio) reframed the "review-gate queue" into an HONEST gate-desk "waiting" in-tray. The only per-agent waiting signal AVO owns is `awaiting-approval` (idle-gap inferred from blocked+90s) — it does NOT prove "submitted for review", so: driven SOLELY by live `awaiting-approval` count (never `activeWorkflow` membership, already drawn as AVO-105 arrows); copy = existing "waiting on you"; soft/inferred styling (no urgent red); NO per-agent type glyph (no per-agent phase) — at most ONE optional global phase glyph (review/ship); aggregates N waiters into ≤3 askew sheets + true count; invisible at 0; clears the same frame a waiter resolves.
+- Pure unit-tested `gateWaiting`/`gatePhaseGlyph` (`src/systems/reviewGate.js`) + `GateWaitingTray` pure overlay at the gate desk (R1: never relocates an agent; complements AVO-105 arrows as the "landed & still waiting" resting state). role=button + aria-label + Enter/Space; reduced-motion drops the settle; click reveals waiters tagged "inferred".
+- Spec: docs/specs/review-gate-waiting.md (status: shipped; §4.4 DSoT + panel). Commits ecfa319 (impl) + spec. Built on main AFTER #116/#30/#117 merged → conflict-free.
+- SSoT written directly (not guard) to avoid the stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions`; incremental overlay covered by existing `ui-rendering` L1 — skipped with justification.
+- Tests: Pass (5 new reviewGate unit tests; suite 1968; build clean; render-smoke PASS 4 viewports / 0 errors; live — a blocked gate agent idle-gap-flipped to awaiting-approval after 90s and the tray rendered with aria-label "1 waiting on you", 0 console errors).

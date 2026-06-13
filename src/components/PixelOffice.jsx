@@ -9,7 +9,8 @@ import { startDesktopNotifier } from '../inference/desktopNotifier'
 import { startIdleGapInference } from '../inference/idleGapInfer'
 import { startWorkflowHandoffs } from '../inference/workflowHandoff'
 import { juiceForEvent } from '../systems/eventJuice'
-import { eventName, t, useLocale } from '../i18n'
+import { gateWaiting, GATE_SHEET_CAP } from '../systems/reviewGate'
+import { eventName, charName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import PairLinkOverlay from './PairLink'
 import HelperHuddles from './HelperHuddle'
@@ -271,6 +272,52 @@ function EventJuice() {
             style={{ animation: `office-sparkle ${juice.durationMs}ms ease-out ${i * 70}ms both` }}>✦</text>
         )
       })}
+    </g>
+  )
+}
+
+// AVO-107 — gate "waiting" in-tray. HONEST: driven SOLELY by per-agent `awaiting-approval` (an
+// inferred "waiting on a human" signal — NOT a confirmed review queue), so copy = "waiting on you",
+// styling is soft/inferred, and there is NO per-agent type glyph (only one optional global phase
+// glyph from activeWorkflow). Pure overlay anchored at the gate desk — never relocates an agent
+// (R1). Renders nothing when 0 wait; clears the SAME frame a waiter resolves (no phantom queue).
+function GateWaitingTray() {
+  const agents = useOfficeStore(useShallow((s) => s.agents))
+  const activeWorkflow = useOfficeStore((s) => s.activeWorkflow)
+  const reducedMotion = useOfficeStore((s) => s.reducedMotion)
+  const [open, setOpen] = React.useState(false)
+  const { count, names, phaseGlyph } = gateWaiting(agents, activeWorkflow)
+  React.useEffect(() => { if (count === 0 && open) setOpen(false) }, [count, open])
+  if (count === 0) return null
+  const ax = 116, ay = 70   // near WAYPOINTS.gate {100,80}, offset clear of the Gatekeeper sprite
+  const sheets = Math.min(count, GATE_SHEET_CAP)
+  const PHASE_GLYPH = { review: '🔍', ship: '🚀' }
+  const label = t('chat.teamBlocked', 'Waiting on you')
+  return (
+    <g>
+      <g style={{ cursor: 'pointer', ...(reducedMotion ? {} : { animation: 'pet-pop 0.15s ease-out' }) }}
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
+        role="button" tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v) } }}
+        aria-label={t('aria.gateWaiting', '{0} waiting on you — click for details').replace('{0}', String(count))}>
+        <rect x={ax} y={ay + 8} width={16} height={3} rx={1} fill="#8a6d4a" opacity={0.85} />
+        {Array.from({ length: sheets }).map((_, i) => (
+          <rect key={i} x={ax + 2 + i * 0.7} y={ay + 6 - i * 2} width={11} height={5} rx={0.5}
+            fill="#fdfcf7" stroke="#cdbf9e" strokeWidth={0.4} opacity={0.9}
+            transform={`rotate(${(i - 1) * 3} ${ax + 7} ${ay + 6})`} />
+        ))}
+        {phaseGlyph && <text x={ax + 8} y={ay + 4} fontSize="4" textAnchor="middle" aria-hidden="true">{PHASE_GLYPH[phaseGlyph]}</text>}
+        {count > 1 && <text x={ax + 18} y={ay + 11} fontSize="5" fill="#6b5a3a" fontWeight="bold">{count}</text>}
+      </g>
+      {open && (
+        <g transform={`translate(${ax - 2}, ${ay + 14})`}>
+          <rect x={0} y={0} width={64} height={7 + names.length * 7} rx={2} fill="#fffdf5" stroke="#cdbf9e" strokeWidth={0.5} />
+          <text x={3} y={5.5} fontSize="4" fill="#6b5a3a" fontWeight="bold">{label}</text>
+          {names.map((id, i) => (
+            <text key={id} x={3} y={12 + i * 7} fontSize="3.6" fill="#555">{charName(id)} · {t('ui.gateInferred', 'inferred')}</text>
+          ))}
+        </g>
+      )}
     </g>
   )
 }
@@ -1277,6 +1324,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <FlyingDocuments />
       <WhiteboardAnimation />
       <EventJuice />
+      <GateWaitingTray />
 
       {/* ═══ AGENT INSPECTOR (click-to-inspect popover) ═══ */}
       <AgentInspector />
