@@ -50,6 +50,6 @@ This spec is the §4.4 Design Source of Truth. AVO is a procedural pixel-art SVG
 - Risk: DOM-node growth on a ~1000-node SVG → bounded to ~8 static, gated nodes.
 - Rollback: revert the single implement commit; the feature also rides `lightingEnabled` (OFF → nothing renders), so it is config-disableable (§2.2 feature-flagged).
 
-## Out-of-scope follow-up (flagged, NOT in this change)
+## Out-of-scope follow-up — RESOLVED (separate quick-win)
 
-The existing NIGHT EFFECTS block (PixelOffice.jsx:1173-1201) is gated on `hour >= 19` only (ignores `lightingEnabled`) and renders AFTER the agents — so today's monitor glow + DeskLamps paint OVER sprites (latent z-order + toggle bug). To be fixed as its own change under the same lighting toggle; do NOT bundle into AVO-125.
+The existing NIGHT EFFECTS block (monitor glow + DeskLamps + ceiling/lounge lights + OVERTIME chip) was gated on `hour >= 19` only (ignored `lightingEnabled`) and rendered AFTER the agents — so its ambient light painted OVER sprites (latent z-order + toggle bug). **Fixed as its own change** (chip `task_9c31a8e0`): the block was relocated to the lighting slot (beneath the agent layer, beside the tint + halos) and re-gated to `lightingEnabled && lightOverlay.opacity > 0`, so one toggle governs the whole lighting story and the glow/lamps never paint over status. Verified at hour 21: glow/lamps beneath agents (legible on top); toggle OFF → 0 monitor-glow ellipses in DOM. Suite 1938/1938.

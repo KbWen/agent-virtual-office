@@ -1173,6 +1173,41 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
         </g>
       )}
 
+      {/* ═══ NIGHT-EFFECTS LIGHTS ═══ (monitor screen-glow, desk lamps, ceiling/lounge warm light,
+          late-night OVERTIME chip). Relocated HERE — beneath the agent/status layer, beside the
+          AVO-111 tint + AVO-125 halos — so this ambient light never paints OVER a sprite/ring/label
+          (the #1 status-legibility law; it used to render after the agents). Now rides the SAME gate
+          as the tint + halos (`lightingEnabled && lightOverlay.opacity > 0`) instead of a bare
+          `hour >= 19`, so one toggle governs the whole lighting story. Visuals otherwise identical. */}
+      {lightingEnabled && lightOverlay.opacity > 0 && (
+        <g pointerEvents="none">
+          {/* Monitor screen glow on desks (gradients defined in <defs>) */}
+          {DESK_DATA.map((d) => (
+            <ellipse key={`glow-${d.id}`} cx={d.x} cy={d.y - 8} rx={32} ry={22} fill={`url(#scr-${d.id})`} />
+          ))}
+          {/* Desk lamps (warm glow) */}
+          {DESK_DATA.map((d) => (
+            <DeskLamp key={`lamp-${d.id}`} x={d.x + 22} y={d.y - 14} on />
+          ))}
+          {/* Meeting room ceiling light */}
+          <ellipse cx={705} cy={162} rx={60} ry={45} fill="url(#mtg-light)" />
+          {/* Lounge ambient warm light */}
+          <ellipse cx={120} cy={480} rx={80} ry={50} fill="url(#lounge-light)" />
+          {/* Late-night OVERTIME indicator (office clock hour ≥ 22). Declutter/calm-tech: a persistent
+              CONDITION (it's late) gets a STEADY, muted chip — NOT the old infinite red pulse, which
+              read as an alarm that re-fired the eye every 2s. The night lighting already signals late;
+              this is a quiet confirmation, not a warning. (Red is reserved for real blocked state.) */}
+          {hour >= 22 && (
+            <g opacity="0.6">
+              <rect x={485} y={142} width={45} height={14} rx={7} fill="#6B5335" />
+              <text x={507} y={149} textAnchor="middle" dominantBaseline="middle" fontSize="6.5" fill="#E8D8B0" fontFamily="monospace" fontWeight="bold">
+                OVERTIME
+              </text>
+            </g>
+          )}
+        </g>
+      )}
+
       {/* ═══ OFFICE PET ═══ (#39 — ambient cat; signal-driven barometer. Painted behind agents so
           they naturally occlude it when overlapping. Renders nothing when toggled off.) */}
       <OfficePet />
@@ -1201,36 +1236,6 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* ═══ AGENT INSPECTOR (click-to-inspect popover) ═══ */}
       <AgentInspector />
-
-      {/* ═══ NIGHT EFFECTS ═══ */}
-      {hour >= 19 && (
-        <g pointerEvents="none">
-          {/* Monitor screen glow on desks (gradients defined in <defs>) */}
-          {DESK_DATA.map((d) => (
-            <ellipse key={`glow-${d.id}`} cx={d.x} cy={d.y - 8} rx={32} ry={22} fill={`url(#scr-${d.id})`} />
-          ))}
-          {/* Desk lamps (warm glow) */}
-          {DESK_DATA.map((d) => (
-            <DeskLamp key={`lamp-${d.id}`} x={d.x + 22} y={d.y - 14} on />
-          ))}
-          {/* Meeting room ceiling light */}
-          <ellipse cx={705} cy={162} rx={60} ry={45} fill="url(#mtg-light)" />
-          {/* Lounge ambient warm light */}
-          <ellipse cx={120} cy={480} rx={80} ry={50} fill="url(#lounge-light)" />
-          {/* Late-night OVERTIME indicator (office clock hour ≥ 22). Declutter/calm-tech: a persistent
-              CONDITION (it's late) gets a STEADY, muted chip — NOT the old infinite red pulse, which
-              read as an alarm that re-fired the eye every 2s. The night lighting already signals late;
-              this is a quiet confirmation, not a warning. (Red is reserved for real blocked state.) */}
-          {hour >= 22 && (
-            <g opacity="0.6">
-              <rect x={485} y={142} width={45} height={14} rx={7} fill="#6B5335" />
-              <text x={507} y={149} textAnchor="middle" dominantBaseline="middle" fontSize="6.5" fill="#E8D8B0" fontFamily="monospace" fontWeight="bold">
-                OVERTIME
-              </text>
-            </g>
-          )}
-        </g>
-      )}
 
       {/* ═══ EVENT / WORKFLOW BANNER ═══ */}
       {(activeEvent || activeWorkflow) && (
