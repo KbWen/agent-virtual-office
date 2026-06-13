@@ -282,9 +282,11 @@
   "status": {
     "offline": "offline",
     "apiOffline": "status api offline",
-    "apiRetrying": "status api retrying"
+    "apiRetrying": "status api retrying",
+    "local": "Local"
   },
   "aria": {
+    "health": "Connection status",
     "pause": "Pause",
     "resume": "Resume",
     "switchLang": "Switch language",
@@ -306,6 +308,10 @@
     "petSkin": "Pet skin",
     "notifications": "Desktop notifications",
     "testPanel": "Test panel",
+    "language": "Language",
+    "view": "View",
+    "run": "Run workflow",
+    "help": "Help & shortcuts",
     "on": "On",
     "off": "Off",
     "blocked": "Blocked",
