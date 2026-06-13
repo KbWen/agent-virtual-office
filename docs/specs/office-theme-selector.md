@@ -1,6 +1,6 @@
 ---
 title: AVO-123 Office theme selector (lightweight overlay-grade)
-status: draft
+status: shipped
 created: 2026-06-13
 signal_tier: none
 backlog: AVO-123
