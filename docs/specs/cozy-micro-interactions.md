@@ -1,6 +1,6 @@
 ---
 title: AVO-125 Cozy Micro-Interactions (restrained)
-status: draft
+status: shipped
 created: 2026-06-13
 signal_tier: none
 backlog: AVO-125

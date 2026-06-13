@@ -1,6 +1,6 @@
 ---
 title: AVO-122 Ambient Soundscape (off-by-default)
-status: draft
+status: shipped
 created: 2026-06-13
 signal_tier: none
 backlog: AVO-122
