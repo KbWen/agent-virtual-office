@@ -4,6 +4,7 @@ import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName } from '../i18n'
 import { requestNotificationPermission, getNotificationState } from '../inference/desktopNotifier'
 import { PET_TYPES } from '../systems/petState.js'
+import { THEMES } from '../systems/theme.js'
 
 const statusOptions = ['idle', 'working', 'blocked', 'done']
 
@@ -76,6 +77,8 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const toggleOfficePet = useOfficeStore((s) => s.toggleOfficePet)
   const petType = useOfficeStore((s) => s.petType)
   const setPetType = useOfficeStore((s) => s.setPetType)
+  const theme = useOfficeStore((s) => s.theme)              // AVO-123
+  const setTheme = useOfficeStore((s) => s.setTheme)
   // #28: RAF-watchdog stall counter — surfaced as a DEV-only diagnostic chip (see render). Cheap
   // primitive subscription; re-renders only when a stall actually bumps the count (rare).
   const watchdogRestarts = useOfficeStore((s) => s.watchdogRestarts)
@@ -317,6 +320,18 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
               </div>
             </div>
           )}
+          {/* AVO-123: office theme — a lightweight tint grade (light themes only; legibility-tested). */}
+          <div className="px-2 py-1.5 flex items-center justify-between">
+            <span className="text-gray-700 dark:text-gray-200">{t('settings.theme', 'Theme')}</span>
+            <div role="radiogroup" aria-label={t('settings.theme', 'Theme')} className="flex gap-1">
+              {THEMES.map((th) => (
+                <button key={th.id} role="radio" aria-checked={theme === th.id} onClick={() => setTheme(th.id)}
+                  title={t(`settings.themeNames.${th.id}`, th.id)} aria-label={t(`settings.themeNames.${th.id}`, th.id)}
+                  className={`w-5 h-5 rounded-full border ${theme === th.id ? 'border-amber-400 ring-1 ring-amber-400 dark:border-amber-500' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'}`}
+                  style={{ backgroundColor: th.opacity === 0 ? '#F8F4E8' : th.fill }} />
+              ))}
+            </div>
+          </div>
           <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
           {/* Desktop notifications */}
           {notifyState !== 'unsupported' && (

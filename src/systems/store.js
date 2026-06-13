@@ -8,6 +8,7 @@ import { STATUS_COLORS } from './constants.js'
 import { classifyTask, familyToBehavior, decideBehavior } from './classify.js'
 import { FEED_ORIGINS } from './rosterModel.js'
 import { PET_TYPES, nextPetType } from './petState.js'
+import { isValidTheme, DEFAULT_THEME } from './theme.js'
 import { recordEpisode, isNewBlockedEpisode } from './recurringFailure.js'
 import { AGENT_CARRY_FIELDS } from '../utils/statusFields.js'
 
@@ -369,6 +370,9 @@ export const useOfficeStore = create((set) => ({
   // the honest mode logic). Validated against PET_TYPES on read so a junk localStorage value can't
   // select a missing sprite.
   petType: typeof window === 'undefined' ? 'cat' : (() => { try { const v = localStorage.getItem('office-pet-type'); return PET_TYPES.includes(v) ? v : 'cat' } catch { return 'cat' } })(),
+  // AVO-123: office theme (lightweight overlay tint). Persisted via a dedicated localStorage key
+  // (same pattern as petType/lighting). Validated vs the theme registry; unknown → default.
+  theme: typeof window === 'undefined' ? DEFAULT_THEME : (() => { try { const v = localStorage.getItem('avo.theme'); return isValidTheme(v) ? v : DEFAULT_THEME } catch { return DEFAULT_THEME } })(),
   showWorkflow: false,
   // Diagnostic counter: how many times the AgentCharacter RAF watchdog had to restart a
   // stalled walk loop. A silent restart hides the underlying stall; surfacing a count lets
@@ -744,6 +748,12 @@ export const useOfficeStore = create((set) => ({
     if (!PET_TYPES.includes(type) || type === s.petType) return s
     try { if (typeof window !== 'undefined') localStorage.setItem('office-pet-type', type) } catch {}
     return { petType: type }
+  }),
+  // AVO-123: select office theme (settings popover radiogroup). Validated vs the theme registry; persisted.
+  setTheme: (id) => set((s) => {
+    if (!isValidTheme(id) || id === s.theme) return s
+    try { if (typeof window !== 'undefined') localStorage.setItem('avo.theme', id) } catch {}
+    return { theme: id }
   }),
   triggerWorkflow: () => set({ showWorkflow: true }),
   endWorkflow: () => set({ showWorkflow: false }),

@@ -10,6 +10,7 @@ import { startIdleGapInference } from '../inference/idleGapInfer'
 import { startWorkflowHandoffs } from '../inference/workflowHandoff'
 import { juiceForEvent } from '../systems/eventJuice'
 import { gateWaiting, GATE_SHEET_CAP } from '../systems/reviewGate'
+import { themeOverlay, cappedThemeOpacity } from '../systems/theme'
 import { eventName, charName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import PairLinkOverlay from './PairLink'
@@ -871,6 +872,12 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     return { coffeeCountMap: coffee, stickyCountMap: sticky, booksCountMap: books }
   }, [deskItemCounts])
   const lightOverlay = getLightingOverlay(hour)
+  // AVO-123: theme tint grade. Composes ON TOP of the lighting tint, beneath the agent/status layer.
+  // cappedThemeOpacity enforces the per-theme cap + the summed (theme+lighting) budget so the scene
+  // is never washed out. Default theme → opacity 0 → no rect.
+  const themeId = useOfficeStore((s) => s.theme)
+  const themeGrade = themeOverlay(themeId)
+  const themeTintOpacity = cappedThemeOpacity(themeGrade.opacity, lightingEnabled ? lightOverlay.opacity : 0)
 
   // Stable handler for the ops desk's deploy button — a fresh inline arrow on
   // every render would defeat PersonalDesk's React.memo for the ops desk.
@@ -1245,6 +1252,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {lightingEnabled && lightOverlay.opacity > 0 && (
         <rect x="0" y="0" width="800" height="560"
           fill={lightOverlay.fill} opacity={lightOverlay.opacity} pointerEvents="none" />
+      )}
+
+      {/* AVO-123: office theme tint — a light overlay grade composing on top of the lighting tint,
+          BENEATH the agent/status layer (same legibility guarantee). Capped + summed-capped so it
+          can never wash out status rings; Default → opacity 0 → no rect. */}
+      {themeTintOpacity > 0 && (
+        <rect x="0" y="0" width="800" height="560"
+          fill={themeGrade.fill} opacity={themeTintOpacity} pointerEvents="none" />
       )}
 
       {/* ═══ NIGHT DESK-LAMP HALOS ═══ (AVO-125 — a warm pool of lamplight on the floor under each
