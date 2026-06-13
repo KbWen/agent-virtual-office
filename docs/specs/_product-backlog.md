@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-06-10
+last_updated: 2026-06-13
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -51,7 +51,7 @@ last_updated: 2026-06-10
 | AVO-127 | Token meter off the default view | review-finding | vibe-rebalance | P0 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | AVO-108 |
 | AVO-128 | Name pills → reveal-on-active | review-finding | vibe-rebalance | P0 | docs/specs/ux-vibe-rebalance.md | feature | Done | — |
 | AVO-129 | Done/blocked KPI off the persistent bar | review-finding | vibe-rebalance | P1 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | — |
-| AVO-130 | Control-bar reduction (gear menu + single health dot) | review-finding | vibe-rebalance | P1 | — | feature | Pending | — |
+| AVO-130 | Control-bar reduction (gear menu + single health dot) | review-finding | vibe-rebalance | P1 | docs/specs/control-bar-reduction.md | feature | Shipped | #116; 4 health pills→1 dot, lang/run/view/help demoted into ⚙ |
 | AVO-131 | TaskLabel pill → inspector-only | review-finding | vibe-rebalance | P1 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | AVO-103 |
 | AVO-132 | ThinkingAura → fold into glow ring | review-finding | vibe-rebalance | P1 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | AVO-102 |
 | AVO-133 | Blocked reads from posture (physical legibility) | product | vibe-rebalance | P1 | — | quick-win | Done | AVO-110 |

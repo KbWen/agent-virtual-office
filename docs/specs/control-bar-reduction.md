@@ -1,6 +1,6 @@
 ---
 title: AVO-130 Control-Bar Reduction (gear menu + single health dot)
-status: draft
+status: shipped
 created: 2026-06-13
 signal_tier: none
 backlog: AVO-130
