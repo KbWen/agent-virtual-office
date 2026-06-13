@@ -259,6 +259,7 @@
   "ui": {
     "live": "即時",
     "fallbackAgents": "{0} 個 agent",
+    "gateInferred": "推測",
     "run": "執行",
     "test": "測試",
     "testHint": "設定 agent 狀態以改變行為權重 — 工作中：更多打字，卡住：焦躁，完成：慶祝",
@@ -300,6 +301,7 @@
   },
   "aria": {
     "health": "連線狀態",
+    "gateWaiting": "{0} 個在等你處理 — 點擊看詳情",
     "pause": "暫停",
     "resume": "繼續",
     "switchLang": "切換語言",

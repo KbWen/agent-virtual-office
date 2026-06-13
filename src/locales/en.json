@@ -259,6 +259,7 @@
   "ui": {
     "live": "Live",
     "fallbackAgents": "{0} agents",
+    "gateInferred": "inferred",
     "run": "Run",
     "test": "Test",
     "testHint": "Set agent status to change behavior weights — working: more typing, blocked: frustrated, done: celebratory",
@@ -300,6 +301,7 @@
   },
   "aria": {
     "health": "Connection status",
+    "gateWaiting": "{0} waiting on you — click for details",
     "pause": "Pause",
     "resume": "Resume",
     "switchLang": "Switch language",
