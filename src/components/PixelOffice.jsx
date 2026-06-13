@@ -912,6 +912,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           <stop offset="0%" stopColor="#FFD090" stopOpacity="0.07" />
           <stop offset="100%" stopColor="#FFD090" stopOpacity="0" />
         </radialGradient>
+        {/* AVO-125: warm desk-lamp ground pool — ONE shared gradient reused by all 7 desks.
+            #FFE0A0 is a lamp-warmth hue OUTSIDE STATUS_COLORS (paler / lower-chroma than the
+            working ring #EF9F27), so a floor pool can never be misread as a status ring. */}
+        <radialGradient id="lamp-halo" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FFE0A0" stopOpacity="0.14" />
+          <stop offset="55%" stopColor="#FFD890" stopOpacity="0.05" />
+          <stop offset="100%" stopColor="#FFD890" stopOpacity="0" />
+        </radialGradient>
       </defs>
 
       {/* ═══ BACKGROUND ═══ */}
@@ -1139,6 +1147,22 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {lightingEnabled && lightOverlay.opacity > 0 && (
         <rect x="0" y="0" width="800" height="560"
           fill={lightOverlay.fill} opacity={lightOverlay.opacity} pointerEvents="none" />
+      )}
+
+      {/* ═══ NIGHT DESK-LAMP HALOS ═══ (AVO-125 — a warm pool of lamplight on the floor under each
+          desk lamp. Rendered HERE (after the lighting tint, before the agent layer) so it washes the
+          desk floor but sits BENEATH every sprite/ring/label/bubble — status legibility is the #1
+          law. Status-AGNOSTIC furniture light (zero agent-state meaning), so it can never compete
+          with the real status channel. Rides the AVO-111 `lightingEnabled` toggle + the lighting
+          tint's own dark-room gate (lightOverlay.opacity > 0), so one switch governs the whole
+          lighting story and halos vanish under reduced-motion/contrast first-run. Fully static. */}
+      {lightingEnabled && lightOverlay.opacity > 0 && (
+        <g pointerEvents="none">
+          {DESK_DATA.map((d) => (
+            <ellipse key={`lamp-halo-${d.id}`} cx={d.x + 22} cy={d.y + 2} rx={28} ry={12}
+              fill="url(#lamp-halo)" />
+          ))}
+        </g>
       )}
 
       {/* ═══ OFFICE PET ═══ (#39 — ambient cat; signal-driven barometer. Painted behind agents so
