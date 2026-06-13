@@ -300,6 +300,8 @@
   },
   "settings": {
     "weather": "天氣動畫",
+    "lighting": "時段光線",
+    "soundscape": "環境音",
     "pet": "辦公室寵物",
     "petSkin": "寵物造型",
     "notifications": "桌面通知",

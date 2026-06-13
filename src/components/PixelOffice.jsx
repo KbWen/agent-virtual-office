@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore } from '../systems/store'
+import { getLightingOverlay } from '../systems/lighting'
+import { startAmbientSound } from '../systems/ambientSound'
 import { startOfficeLife, triggerInteractiveEvent } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
 import { startDesktopNotifier } from '../inference/desktopNotifier'
@@ -228,18 +230,6 @@ function WhiteboardAnimation() {
       )}
     </g>
   )
-}
-
-function getLightingOverlay(hour) {
-  if (hour >= 22) return { fill: '#050510', opacity: 0.45 }
-  if (hour >= 20) return { fill: '#0a0a2e', opacity: 0.38 }
-  if (hour >= 19) return { fill: '#0f1040', opacity: 0.30 }
-  if (hour >= 18) return { fill: '#1a1040', opacity: 0.18 }
-  if (hour >= 17) return { fill: '#ff6622', opacity: 0.08 }
-  if (hour >= 9 && hour < 17) return { fill: '#fff', opacity: 0.0 }
-  if (hour >= 7) return { fill: '#ffd080', opacity: 0.07 }
-  if (hour >= 6) return { fill: '#FFD093', opacity: 0.05 }
-  return { fill: '#050510', opacity: 0.45 }
 }
 
 // ─── Clock widget — isolates the per-minute subscription ──────────────────
@@ -715,6 +705,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const mood = useOfficeStore((s) => s.mood)
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
   const weatherEffects = useOfficeStore((s) => s.weatherEffects)
+  const lightingEnabled = useOfficeStore((s) => s.lightingEnabled)
   const weather = moodToWeather(mood)
   // #45: WallWindow's reducedMotion prop ONLY governs the WeatherOverlay animation. Feed it the
   // OR of the accessibility pref and the user weather toggle so disabling either renders weather
@@ -729,6 +720,13 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
   useEffect(() => {
     const cleanup = startStatusIntegration(useOfficeStore)
+    return cleanup
+  }, [])
+
+  // AVO-122: ambient soundscape engine. Subscribes to the store but creates NO audio until the
+  // user opts in via the ⚙ toggle (autoplay-safe; off by default). cleanup tears down the ctx.
+  useEffect(() => {
+    const cleanup = startAmbientSound(useOfficeStore)
     return cleanup
   }, [])
 
@@ -921,6 +919,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
         <radialGradient id="lounge-light" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#FFD090" stopOpacity="0.07" />
           <stop offset="100%" stopColor="#FFD090" stopOpacity="0" />
+        </radialGradient>
+        {/* AVO-125: warm desk-lamp ground pool — ONE shared gradient reused by all 7 desks.
+            #FFE0A0 is a lamp-warmth hue OUTSIDE STATUS_COLORS (paler / lower-chroma than the
+            working ring #EF9F27), so a floor pool can never be misread as a status ring. */}
+        <radialGradient id="lamp-halo" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FFE0A0" stopOpacity="0.14" />
+          <stop offset="55%" stopColor="#FFD890" stopOpacity="0.05" />
+          <stop offset="100%" stopColor="#FFD890" stopOpacity="0" />
         </radialGradient>
       </defs>
 
@@ -1141,6 +1147,67 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
         </g>
       )}
 
+      {/* ═══ TIME-OF-DAY LIGHTING ═══ (AVO-111 — full-canvas color-grade tint. Painted HERE on
+          purpose: it washes the room/floor/furniture above, but sits BENEATH the agent + status
+          layer below, so a backdrop can never dim or recolor status rings, name labels, or speech
+          bubbles (status legibility is the #1 product law). Toggled off — or first-run under
+          prefers-reduced-motion / prefers-contrast — renders no rect = clear midday baseline. */}
+      {lightingEnabled && lightOverlay.opacity > 0 && (
+        <rect x="0" y="0" width="800" height="560"
+          fill={lightOverlay.fill} opacity={lightOverlay.opacity} pointerEvents="none" />
+      )}
+
+      {/* ═══ NIGHT DESK-LAMP HALOS ═══ (AVO-125 — a warm pool of lamplight on the floor under each
+          desk lamp. Rendered HERE (after the lighting tint, before the agent layer) so it washes the
+          desk floor but sits BENEATH every sprite/ring/label/bubble — status legibility is the #1
+          law. Status-AGNOSTIC furniture light (zero agent-state meaning), so it can never compete
+          with the real status channel. Rides the AVO-111 `lightingEnabled` toggle + the lighting
+          tint's own dark-room gate (lightOverlay.opacity > 0), so one switch governs the whole
+          lighting story and halos vanish under reduced-motion/contrast first-run. Fully static. */}
+      {lightingEnabled && lightOverlay.opacity > 0 && (
+        <g pointerEvents="none">
+          {DESK_DATA.map((d) => (
+            <ellipse key={`lamp-halo-${d.id}`} cx={d.x + 22} cy={d.y + 2} rx={28} ry={12}
+              fill="url(#lamp-halo)" />
+          ))}
+        </g>
+      )}
+
+      {/* ═══ NIGHT-EFFECTS LIGHTS ═══ (monitor screen-glow, desk lamps, ceiling/lounge warm light,
+          late-night OVERTIME chip). Relocated HERE — beneath the agent/status layer, beside the
+          AVO-111 tint + AVO-125 halos — so this ambient light never paints OVER a sprite/ring/label
+          (the #1 status-legibility law; it used to render after the agents). Now rides the SAME gate
+          as the tint + halos (`lightingEnabled && lightOverlay.opacity > 0`) instead of a bare
+          `hour >= 19`, so one toggle governs the whole lighting story. Visuals otherwise identical. */}
+      {lightingEnabled && lightOverlay.opacity > 0 && (
+        <g pointerEvents="none">
+          {/* Monitor screen glow on desks (gradients defined in <defs>) */}
+          {DESK_DATA.map((d) => (
+            <ellipse key={`glow-${d.id}`} cx={d.x} cy={d.y - 8} rx={32} ry={22} fill={`url(#scr-${d.id})`} />
+          ))}
+          {/* Desk lamps (warm glow) */}
+          {DESK_DATA.map((d) => (
+            <DeskLamp key={`lamp-${d.id}`} x={d.x + 22} y={d.y - 14} on />
+          ))}
+          {/* Meeting room ceiling light */}
+          <ellipse cx={705} cy={162} rx={60} ry={45} fill="url(#mtg-light)" />
+          {/* Lounge ambient warm light */}
+          <ellipse cx={120} cy={480} rx={80} ry={50} fill="url(#lounge-light)" />
+          {/* Late-night OVERTIME indicator (office clock hour ≥ 22). Declutter/calm-tech: a persistent
+              CONDITION (it's late) gets a STEADY, muted chip — NOT the old infinite red pulse, which
+              read as an alarm that re-fired the eye every 2s. The night lighting already signals late;
+              this is a quiet confirmation, not a warning. (Red is reserved for real blocked state.) */}
+          {hour >= 22 && (
+            <g opacity="0.6">
+              <rect x={485} y={142} width={45} height={14} rx={7} fill="#6B5335" />
+              <text x={507} y={149} textAnchor="middle" dominantBaseline="middle" fontSize="6.5" fill="#E8D8B0" fontFamily="monospace" fontWeight="bold">
+                OVERTIME
+              </text>
+            </g>
+          )}
+        </g>
+      )}
+
       {/* ═══ OFFICE PET ═══ (#39 — ambient cat; signal-driven barometer. Painted behind agents so
           they naturally occlude it when overlapping. Renders nothing when toggled off.) */}
       <OfficePet />
@@ -1169,42 +1236,6 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* ═══ AGENT INSPECTOR (click-to-inspect popover) ═══ */}
       <AgentInspector />
-
-      {/* ═══ LIGHTING ═══ */}
-      {lightOverlay.opacity > 0 && (
-        <rect x="0" y="0" width="800" height="560"
-          fill={lightOverlay.fill} opacity={lightOverlay.opacity} pointerEvents="none" />
-      )}
-
-      {/* ═══ NIGHT EFFECTS ═══ */}
-      {hour >= 19 && (
-        <g pointerEvents="none">
-          {/* Monitor screen glow on desks (gradients defined in <defs>) */}
-          {DESK_DATA.map((d) => (
-            <ellipse key={`glow-${d.id}`} cx={d.x} cy={d.y - 8} rx={32} ry={22} fill={`url(#scr-${d.id})`} />
-          ))}
-          {/* Desk lamps (warm glow) */}
-          {DESK_DATA.map((d) => (
-            <DeskLamp key={`lamp-${d.id}`} x={d.x + 22} y={d.y - 14} on />
-          ))}
-          {/* Meeting room ceiling light */}
-          <ellipse cx={705} cy={162} rx={60} ry={45} fill="url(#mtg-light)" />
-          {/* Lounge ambient warm light */}
-          <ellipse cx={120} cy={480} rx={80} ry={50} fill="url(#lounge-light)" />
-          {/* Late-night OVERTIME indicator (office clock hour ≥ 22). Declutter/calm-tech: a persistent
-              CONDITION (it's late) gets a STEADY, muted chip — NOT the old infinite red pulse, which
-              read as an alarm that re-fired the eye every 2s. The night lighting already signals late;
-              this is a quiet confirmation, not a warning. (Red is reserved for real blocked state.) */}
-          {hour >= 22 && (
-            <g opacity="0.6">
-              <rect x={485} y={142} width={45} height={14} rx={7} fill="#6B5335" />
-              <text x={507} y={149} textAnchor="middle" dominantBaseline="middle" fontSize="6.5" fill="#E8D8B0" fontFamily="monospace" fontWeight="bold">
-                OVERTIME
-              </text>
-            </g>
-          )}
-        </g>
-      )}
 
       {/* ═══ EVENT / WORKFLOW BANNER ═══ */}
       {(activeEvent || activeWorkflow) && (

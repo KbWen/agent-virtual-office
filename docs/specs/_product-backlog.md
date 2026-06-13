@@ -32,7 +32,7 @@ last_updated: 2026-06-10
 | AVO-108 | Token & cost meter | product | info-density | P0 | — | feature | Done | — |
 | AVO-109 | Recent-files heatmap | product | info-density | P2 | — | feature | Pending | — |
 | AVO-110 | Blocked-reason tags | product | info-density | P1 | docs/specs/blocked-reason-tags.md | feature | Done | unblocks AVO-117; Phase-2 (permission/auth/rate-limit) deferred |
-| AVO-111 | Time-of-day lighting | product | game-feel | P2 | — | feature | Pending | — |
+| AVO-111 | Time-of-day lighting | product | game-feel | P2 | — | quick-win | Done | chill-fun wave; smooth 24h color-grade in `src/systems/lighting.js` (replaced 9 discrete steps); desk-lamp halos split to AVO-125 |
 | AVO-112 | Eureka cascade | product | game-feel | P3 | — | feature | Pending | — |
 | AVO-113 | OpenTelemetry GenAI export | infra | observability | P1 | — | feature | Pending | — |
 | AVO-114 | Event-stream replay scrubber | product | observability | P2 | — | feature | Pending | — |
@@ -43,7 +43,7 @@ last_updated: 2026-06-10
 | AVO-119 | Language / file-type breakdown | product | info-density | P2 | — | feature | Pending | — |
 | AVO-120 | Daily MVP / productivity leaderboard | product | brand | P2 | — | feature | Pending | — |
 | AVO-121 | Office pet (ambient companion) | product | game-feel | P3 | — | feature | Done | reframed as signal-driven barometer; docs/specs/office-pet-barometer.md (PR #62) |
-| AVO-122 | Ambient soundscape (toggle) | product | game-feel | P2 | — | feature | Pending | — |
+| AVO-122 | Ambient soundscape (toggle) | product | game-feel | P2 | docs/specs/ambient-soundscape.md | feature | Done | chill-fun wave; 100% procedural Web Audio (0 KB), off-by-default; clatter∝teamPulse + double-gated rain; coffee gurgle dropped (honesty — tea-break isn't a real signal) |
 | AVO-123 | Office theme / skin selector | product | brand | P2 | — | feature | Pending | — |
 | AVO-124 | Agent appearance customization | product | brand | P3 | — | feature | Pending | — |
 | AVO-125 | Cozy micro-interactions | product | game-feel | P3 | — | feature | Pending | AVO-111 |
@@ -120,7 +120,7 @@ last_updated: 2026-06-10
 - **AVO-110 Blocked-reason tags** — Classifier extension → `blocked.reason` enum, colored sub-icon on status bubble (auth-error vs test-fail vs waiting-on-human). Extend `classifyStatus` with sub-reason; OpenTelemetry GenAI error taxonomy as reference.
 
 ### 🎨 Game Feel / Ambient
-- **AVO-111 Time-of-day lighting** — Global color-grade layer shifting with wall-clock time (warm dawn / neutral noon / blue evening / dim night with desk-lamp halos). Existing `getLightingOverlay` (PixelOffice.jsx) handles night; extend to full day cycle.
+- **AVO-111 Time-of-day lighting** — Global color-grade layer shifting with wall-clock time (warm dawn / neutral noon / blue evening / dim night with desk-lamp halos). Existing `getLightingOverlay` (PixelOffice.jsx) handles night; extend to full day cycle. *Shipped (chill-fun wave): extracted to pure module `src/systems/lighting.js` — smooth keyframe-interpolated 24h grade (deep-night→purple-dawn→amber-morning→clear-noon→golden-hour→sunset→blue-dusk) replacing the 9 hard steps; hour-granular (keeps PixelOffice's hour-only subscription). Then a 5-lens design panel (color/calm-tech/game-feel/a11y/clutter) tuned it: night capped at 0.38 desaturated indigo + sunset desaturated to terracotta (off the orange status-ring hue) + dawn rose-blush & warm shoulders; **z-order fix** — tint moved to paint BENEATH the agent/status layer so it never dims rings/labels/bubbles (the #1 product law); **on/off toggle** in the ⚙ settings sheet (default ON; first-run OFF under prefers-reduced-motion/contrast; localStorage `avo.lighting.enabled`; off → clear midday baseline). 7 unit tests incl. the 0.38 legibility ceiling; visual proof at 07/13/18/21 + toggle-off (`scripts/lighting-shot.mjs`, `lighting-toggle-shot.mjs`). Desk-lamp halos at night carried to AVO-125.*
 - **AVO-112 Eureka cascade** — 2+ eurekas within 10s → confetti cascade across the whole office. Hook into existing eureka handler; tiny SVG particle system.
 
 ### 📈 Performance / Observability

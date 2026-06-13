@@ -300,6 +300,8 @@
   },
   "settings": {
     "weather": "Weather animations",
+    "lighting": "Time-of-day lighting",
+    "soundscape": "Ambient soundscape",
     "pet": "Office pet",
     "petSkin": "Pet skin",
     "notifications": "Desktop notifications",
