@@ -13,23 +13,34 @@
 // adjacent hour differs by only a small amount (no visible snap).
 
 // Each keyframe: hour anchor, fill as [r,g,b], and tint opacity (0 = fully clear).
+// Palette tuned by a 5-lens design panel (AVO-111 polish). Hard rules baked in:
+//   • Opacity ceiling 0.38 — night ambiance must never bury status legibility
+//     (the product's #1 law); deep night is a DESATURATED indigo, never near-black.
+//   • Sunset is desaturated terracotta, off the orange working-ring hue band, so a
+//     status ring never blends into the floor and white bubbles aren't recolored.
+//   • Half-hour anchors (6.5 dawn rose-blush, 16.5 warm shoulder) only SHAPE the
+//     interpolation between integer hours — PixelOffice samples integer `hour` only.
 const KEYFRAMES = [
-  { h: 0,  rgb: [5, 5, 16],      op: 0.45 }, // deep night
-  { h: 5,  rgb: [12, 12, 48],    op: 0.42 }, // last of night, blue
-  { h: 6,  rgb: [70, 55, 95],    op: 0.32 }, // pre-dawn purple
-  { h: 7,  rgb: [255, 210, 150], op: 0.18 }, // warm dawn
-  { h: 8,  rgb: [255, 235, 200], op: 0.07 }, // soft morning
-  { h: 9,  rgb: [255, 255, 255], op: 0.0 },  // clear — day begins
-  { h: 16, rgb: [255, 255, 255], op: 0.0 },  // clear — day ends
-  { h: 17, rgb: [255, 180, 100], op: 0.08 }, // golden hour
-  { h: 18, rgb: [255, 120, 60],  op: 0.16 }, // sunset orange
-  { h: 19, rgb: [95, 60, 110],   op: 0.27 }, // dusk purple
-  { h: 20, rgb: [30, 30, 82],    op: 0.36 }, // blue evening
-  { h: 21, rgb: [15, 15, 58],    op: 0.42 }, // night falling
-  { h: 23, rgb: [5, 5, 16],      op: 0.45 }, // deep night
+  { h: 0,    rgb: [12, 14, 38],   op: 0.38 }, // deep night — desaturated indigo
+  { h: 5,    rgb: [22, 24, 60],   op: 0.36 }, // last of night, periwinkle
+  { h: 6,    rgb: [88, 66, 112],  op: 0.30 }, // pre-dawn violet
+  { h: 6.5,  rgb: [212, 132, 140], op: 0.24 }, // dawn rose-blush (transit only)
+  { h: 7,    rgb: [255, 208, 152], op: 0.17 }, // warm dawn — sun cresting
+  { h: 8,    rgb: [255, 236, 206], op: 0.06 }, // soft morning shoulder
+  { h: 9,    rgb: [255, 255, 255], op: 0.0 },  // clear — day begins (legibility anchor)
+  { h: 16,   rgb: [255, 255, 255], op: 0.0 },  // clear — day ends (legibility anchor)
+  { h: 16.5, rgb: [255, 244, 222], op: 0.05 }, // warm shoulder into golden hour
+  { h: 17,   rgb: [255, 188, 116], op: 0.08 }, // golden hour
+  { h: 18,   rgb: [236, 126, 92],  op: 0.13 }, // sunset — desaturated terracotta
+  { h: 19,   rgb: [108, 68, 120],  op: 0.26 }, // dusk — magenta-leaning purple
+  { h: 20,   rgb: [46, 44, 96],    op: 0.32 }, // blue evening
+  { h: 21,   rgb: [26, 28, 70],    op: 0.36 }, // night falling
+  { h: 23,   rgb: [12, 14, 38],    op: 0.38 }, // deep night — wraps to h0
 ]
 
-const NIGHT = { fill: 'rgb(5, 5, 16)', opacity: 0.45 }
+// Opacity ceiling shared by the curve and the non-finite fallback (status-legibility law).
+export const MAX_OPACITY = 0.38
+const NIGHT = { fill: 'rgb(12, 14, 38)', opacity: MAX_OPACITY }
 
 function lerp(a, b, t) {
   return a + (b - a) * t

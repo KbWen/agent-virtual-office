@@ -30,6 +30,8 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const toggleRosterMode = useOfficeStore((s) => s.toggleRosterMode)
   const weatherEffects = useOfficeStore((s) => s.weatherEffects)
   const toggleWeatherEffects = useOfficeStore((s) => s.toggleWeatherEffects)
+  const lightingEnabled = useOfficeStore((s) => s.lightingEnabled)
+  const toggleLighting = useOfficeStore((s) => s.toggleLighting)
   const officePet = useOfficeStore((s) => s.officePet)
   const toggleOfficePet = useOfficeStore((s) => s.toggleOfficePet)
   const petType = useOfficeStore((s) => s.petType)
@@ -216,6 +218,12 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-200">
             <span>{t('settings.weather', 'Weather animations')}</span>
             <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${weatherEffects ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>{weatherEffects ? t('settings.on', 'On') : t('settings.off', 'Off')}</span>
+          </button>
+          {/* Time-of-day lighting (AVO-111) */}
+          <button role="switch" aria-checked={lightingEnabled} onClick={toggleLighting}
+            className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-200">
+            <span>{t('settings.lighting', 'Time-of-day lighting')}</span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${lightingEnabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>{lightingEnabled ? t('settings.on', 'On') : t('settings.off', 'Off')}</span>
           </button>
           {/* Office pet */}
           <button role="switch" aria-checked={officePet} onClick={toggleOfficePet}

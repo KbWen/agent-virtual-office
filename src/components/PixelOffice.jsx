@@ -704,6 +704,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const mood = useOfficeStore((s) => s.mood)
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
   const weatherEffects = useOfficeStore((s) => s.weatherEffects)
+  const lightingEnabled = useOfficeStore((s) => s.lightingEnabled)
   const weather = moodToWeather(mood)
   // #45: WallWindow's reducedMotion prop ONLY governs the WeatherOverlay animation. Feed it the
   // OR of the accessibility pref and the user weather toggle so disabling either renders weather
@@ -1130,6 +1131,16 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
         </g>
       )}
 
+      {/* ═══ TIME-OF-DAY LIGHTING ═══ (AVO-111 — full-canvas color-grade tint. Painted HERE on
+          purpose: it washes the room/floor/furniture above, but sits BENEATH the agent + status
+          layer below, so a backdrop can never dim or recolor status rings, name labels, or speech
+          bubbles (status legibility is the #1 product law). Toggled off — or first-run under
+          prefers-reduced-motion / prefers-contrast — renders no rect = clear midday baseline. */}
+      {lightingEnabled && lightOverlay.opacity > 0 && (
+        <rect x="0" y="0" width="800" height="560"
+          fill={lightOverlay.fill} opacity={lightOverlay.opacity} pointerEvents="none" />
+      )}
+
       {/* ═══ OFFICE PET ═══ (#39 — ambient cat; signal-driven barometer. Painted behind agents so
           they naturally occlude it when overlapping. Renders nothing when toggled off.) */}
       <OfficePet />
@@ -1158,12 +1169,6 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* ═══ AGENT INSPECTOR (click-to-inspect popover) ═══ */}
       <AgentInspector />
-
-      {/* ═══ LIGHTING ═══ */}
-      {lightOverlay.opacity > 0 && (
-        <rect x="0" y="0" width="800" height="560"
-          fill={lightOverlay.fill} opacity={lightOverlay.opacity} pointerEvents="none" />
-      )}
 
       {/* ═══ NIGHT EFFECTS ═══ */}
       {hour >= 19 && (

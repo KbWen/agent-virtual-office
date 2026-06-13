@@ -337,6 +337,19 @@ export const useOfficeStore = create((set) => ({
   // decoration (the mood signal stays; the per-frame animation stops). prefers-reduced-motion
   // already forces static regardless of this toggle.
   weatherEffects: typeof window === 'undefined' ? true : (() => { try { return localStorage.getItem('office-weather') !== 'off' } catch { return true } })(),
+  // AVO-111: time-of-day color-grade tint on/off. Default ON (it's the want-to-open feel); first
+  // run defaults OFF under prefers-reduced-motion / prefers-contrast:more (the grade is ambient
+  // luminance modulation those users opt out of). Persisted via a dedicated localStorage key (same
+  // lightweight pattern as weatherEffects). OFF → PixelOffice renders NO tint rect, pinning the
+  // office to the clear midday baseline = maximum status legibility.
+  lightingEnabled: typeof window === 'undefined' ? true : (() => {
+    try {
+      const v = localStorage.getItem('avo.lighting.enabled')
+      if (v === null) return !(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+        || window.matchMedia?.('(prefers-contrast: more)')?.matches)
+      return v !== 'off'
+    } catch { return true }
+  })(),
   // #39: ambient office pet (signal-driven barometer). Default ON; persisted via a dedicated
   // localStorage key (same lightweight pattern as weatherEffects). OFF → no pet rendered (zero cost).
   officePet: typeof window === 'undefined' ? true : (() => { try { return localStorage.getItem('office-pet') !== 'off' } catch { return true } })(),
@@ -686,6 +699,13 @@ export const useOfficeStore = create((set) => ({
     const next = !s.weatherEffects
     try { if (typeof window !== 'undefined') localStorage.setItem('office-weather', next ? 'on' : 'off') } catch {}
     return { weatherEffects: next }
+  }),
+  // AVO-111: flip the time-of-day lighting preference and persist it ('off' stored explicitly so a
+  // default-absent key reads ON). OFF pins the office to the clear midday baseline (max legibility).
+  toggleLighting: () => set((s) => {
+    const next = !s.lightingEnabled
+    try { if (typeof window !== 'undefined') localStorage.setItem('avo.lighting.enabled', next ? 'on' : 'off') } catch {}
+    return { lightingEnabled: next }
   }),
   // #39: flip the office-pet preference and persist it ('off' stored explicitly so default reads ON).
   toggleOfficePet: () => set((s) => {

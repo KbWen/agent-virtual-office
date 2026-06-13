@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getLightingOverlay } from './lighting'
+import { getLightingOverlay, MAX_OPACITY } from './lighting'
 
 const RGB = /^rgb\((\d{1,3}), (\d{1,3}), (\d{1,3})\)$/
 
@@ -26,12 +26,21 @@ describe('getLightingOverlay — time-of-day color grade', () => {
     }
   })
 
-  it('is deep night at the day boundaries (0, 23)', () => {
-    expect(getLightingOverlay(0).opacity).toBeCloseTo(0.45, 3)
-    expect(getLightingOverlay(23).opacity).toBeCloseTo(0.45, 3)
-    // and dark — low channel sum
+  it('is deep night at the day boundaries (0, 23) — capped, desaturated indigo (not near-black)', () => {
+    expect(getLightingOverlay(0).opacity).toBeCloseTo(MAX_OPACITY, 3)
+    expect(getLightingOverlay(23).opacity).toBeCloseTo(MAX_OPACITY, 3)
+    // Blue-dominant indigo, lifted off near-black so sprites/labels keep luminance.
     const [r, g, b] = parseRgb(getLightingOverlay(0).fill)
-    expect(r + g + b).toBeLessThan(60)
+    expect(b).toBeGreaterThan(r)
+    expect(b).toBeGreaterThan(g)
+    expect(r + g + b).toBeGreaterThan(30) // not crushed to black
+    expect(r + g + b).toBeLessThan(110)   // still clearly night
+  })
+
+  it('never exceeds the status-legibility opacity ceiling (0.38) at any hour', () => {
+    for (let h = 0; h < 24; h++) {
+      expect(getLightingOverlay(h).opacity).toBeLessThanOrEqual(MAX_OPACITY + 1e-9)
+    }
   })
 
   it('transitions smoothly — no adjacent-hour opacity jump exceeds 0.16', () => {
@@ -54,8 +63,8 @@ describe('getLightingOverlay — time-of-day color grade', () => {
   })
 
   it('falls back to deep night for non-finite input and wraps out-of-range hours', () => {
-    expect(getLightingOverlay(undefined).opacity).toBeCloseTo(0.45, 3)
-    expect(getLightingOverlay(NaN).opacity).toBeCloseTo(0.45, 3)
+    expect(getLightingOverlay(undefined).opacity).toBeCloseTo(MAX_OPACITY, 3)
+    expect(getLightingOverlay(NaN).opacity).toBeCloseTo(MAX_OPACITY, 3)
     // 24 wraps to 0
     expect(getLightingOverlay(24)).toEqual(getLightingOverlay(0))
   })
