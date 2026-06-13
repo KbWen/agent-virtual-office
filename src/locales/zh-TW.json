@@ -331,7 +331,9 @@
     "off": "關",
     "blocked": "已封鎖",
     "enable": "啟用",
-    "skin": { "cat": "貓", "vacuum": "掃地機器人", "dog": "狗", "rabbit": "兔子", "bird": "鳥", "hamster": "倉鼠" }
+    "theme": "主題",
+    "skin": { "cat": "貓", "vacuum": "掃地機器人", "dog": "狗", "rabbit": "兔子", "bird": "鳥", "hamster": "倉鼠" },
+    "themeNames": { "default": "預設", "winter": "冬季", "autumn": "秋季" }
   },
   "time": {
     "now": "剛剛",

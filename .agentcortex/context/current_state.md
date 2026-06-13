@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-13T08:00:00Z
-- **Update Sequence**: 87
+- **Last Updated**: 2026-06-13T08:30:00Z
+- **Update Sequence**: 88
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -75,6 +75,7 @@
   - [real-ai-behavior] docs/specs/skill-activation-badge.md [Shipped]  *(AVO-104 / #30 — transient skill bubble on SubagentStart via existing bubble cap (working-tier); panel Option B, honest no-over-head-element)*
   - [game-feel] docs/specs/event-juice-pass.md [Shipped]  *(AVO-136 / #117 — rare-event juice: deploy confetti + eureka sparkle + desk-slam local shake; pure juiceForEvent resolver, reduced-motion-safe, never occludes status)*
   - [multi-agent] docs/specs/review-gate-waiting.md [Shipped]  *(AVO-107 / #112 — honest reframe: gate-desk "waiting" in-tray driven by awaiting-approval only; no queue/type fabrication; complements AVO-105 arrows; panel-decided)*
+  - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
@@ -635,3 +636,10 @@
 - Spec: docs/specs/review-gate-waiting.md (status: shipped; §4.4 DSoT + panel). Commits ecfa319 (impl) + spec. Built on main AFTER #116/#30/#117 merged → conflict-free.
 - SSoT written directly (not guard) to avoid the stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions`; incremental overlay covered by existing `ui-rendering` L1 — skipped with justification.
 - Tests: Pass (5 new reviewGate unit tests; suite 1968; build clean; render-smoke PASS 4 viewports / 0 errors; live — a blocked gate agent idle-gap-flipped to awaiting-approval after 90s and the tray rendered with aria-label "1 waiting on you", 0 console errors).
+
+### Ship-feat-avo-123-theme-selector-2026-06-13 (#41 — office theme selector: lightweight overlay-grade)
+- Feature shipped: AVO-123. Office theme/skin selector as a LIGHTWEIGHT global tint grade — one full-office rect rendered BENEATH the agent/status layer (the AVO-111 lighting mechanism), NOT a 150-fill re-color. Opt-in ⚙ swatch radiogroup, persisted (`avo.theme`). Ships Default + Winter + Autumn (light tints).
+- A 3-lens game panel (cozy art-director · legibility skeptic · office-sim) chose the overlay-grade approach; a per-theme × per-status WCAG **contrast guard** (unit test) then DROVE the theme set: DROPPED Dark (a genuinely-dark tint pushes working-amber→1.36 / idle-gray below the guard; one faint enough to pass ≤0.08 doesn't read as dark; night lighting already gives an honest dark mood), and deferred Retro (needs per-sprite remap) + Cyberpunk (saturation endangers ring contrast). Guards: opacity cap 0.20 + summed (theme+lighting) cap 0.45 (lighting wins) + the build-failing contrast test. Status sits above the tint → never recolored.
+- Spec: docs/specs/office-theme-selector.md (status: shipped; §4.4 DSoT + panel). Commit a38adcb. Built on main AFTER #116/#30/#117/#112 merged → conflict-free.
+- SSoT written directly (not guard) to avoid the stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions`; incremental overlay covered by existing `ui-rendering` L1 — skipped with justification.
+- Tests: Pass (7 new theme unit tests incl. the contrast guard; suite 1975; build clean; render-smoke PASS 4 viewports / 0 errors; live — Winter swatch applied an `rgb(150,180,210)@0.14` tint beneath the status layer + persisted to localStorage, 0 console errors).
