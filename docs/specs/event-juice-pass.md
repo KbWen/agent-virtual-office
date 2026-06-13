@@ -1,6 +1,6 @@
 ---
 title: AVO-136 Event Juice Pass (rare meaningful moments)
-status: draft
+status: shipped
 created: 2026-06-13
 signal_tier: none
 backlog: AVO-136

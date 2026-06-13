@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-13T07:00:00Z
-- **Update Sequence**: 85
+- **Last Updated**: 2026-06-13T07:30:00Z
+- **Update Sequence**: 86
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -73,6 +73,7 @@
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
   - [vibe-rebalance] docs/specs/control-bar-reduction.md [Shipped]  *(AVO-130 / #116 — 4 health pills→1 expandable health dot; lang/run/view/help/platform demoted into ⚙ menu / info popover)*
   - [real-ai-behavior] docs/specs/skill-activation-badge.md [Shipped]  *(AVO-104 / #30 — transient skill bubble on SubagentStart via existing bubble cap (working-tier); panel Option B, honest no-over-head-element)*
+  - [game-feel] docs/specs/event-juice-pass.md [Shipped]  *(AVO-136 / #117 — rare-event juice: deploy confetti + eureka sparkle + desk-slam local shake; pure juiceForEvent resolver, reduced-motion-safe, never occludes status)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
@@ -619,3 +620,10 @@
 - **Branch note**: this branch was rebased `--onto main` to drop two AVO-130/#116 commits it had inadvertently inherited (cut from the #116 branch) — it is now independent. #116 (PR #142) and this PR both touch SSoT seq + Ship History + backlog; whichever merges second must rebase (trivial: distinct rows/sections, seq line + INDEX chain re-stitch).
 - SSoT written directly (not guard) to avoid the known stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions` block; incremental client bubble feature covered by existing `hook-integration`/`ui-rendering` L1 — consolidation skipped with justification.
 - Tests: Pass (13 new incl. store→bubble + drift-guard skill survival; suite 1952; build 462.08 kB; render-smoke PASS).
+
+### Ship-feat-avo-136-event-juice-2026-06-13 (#117 — event juice pass: rare meaningful moments)
+- Feature shipped: AVO-136. Scoped game-feel juice over EXISTING rare events — deploy-success → one-shot capped ✦ office-confetti burst, eureka → small ✦ sparkle ring near the whiteboard, desk-slam → brief LOCAL jitter on the affected agent only (SVG `<animateTransform additive="sum">` so it composes with the sprite's translate/scale; a CSS transform would override positioning). Review/boss reaction beats already covered by existing officeLife handler expression flips.
+- Pure `juiceForEvent` / `shouldShakeDesk` resolver (`src/systems/eventJuice.js`, unit-tested): returns null under reduced-motion (motion fully disabled — event still conveyed by bubbles/behaviors) and for any non-juiced event (rare-only, no idle loop). EventJuice overlay is pointer-events-none, particles keyed by event id (replay once per event, anti-nag), transient <1.2s — never hides status. Confetti/sparkle keyframes bundled in index.css (CSP-safe). No new events, no store flag.
+- Spec: docs/specs/event-juice-pass.md (status: shipped; §4.4 DSoT). Commits 2dfd670 (spec) + 1ce15b0 (impl). Built on main AFTER #116/#30 merged (no SSoT conflict).
+- SSoT written directly (not guard) to avoid the known stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions`; incremental cosmetic overlay covered by existing `ui-rendering` L1 — skipped with justification.
+- Tests: Pass (6 new eventJuice unit tests; suite 1963; build clean; render-smoke PASS 4 viewports / 0 errors; live — deploy GO click rendered 14 office-confetti particles, 0 errors).
