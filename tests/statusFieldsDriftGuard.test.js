@@ -87,6 +87,7 @@ const SYNTHETIC = {
   hint:       'synthetic-hint-value',
   reasonCode: 'test-run-failed',   // must be a valid BLOCKED_REASONS member
   activeFile:  '/synthetic/active/file.js',
+  skill:      'review',            // AVO-104: raw skill name
 }
 
 // ── (c) SITE 9 drift guard: the .mjs bare-Node runtime copy ─────────────────

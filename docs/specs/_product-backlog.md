@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-06-10
+last_updated: 2026-06-13
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -25,14 +25,14 @@ last_updated: 2026-06-10
 | AVO-101 | Plan-Mode visualization | product | real-ai-behavior | P0 | — | feature | Done | — |
 | AVO-102 | Extended-thinking aura | product | real-ai-behavior | P1 | — | feature | Done | — |
 | AVO-103 | Tool inventory label | product | real-ai-behavior | P1 | — | feature | Done | — |
-| AVO-104 | Skill activation badge | product | real-ai-behavior | P2 | — | feature | Pending | — |
+| AVO-104 | Skill activation badge | product | real-ai-behavior | P2 | docs/specs/skill-activation-badge.md | feature | Shipped | #30; transient skill bubble (panel Option B), reuses bubble cap, working-tier, honest |
 | AVO-105 | Handoff arrows | product | multi-agent | P0 | — | feature | Done | — |
 | AVO-106 | Pair-programming huddle | product | multi-agent | P1 | docs/specs/pair-programming-huddle.md | feature | Done | co-editing pair overlay (desk-to-desk link, edit-only); redesigned from a huddle per expert panel (PR #80) |
-| AVO-107 | Review-gate queue | product | multi-agent | P1 | — | feature | Pending | — |
+| AVO-107 | Review-gate queue | product | multi-agent | P1 | docs/specs/review-gate-waiting.md | feature | Shipped | #112; honest reframe → gate-desk "waiting" in-tray (awaiting-approval only, no queue/type fabrication); panel-decided |
 | AVO-108 | Token & cost meter | product | info-density | P0 | — | feature | Done | — |
 | AVO-109 | Recent-files heatmap | product | info-density | P2 | — | feature | Pending | — |
 | AVO-110 | Blocked-reason tags | product | info-density | P1 | docs/specs/blocked-reason-tags.md | feature | Done | unblocks AVO-117; Phase-2 (permission/auth/rate-limit) deferred |
-| AVO-111 | Time-of-day lighting | product | game-feel | P2 | — | feature | Pending | — |
+| AVO-111 | Time-of-day lighting | product | game-feel | P2 | — | quick-win | Done | chill-fun wave; smooth 24h color-grade in `src/systems/lighting.js` (replaced 9 discrete steps); desk-lamp halos split to AVO-125 |
 | AVO-112 | Eureka cascade | product | game-feel | P3 | — | feature | Pending | — |
 | AVO-113 | OpenTelemetry GenAI export | infra | observability | P1 | — | feature | Pending | — |
 | AVO-114 | Event-stream replay scrubber | product | observability | P2 | — | feature | Pending | — |
@@ -43,21 +43,21 @@ last_updated: 2026-06-10
 | AVO-119 | Language / file-type breakdown | product | info-density | P2 | — | feature | Pending | — |
 | AVO-120 | Daily MVP / productivity leaderboard | product | brand | P2 | — | feature | Pending | — |
 | AVO-121 | Office pet (ambient companion) | product | game-feel | P3 | — | feature | Done | reframed as signal-driven barometer; docs/specs/office-pet-barometer.md (PR #62) |
-| AVO-122 | Ambient soundscape (toggle) | product | game-feel | P2 | — | feature | Pending | — |
-| AVO-123 | Office theme / skin selector | product | brand | P2 | — | feature | Pending | — |
+| AVO-122 | Ambient soundscape (toggle) | product | game-feel | P2 | docs/specs/ambient-soundscape.md | feature | Done | chill-fun wave; 100% procedural Web Audio (0 KB), off-by-default; clatter∝teamPulse + double-gated rain; coffee gurgle dropped (honesty — tea-break isn't a real signal) |
+| AVO-123 | Office theme / skin selector | product | brand | P2 | docs/specs/office-theme-selector.md | feature | Shipped | #41; lightweight overlay-grade (Default/Winter/Autumn light tints); contrast-guarded; Dark/Retro/Cyberpunk deferred (unsafe/need more than a tint) |
 | AVO-124 | Agent appearance customization | product | brand | P3 | — | feature | Pending | — |
 | AVO-125 | Cozy micro-interactions | product | game-feel | P3 | — | feature | Pending | AVO-111 |
 | AVO-126 | Bubble register unification (banish raw shell strings) | review-finding | vibe-rebalance | P0 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | — |
 | AVO-127 | Token meter off the default view | review-finding | vibe-rebalance | P0 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | AVO-108 |
 | AVO-128 | Name pills → reveal-on-active | review-finding | vibe-rebalance | P0 | docs/specs/ux-vibe-rebalance.md | feature | Done | — |
 | AVO-129 | Done/blocked KPI off the persistent bar | review-finding | vibe-rebalance | P1 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | — |
-| AVO-130 | Control-bar reduction (gear menu + single health dot) | review-finding | vibe-rebalance | P1 | — | feature | Pending | — |
+| AVO-130 | Control-bar reduction (gear menu + single health dot) | review-finding | vibe-rebalance | P1 | docs/specs/control-bar-reduction.md | feature | Shipped | #116; 4 health pills→1 dot, lang/run/view/help demoted into ⚙ |
 | AVO-131 | TaskLabel pill → inspector-only | review-finding | vibe-rebalance | P1 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | AVO-103 |
 | AVO-132 | ThinkingAura → fold into glow ring | review-finding | vibe-rebalance | P1 | docs/specs/ux-vibe-rebalance.md | quick-win | Done | AVO-102 |
 | AVO-133 | Blocked reads from posture (physical legibility) | product | vibe-rebalance | P1 | — | quick-win | Done | AVO-110 |
 | AVO-134 | BehaviorIndicator micro-telegraphs | product | game-feel | P2 | — | quick-win | Done | — |
 | AVO-135 | Status-ring distance encoding (breathe/flash) | product | game-feel | P2 | — | quick-win | Done | — |
-| AVO-136 | Event juice pass (reaction beats / shake / confetti) | product | game-feel | P2 | — | feature | Pending | AVO-112 |
+| AVO-136 | Event juice pass (reaction beats / shake / confetti) | product | game-feel | P2 | docs/specs/event-juice-pass.md | feature | Shipped | #117; deploy confetti + eureka sparkle + desk-slam local shake; rare/capped/reduced-motion-safe; AVO-112 cascade can layer on the particle idiom |
 | AVO-137 | Density-layer foundation (glance-L1 default + zen far-view) | product | vibe-rebalance | P1 | — | architecture-change | Pending | AVO-126, AVO-127, AVO-128 |
 | AVO-138 | Subagent helper huddle (desk-side capped figures + heavy-load cue) | product | game-feel | P1 | docs/specs/subagent-helper-huddle.md | feature | Done | AVO-106 |
 | AVO-139 | Responsive office width-fill + readable labels (no whitespace/crop) | product | vibe-rebalance | P0 | docs/specs/responsive-office-roster.md | feature | Done | — |
@@ -78,6 +78,15 @@ last_updated: 2026-06-10
 | AVO-153 | Hook-runtime payload fixture corpus: record REAL Claude Code hook events as fixtures + contract tests pinning the shapes the hook relies on (is_error era vs PostToolUseFailure era, StopFailure matcher) | infra | observability | P1 | docs/specs/hook-runtime-contract.md | feature | Done | stability-wave W4; shipped 2026-06-10; 14 live fixtures + 143 contract tests |
 | AVO-154 | Reconcile hook result-field reads with runtime truth (W4 found: runtime sends `tool_response`, hook reads `tool_result` → toolResult always empty on this runtime; is_error shape on ERROR events not yet captured) | chore | tech-debt | P1 | — | quick-win | Done | shipped 2026-06-11; error events INDUCED+captured (no is_error exists on this runtime → derivation honestly inert); toolResultText dual-read + PowerShell→ops mapping + 26-fixture corpus |
 | AVO-155 | Add same-pick guarantee test for socialTargetOverride | review-finding | social-chat | P2 | — | quick-win | Pending | feat/social-chat-feel review 2026-06-10: `getTargetForBehavior` 4th-param override is untested — flip override to ignore-mode causes 0 test failures; add a test passing a pre-seeded socialTargetOverride and asserting the walk destination orbits that specific peer |
+| #120 | Prepublish build-before-test contract | chore | tech-debt | P0 | docs/reviews/2026-06-11-tech-debt-audit.md | quick-win | Done | shipped 2026-06-11 in `0a1aa93`; `prepublishOnly` now runs build before test |
+| #121 | Monolith extraction map | chore | tech-debt | P1 | docs/architecture/monolith-extraction-map.md | quick-win | Done | doc-only guard for future seam extraction; no runtime refactor |
+| #122 | normalizePost.mjs runtime mirror | chore | tech-debt | P2 | docs/reviews/2026-06-11-tech-debt-audit.md | feature | Pending | defer until transport fields change again; current drift guards are green |
+| #123 | Bridge dynamic rendering hardening | chore | tech-debt | P0 | docs/reviews/2026-06-11-tech-debt-audit.md | quick-win | Done | shipped 2026-06-11 in `0a1aa93`; external `bridge-ui.js`, no inline handlers or dynamic `innerHTML` |
+| #124 | Silent catch observability classification | chore | tech-debt | P1 | docs/architecture/silent-catch-policy.md | quick-win | Done | classification policy + current inventory; hook crash-proof paths preserved |
+| #125 | Dependency maintenance wave | chore | tech-debt | P2 | docs/reviews/2026-06-11-tech-debt-audit.md | quick-win | Done | vite 6→8 + plugin-react 6 + vitest 4 (brings esbuild 0.28.1) clears the high-sev esbuild "NPM_CONFIG_REGISTRY RCE" audit advisory that was failing CI on every PR; esbuild-override-on-vite-6 was tried and broke the build (121 transform errors), so the major bump is the only fix |
+| #126 | Semgrep baseline and fail-on-new serious findings | infra | tech-debt | P1 | docs/reviews/2026-06-11-tech-debt-audit.md | feature | Pending | security hardening lane; requires baseline triage |
+| #127 | Architecture overview refresh | chore | tech-debt | P1 | docs/ARCHITECTURE.md | quick-win | Done | current runtime spine refreshed 2026-06-11 |
+| #128 | Resolve audit routing_actions | chore | tech-debt | P0 | docs/reviews/2026-06-11-tech-debt-audit.md | quick-win | Done | audit findings routed into backlog and architecture decision logs |
 
 ## Status Key
 
@@ -111,7 +120,7 @@ last_updated: 2026-06-10
 - **AVO-110 Blocked-reason tags** — Classifier extension → `blocked.reason` enum, colored sub-icon on status bubble (auth-error vs test-fail vs waiting-on-human). Extend `classifyStatus` with sub-reason; OpenTelemetry GenAI error taxonomy as reference.
 
 ### 🎨 Game Feel / Ambient
-- **AVO-111 Time-of-day lighting** — Global color-grade layer shifting with wall-clock time (warm dawn / neutral noon / blue evening / dim night with desk-lamp halos). Existing `getLightingOverlay` (PixelOffice.jsx) handles night; extend to full day cycle.
+- **AVO-111 Time-of-day lighting** — Global color-grade layer shifting with wall-clock time (warm dawn / neutral noon / blue evening / dim night with desk-lamp halos). Existing `getLightingOverlay` (PixelOffice.jsx) handles night; extend to full day cycle. *Shipped (chill-fun wave): extracted to pure module `src/systems/lighting.js` — smooth keyframe-interpolated 24h grade (deep-night→purple-dawn→amber-morning→clear-noon→golden-hour→sunset→blue-dusk) replacing the 9 hard steps; hour-granular (keeps PixelOffice's hour-only subscription). Then a 5-lens design panel (color/calm-tech/game-feel/a11y/clutter) tuned it: night capped at 0.38 desaturated indigo + sunset desaturated to terracotta (off the orange status-ring hue) + dawn rose-blush & warm shoulders; **z-order fix** — tint moved to paint BENEATH the agent/status layer so it never dims rings/labels/bubbles (the #1 product law); **on/off toggle** in the ⚙ settings sheet (default ON; first-run OFF under prefers-reduced-motion/contrast; localStorage `avo.lighting.enabled`; off → clear midday baseline). 7 unit tests incl. the 0.38 legibility ceiling; visual proof at 07/13/18/21 + toggle-off (`scripts/lighting-shot.mjs`, `lighting-toggle-shot.mjs`). Desk-lamp halos at night carried to AVO-125.*
 - **AVO-112 Eureka cascade** — 2+ eurekas within 10s → confetti cascade across the whole office. Hook into existing eureka handler; tiny SVG particle system.
 
 ### 📈 Performance / Observability

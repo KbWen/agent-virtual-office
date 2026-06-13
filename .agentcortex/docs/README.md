@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Agentic%20OS-v1.5.1-blueviolet?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMThjLTQuNDEgMC04LTMuNTktOC04czMuNTktOCA4LTggOCAzLjU5IDggOC0zLjU5IDgtOCA4eiIvPjwvc3ZnPg==" alt="Agentic OS v1.5.1"/>
+  <img src="https://img.shields.io/badge/Agentic%20OS-v1.5.2-blueviolet?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgMThjLTQuNDEgMC04LTMuNTktOC04czMuNTktOCA4LTggOCAzLjU5IDggOC0zLjU5IDgtOCA4eiIvPjwvc3ZnPg==" alt="Agentic OS v1.5.2"/>
 </p>
 
 <h1 align="center">Agentic OS</h1>
@@ -92,13 +92,13 @@ flowchart LR
 
 ### Engineering Guardrails
 
-A constitution for AI behavior — loaded automatically, enforced at every phase:
+A constitution for AI behavior — safety invariants always loaded (`AGENTS.md`); deeper rules load by task tier and phase:
 
 - **No Evidence = No Completion** — narrative claims are not proof
 - **Scope Discipline** — unauthorized refactoring is strictly prohibited
-- **Destructive Command Blocking** — `rm -rf`, `git reset --hard`, force pushes require pre-approved rollback plans
+- **Destructive Command Gate** — `rm -rf`, `git reset --hard`, force pushes & co. are deny-by-default: blast radius + rollback plan covering untracked state + user confirmation first (canonical rule and full command list: `AGENTS.md §Core Directives`)
 - **OWASP Top 10 Auto-Scan** — security checks run during `/implement` and `/review`
-- **Confidence Gate** — AI must declare confidence level; low confidence triggers escalation
+- **Confidence Gate** — AI must declare confidence at plan/implement; low confidence triggers escalation
 
 ### 14 Professional Skills
 
@@ -460,6 +460,28 @@ Start with the document that matches what you are trying to do:
 | [Nonlinear Scenarios](.agentcortex/docs/NONLINEAR_SCENARIOS.md) | Recovery from interrupted sessions |
 | [Lifecycle Benchmark](https://github.com/KbWen/agentic-os/blob/main/docs/LIFECYCLE_BENCHMARK.md) | 6 real scenarios with token costs |
 | [生命週期基準測試](https://github.com/KbWen/agentic-os/blob/main/docs/LIFECYCLE_BENCHMARK_zh-TW.md) | Token 消耗量測（繁體中文） |
+
+---
+
+## FAQ
+
+**What is Agentic OS?**
+Agentic OS is an open-source governance framework for AI coding agents. It gives agents like Claude Code, OpenAI Codex, Cursor, GitHub Copilot, and Google Antigravity a repeatable workflow — plan, build, review, test, ship — and enforces quality gates so they can't skip steps or call a task "done" without verifiable evidence.
+
+**How is it different from Cursor Rules or a plain `AGENTS.md` file?**
+A rules file tells the agent how to behave. Agentic OS adds the workflow and the gates that hold it to that behavior: phase sequencing, evidence requirements, scope discipline, and a single source of truth that remembers decisions across sessions. It's the difference between a prompt the agent might follow and a workflow it has to.
+
+**Which AI coding agents does it support?**
+Any agent that can read Markdown instructions. It ships native entry points for Claude Code (`CLAUDE.md`) and Codex / Antigravity (`AGENTS.md`), and works with Cursor, GitHub Copilot, and other LLM agents through the same model-agnostic workflow files.
+
+**Do I need to know a specific programming language?**
+No. The governance layer is plain Markdown. Python is optional — it only unlocks the deeper validation checks. Everything deploys and runs without it.
+
+**Does it lock me into one AI vendor?**
+No. The workflows are model-agnostic Markdown, so the same governance works whether you switch between Claude, Codex, Gemini, or anything else.
+
+**Is it free?**
+Yes — MIT licensed. Use it, fork it, ship it.
 
 ---
 

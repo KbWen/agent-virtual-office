@@ -11,9 +11,29 @@ ACX_SOURCE="${ACX_SOURCE:-}"
 ACX_CACHE="$PROJECT_ROOT/.agentcortex-src"
 MANIFEST="$PROJECT_ROOT/.agentcortex-manifest"
 
+# Peek at --source <url> (not consumed — deploy.sh parses it too). Without this,
+# a `deploy_brain.ps1 -Source <url>` override would be invisible to the cache
+# origin-verification below. Explicit ACX_SOURCE env still wins.
+if [[ -z "$ACX_SOURCE" ]]; then
+    _prev=""
+    for _arg in "$@"; do
+        if [[ "$_prev" == "--source" ]]; then
+            ACX_SOURCE="$_arg"
+            break
+        fi
+        case "$_arg" in
+            --source=*)
+                ACX_SOURCE="${_arg#--source=}"
+                break
+                ;;
+        esac
+        _prev="$_arg"
+    done
+fi
+
 # Try to read source_repo from manifest
 if [[ -z "$ACX_SOURCE" && -f "$MANIFEST" ]]; then
-    ACX_SOURCE="$(grep '^source_repo:' "$MANIFEST" | awk '{print $2}')" || true
+    ACX_SOURCE="$(sed -n 's/^source_repo:[[:space:]]*//p' "$MANIFEST" | head -n 1)" || true
 fi
 
 # NVM-style dispatch:
@@ -42,18 +62,50 @@ if ! command -v git >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ -d "$ACX_CACHE/.git" ]]; then
-    echo "Updating cached Agentic OS source..."
-    if ! git -C "$ACX_CACHE" pull 2>&1; then
+# Trailing slash / .git suffix differences are not real mismatches.
+normalize_git_url() {
+    local url="${1%/}"
+    printf '%s' "${url%.git}"
+}
+
+# rm -rf can fail partway (e.g. Windows "Device or resource busy"), leaving a
+# half-deleted dir — possibly without .git, so later git commands would silently
+# fall through to the PARENT repo. Never proceed past a failed removal.
+remove_cache_or_die() {
+    rm -rf "$ACX_CACHE" 2>/dev/null || true
+    if [[ -e "$ACX_CACHE" ]]; then
         echo "" >&2
-        echo "Failed to update cached source. Removing stale cache and re-cloning..." >&2
-        rm -rf "$ACX_CACHE"
+        echo "Failed to fully remove cache at $ACX_CACHE (file in use?)." >&2
+        echo "Remove it manually, then re-run this script. Aborting to avoid" >&2
+        echo "running git against a half-deleted directory." >&2
+        exit 1
+    fi
+}
+
+if [[ -d "$ACX_CACHE/.git" ]]; then
+    # A cache cloned from a different repo (e.g. pre-migration source) must
+    # never be pulled or deployed from — verify origin matches the resolved source.
+    CACHE_ORIGIN="$(git -C "$ACX_CACHE" remote get-url origin 2>/dev/null || true)"
+    if [[ "$(normalize_git_url "$CACHE_ORIGIN")" != "$(normalize_git_url "$ACX_SOURCE")" ]]; then
+        echo "Cached source origin does not match the configured source:" >&2
+        echo "  cache origin: ${CACHE_ORIGIN:-<none>}" >&2
+        echo "  configured:   $ACX_SOURCE" >&2
+        echo "Re-cloning from the configured source..." >&2
+        remove_cache_or_die
         git clone --depth 1 "$ACX_SOURCE" "$ACX_CACHE"
+    else
+        echo "Updating cached Agentic OS source..."
+        if ! git -C "$ACX_CACHE" pull 2>&1; then
+            echo "" >&2
+            echo "Failed to update cached source. Removing stale cache and re-cloning..." >&2
+            remove_cache_or_die
+            git clone --depth 1 "$ACX_SOURCE" "$ACX_CACHE"
+        fi
     fi
 else
     echo "Cloning Agentic OS from $ACX_SOURCE..."
     # Clean up any partial clone left by a prior interrupted attempt
-    [[ -d "$ACX_CACHE" ]] && rm -rf "$ACX_CACHE"
+    [[ -d "$ACX_CACHE" ]] && remove_cache_or_die
     git clone --depth 1 "$ACX_SOURCE" "$ACX_CACHE"
 fi
 

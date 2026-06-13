@@ -61,3 +61,12 @@ source_sha: 47724e9
 - [DECISION] State lives in the store, in-memory, not persisted (reload resets the window) — the reasonCode stream itself is non-persisted. Pure helpers in recurringFailure.js; store is the single recording point.
 - [CONSTRAINT] Recurring sign is EPHEMERAL: only while currently blocked AND currently recurring; threshold >=3 within a 10-min window. A false-positive alarm is worse than silence.
 - [TRADEOFF] reasonCode is coarse, so recurring means "this KIND of step keeps failing" (may bundle distinct root causes). Accepted: still a true actionable signal; honest wording prevents over-claiming. Finer signatures wait for a structured-error hook field (shared Phase-2 boundary with AVO-110).
+
+### [office-runtime][2026-06-11][main]
+source_review: docs/reviews/2026-06-11-tech-debt-audit.md
+cross_ref: docs/architecture/monolith-extraction-map.md, docs/architecture/silent-catch-policy.md
+
+- [DECISION] High-line-count runtime/rendering files are NOT refactor targets by themselves. Use `docs/architecture/monolith-extraction-map.md` before extracting any seam, and start with pure helpers plus existing tests.
+- [CONSTRAINT] First extraction PR for any seam must be behavior-preserving and reversible as one commit; no visual/layout behavior changes are allowed in the extraction-only step.
+- [CONSTRAINT] Silent catches must be classified as `expected-no-op`, `best-effort-dev-observable`, or `production-observable`. New bare `catch {}` additions must include a nearby comment naming the class or a test proving harmless degradation.
+- [DECISION] The user-reported full-office crop regression exposed a render-smoke blind spot: descendant count is not enough. `scripts/render-smoke.mjs` now checks a viewport matrix and visible top/bottom scene anchors.

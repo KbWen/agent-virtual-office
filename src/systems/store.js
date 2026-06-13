@@ -8,6 +8,7 @@ import { STATUS_COLORS } from './constants.js'
 import { classifyTask, familyToBehavior, decideBehavior } from './classify.js'
 import { FEED_ORIGINS } from './rosterModel.js'
 import { PET_TYPES, nextPetType } from './petState.js'
+import { isValidTheme, DEFAULT_THEME } from './theme.js'
 import { recordEpisode, isNewBlockedEpisode } from './recurringFailure.js'
 import { AGENT_CARRY_FIELDS } from '../utils/statusFields.js'
 
@@ -337,6 +338,31 @@ export const useOfficeStore = create((set) => ({
   // decoration (the mood signal stays; the per-frame animation stops). prefers-reduced-motion
   // already forces static regardless of this toggle.
   weatherEffects: typeof window === 'undefined' ? true : (() => { try { return localStorage.getItem('office-weather') !== 'off' } catch { return true } })(),
+  // AVO-111: time-of-day color-grade tint on/off. Default ON (it's the want-to-open feel); first
+  // run defaults OFF under prefers-reduced-motion / prefers-contrast:more (the grade is ambient
+  // luminance modulation those users opt out of). Persisted via a dedicated localStorage key (same
+  // lightweight pattern as weatherEffects). OFF → PixelOffice renders NO tint rect, pinning the
+  // office to the clear midday baseline = maximum status legibility.
+  lightingEnabled: typeof window === 'undefined' ? true : (() => {
+    try {
+      const v = localStorage.getItem('avo.lighting.enabled')
+      if (v === null) return !(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+        || window.matchMedia?.('(prefers-contrast: more)')?.matches)
+      return v !== 'off'
+    } catch { return true }
+  })(),
+  // AVO-122: ambient soundscape on/off. Default OFF (audio is the most intrusive output — opt-in
+  // only); forced OFF under prefers-reduced-motion regardless of a stale 'on'. Persisted via a
+  // dedicated localStorage key. The ambientSound.js engine subscribes to this flag and creates its
+  // AudioContext only inside the toggle-ON user gesture (autoplay-safe). Mirrors initSoundscapeEnabled.
+  soundscapeEnabled: typeof window === 'undefined' ? false : (() => {
+    try {
+      const v = localStorage.getItem('avo.sound.enabled')
+      if (v === null) return false
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return false
+      return v === 'on'
+    } catch { return false }
+  })(),
   // #39: ambient office pet (signal-driven barometer). Default ON; persisted via a dedicated
   // localStorage key (same lightweight pattern as weatherEffects). OFF → no pet rendered (zero cost).
   officePet: typeof window === 'undefined' ? true : (() => { try { return localStorage.getItem('office-pet') !== 'off' } catch { return true } })(),
@@ -344,6 +370,9 @@ export const useOfficeStore = create((set) => ({
   // the honest mode logic). Validated against PET_TYPES on read so a junk localStorage value can't
   // select a missing sprite.
   petType: typeof window === 'undefined' ? 'cat' : (() => { try { const v = localStorage.getItem('office-pet-type'); return PET_TYPES.includes(v) ? v : 'cat' } catch { return 'cat' } })(),
+  // AVO-123: office theme (lightweight overlay tint). Persisted via a dedicated localStorage key
+  // (same pattern as petType/lighting). Validated vs the theme registry; unknown → default.
+  theme: typeof window === 'undefined' ? DEFAULT_THEME : (() => { try { const v = localStorage.getItem('avo.theme'); return isValidTheme(v) ? v : DEFAULT_THEME } catch { return DEFAULT_THEME } })(),
   showWorkflow: false,
   // Diagnostic counter: how many times the AgentCharacter RAF watchdog had to restart a
   // stalled walk loop. A silent restart hides the underlying stall; surfacing a count lets
@@ -687,6 +716,21 @@ export const useOfficeStore = create((set) => ({
     try { if (typeof window !== 'undefined') localStorage.setItem('office-weather', next ? 'on' : 'off') } catch {}
     return { weatherEffects: next }
   }),
+  // AVO-111: flip the time-of-day lighting preference and persist it ('off' stored explicitly so a
+  // default-absent key reads ON). OFF pins the office to the clear midday baseline (max legibility).
+  toggleLighting: () => set((s) => {
+    const next = !s.lightingEnabled
+    try { if (typeof window !== 'undefined') localStorage.setItem('avo.lighting.enabled', next ? 'on' : 'off') } catch {}
+    return { lightingEnabled: next }
+  }),
+  // AVO-122: flip the ambient-soundscape preference and persist it ('on'/'off'; absent reads OFF).
+  // The flag flip runs inside the ControlPanel click handler, so ambientSound.js's store
+  // subscription fires synchronously within the user gesture → its AudioContext is autoplay-allowed.
+  toggleSoundscape: () => set((s) => {
+    const next = !s.soundscapeEnabled
+    try { if (typeof window !== 'undefined') localStorage.setItem('avo.sound.enabled', next ? 'on' : 'off') } catch {}
+    return { soundscapeEnabled: next }
+  }),
   // #39: flip the office-pet preference and persist it ('off' stored explicitly so default reads ON).
   toggleOfficePet: () => set((s) => {
     const next = !s.officePet
@@ -704,6 +748,12 @@ export const useOfficeStore = create((set) => ({
     if (!PET_TYPES.includes(type) || type === s.petType) return s
     try { if (typeof window !== 'undefined') localStorage.setItem('office-pet-type', type) } catch {}
     return { petType: type }
+  }),
+  // AVO-123: select office theme (settings popover radiogroup). Validated vs the theme registry; persisted.
+  setTheme: (id) => set((s) => {
+    if (!isValidTheme(id) || id === s.theme) return s
+    try { if (typeof window !== 'undefined') localStorage.setItem('avo.theme', id) } catch {}
+    return { theme: id }
   }),
   triggerWorkflow: () => set({ showWorkflow: true }),
   endWorkflow: () => set({ showWorkflow: false }),

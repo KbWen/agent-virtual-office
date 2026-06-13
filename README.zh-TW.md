@@ -8,7 +8,7 @@
 
 **一個讓你的 coding agent 活過來的迷你像素辦公室。**
 
-![Virtual Office Screenshot](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.png)
+![Agent Virtual Office — 像素風虛擬辦公室,即時視覺化 AI coding agent(Claude Code、Codex、Gemini CLI)的工作、卡關與出貨狀態](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.png)
 
 <sub><i>整間辦公室，session 進行中 —— 有人埋頭、有人卡關、有人剛出貨。全是即時的。</i></sub>
 
@@ -18,7 +18,7 @@ QA 吵那到底算不算 bug。把它接上你的 Claude Code / Codex / CI sessi
 
 它不是儀表板。對工作毫無幫助，但你就是會一整天開著它。
 
-[快速開始](#快速開始) · [他們在幹嘛](#他們在幹嘛) · [English](README.md)
+[快速開始](#快速開始) · [他們在幹嘛](#他們在幹嘛) · [常見問答](#常見問答) · [English](README.md)
 
 </div>
 
@@ -149,6 +149,38 @@ http://localhost:5174?lang=zh-TW     # 強制繁體中文
 只是天氣／移動的視覺裝飾會消失。完整說明在 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 </details>
+
+## 常見問答
+
+### Agent Virtual Office 是什麼?
+
+一個開源的像素風 AI coding agent 視覺化工具:把進行中的 Claude Code / Codex / Gemini CLI session
+變成一間迷你辦公室,每個 agent 都是一個會工作、會卡關、會出貨的小人 —— 全部即時、只由 session 的
+真實訊號驅動。React + 純 SVG,完全在你的機器上跑,零後端。
+
+### 怎麼把 Claude Code 的活動視覺化?
+
+跑一次 `npx github:KbWen/agent-virtual-office setup`。它會註冊 Claude Code hooks,之後每個工具呼叫、
+subagent、回合都會自動更新辦公室 —— 不用手動接線、不用 API key。
+
+### 支援 Codex、Gemini CLI 或 CI 嗎?
+
+支援。任何能發 HTTP POST 的工具都能驅動辦公室 —— Codex CLI / Codex App、Gemini CLI、GitHub Actions,
+或你自己的腳本。見[整合指南](docs/INTEGRATIONS.md)。
+
+### 它是儀表板或 token/成本追蹤器嗎?
+
+不是。它不畫 token、花費或生產力圖表。它是誠實的視覺化:只有真實訊號證明時才顯示狀態,絕不造假活動。
+它是桌上小玩具,不是指標系統。
+
+### 它會把我的程式碼或資料傳出去嗎?
+
+不會。沒有後端、沒有資料庫、沒有遙測、沒有外部服務。狀態更新只在你自己的機器上以 HTTP 傳遞 ——
+預設 localhost,LAN 曝露可用 `--no-host` 關閉。
+
+### 需要安裝什麼嗎?
+
+不用。`npx github:KbWen/agent-virtual-office` 直接從公開 GitHub repo 跑起來,唯一需求是 Node.js ≥ 22。
 
 ## 技術選型
 

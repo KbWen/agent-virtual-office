@@ -278,25 +278,31 @@ export const MAIN_ROUTE_NODES = [
 
 // ─── Path calculation ───────────────────────────────────────────────
 
-function lineHitsRect(ax, ay, bx, by, r) {
+export function lineHitsRect(ax, ay, bx, by, r) {
   const dx = bx - ax, dy = by - ay
   let tMin = 0, tMax = 1
   // Order the slab intersection bounds with a scalar temp instead of a destructuring
   // swap `[t1, t2] = [t2, t1]` — the latter allocates a 2-element array literal each
   // time the line runs backward through a slab. lineHitsRect is called per desk per
   // line-segment inside calculatePath's corridor routing.
+  // Near-axis branches test the segment's coordinate RANGE, not just the start point:
+  // a start-only check missed near-vertical segments drifting <0.1px across an edge
+  // plane (jittered Dijkstra nodes produced real 0.005–0.3px furniture grazes at ~0.3%
+  // of pairs — chip task_4be9264a). Range check is conservative: it never misses a real
+  // hit and may over-flag by ≤0.1px, which only makes a jitter candidate fall back to
+  // its exact node.
   if (Math.abs(dx) > 0.1) {
     let t1 = (r.x1 - ax) / dx, t2 = (r.x2 - ax) / dx
     if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp }
     tMin = Math.max(tMin, t1); tMax = Math.min(tMax, t2)
     if (tMin > tMax) return false
-  } else if (ax < r.x1 || ax > r.x2) return false
+  } else if (Math.max(ax, bx) < r.x1 || Math.min(ax, bx) > r.x2) return false
   if (Math.abs(dy) > 0.1) {
     let t1 = (r.y1 - ay) / dy, t2 = (r.y2 - ay) / dy
     if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp }
     tMin = Math.max(tMin, t1); tMax = Math.min(tMax, t2)
     if (tMin > tMax) return false
-  } else if (ay < r.y1 || ay > r.y2) return false
+  } else if (Math.max(ay, by) < r.y1 || Math.min(ay, by) > r.y2) return false
   return true
 }
 
@@ -333,8 +339,37 @@ function findBestCorridor(from, to) {
   return { x: best.x, y: best.y }
 }
 
+// Wedge-escape candidates (issue #27): an endpoint parked in the 1–7px band off a
+// furniture rect (clampToFloor's 6px standoff lives in this band) can be unreachable
+// from the FIXED node set — desk "canyons" (e.g. the 50px pm/arch gap) open along one
+// axis only, so every fixed-node segment crosses a desk, findSafePolyline returns null,
+// and the caller's last-resort relay emits a crossing segment (fuzz suite never saw it:
+// its clean points keep an 8px margin by design). For each rect hugging the endpoint,
+// project just past each of the rect's four edges through the endpoint's own coordinate
+// — a surviving candidate is, by construction, connectable to the endpoint along the
+// open axis. Pure ADDITION to the Dijkstra node set: every edge still passes the same
+// validation, so a found path is never worse — only previously-null routes gain an exit.
+const WEDGE_NEAR_PX = 12   // covers the sub-MARGIN band incl. OBSTACLE_PUSH_PX + jitter slack
+const WEDGE_ESCAPE_PX = 10 // lands the candidate just outside the wedge band
+function wedgeEscapeNodes(p, obstacles) {
+  const out = []
+  for (const r of obstacles) {
+    if (p.x < r.x1 - WEDGE_NEAR_PX || p.x > r.x2 + WEDGE_NEAR_PX) continue
+    if (p.y < r.y1 - WEDGE_NEAR_PX || p.y > r.y2 + WEDGE_NEAR_PX) continue
+    for (const c of [
+      { x: p.x, y: r.y1 - WEDGE_ESCAPE_PX },
+      { x: p.x, y: r.y2 + WEDGE_ESCAPE_PX },
+      { x: r.x1 - WEDGE_ESCAPE_PX, y: p.y },
+      { x: r.x2 + WEDGE_ESCAPE_PX, y: p.y },
+    ]) {
+      if (isOnFloor(c.x, c.y) && !isOnObstacle(c.x, c.y)) out.push(c)
+    }
+  }
+  return out
+}
+
 function findSafePolyline(from, to, nodes, obstacles) {
-  const pts = [from, to, ...nodes]
+  const pts = [from, to, ...nodes, ...wedgeEscapeNodes(from, obstacles), ...wedgeEscapeNodes(to, obstacles)]
   const n = pts.length
   const dist = Array(n).fill(Infinity)
   const prev = Array(n).fill(-1)
@@ -465,8 +500,32 @@ function routeWithinMeetingRoom(from, to) {
   return best || [{ x: 640, y: from.y }, { x: 640, y: to.y }, to]
 }
 
+// Lounge route nodes (issue #27): the single south lane (y=520) descended straight
+// columns into wedged targets — a point 1–7px ABOVE the WC/shelves/coffee row was
+// approached vertically THROUGH the rect. Two clear lanes instead: the original south
+// lane (all lounge furniture ends by y≤502) and the north strip y=430 (all lounge
+// furniture starts at y≥438), routed via the same fully edge-validated Dijkstra as the
+// main office; wedge-escape augmentation connects sub-margin endpoints. The pre-fix
+// lane path is kept verbatim as the degraded fallback, so no input routes worse.
+const LOUNGE_ROUTE_NODES = [
+  { x: 40, y: 520 }, { x: 120, y: 520 }, { x: 200, y: 520 }, { x: 240, y: 520 }, { x: 300, y: 520 }, { x: 430, y: 520 },
+  { x: 90, y: 430 }, { x: 200, y: 430 }, { x: 240, y: 430 }, { x: 300, y: 430 }, { x: 430, y: 430 },
+]
+
 function routeWithinLounge(from, to) {
   if (!lineHitsAnyRect(from.x, from.y, to.x, to.y, LOUNGE_OBSTACLES)) return [to]
+  // Graph routing ONLY when both endpoints sit inside the lounge's convex floor rect:
+  // findSafePolyline validates furniture rects, never floor membership of segment
+  // interiors — that is safe inside one convex floor rect, but an endpoint in the door
+  // strip (getZone says lounge from y≥418 while the floor there is only the passage
+  // x 215–266) admits a diagonal through the south wall (fresh-review HIGH, measured:
+  // 104/720 door-strip pairs went off-floor). Door-strip endpoints keep the pre-fix
+  // lane path verbatim, so no input routes worse than before this change.
+  const inLoungeRect = (p) => p.x >= 15 && p.x <= 451 && p.y >= 424 && p.y <= 545
+  if (inLoungeRect(from) && inLoungeRect(to)) {
+    const graphPath = findSafePolyline(from, to, LOUNGE_ROUTE_NODES, LOUNGE_OBSTACLES)
+    if (graphPath) return graphPath
+  }
   const y = 520
   const pts = [
     clampToFloor({ x: from.x, y }),
@@ -521,12 +580,52 @@ function routeWithinMainOffice(from, to) {
   return [{ x: mid.x, y: mid.y }, to]
 }
 
+// Convex floor rect per zone — matches FLOOR_ZONES' room rects (not the door passages).
+const ZONE_FLOOR_RECTS = {
+  entrance:    { x1: 15,  y1: 15,  x2: 593, y2: 133 },
+  mainOffice:  { x1: 15,  y1: 168, x2: 593, y2: 394 },
+  meetingRoom: { x1: 628, y1: 15,  x2: 785, y2: 413 },
+  lounge:      { x1: 15,  y1: 424, x2: 451, y2: 545 },
+  research:    { x1: 469, y1: 424, x2: 785, y2: 545 },
+}
+
+// Zone-mouth stub (issue-#27 review Finding 2): every zone router validates segments
+// against furniture rects only — floor membership of segment INTERIORS is implied by
+// both endpoints sitting inside the zone's convex floor rect. getZone, however, also
+// assigns the door strips to a zone (e.g. door-lounge passage y 418–424 → lounge), so a
+// strip endpoint admitted a furniture-free diagonal straight through the wall band
+// (measured 130/720 door-strip pairs off-floor). For an ON-FLOOR endpoint outside the
+// convex rect (⇒ it is on door-passage floor), route via its "mouth": the projection
+// onto the rect. The endpoint→mouth stub runs along the passage axis, on passage floor
+// by construction; past the mouth the routers' convexity assumption holds again.
+// Off-floor (bogus) inputs and in-rect inputs keep pre-fix behavior byte-identical.
+function zoneMouth(p, zone) {
+  const r = ZONE_FLOOR_RECTS[zone]
+  if (!r) return null
+  if (p.x >= r.x1 && p.x <= r.x2 && p.y >= r.y1 && p.y <= r.y2) return null
+  if (!isOnFloor(p.x, p.y)) return null
+  return {
+    x: Math.max(r.x1, Math.min(r.x2, p.x)),
+    y: Math.max(r.y1, Math.min(r.y2, p.y)),
+  }
+}
+
 function routeWithinZone(from, to, zone) {
-  if (zone === 'mainOffice') return routeWithinMainOffice(from, to)
-  if (zone === 'meetingRoom') return routeWithinMeetingRoom(from, to)
-  if (zone === 'lounge') return routeWithinLounge(from, to)
-  if (zone === 'research') return routeWithinResearch(from, to)
-  return [to]
+  const inner = (a, b) => {
+    if (zone === 'mainOffice') return routeWithinMainOffice(a, b)
+    if (zone === 'meetingRoom') return routeWithinMeetingRoom(a, b)
+    if (zone === 'lounge') return routeWithinLounge(a, b)
+    if (zone === 'research') return routeWithinResearch(a, b)
+    return [b]
+  }
+  const fromMouth = zoneMouth(from, zone)
+  const toMouth = zoneMouth(to, zone)
+  if (!fromMouth && !toMouth) return inner(from, to)
+  const pts = []
+  if (fromMouth) pts.push(fromMouth)
+  for (const pt of inner(fromMouth || from, toMouth || to)) pts.push(pt)
+  if (toMouth) pts.push(to)
+  return pts
 }
 
 function appendZoneRoute(path, from, to, zone) {

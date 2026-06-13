@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Office Bridge — Platform Launcher</title>
   <script src="/bridge.js"></script>
+  <script src="/bridge-ui.js" defer></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; max-width: 720px; margin: 0 auto; }
@@ -62,8 +63,8 @@
     <div class="agents-grid" id="agentsGrid"></div>
     <div class="workflow-row">
       <input type="text" id="workflowInput" placeholder="Workflow name (e.g. Build Feature, Sprint 42)" />
-      <button class="btn btn-primary" onclick="sendCurrent()">Send</button>
-      <button class="btn btn-danger" onclick="clearAll()">Clear</button>
+      <button class="btn btn-primary" id="sendBtn" type="button">Send</button>
+      <button class="btn btn-danger" id="clearBtn" type="button">Clear</button>
     </div>
   </div>
 
@@ -71,13 +72,13 @@
   <div class="section">
     <h2>Quick Presets</h2>
     <div class="presets">
-      <button class="btn btn-ghost" onclick="preset('solo-dev')">Solo Dev</button>
-      <button class="btn btn-ghost" onclick="preset('full-sprint')">Full Sprint</button>
-      <button class="btn btn-ghost" onclick="preset('code-review')">Code Review</button>
-      <button class="btn btn-ghost" onclick="preset('deploy')">Deploying</button>
-      <button class="btn btn-ghost" onclick="preset('blocked')">Dev Blocked</button>
-      <button class="btn btn-ghost" onclick="preset('research')">Research Mode</button>
-      <button class="btn btn-ghost" onclick="preset('done')">All Done</button>
+      <button class="btn btn-ghost" data-preset="solo-dev" type="button">Solo Dev</button>
+      <button class="btn btn-ghost" data-preset="full-sprint" type="button">Full Sprint</button>
+      <button class="btn btn-ghost" data-preset="code-review" type="button">Code Review</button>
+      <button class="btn btn-ghost" data-preset="deploy" type="button">Deploying</button>
+      <button class="btn btn-ghost" data-preset="blocked" type="button">Dev Blocked</button>
+      <button class="btn btn-ghost" data-preset="research" type="button">Research Mode</button>
+      <button class="btn btn-ghost" data-preset="done" type="button">All Done</button>
     </div>
   </div>
 
@@ -143,130 +144,5 @@ window.__office_status__ = {
     <div class="log" id="log"></div>
   </div>
 
-  <script>
-    const AGENTS = [
-      { id: 'pm',   name: 'PM',         color: '#5B8CFF' },
-      { id: 'arch', name: 'Architect',   color: '#8B5CF6' },
-      { id: 'dev',  name: 'Developer',   color: '#F97316' },
-      { id: 'qa',   name: 'QA',          color: '#22C55E' },
-      { id: 'ops',  name: 'DevOps',      color: '#EC4899' },
-      { id: 'res',  name: 'Researcher',  color: '#06B6D4' },
-      { id: 'gate', name: 'Gatekeeper',  color: '#EAB308' },
-      { id: 'designer', name: 'Designer', color: '#E8688A' },
-    ]
-
-    const state = {}
-    AGENTS.forEach(a => { state[a.id] = null }) // null = not active
-
-    // Build agent cards
-    const grid = document.getElementById('agentsGrid')
-    AGENTS.forEach(agent => {
-      const card = document.createElement('div')
-      card.className = 'agent-card'
-      card.innerHTML = `
-        <div class="agent-name" style="color:${agent.color}">${agent.name}</div>
-        <div class="agent-btns">
-          <button data-agent="${agent.id}" data-status="working" onclick="toggle('${agent.id}','working',this)">work</button>
-          <button data-agent="${agent.id}" data-status="blocked" onclick="toggle('${agent.id}','blocked',this)">block</button>
-          <button data-agent="${agent.id}" data-status="done" onclick="toggle('${agent.id}','done',this)">done</button>
-        </div>
-      `
-      grid.appendChild(card)
-    })
-
-    function toggle(agentId, status, btn) {
-      // Toggle off if already active
-      if (state[agentId] === status) {
-        state[agentId] = null
-        btn.className = btn.className.replace(/active-\w+/, '').trim()
-      } else {
-        state[agentId] = status
-        // Clear sibling active states
-        const siblings = btn.parentElement.querySelectorAll('button')
-        siblings.forEach(b => b.className = b.className.replace(/active-\w+/, '').trim())
-        btn.classList.add('active-' + status)
-      }
-      sendCurrent()
-    }
-
-    function sendCurrent() {
-      const agents = []
-      for (const [id, status] of Object.entries(state)) {
-        if (status) agents.push({ role: id, task: null, status, label: null })
-      }
-      const workflow = document.getElementById('workflowInput').value || null
-      const msg = { type: 'office-status', agents, workflow, activeCount: agents.length }
-      officeBridge.send(msg)
-      logMessage(msg)
-    }
-
-    function clearAll() {
-      for (const id of Object.keys(state)) state[id] = null
-      document.querySelectorAll('.agent-btns button').forEach(b => {
-        b.className = b.className.replace(/active-\w+/, '').trim()
-      })
-      document.getElementById('workflowInput').value = ''
-      officeBridge.stop()
-      // Reopen channel after stop
-      setTimeout(() => { window.location.reload() }, 100)
-    }
-
-    function preset(name) {
-      // Clear all first
-      for (const id of Object.keys(state)) state[id] = null
-      document.querySelectorAll('.agent-btns button').forEach(b => {
-        b.className = b.className.replace(/active-\w+/, '').trim()
-      })
-
-      const presets = {
-        'solo-dev': { dev: 'working', workflow: 'Solo Development' },
-        'full-sprint': { pm: 'working', arch: 'working', dev: 'working', qa: 'working', ops: 'working', workflow: 'Full Sprint' },
-        'code-review': { dev: 'done', qa: 'working', gate: 'working', workflow: 'Code Review' },
-        'deploy': { dev: 'done', qa: 'done', ops: 'working', gate: 'working', workflow: 'Deployment' },
-        'blocked': { dev: 'blocked', pm: 'working', workflow: 'Bug Investigation' },
-        'research': { res: 'working', arch: 'working', workflow: 'Research Phase' },
-        'done': { pm: 'done', arch: 'done', dev: 'done', qa: 'done', ops: 'done', res: 'done', gate: 'done', workflow: 'Sprint Complete!' },
-      }
-
-      const p = presets[name]
-      if (!p) return
-
-      document.getElementById('workflowInput').value = p.workflow || ''
-      for (const [id, status] of Object.entries(p)) {
-        if (id === 'workflow') continue
-        state[id] = status
-        const btn = document.querySelector(`button[data-agent="${id}"][data-status="${status}"]`)
-        if (btn) btn.classList.add('active-' + status)
-      }
-      sendCurrent()
-    }
-
-    function logMessage(msg) {
-      const log = document.getElementById('log')
-      const time = new Date().toLocaleTimeString()
-      const agents = (msg.agents || []).map(a => `${a.role}=${a.status}`).join(', ')
-      const entry = document.createElement('div')
-      entry.className = 'entry'
-      function esc(s) { const d = document.createElement('span'); d.textContent = s; return d.innerHTML }
-      entry.innerHTML = `<span class="time">${esc(time)}</span> ${esc(agents)}${msg.workflow ? ' | ' + esc(msg.workflow) : ''}`
-      log.prepend(entry)
-      // Keep log manageable
-      while (log.children.length > 50) log.removeChild(log.lastChild)
-    }
-
-    // Auto-apply URL params on load
-    if (window.location.search) {
-      const params = new URLSearchParams(window.location.search)
-      for (const [k, v] of params.entries()) {
-        if (AGENTS.find(a => a.id === k)) {
-          state[k] = v
-          const isStatus = ['working', 'blocked', 'done'].includes(v)
-          const btn = document.querySelector(`button[data-agent="${k}"][data-status="${isStatus ? v : 'working'}"]`)
-          if (btn) btn.classList.add('active-' + (isStatus ? v : 'working'))
-        }
-        if (k === 'workflow') document.getElementById('workflowInput').value = v
-      }
-    }
-  </script>
 </body>
 </html>

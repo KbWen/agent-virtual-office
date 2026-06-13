@@ -9,6 +9,7 @@ import { selectVisibleBubbles, BUBBLE_VISIBLE_CAP } from '../systems/bubbleVisib
 import { stepWalkFrame } from '../systems/walkFrame.js'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
+import { shouldShakeDesk } from '../systems/eventJuice.js'
 
 // Pure guard: returns true if a social arriver's TARGET should face back.
 // R1: tracked agents (live externalStatus entry) are NEVER modulated.
@@ -1260,6 +1261,15 @@ function AgentCharacter({ agent }) {
       data-supervising={hasActiveHelper ? '1' : '0'}
       role="button" aria-label={`${name} — ${t(`statusLabels.${state.status || 'idle'}`, state.status || 'idle')}`} tabIndex={0}
       onKeyDown={handleKeyDown}>
+      {/* AVO-136: desk-slam → a brief LOCAL jitter on this agent only. `additive="sum"` composes the
+          shake ON TOP of the base translate/scale (a CSS transform would override positioning). One
+          play; mounts only while in desk-slam, so it fires once on onset (anti-nag). Gated off under
+          reduced-motion — the desk-slam posture + confused expression remain the semantic tell. */}
+      {shouldShakeDesk(state.behavior, reducedMotion) && (
+        <animateTransform attributeName="transform" type="translate" additive="sum"
+          values="0 0;-1.6 0;1.6 0;-1 0;1 0;0 0" keyTimes="0;0.2;0.4;0.6;0.8;1"
+          dur="0.42s" repeatCount="1" fill="freeze" />
+      )}
       {/* AVO-132: single working/planning glow ring; effort (high/xhigh/max) intensifies it
           (peak opacity + stroke width) instead of stacking a second concentric aura.
           Planning uses a calm violet ring at BASE_GLOW intensity (effort does not apply). */}

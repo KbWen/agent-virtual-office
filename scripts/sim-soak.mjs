@@ -39,6 +39,9 @@ let baseUrl = process.env.SOAK_SPAWN === '1' ? null : (process.env.SOAK_URL || n
 let serverProc = null
 if (!baseUrl && process.env.SOAK_SPAWN !== '1' && await urlUp('http://localhost:5173/')) baseUrl = 'http://localhost:5173'
 if (!baseUrl) {
+  // shell:true is required for npx on Windows (.cmd shim); PORT is a parseInt-validated
+  // module-level int (worst case NaN → harmless flag), no external string reaches the line.
+  // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
   serverProc = spawn(`npx vite --port ${PORT} --strictPort`, { shell: true, stdio: ['ignore', 'pipe', 'pipe'] })
   baseUrl = `http://localhost:${PORT}`
   const deadline = Date.now() + 30000

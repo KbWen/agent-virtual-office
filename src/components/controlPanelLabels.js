@@ -64,6 +64,43 @@ export function agentLineLabel(ext, t) {
     || t(`statusLabels.${ext.status}`, ext.status)
 }
 
+// AVO-130 — collapse the connection/integration indicator into ONE health dot. Pure derivation of
+// the single highest-severity state from the two independent signals the bar used to render as 2–4
+// separate pills: `statusSource` ('external' | 'fallback' | local/demo) and `integrationHealth.state`
+// ('offline' | 'degraded' | else). Single result by severity precedence so the worst real state
+// always wins and is never hidden — offline > degraded > fallback > live > idle.
+//   level   — which dot to paint.
+//   trouble — true for offline/degraded/fallback: caller auto-shows the inline label (not hover-only)
+//             so a real problem is glanceable without interaction (status-legibility law).
+//   labelKey / labelVal — i18n key (+ {0} replacement) for the detail text; reuses existing strings.
+//   tone    — semantic color band for the dot ('red' | 'amber' | 'emerald' | 'gray').
+//   pulse   — whether the dot animates (live signals pulse; offline solid; idle quiet).
+const HEALTH_DOT = Object.freeze({
+  offline:  { trouble: true,  labelKey: 'status.apiOffline',  tone: 'red',     pulse: false },
+  degraded: { trouble: true,  labelKey: 'status.apiRetrying', tone: 'amber',   pulse: true  },
+  fallback: { trouble: true,  labelKey: 'ui.fallbackAgents',  tone: 'amber',   pulse: true  },
+  live:     { trouble: false, labelKey: 'ui.live',            tone: 'emerald', pulse: true  },
+  idle:     { trouble: false, labelKey: 'status.local',       tone: 'gray',    pulse: false },
+})
+export function healthDotState({ statusSource, integrationHealth, externalCount = 0 } = {}) {
+  const ih = integrationHealth?.state
+  let level
+  if (ih === 'offline') level = 'offline'
+  else if (ih === 'degraded') level = 'degraded'
+  else if (statusSource === 'fallback') level = 'fallback'
+  else if (statusSource === 'external') level = 'live'
+  else level = 'idle'
+  const cfg = HEALTH_DOT[level]
+  return {
+    level,
+    trouble: cfg.trouble,
+    tone: cfg.tone,
+    pulse: cfg.pulse,
+    labelKey: cfg.labelKey,
+    labelVal: level === 'fallback' ? externalCount : null,
+  }
+}
+
 // #28 — DEV-only diagnostics gate for the RAF-watchdog restart counter. Shown only in dev builds AND
 // only once a stall has happened (count > 0), so it's invisible at rest and zero-cost in production
 // (`import.meta.env.DEV` is a compile-time constant → the render branch is dead-code-eliminated from

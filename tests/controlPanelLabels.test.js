@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatTokens, blockedReasonLabel, agentLineLabel, taskChipLabel } from '../src/components/controlPanelLabels.js'
+import { formatTokens, blockedReasonLabel, agentLineLabel, taskChipLabel, healthDotState } from '../src/components/controlPanelLabels.js'
 
 // These pure helpers were extracted out of ControlPanel.jsx (god-component cleanup) so they can be
 // tested without importing the React module. `formatTokens`/`blockedReasonLabel`/`agentLineLabel`
@@ -58,5 +58,43 @@ describe('agentLineLabel — AVO-110 reason token › tool chip › status word'
   })
   it('null ext → null', () => {
     expect(agentLineLabel(null, t)).toBeNull()
+  })
+})
+
+describe('healthDotState (AVO-130)', () => {
+  const ok = { state: 'online' }
+  it('severity precedence: offline > degraded > fallback > live > idle', () => {
+    // offline wins even when an external feed is live
+    expect(healthDotState({ statusSource: 'external', integrationHealth: { state: 'offline' } }).level).toBe('offline')
+    // degraded wins over a live external feed
+    expect(healthDotState({ statusSource: 'external', integrationHealth: { state: 'degraded' } }).level).toBe('degraded')
+    // fallback when integration is fine but source is the fallback feed
+    expect(healthDotState({ statusSource: 'fallback', integrationHealth: ok }).level).toBe('fallback')
+    // live when external + healthy integration
+    expect(healthDotState({ statusSource: 'external', integrationHealth: ok }).level).toBe('live')
+    // idle when no external source and healthy (demo/local)
+    expect(healthDotState({ statusSource: 'local', integrationHealth: ok }).level).toBe('idle')
+  })
+  it('marks offline/degraded/fallback as trouble (auto-show inline label), live/idle as calm', () => {
+    expect(healthDotState({ integrationHealth: { state: 'offline' } }).trouble).toBe(true)
+    expect(healthDotState({ integrationHealth: { state: 'degraded' } }).trouble).toBe(true)
+    expect(healthDotState({ statusSource: 'fallback' }).trouble).toBe(true)
+    expect(healthDotState({ statusSource: 'external' }).trouble).toBe(false)
+    expect(healthDotState({ statusSource: 'local' }).trouble).toBe(false)
+  })
+  it('carries the fallback agent count into labelVal, null otherwise', () => {
+    expect(healthDotState({ statusSource: 'fallback', externalCount: 3 }).labelVal).toBe(3)
+    expect(healthDotState({ statusSource: 'external', externalCount: 3 }).labelVal).toBeNull()
+  })
+  it('reuses the existing i18n keys per level', () => {
+    expect(healthDotState({ integrationHealth: { state: 'offline' } }).labelKey).toBe('status.apiOffline')
+    expect(healthDotState({ integrationHealth: { state: 'degraded' } }).labelKey).toBe('status.apiRetrying')
+    expect(healthDotState({ statusSource: 'fallback' }).labelKey).toBe('ui.fallbackAgents')
+    expect(healthDotState({ statusSource: 'external' }).labelKey).toBe('ui.live')
+    expect(healthDotState({ statusSource: 'local' }).labelKey).toBe('status.local')
+  })
+  it('defaults to idle on empty / missing input', () => {
+    expect(healthDotState().level).toBe('idle')
+    expect(healthDotState({}).level).toBe('idle')
   })
 })

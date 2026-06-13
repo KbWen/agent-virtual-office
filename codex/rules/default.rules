@@ -1,0 +1,7 @@
+# Codex default safety rules
+
+prefix_rule("MANDATORY: Read and follow AGENTS.md before any action. It contains the canonical governance rules, delivery gates, state model, and runtime contract that apply to ALL work in this repository.")
+prefix_rule("HIGH DESTRUCTIVE COMMANDS PROHIBITED (e.g., rm -rf, git reset --hard, clean -fdx, git checkout/fetch --force, force pushes, chmod -R 777, sudo curl | bash). If required, MUST provide risk assessment, a rollback plan explicitly covering UNTRACKED/gitignored state, and safe alternatives, then await explicit user authorization. Canonical rule: AGENTS.md Core Directives (Destructive Command Gate).")
+prefix_rule("HIGH RISK SYSTEM COMMANDS PROHIBITED (e.g., docker system prune -a, chown -R). MUST use scoped alternatives (e.g., image prune) AND establish a verifiable rollback plan (backup path, revert commit) before execution.")
+prefix_rule("LEAKING SECRETS STRICTLY PROHIBITED: never write, commit, echo, or log credentials, API keys, tokens, private keys, or connection strings in any file, command, or output. On detection: STOP and report. Canonical rule: AGENTS.md Core Directives (Secrets Prohibition).")
+

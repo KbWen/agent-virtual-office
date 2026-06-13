@@ -1,7 +1,7 @@
 {
   "name": "agent-virtual-office",
   "version": "1.4.0",
-  "description": "Pixel-art virtual office that visualizes AI agent activity in real-time. Works with Claude Code, Gemini CLI, Codex, and any tool that can POST status.",
+  "description": "Pixel-art virtual office that visualizes your AI coding agents in real time — Claude Code, Codex, Gemini CLI, or any tool that can POST status. Pure SVG, zero backend, runs locally.",
   "main": "bin/cli.js",
   "bin": {
     "agent-virtual-office": "./bin/cli.js"
@@ -17,18 +17,27 @@
     "smoke:pack": "node scripts/pack-smoke.mjs",
     "soak": "node scripts/sim-soak.mjs",
     "test": "vitest run",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
     "virtual-office",
     "agent",
     "ai",
+    "ai-agents",
+    "coding-agent",
     "pixel-art",
     "claude",
+    "claude-code",
+    "claude-code-hooks",
     "gemini",
+    "gemini-cli",
     "codex",
+    "llm",
     "visualization",
-    "status"
+    "status",
+    "developer-tools",
+    "svg",
+    "react"
   ],
   "author": "KbWen",
   "license": "MIT",
@@ -54,16 +63,19 @@
     "docs/deployment/"
   ],
   "dependencies": {
-    "@tailwindcss/vite": "^4.2.1",
-    "@vitejs/plugin-react": "^4.7.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "tailwindcss": "^4.2.1",
-    "vite": "^6.4.1",
-    "zustand": "^5.0.12"
+    "@tailwindcss/vite": "^4.3.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.0",
+    "vite": "^8.0.16",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "playwright": "^1.60.0",
-    "vitest": "^3.2.1"
+    "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   }
 }

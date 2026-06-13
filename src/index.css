@@ -81,3 +81,19 @@ html, body, #root {
   25%  { opacity: 1; transform: translateY(-1px) scale(1); }
   100% { opacity: 0; transform: translateY(-9px) scale(1); }
 }
+/* AVO-136 event juice (bundled here, CSP-safe — no inline <style>). One-shot only; reduced-motion
+   never mounts these (gated in JS), so no media-query needed. */
+/* Deploy-success: a ✦ particle rises, drifts, and fades — a brief office-wide celebration burst. */
+@keyframes office-confetti {
+  0%   { opacity: 0; transform: translateY(4px) scale(0.6); }
+  18%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-26px) scale(1); }
+}
+/* Eureka: a ✦ sparkle pops near the whiteboard then fades. */
+@keyframes office-sparkle {
+  0%   { opacity: 0; transform: scale(0.4); }
+  40%  { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 0; transform: scale(0.9); }
+}
+/* (desk-slam jitter is done in SVG via <animateTransform additive="sum"> in AgentCharacter — it must
+   COMPOSE with the sprite's translate/scale, which a CSS transform animation would override.) */

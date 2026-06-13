@@ -132,6 +132,19 @@
     "awaiting-approval": "Awaiting approval",
     "thinking": "Thinking"
   },
+  "skillBubbles": {
+    "plan": "📊 Planning",
+    "spec": "📋 Writing spec",
+    "review": "🧐 Reviewing",
+    "test": "🧪 Testing",
+    "implement": "⌨️ Coding",
+    "fix": "🔧 Debugging",
+    "ship": "🚀 Deploying",
+    "research": "🔬 Researching",
+    "architect": "🏗️ Designing",
+    "security": "🛡️ Security check",
+    "generic": "💼 {ctx}"
+  },
   "contextBubbles": {
     "dev-edit": ["tweaking {ctx}...", "hmm {ctx} needs work", "{ctx} again, let's go", "refactoring {ctx}~", "one sec, fixing {ctx}", "{ctx} could be cleaner..."],
     "dev-write": ["writing {ctx} from scratch!", "new file {ctx}, here we go", "{ctx} coming right up"],
@@ -246,6 +259,7 @@
   "ui": {
     "live": "Live",
     "fallbackAgents": "{0} agents",
+    "gateInferred": "inferred",
     "run": "Run",
     "test": "Test",
     "testHint": "Set agent status to change behavior weights — working: more typing, blocked: frustrated, done: celebratory",
@@ -282,9 +296,12 @@
   "status": {
     "offline": "offline",
     "apiOffline": "status api offline",
-    "apiRetrying": "status api retrying"
+    "apiRetrying": "status api retrying",
+    "local": "Local"
   },
   "aria": {
+    "health": "Connection status",
+    "gateWaiting": "{0} waiting on you — click for details",
     "pause": "Pause",
     "resume": "Resume",
     "switchLang": "Switch language",
@@ -300,15 +317,23 @@
   },
   "settings": {
     "weather": "Weather animations",
+    "lighting": "Time-of-day lighting",
+    "soundscape": "Ambient soundscape",
     "pet": "Office pet",
     "petSkin": "Pet skin",
     "notifications": "Desktop notifications",
     "testPanel": "Test panel",
+    "language": "Language",
+    "view": "View",
+    "run": "Run workflow",
+    "help": "Help & shortcuts",
     "on": "On",
     "off": "Off",
     "blocked": "Blocked",
     "enable": "Enable",
-    "skin": { "cat": "Cat", "vacuum": "Robot vacuum", "dog": "Dog", "rabbit": "Rabbit", "bird": "Bird", "hamster": "Hamster" }
+    "theme": "Theme",
+    "skin": { "cat": "Cat", "vacuum": "Robot vacuum", "dog": "Dog", "rabbit": "Rabbit", "bird": "Bird", "hamster": "Hamster" },
+    "themeNames": { "default": "Default", "winter": "Winter", "autumn": "Autumn" }
   },
   "time": {
     "now": "now",

@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-11T21:25:00Z
-- **Update Sequence**: 75
+- **Last Updated**: 2026-06-13T08:30:00Z
+- **Update Sequence**: 88
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -71,6 +71,11 @@
   - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Frozen]  *(AVO-126/127/128/129/131/132 — branch feat/ux-vibe-rebalance, not yet merged)*
   - [living-office] docs/specs/living-office-events.md [DRAFT, review-gated]  *(P1-P4 shipped to branch feat/ux-vibe-rebalance, not merged; AC-3 pixel-dominance pending owner visual confirm)*
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
+  - [vibe-rebalance] docs/specs/control-bar-reduction.md [Shipped]  *(AVO-130 / #116 — 4 health pills→1 expandable health dot; lang/run/view/help/platform demoted into ⚙ menu / info popover)*
+  - [real-ai-behavior] docs/specs/skill-activation-badge.md [Shipped]  *(AVO-104 / #30 — transient skill bubble on SubagentStart via existing bubble cap (working-tier); panel Option B, honest no-over-head-element)*
+  - [game-feel] docs/specs/event-juice-pass.md [Shipped]  *(AVO-136 / #117 — rare-event juice: deploy confetti + eureka sparkle + desk-slam local shake; pure juiceForEvent resolver, reduced-motion-safe, never occludes status)*
+  - [multi-agent] docs/specs/review-gate-waiting.md [Shipped]  *(AVO-107 / #112 — honest reframe: gate-desk "waiting" in-tray driven by awaiting-approval only; no queue/type fabrication; complements AVO-105 arrows; panel-decided)*
+  - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
@@ -84,6 +89,8 @@
   - [ci-infra] docs/specs/npm-pack-install-smoke.md [Shipped]  *(AVO-151 / stability-wave W3 — pack→install→setup/hook/boot smoke gate)*
   - [ci-infra] docs/specs/transport-spine-e2e.md [Shipped]  *(AVO-150 / stability-wave W2 — 19-case real-server API e2e; HOME-override isolation)*
   - [hook-io] docs/specs/hook-runtime-contract.md [Shipped]  *(AVO-153 / stability-wave W4 — live-captured fixtures + 143 contract tests; found the tool_response/tool_result divergence → AVO-154)*
+  - [game-feel] docs/specs/cozy-micro-interactions.md [Shipped]  *(AVO-125 / chill-fun wave — night desk-lamp halos beneath the status layer; status-tinted monitor glow DROPPED on honesty (desk-fixed glow vs walking agents))*
+  - [game-feel] docs/specs/ambient-soundscape.md [Shipped]  *(AVO-122 / chill-fun wave — off-by-default 0-KB procedural Web Audio; clatter∝teamPulse (silent@0) + double-gated rain; coffee gurgle DROPPED on honesty (tea-break is a clock event))*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -147,6 +154,57 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-line-hits-rect-epsilon-2026-06-11 (chip task_4be9264a — lineHitsRect 軸向 epsilon 洞)
+
+- Branch `fix/line-hits-rect-epsilon`, quick-win。Chip 由 owner 回貼主對話執行(zone-mouth review 的 reviewer 自行開的 chip)。**既有精度洞**:`lineHitsRect` 對 |dx|≤0.1(或 |dy|≤0.1)的近軸線段只用**起點**做 slab 檢查——x 漂移 <0.1px 跨過家具邊緣平面的近垂直線段被誤判為 miss;jittered Dijkstra 節點據此產生 0.005–0.3px 真實擦邊(隨機 in-rect 對 ~0.3% 率,reviewer 於 main 復現)。視覺上 sub-pixel,但屬種子化尋路 oracle 的潛在 flake 源。
+- **修(2 行,保守方向)**:近軸分支改測**兩端點座標範圍**(min/max vs slab)——絕不漏報真相交;≤0.1px 級過度標記只會讓 jitter 候選退回精確節點(該鏈本有的 fallback)。函數 export 供直接單元釘。
+- **Tests: 1913 → 1920**:7 釘含兩個 pre-fix 必敗的洞釘(漂移方向不對稱與機制吻合:起點在內側的方向 pre-fix 本來就過)+ 楔形峽谷類「必須仍為 miss」防回歸釘;全部種子化尋路套件(deep 484 對/fuzz 1000 對/楔形矩陣/門廊網格)在更嚴格偵測下全綠。2 分鐘 soak PASS。Tests: Pass
+
+### Ship-chore-semgrep-baseline-gate-2026-06-11 (#126 — Semgrep ERROR 級轉阻擋,baseline 三角化)
+
+- Branch `chore/semgrep-baseline-gate`, quick-win。**確認先行**(semgrep 無法在 Windows 跑):從 main 最新 SAST log 抽出完整 baseline——20 findings = 13 rule×file 組:ERROR×2、WARNING×10 組(全屬設計接受:localhost 傳輸契約、操作者自選路徑、bundled 翻譯表、opt-in CORS allowlist、範例 nginx)、INFO×1。
+- **兩個 ERROR 當場解決**:sim-soak.yml dispatch input 改走 `env: SOAK_MINUTES` 間接化(真修);sim-soak.mjs `spawn shell:true` 範圍化 nosemgrep + 理由(Windows npx .cmd shim 需 shell;PORT 為 parseInt 驗證的模組常數)。
+- **閘門語意**:security.yml 全掃描維持 report-only + 新增 `--severity ERROR --error` 阻擋 pass;新 ERROR(程式碼或 `--config auto` registry 漂移)按設計 FAIL CI,註解明示「三角化、不放鬆」。Baseline 快照:`docs/reviews/2026-06-11-semgrep-baseline.md`(doc_state: snapshot,13 組處置表)。
+- **Evidence**:PR #136 SAST 自證——report pass 18 findings(20→18,兩 ERROR 消失)、**阻擋 pass 0 findings(172 條 ERROR 級規則/407 檔)**;7/7 checks 綠;audit/TruffleHog 未動仍綠。合併後 `gh workflow run sim-soak -f minutes=1` 驗 dispatch 路徑。Tests: Pass
+
+### Ship-chore-dependency-wave-minor-2026-06-11 (#125 依賴維護波 — patch/minor 車道)
+
+- Branch `chore/dependency-wave-minor`, quick-win。依 #125 自身 AC「patch/minor 與 major 分開落地」只做小版本:react/react-dom 19.2.4→**19.2.7**、tailwindcss + @tailwindcss/vite 4.2.1→**4.3.0**、zustand 5.0.12→**5.0.14**。
+- **驗收電池全綠**:`npm test` 1913/1913;bundle-budget PASS 455,872 bytes(+1.29% vs 基線;更新本身僅 +1,059 bytes ≈ +0.23pp,基線不動);`npm audit --audit-level=high` 0 漏洞;render-smoke 4-viewport PASS;pack-smoke 全斷言 PASS。
+- **Major 拆出**:Vite 8 / Vitest 4 / plugin-react 6 → issue **#134**(三件一起版本配套,遷移指南逐項核對)。#125 於合併時關閉。Tests: Pass
+
+### Ship-fix-door-strip-floor-routing-2026-06-11 (門廊帶地板路由洞關閉 — #27 review Finding 2 後續)
+
+- Branch `fix/door-strip-floor-routing`, quick-win。Chip task_2b246e48 由 owner 回貼主對話執行(驗證無 spawned worktree)。**既有洞**(早於 #132):zone router 的 early-return `[to]` 不驗證線段內部的地板歸屬——`getZone` 把門洞地板點劃進相鄰區(如 door-lounge y 418–424 → lounge),無家具阻擋的斜線直接切穿牆帶(量測 130/720 對 off-floor);五個區全有同型 strip。
+- **修(單一接點)**:`ZONE_FLOOR_RECTS` + `zoneMouth` —— on-floor 但在區凸地板矩形外的端點(⇒必在門洞地板上)先走「mouth」(夾至矩形的投影,沿門洞軸、構造上必在門洞地板),內部 router 只在凸矩形內運作(其「家具矩形驗證即足夠」的凸性假設恢復成立)。in-rect 與 off-floor 輸入 byte-identical 保留。
+- **Fresh review PASS(窮舉級)**:0.25px 全畫布網格 101,332 個矩形外地板點 → 0 個壞 stub、0 個真實地板雙軸 clamp;1,537 對 in-rect 差分探針與 HEAD byte-identical;门側錨點 ±jitter 全數在矩形內(mouth 絕不在跨區腿觸發);496k 對 fuzz 僅 1 命中＝**既有** `lineHitsRect` 軸向 epsilon 洞(~0.3px 擦邊,main 上可復現)→ chip task_4be9264a。
+- **Tests: 1913**(門廊帶網格解除 Finding-2 守衛恢復全配對 + 六區 strip 釘;修復前 2 測試 FAIL 四個區證敏感度)。2 分鐘 soak PASS(471 樣本 0 違規)。Tests: Pass
+
+### Ship-fix-wedged-endpoint-routing-2026-06-11 (issue #27 — 楔形端點路由加固,fuzz 盲區帶關閉)
+
+- Branch `fix/wedged-endpoint-routing`, quick-win。Owner:「先確認問題→再處理」。**確認先行**:種子化探針證實 #27 是真缺陷且觸及日常路徑——楔形距 1–7px 穩定產生 ~5% 穿桌路徑(52/880 @d=1),**含 d=6 = `OBSTACLE_PUSH_PX`(`clampToFloor` 的日常輸出距離)**;fuzz MARGIN=8 剛好全帶排除(#27 所述盲區屬實)。根因:桌間峽谷端點從 9 個固定 Dijkstra 節點全部不可達 → `findSafePolyline` null → `routeWithinMainOffice` 最後一招 `[CORRIDORS[2], to]`(自註已知洞)直接穿桌;lounge 單 lane 降柱同型洞。
+- **修(永不變差構造)**:(A) `wedgeEscapeNodes` —— 貼身家具四邊法向投影 10px 的逃逸候選,floor/obstacle 過濾後**純增量**加入 Dijkstra 節點集(每條邊仍走原驗證);(B) lounge 改雙 lane(南 520 / 北 430)全驗證圖路由 + **凸地板矩形閘門**,門廊帶端點與圖失敗一律退回原 lane 路徑逐字保留。
+- **Fresh review(無實作者敘事)抓到 1 HIGH**:lounge 圖對門廊帶端點(y 418–424,getZone=lounge 但地板僅門洞)發穿南牆斜線,量測 104/720 對新增 off-floor——按 reviewer 最小修法加閘,反例 (218,418.5)→(430,470) ×25 釘住。Reviewer 獨立復現敏感度:HEAD 154/3516 fail → 修後 0/3516。Finding 2(**既有** early-return 門廊帶洞,130/720,新舊相同)→ chip task_2b246e48 追蹤。
+- **Tests: 1905 → 1912**(楔形矩陣 d∈{1,2,4,6,7} 修復前 5/5 FAIL 證敏感度 + 門廊帶閘門 2 測試);探針全矩陣 0 違規;2 分鐘 soak PASS(469 樣本 0 違規)。Issue #27 三項 asks 全數回應後關閉。Tests: Pass
+
+### Ship-fix-tech-debt-remediation-2026-06-11 (Codex tech-debt 波接手收尾 — viewport fit + bridge 加固 + routing docs)
+
+- Branch `fix/tech-debt-remediation`, quick-win。**Codex session 實作（額度耗盡）、claude-fable-5 接手收尾**：兩個 commit 落錯分支（local main + 他人分支）→ cherry-pick（保留 Codex 署名）到合法分支重出。
+- **`72ff117`（app code）**：#120 `prepublishOnly` 改 build-before-test；#123 bridge UI 自 inline script 抽出為 CSP 相容 `public/bridge-ui.js`（DOM node 取代 innerHTML、移除 inline handlers）+ `tests/bridgeHtmlSafety.test.js` 回歸釘；**full-mode viewport fit 修復**（`preserveAspectRatio="xMidYMid meet"`，800×560 完整入框；owner 截圖回報的裁切回歸）；render-smoke 升級 4-viewport 矩陣 + 垂直裁切斷言。
+- **`706cc88`（docs）**：#121 monolith extraction map、#124 silent-catch policy、#127 ARCHITECTURE.md 現況更新、#128 routing_actions 全數 merged。
+- **接手修正（`e28b166`）**：audit 檔 frontmatter `status: review` 非法（validator routing_actions 檢查掃全檔 status: 行，僅容 pending|merged|rejected）→ 改 `doc_state: snapshot`（比照 2026-06-05 audit 慣例）。bash validator 此 FAIL 消除。
+- **Issue 帳務**：#120/#121/#123/#124/#127/#128 已由 Codex 關閉，本 ship 使其成立；#122/#125/#126 留待後續。研究/issue 整併（#48/#49/#51 併入 #40/#31/#41、新增 #112–#119）為 GitHub 端操作、已 live。
+- Evidence: takeover 分支上 `npm test` 1905/1905 綠、build 5.79s 乾淨、routing_actions 掃描零違規；Codex 原 4-viewport smoke + bridge-smoke 證據保留於 work log。Tests: Pass
+
+### Ship-chore-github-seo-aeo-2026-06-11 (GitHub 曝光度 — SEO / AEO / 描述與 topics 優化)
+
+- Branch `chore/github-seo-aeo`, quick-win, docs/metadata-only（README ×2 + package.json + GitHub repo 中繼資料，零 app code）。
+- **README en/zh AEO**：各加 6 題直接回答式 FAQ（What is / 怎麼接 Claude Code / 支援 Codex·Gemini CLI·CI / 不是儀表板·不追蹤 token 成本 / 資料不外傳 / 免安裝）＋導覽列 FAQ 連結＋截圖 alt text 關鍵字化。FAQ 措辭全部對齊已出貨行為（signal-driven 誠實、零後端、`--no-host`、Node ≥ 22），守住「不是 cost dashboard」定位。
+- **package.json**：description 重寫（關鍵字前置：AI coding agents / Claude Code / Codex / Gemini CLI / pure SVG / zero backend）；keywords 9 → 18（補 claude-code、claude-code-hooks、gemini-cli、ai-agents、coding-agent、llm、developer-tools、svg、react）。
+- **GitHub repo（gh repo edit，立即生效、git 外）**：description 換新（🏢 開頭、關鍵字密度提高）；topics 10 → 18（+claude、codex、gemini-cli、anthropic、llm、svg、coding-agents、developer-tools）；`gh repo view` 回讀複驗。舊值已記錄於 work log Evidence 供回滾。
+- **留給 owner（UI-only，API 做不到）**：Settings → Social preview 上傳 `docs/screenshot.png`（1280×640）— 社群分享卡片是 GitHub SEO 最大單一槓桿之一。
+- Evidence: package.json JSON parse OK；gh 回讀確認 18 topics；diff 僅 3 檔零程式碼。Tests: Pass（docs-only，無程式碼路徑變更）
 
 ### Ship-chore-upgrade-agentic-os-v1.5.1-2026-06-11 (governance brain 升級 v1.2.0 → v1.5.1)
 
@@ -549,3 +607,39 @@
 - **Review**: 5-axis + OWASP A01–A10 + secrets clean; 1 MEDIUM advisory (two-watchdog scope), 1 LOW accepted (watchdog suppressed for full active lifetime, mitigated + tested).
 - **Ship incident (self-corrected)**: the first ship commit used `guard_context_write.py` with a guard receipt (`337ffd90`) cached from a prior codex session; `replace` mode wrote stale seq-26 content over this consolidated SSoT, dropping the 7 most recent Ship History entries. Caught in post-merge verification; current_state.md restored from `5c4bf49` + this entry, re-committed directly. Lesson: do not reuse stale guard receipts across sessions; verify SSoT seq/entry-count after a guarded write.
 - Tests: Pass
+
+### Ship-feat-avo-130-control-bar-reduction-2026-06-13 (#116 — control-bar reduction: single health dot + gear demotion)
+- Feature shipped: AVO-130. The resting control bar's 2–4 side-by-side connection/integration pills (live / fallback / API-offline / API-retrying) collapse into ONE focusable health dot whose color encodes the single highest-severity state (precedence offline > degraded > fallback > live > idle, pure-tested `healthDotState`). Language switch, list-view (☰), run-workflow, help (?), and the platform label demoted off the bar into the ⚙ gear menu / info popover. Resting cluster = health-dot · pause · ⚙. Applied in both full and panel mode.
+- Honesty/legibility guard: agent presence rail + STATUS_COLORS untouched (the #1 status channel); trouble states auto-show their inline label (not hover-only) so a real offline/degraded/fallback is never hidden; calm states reveal detail on hover/focus/click. Global L/Space shortcuts still work.
+- Spec: docs/specs/control-bar-reduction.md (status: shipped; §4.4 DSoT for procedural UI). Commit 8947d3e.
+- SSoT written directly (not via guard_context_write.py) to avoid the known stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions` block + this is an incremental UI re-layer covered by existing `ui-rendering` L1 — no new domain decision; consolidation skipped with justification.
+- Tests: Pass (6 new healthDotState unit tests; full suite 1943; vite build clean 460.88 kB; render-smoke PASS 4 viewports / 0 errors; live preview + Playwright responsive checks).
+
+### Ship-feat-avo-104-skill-activation-badge-2026-06-13 (#30 — skill activation badge: transient skill bubble)
+- Feature shipped: AVO-104. Claude skill activation (SubagentStart: /review, /plan, /implement, /test, /ship, /research) now surfaces per-agent as a transient skill speech-bubble ("🧐 Reviewing") routed through the EXISTING bubble system — the honest Option B chosen by a 4-lens game-design panel (cozy/systemic/juice/calm-tech) over re-adding over-head chrome (AVO-131 declutter line held). One registry change: `skill` added to `AGENT_CARRY_FIELDS` + `FIELD_SANITIZERS` (statusFields.js), auto-propagating through inferStatus/agentRouter/store/normalizePost (AVO-146). `skillBubbleText` + a skill branch in contextBubble.js (gated on working — never blocked/done). i18n `skillBubbles` map en+zh. Hook stamps `skill` on SubagentStart, clears for other agents (transient).
+- Honesty guard: skill = working-tier priority (below blocked/done in the existing cap); never suppresses the AVO-110 reason glyph; auto-expires on the existing bubble timer; no new over-head element; optional field (absent = byte-identical). Store→bubble link proven by a deterministic store test.
+- Spec: docs/specs/skill-activation-badge.md (status: shipped; §4.4 DSoT + panel). Commits ce7aaf0 (spec) + 4636c92 (impl).
+- **Branch note**: this branch was rebased `--onto main` to drop two AVO-130/#116 commits it had inadvertently inherited (cut from the #116 branch) — it is now independent. #116 (PR #142) and this PR both touch SSoT seq + Ship History + backlog; whichever merges second must rebase (trivial: distinct rows/sections, seq line + INDEX chain re-stitch).
+- SSoT written directly (not guard) to avoid the known stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions` block; incremental client bubble feature covered by existing `hook-integration`/`ui-rendering` L1 — consolidation skipped with justification.
+- Tests: Pass (13 new incl. store→bubble + drift-guard skill survival; suite 1952; build 462.08 kB; render-smoke PASS).
+
+### Ship-feat-avo-136-event-juice-2026-06-13 (#117 — event juice pass: rare meaningful moments)
+- Feature shipped: AVO-136. Scoped game-feel juice over EXISTING rare events — deploy-success → one-shot capped ✦ office-confetti burst, eureka → small ✦ sparkle ring near the whiteboard, desk-slam → brief LOCAL jitter on the affected agent only (SVG `<animateTransform additive="sum">` so it composes with the sprite's translate/scale; a CSS transform would override positioning). Review/boss reaction beats already covered by existing officeLife handler expression flips.
+- Pure `juiceForEvent` / `shouldShakeDesk` resolver (`src/systems/eventJuice.js`, unit-tested): returns null under reduced-motion (motion fully disabled — event still conveyed by bubbles/behaviors) and for any non-juiced event (rare-only, no idle loop). EventJuice overlay is pointer-events-none, particles keyed by event id (replay once per event, anti-nag), transient <1.2s — never hides status. Confetti/sparkle keyframes bundled in index.css (CSP-safe). No new events, no store flag.
+- Spec: docs/specs/event-juice-pass.md (status: shipped; §4.4 DSoT). Commits 2dfd670 (spec) + 1ce15b0 (impl). Built on main AFTER #116/#30 merged (no SSoT conflict).
+- SSoT written directly (not guard) to avoid the known stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions`; incremental cosmetic overlay covered by existing `ui-rendering` L1 — skipped with justification.
+- Tests: Pass (6 new eventJuice unit tests; suite 1963; build clean; render-smoke PASS 4 viewports / 0 errors; live — deploy GO click rendered 14 office-confetti particles, 0 errors).
+
+### Ship-feat-avo-107-review-gate-queue-2026-06-13 (#112 — gate "waiting" in-tray: honest reframe of review-gate queue)
+- Feature shipped: AVO-107. A 4-lens office/management-sim game panel (office-sim · cozy · calm-tech honesty skeptic · multi-agent-studio) reframed the "review-gate queue" into an HONEST gate-desk "waiting" in-tray. The only per-agent waiting signal AVO owns is `awaiting-approval` (idle-gap inferred from blocked+90s) — it does NOT prove "submitted for review", so: driven SOLELY by live `awaiting-approval` count (never `activeWorkflow` membership, already drawn as AVO-105 arrows); copy = existing "waiting on you"; soft/inferred styling (no urgent red); NO per-agent type glyph (no per-agent phase) — at most ONE optional global phase glyph (review/ship); aggregates N waiters into ≤3 askew sheets + true count; invisible at 0; clears the same frame a waiter resolves.
+- Pure unit-tested `gateWaiting`/`gatePhaseGlyph` (`src/systems/reviewGate.js`) + `GateWaitingTray` pure overlay at the gate desk (R1: never relocates an agent; complements AVO-105 arrows as the "landed & still waiting" resting state). role=button + aria-label + Enter/Space; reduced-motion drops the settle; click reveals waiters tagged "inferred".
+- Spec: docs/specs/review-gate-waiting.md (status: shipped; §4.4 DSoT + panel). Commits ecfa319 (impl) + spec. Built on main AFTER #116/#30/#117 merged → conflict-free.
+- SSoT written directly (not guard) to avoid the stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions`; incremental overlay covered by existing `ui-rendering` L1 — skipped with justification.
+- Tests: Pass (5 new reviewGate unit tests; suite 1968; build clean; render-smoke PASS 4 viewports / 0 errors; live — a blocked gate agent idle-gap-flipped to awaiting-approval after 90s and the tray rendered with aria-label "1 waiting on you", 0 console errors).
+
+### Ship-feat-avo-123-theme-selector-2026-06-13 (#41 — office theme selector: lightweight overlay-grade)
+- Feature shipped: AVO-123. Office theme/skin selector as a LIGHTWEIGHT global tint grade — one full-office rect rendered BENEATH the agent/status layer (the AVO-111 lighting mechanism), NOT a 150-fill re-color. Opt-in ⚙ swatch radiogroup, persisted (`avo.theme`). Ships Default + Winter + Autumn (light tints).
+- A 3-lens game panel (cozy art-director · legibility skeptic · office-sim) chose the overlay-grade approach; a per-theme × per-status WCAG **contrast guard** (unit test) then DROVE the theme set: DROPPED Dark (a genuinely-dark tint pushes working-amber→1.36 / idle-gray below the guard; one faint enough to pass ≤0.08 doesn't read as dark; night lighting already gives an honest dark mood), and deferred Retro (needs per-sprite remap) + Cyberpunk (saturation endangers ring contrast). Guards: opacity cap 0.20 + summed (theme+lighting) cap 0.45 (lighting wins) + the build-failing contrast test. Status sits above the tint → never recolored.
+- Spec: docs/specs/office-theme-selector.md (status: shipped; §4.4 DSoT + panel). Commit a38adcb. Built on main AFTER #116/#30/#117/#112 merged → conflict-free.
+- SSoT written directly (not guard) to avoid the stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions`; incremental overlay covered by existing `ui-rendering` L1 — skipped with justification.
+- Tests: Pass (7 new theme unit tests incl. the contrast guard; suite 1975; build clean; render-smoke PASS 4 viewports / 0 errors; live — Winter swatch applied an `rgb(150,180,210)@0.14` tint beneath the status layer + persisted to localStorage, 0 console errors).

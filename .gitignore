@@ -1,15 +1,25 @@
+# .claude/ — ignore Claude local state, but TRACK the vendored Agentic-OS brain
+# (settings.json, command adapters, and the acx-* phase-shim sub-agents).
 .claude/**
 !.claude/settings.json
 !.claude/commands/
 !.claude/commands/**
-.codex/
-codex/
+!.claude/agents/
+!.claude/agents/**
+# .codex/ + codex/ — ignore any Codex local state, but TRACK the vendored framework
+# files (the install guide and the codex rules the manifest/validator require).
+.codex/**
+!.codex/INSTALL.md
+codex/**
+!codex/rules/
+!codex/rules/**
+# Legacy migration guards (old pre-1.x paths the deploy migrates away from) — keep ignored.
 agentcortex/
 tools/validate.sh
 tools/validate.ps1
 tools/validate.cmd
+# Owner's draft issue template (not a framework file) — keep ignored.
 .github/ISSUE_TEMPLATE/agent_issue.md
-.github/PULL_REQUEST_TEMPLATE.md
 
 # Runtime State
 docs/context/current_state.md

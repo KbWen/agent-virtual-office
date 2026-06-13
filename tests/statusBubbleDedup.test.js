@@ -43,4 +43,17 @@ describe('status bubble fires on change, not on poll re-apply', () => {
     useOfficeStore.getState().applyExternalStatus([{ agentId: 'qa', status: 'done', task: 'magnifier' }])
     expect(useOfficeStore.getState().agents.qa.bubble).toBeTruthy()
   })
+
+  // AVO-104: a SubagentStart skill activation must surface the localized skill bubble through the
+  // store's existing bubble channel (generateContextBubble → agent.bubble → BehaviorBubble). This
+  // is the store→bubble link the unit + pipeline tests don't cover end-to-end.
+  it('a skill activation sets the localized skill bubble on the agent (working)', () => {
+    useOfficeStore.getState().applyExternalStatus([{ agentId: 'qa', status: 'working', task: 'review', skill: 'review' }])
+    expect(useOfficeStore.getState().agents.qa.bubble).toBe('🧐 Reviewing')
+  })
+
+  it('a blocked update with a skill does NOT show the skill bubble (honesty: working-phase only)', () => {
+    useOfficeStore.getState().applyExternalStatus([{ agentId: 'qa', status: 'blocked', task: 'review', skill: 'review', reasonCode: 'blocked-unknown' }])
+    expect(useOfficeStore.getState().agents.qa.bubble).not.toBe('🧐 Reviewing')
+  })
 })

@@ -28,3 +28,11 @@ note: RESOLVES the [FORWARD-LOOKING] deferral in the 2026-05-29 entry above — 
 - [DECISION] AVO-108 (token meter): the hook tail-reads `transcript_path` (a JSONL; 64 KB from end) for the latest `usage` and emits `tokens:{ctx,out,model}` where `ctx = input + cache_creation + cache_read` (`office-status-hook.js:499`). Token/cost is NOT in the raw hook payload — the transcript is the data path.
 - [DECISION] AVO-102 (effort aura): the hook emits `effort.level` (low|medium|high|xhigh|max) from `event.effort.level` (`office-status-hook.js:528`).
 - [CONSTRAINT] All three are ADDITIVE to the normalized office-status contract — no existing field changed; consumers ignoring planning/tokens/effort are unaffected. `transcript_path` tailing is read-only and bounded (64 KB); hook authors must not assume the full transcript is parsed. OT GenAI `gen_ai.usage.*` remains the forward target for the token-field naming.
+
+### [hook-integration][2026-06-11][main]
+source_review: docs/reviews/2026-06-11-tech-debt-audit.md
+cross_ref: docs/architecture/silent-catch-policy.md
+
+- [DECISION] Bridge page dynamic UI must avoid inline handlers and dynamic `innerHTML`. The launcher keeps the external script split (`public/bridge.html` + `public/bridge-ui.js`) so the existing CSP can block inline script without breaking controls.
+- [CONSTRAINT] Hook and bridge failure handling is intentionally crash-proof, but new silent catches must follow `docs/architecture/silent-catch-policy.md`; user-visible API failures remain observable through status codes or sanitized logs.
+- [CONSTRAINT] Hook hot paths must stay fast and avoid logging raw prompts, command bodies, token payloads, or local paths unless an existing sanitized diagnostic channel explicitly allows it.

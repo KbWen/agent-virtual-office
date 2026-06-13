@@ -1,12 +1,17 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore } from '../systems/store'
+import { getLightingOverlay } from '../systems/lighting'
+import { startAmbientSound } from '../systems/ambientSound'
 import { startOfficeLife, triggerInteractiveEvent } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
 import { startDesktopNotifier } from '../inference/desktopNotifier'
 import { startIdleGapInference } from '../inference/idleGapInfer'
 import { startWorkflowHandoffs } from '../inference/workflowHandoff'
-import { eventName, t, useLocale } from '../i18n'
+import { juiceForEvent } from '../systems/eventJuice'
+import { gateWaiting, GATE_SHEET_CAP } from '../systems/reviewGate'
+import { themeOverlay, cappedThemeOpacity } from '../systems/theme'
+import { eventName, charName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import PairLinkOverlay from './PairLink'
 import HelperHuddles from './HelperHuddle'
@@ -230,16 +235,92 @@ function WhiteboardAnimation() {
   )
 }
 
-function getLightingOverlay(hour) {
-  if (hour >= 22) return { fill: '#050510', opacity: 0.45 }
-  if (hour >= 20) return { fill: '#0a0a2e', opacity: 0.38 }
-  if (hour >= 19) return { fill: '#0f1040', opacity: 0.30 }
-  if (hour >= 18) return { fill: '#1a1040', opacity: 0.18 }
-  if (hour >= 17) return { fill: '#ff6622', opacity: 0.08 }
-  if (hour >= 9 && hour < 17) return { fill: '#fff', opacity: 0.0 }
-  if (hour >= 7) return { fill: '#ffd080', opacity: 0.07 }
-  if (hour >= 6) return { fill: '#FFD093', opacity: 0.05 }
-  return { fill: '#050510', opacity: 0.45 }
+// AVO-136 — event juice overlay. One-shot, capped particle bursts for RARE meaningful events only,
+// rendered BENEATH no status element (it's a pointer-events-none cosmetic layer above the floor but
+// it never occludes a ring/badge — particles are tiny ✦ that fade). `juiceForEvent` returns null
+// under reduced-motion (motion fully disabled — the event's bubbles/behaviors still convey it) and
+// for any non-juiced event, so this renders nothing at rest. Particles are keyed by event id so a
+// NEW event remounts them (CSS animation replays once); within one event they don't re-fire.
+function EventJuice() {
+  const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
+  const reducedMotion = useOfficeStore((s) => s.reducedMotion)
+  const juice = juiceForEvent(activeEvent?.id, { reducedMotion })
+  if (!juice) return null
+  const ek = activeEvent.id
+  if (juice.kind === 'confetti') {
+    // deploy-success: a brief office-wide ✦ burst in the upper-centre, drifting up + fading.
+    const cx = 360, cy = 130
+    const hues = ['#F5C842', '#E24B4A', '#378ADD', '#1D9E75', '#9B59B6']
+    return (
+      <g pointerEvents="none" aria-hidden="true">
+        {Array.from({ length: juice.count }).map((_, i) => (
+          <text key={`${ek}-${i}`} x={cx + (i - juice.count / 2) * 9 + (i % 3 - 1) * 3} y={cy}
+            fontSize="9" fill={hues[i % hues.length]} textAnchor="middle"
+            style={{ animation: `office-confetti ${juice.durationMs}ms ease-out ${i * 40}ms both` }}>✦</text>
+        ))}
+      </g>
+    )
+  }
+  // eureka: a small ✦ sparkle ring near the whiteboard (matches WhiteboardAnimation at 537,282).
+  const bx = 537, by = 282
+  return (
+    <g pointerEvents="none" aria-hidden="true">
+      {Array.from({ length: juice.count }).map((_, i) => {
+        const ang = (i / juice.count) * Math.PI * 2
+        return (
+          <text key={`${ek}-${i}`} x={bx + 35 + Math.cos(ang) * 15} y={by + 10 + Math.sin(ang) * 12}
+            fontSize="8" fill="#F5C842" textAnchor="middle"
+            style={{ animation: `office-sparkle ${juice.durationMs}ms ease-out ${i * 70}ms both` }}>✦</text>
+        )
+      })}
+    </g>
+  )
+}
+
+// AVO-107 — gate "waiting" in-tray. HONEST: driven SOLELY by per-agent `awaiting-approval` (an
+// inferred "waiting on a human" signal — NOT a confirmed review queue), so copy = "waiting on you",
+// styling is soft/inferred, and there is NO per-agent type glyph (only one optional global phase
+// glyph from activeWorkflow). Pure overlay anchored at the gate desk — never relocates an agent
+// (R1). Renders nothing when 0 wait; clears the SAME frame a waiter resolves (no phantom queue).
+function GateWaitingTray() {
+  const agents = useOfficeStore(useShallow((s) => s.agents))
+  const activeWorkflow = useOfficeStore((s) => s.activeWorkflow)
+  const reducedMotion = useOfficeStore((s) => s.reducedMotion)
+  const [open, setOpen] = React.useState(false)
+  const { count, names, phaseGlyph } = gateWaiting(agents, activeWorkflow)
+  React.useEffect(() => { if (count === 0 && open) setOpen(false) }, [count, open])
+  if (count === 0) return null
+  const ax = 116, ay = 70   // near WAYPOINTS.gate {100,80}, offset clear of the Gatekeeper sprite
+  const sheets = Math.min(count, GATE_SHEET_CAP)
+  const PHASE_GLYPH = { review: '🔍', ship: '🚀' }
+  const label = t('chat.teamBlocked', 'Waiting on you')
+  return (
+    <g>
+      <g style={{ cursor: 'pointer', ...(reducedMotion ? {} : { animation: 'pet-pop 0.15s ease-out' }) }}
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
+        role="button" tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v) } }}
+        aria-label={t('aria.gateWaiting', '{0} waiting on you — click for details').replace('{0}', String(count))}>
+        <rect x={ax} y={ay + 8} width={16} height={3} rx={1} fill="#8a6d4a" opacity={0.85} />
+        {Array.from({ length: sheets }).map((_, i) => (
+          <rect key={i} x={ax + 2 + i * 0.7} y={ay + 6 - i * 2} width={11} height={5} rx={0.5}
+            fill="#fdfcf7" stroke="#cdbf9e" strokeWidth={0.4} opacity={0.9}
+            transform={`rotate(${(i - 1) * 3} ${ax + 7} ${ay + 6})`} />
+        ))}
+        {phaseGlyph && <text x={ax + 8} y={ay + 4} fontSize="4" textAnchor="middle" aria-hidden="true">{PHASE_GLYPH[phaseGlyph]}</text>}
+        {count > 1 && <text x={ax + 18} y={ay + 11} fontSize="5" fill="#6b5a3a" fontWeight="bold">{count}</text>}
+      </g>
+      {open && (
+        <g transform={`translate(${ax - 2}, ${ay + 14})`}>
+          <rect x={0} y={0} width={64} height={7 + names.length * 7} rx={2} fill="#fffdf5" stroke="#cdbf9e" strokeWidth={0.5} />
+          <text x={3} y={5.5} fontSize="4" fill="#6b5a3a" fontWeight="bold">{label}</text>
+          {names.map((id, i) => (
+            <text key={id} x={3} y={12 + i * 7} fontSize="3.6" fill="#555">{charName(id)} · {t('ui.gateInferred', 'inferred')}</text>
+          ))}
+        </g>
+      )}
+    </g>
+  )
 }
 
 // ─── Clock widget — isolates the per-minute subscription ──────────────────
@@ -715,6 +796,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const mood = useOfficeStore((s) => s.mood)
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
   const weatherEffects = useOfficeStore((s) => s.weatherEffects)
+  const lightingEnabled = useOfficeStore((s) => s.lightingEnabled)
   const weather = moodToWeather(mood)
   // #45: WallWindow's reducedMotion prop ONLY governs the WeatherOverlay animation. Feed it the
   // OR of the accessibility pref and the user weather toggle so disabling either renders weather
@@ -729,6 +811,13 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
   useEffect(() => {
     const cleanup = startStatusIntegration(useOfficeStore)
+    return cleanup
+  }, [])
+
+  // AVO-122: ambient soundscape engine. Subscribes to the store but creates NO audio until the
+  // user opts in via the ⚙ toggle (autoplay-safe; off by default). cleanup tears down the ctx.
+  useEffect(() => {
+    const cleanup = startAmbientSound(useOfficeStore)
     return cleanup
   }, [])
 
@@ -783,6 +872,12 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     return { coffeeCountMap: coffee, stickyCountMap: sticky, booksCountMap: books }
   }, [deskItemCounts])
   const lightOverlay = getLightingOverlay(hour)
+  // AVO-123: theme tint grade. Composes ON TOP of the lighting tint, beneath the agent/status layer.
+  // cappedThemeOpacity enforces the per-theme cap + the summed (theme+lighting) budget so the scene
+  // is never washed out. Default theme → opacity 0 → no rect.
+  const themeId = useOfficeStore((s) => s.theme)
+  const themeGrade = themeOverlay(themeId)
+  const themeTintOpacity = cappedThemeOpacity(themeGrade.opacity, lightingEnabled ? lightOverlay.opacity : 0)
 
   // Stable handler for the ops desk's deploy button — a fresh inline arrow on
   // every render would defeat PersonalDesk's React.memo for the ops desk.
@@ -889,20 +984,17 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       setSceneBounds(parts[0], parts[2])
     }
   }, [viewBox, setSceneBounds])
-  // Office (non-panel) FILLS THE WIDTH at every pane shape: the svg is width-driven via aspect-ratio
-  // (800/560), so the scene ALWAYS spans the full browser width — no left/right whitespace, ever.
-  // Its height follows the ratio; the wrapper centers + clips, so a wide-short pane trims the empty
-  // ceiling/floor symmetrically (no side gaps) while a tall pane just gets vertical breathing room.
-  // Panel mode keeps its own crop+fit (w-full h-full + meet).
-  const svgStyle = isPanel ? {} : { aspectRatio: '800 / 560' }
+  // Full-office mode must fit the whole authored 800x560 scene inside the available pane.
+  // Let the SVG viewport take the container box and rely on `meet` so wide panes letterbox
+  // horizontally instead of cropping the entrance/lounge edges.
+  const svgClassName = isPanel ? 'w-full h-full' : 'w-full h-full'
 
   const svgElement = (
     <svg
       ref={svgRef}
       viewBox={viewBox}
       xmlns="http://www.w3.org/2000/svg"
-      className={isPanel ? 'w-full h-full' : 'w-full'}
-      style={svgStyle}
+      className={svgClassName}
       preserveAspectRatio="xMidYMid meet"
     >
       <defs>
@@ -924,6 +1016,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
         <radialGradient id="lounge-light" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#FFD090" stopOpacity="0.07" />
           <stop offset="100%" stopColor="#FFD090" stopOpacity="0" />
+        </radialGradient>
+        {/* AVO-125: warm desk-lamp ground pool — ONE shared gradient reused by all 7 desks.
+            #FFE0A0 is a lamp-warmth hue OUTSIDE STATUS_COLORS (paler / lower-chroma than the
+            working ring #EF9F27), so a floor pool can never be misread as a status ring. */}
+        <radialGradient id="lamp-halo" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FFE0A0" stopOpacity="0.14" />
+          <stop offset="55%" stopColor="#FFD890" stopOpacity="0.05" />
+          <stop offset="100%" stopColor="#FFD890" stopOpacity="0" />
         </radialGradient>
       </defs>
 
@@ -1144,43 +1244,47 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
         </g>
       )}
 
-      {/* ═══ OFFICE PET ═══ (#39 — ambient cat; signal-driven barometer. Painted behind agents so
-          they naturally occlude it when overlapping. Renders nothing when toggled off.) */}
-      <OfficePet />
-
-      {/* ═══ SUBAGENT HELPER HUDDLES ═══ (capped helper figures — painted BEHIND the agents
-          so the full-size lead is never clipped by its own helpers; they trail the lead's live pos) */}
-      <HelperHuddles />
-
-      {/* ═══ CO-EDITING PAIR LINK ═══ (AVO-106 — faint desk-to-desk link when two agents co-edit
-          the same file; painted BEHIND agents so sprites occlude the endpoints. Pure overlay — never
-          moves an agent. Renders nothing when no pair.) */}
-      <PairLinkOverlay />
-
-      {/* ═══ AGENTS ═══ */}
-      {agentList.map((agent) => (
-        <AgentCharacter key={agent.id} agent={agent} />
-      ))}
-
-      {/* ═══ SPECIAL EVENT CHARACTERS ═══ */}
-      {activeEvent?.id === 'boss-visit' && <WalkingBoss />}
-      {activeEvent?.id === 'dog-visit' && <OfficeDog />}
-
-      {/* ═══ FLYING DOCUMENTS (handoff animation) ═══ */}
-      <FlyingDocuments />
-      <WhiteboardAnimation />
-
-      {/* ═══ AGENT INSPECTOR (click-to-inspect popover) ═══ */}
-      <AgentInspector />
-
-      {/* ═══ LIGHTING ═══ */}
-      {lightOverlay.opacity > 0 && (
+      {/* ═══ TIME-OF-DAY LIGHTING ═══ (AVO-111 — full-canvas color-grade tint. Painted HERE on
+          purpose: it washes the room/floor/furniture above, but sits BENEATH the agent + status
+          layer below, so a backdrop can never dim or recolor status rings, name labels, or speech
+          bubbles (status legibility is the #1 product law). Toggled off — or first-run under
+          prefers-reduced-motion / prefers-contrast — renders no rect = clear midday baseline. */}
+      {lightingEnabled && lightOverlay.opacity > 0 && (
         <rect x="0" y="0" width="800" height="560"
           fill={lightOverlay.fill} opacity={lightOverlay.opacity} pointerEvents="none" />
       )}
 
-      {/* ═══ NIGHT EFFECTS ═══ */}
-      {hour >= 19 && (
+      {/* AVO-123: office theme tint — a light overlay grade composing on top of the lighting tint,
+          BENEATH the agent/status layer (same legibility guarantee). Capped + summed-capped so it
+          can never wash out status rings; Default → opacity 0 → no rect. */}
+      {themeTintOpacity > 0 && (
+        <rect x="0" y="0" width="800" height="560"
+          fill={themeGrade.fill} opacity={themeTintOpacity} pointerEvents="none" />
+      )}
+
+      {/* ═══ NIGHT DESK-LAMP HALOS ═══ (AVO-125 — a warm pool of lamplight on the floor under each
+          desk lamp. Rendered HERE (after the lighting tint, before the agent layer) so it washes the
+          desk floor but sits BENEATH every sprite/ring/label/bubble — status legibility is the #1
+          law. Status-AGNOSTIC furniture light (zero agent-state meaning), so it can never compete
+          with the real status channel. Rides the AVO-111 `lightingEnabled` toggle + the lighting
+          tint's own dark-room gate (lightOverlay.opacity > 0), so one switch governs the whole
+          lighting story and halos vanish under reduced-motion/contrast first-run. Fully static. */}
+      {lightingEnabled && lightOverlay.opacity > 0 && (
+        <g pointerEvents="none">
+          {DESK_DATA.map((d) => (
+            <ellipse key={`lamp-halo-${d.id}`} cx={d.x + 22} cy={d.y + 2} rx={28} ry={12}
+              fill="url(#lamp-halo)" />
+          ))}
+        </g>
+      )}
+
+      {/* ═══ NIGHT-EFFECTS LIGHTS ═══ (monitor screen-glow, desk lamps, ceiling/lounge warm light,
+          late-night OVERTIME chip). Relocated HERE — beneath the agent/status layer, beside the
+          AVO-111 tint + AVO-125 halos — so this ambient light never paints OVER a sprite/ring/label
+          (the #1 status-legibility law; it used to render after the agents). Now rides the SAME gate
+          as the tint + halos (`lightingEnabled && lightOverlay.opacity > 0`) instead of a bare
+          `hour >= 19`, so one toggle governs the whole lighting story. Visuals otherwise identical. */}
+      {lightingEnabled && lightOverlay.opacity > 0 && (
         <g pointerEvents="none">
           {/* Monitor screen glow on desks (gradients defined in <defs>) */}
           {DESK_DATA.map((d) => (
@@ -1208,6 +1312,37 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           )}
         </g>
       )}
+
+      {/* ═══ OFFICE PET ═══ (#39 — ambient cat; signal-driven barometer. Painted behind agents so
+          they naturally occlude it when overlapping. Renders nothing when toggled off.) */}
+      <OfficePet />
+
+      {/* ═══ SUBAGENT HELPER HUDDLES ═══ (capped helper figures — painted BEHIND the agents
+          so the full-size lead is never clipped by its own helpers; they trail the lead's live pos) */}
+      <HelperHuddles />
+
+      {/* ═══ CO-EDITING PAIR LINK ═══ (AVO-106 — faint desk-to-desk link when two agents co-edit
+          the same file; painted BEHIND agents so sprites occlude the endpoints. Pure overlay — never
+          moves an agent. Renders nothing when no pair.) */}
+      <PairLinkOverlay />
+
+      {/* ═══ AGENTS ═══ */}
+      {agentList.map((agent) => (
+        <AgentCharacter key={agent.id} agent={agent} />
+      ))}
+
+      {/* ═══ SPECIAL EVENT CHARACTERS ═══ */}
+      {activeEvent?.id === 'boss-visit' && <WalkingBoss />}
+      {activeEvent?.id === 'dog-visit' && <OfficeDog />}
+
+      {/* ═══ FLYING DOCUMENTS (handoff animation) ═══ */}
+      <FlyingDocuments />
+      <WhiteboardAnimation />
+      <EventJuice />
+      <GateWaitingTray />
+
+      {/* ═══ AGENT INSPECTOR (click-to-inspect popover) ═══ */}
+      <AgentInspector />
 
       {/* ═══ EVENT / WORKFLOW BANNER ═══ */}
       {(activeEvent || activeWorkflow) && (
@@ -1258,9 +1393,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
   // Office-primary: the full scene by default at every size. The roster is shown ONLY when the user
   // manually toggles it (store.rosterMode) — an optional lens, never an automatic size-based switch.
-  // Office branch CENTERS + CLIPS: the width-driven svg spans the full width, so vertical overflow on
-  // a wide-short pane is clipped symmetrically (no left/right whitespace) and vertical slack on a tall
-  // pane is centered. Roster branch keeps its own internal scroll.
+  // Office branch centers the complete scene inside the available pane. Roster branch keeps its own
+  // internal scroll.
   return rosterMode ? (
     <div ref={containerRef} className="w-full flex-1 overflow-hidden min-h-0">
       <NarrowRoster />

@@ -1,54 +1,44 @@
-# 技術架構 — Agent Virtual Office（精簡版）
-
-> [!IMPORTANT]
-> **目前的行為模型請看本文件下方的 [`v1.1.0 — Classifier + Inference Layer`](#v110--classifier--inference-layer-2026-05-29) section。**
-> 緊接在下面的「核心原則 / 系統架構」頂部圖描述的是**最初的概念模型**（Level A/B 權重 + `inferStatus.sh`），保留作為設計沿革。
-> 實際出貨的狀態→行為決策由 `src/systems/classify.js` 的四層分類器 + `decideBehavior({task, role, status, workflow})`（優先序 `status > workflow > role > family-default`）+ zustand store 驅動，**不是**頂部圖的權重隨機 `BehaviorEngine`。
-> 另注意：頂部圖與部分 Level B 段落仍寫舊路徑 `docs/context/`；SSoT 現位於 `.agentcortex/context/`（`current_state.md` + `work/<key>.md`）。
+# 技術架構 — Agent Virtual Office
 
 ---
 
 ## 核心原則
 
 1. **AgentCortex 零改動** — 辦公室是唯讀觀察者
-2. **前端為主** — 能不用後端就不用
-3. **漸進增強** — Level A 獨立運作，Level B 可選附加
+2. **標準化狀態契約** — hook、bridge、API 都收斂成 `office-status`
+3. **誠實可觀測** — 只呈現真實訊號或明確標示的保守推論
+4. **SVG 場景優先** — 800×560 office scene 是主體；控制列和 inspector 是輔助層
 
 ---
 
 ## 系統架構
 
 ```
-┌──────────────────────────────────────────────┐
-│              前端 (React + SVG)                │
-│                                              │
-│  PixelOffice ─── AgentCharacter ×8           │
-│       │                    │                 │
-│       │              BehaviorEngine          │
-│       │              (權重隨機行為)            │
-│       │                    │                 │
-│       │         ┌──────────┴──────────┐      │
-│       │         │                     │      │
-│       │    Level A 預設權重      Level B 覆蓋  │
-│       │    (work:50 daily:25     (推斷結果     │
-│       │     social:15 away:10)   調整權重)    │
-│       │                     │                │
-│       │                     ▼                │
-│       │             inferStatus.sh           │
-│       │             (唯讀腳本)                │
-│       │                     │                │
-│       └─────────────────────┘                │
-└──────────────────────────────────────────────┘
-                      │ (Level B 才會碰)
-                      ▼ (唯讀)
-        ┌───────────────────────────┐
-        │  AgentCortex 既有檔案      │
-        │  docs/context/             │
-        │    current_state.md        │
-        │    work_log_*.md           │
-        │  .agent/workflows/         │
-        └───────────────────────────┘
-           ↑ 不改動任何東西
+Claude/Codex hooks      Bridge page/API       File/session scanner
+        │                    │                    │
+        └──────────────┬─────┴──────────────┬─────┘
+                       ▼                    ▼
+             normalize/sanitize      scanAndMerge(_cwd)
+                       │                    │
+                       └────────────┬───────┘
+                                    ▼
+                         inferStatus.applyMessage
+                                    │
+                                    ▼
+                         store.applyExternalStatus
+                                    │
+                                    ▼
+        decideBehavior({ task, role, status, workflow })
+          priority: status > workflow > role > family-default
+                                    │
+                                    ▼
+                         Zustand office store
+                                    │
+             ┌──────────────────────┼──────────────────────┐
+             ▼                      ▼                      ▼
+       PixelOffice SVG        AgentCharacter ×8       ControlPanel /
+       800×560 scene          RAF movement +          ActivityFeed /
+       `meet` fit             behavior overlays       Inspector
 ```
 
 ---
@@ -407,10 +397,11 @@ Worktree 角色的 ID 格式為 `{slug}~{role}`（例如 `feat-auth~dev`）。
 
 ---
 
-## Level B 推斷介面
+## Legacy Lightweight Inference Concept
 
 ```typescript
-// 推斷結果的資料結構（超簡單）
+// Legacy concept only. Current production status flows through
+// office-status hooks / bridge / API plus inferStatus.applyMessage.
 interface OfficeVibe {
   mode: 'agentcortex' | 'lightweight' | 'demo';
   activeAgent: string | null;     // 'pm' | 'dev' | 'qa' | ... | null
@@ -420,7 +411,7 @@ interface OfficeVibe {
 
 // 推斷函數（前端 JS 版，讀本地檔案）
 async function inferStatus(projectRoot: string): Promise<OfficeVibe> {
-  // 試著讀 current_state.md
+  // 試著讀 .agentcortex/context/current_state.md
   // 讀不到就回傳 demo 模式
   // 讀到了就 grep 出 phase 和 active workflow
   // 完全不寫入任何檔案
@@ -437,7 +428,7 @@ async function inferStatus(projectRoot: string): Promise<OfficeVibe> {
        └── 都沒有 → Demo 模式（3 角色，純動畫）
 
 2. 如果是 AgentCortex 模式：
-   讀 docs/context/current_state.md
+   讀 .agentcortex/context/current_state.md
    ├── grep "Current Phase" → 推斷目前階段
    ├── grep "Active Workflow" → 推斷目前 command
    └── 對應到角色 → 調整該角色的行為權重
@@ -489,7 +480,7 @@ npm run build:lib
 
 ---
 
-## Claude Desktop 整合路徑
+## Claude Desktop 整合路徑（legacy concept）
 
 ### 現在（Phase 1-2）
 
@@ -514,7 +505,7 @@ sendPrompt('刷新辦公室狀態')
   ↓
 Claude 呼叫輕量 MCP 工具 get_office_vibe
   ↓
-MCP 工具讀 current_state.md（唯讀）
+MCP 工具讀 .agentcortex/context/current_state.md（唯讀）
   ↓
 Claude 更新 artifact
 ```
@@ -526,7 +517,7 @@ MCP Server 極簡版（未來才需要）：
 const server = new Server({ name: 'virtual-office', version: '0.1.0' });
 
 server.tool('get_office_vibe', { project_root: 'string' }, async ({ project_root }) => {
-  const state = readFileSync(join(project_root, 'docs/context/current_state.md'), 'utf8');
+  const state = readFileSync(join(project_root, '.agentcortex/context/current_state.md'), 'utf8');
   const phase = state.match(/Current Phase:\s*(\w+)/)?.[1] || 'idle';
   const active = state.match(/Active Workflow:\s*(\S+)/)?.[1] || null;
   

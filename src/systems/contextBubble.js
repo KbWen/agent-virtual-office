@@ -54,6 +54,33 @@ function fromTemplate(key, ctx) {
     : template.replace(/\s*\{ctx\}\s*/g, '')
 }
 
+// AVO-104: map a raw skill / subagent name to a localized skill-bubble string. Mirrors the buckets
+// (and order) of the hook's skillLabel() so the in-scene bubble matches the role-routing vocabulary.
+// The icon lives INSIDE the i18n string (text channel, a11y-friendly — not an icon-only SVG). Derived
+// on the CLIENT from the raw skill name so the bubble follows the viewer's locale, not the hook-time
+// language. Returns null for a missing/non-string skill.
+const SKILL_FAMILY = [
+  [/plan/i, 'plan'],
+  [/spec|bootstrap/i, 'spec'],
+  [/review/i, 'review'],
+  [/test/i, 'test'],
+  [/implement|code/i, 'implement'],
+  [/fix|debug/i, 'fix'],
+  [/ship|deploy/i, 'ship'],
+  [/research|explore/i, 'research'],
+  [/architect|design/i, 'architect'],
+  [/security|audit/i, 'security'],
+]
+export function skillBubbleText(skill, tt = t) {
+  if (!skill || typeof skill !== 'string') return null
+  for (const [re, fam] of SKILL_FAMILY) {
+    if (re.test(skill)) return tt(`skillBubbles.${fam}`)
+  }
+  // generic fallback: "💼 {ctx}" — function replacer so `$`-sequences in the raw name stay literal.
+  const generic = tt('skillBubbles.generic')
+  return typeof generic === 'string' ? generic.replace(/\{ctx\}/g, () => skill) : null
+}
+
 /**
  * Map tool name to action category for template lookup
  */
@@ -86,7 +113,7 @@ export function generateContextBubble(agentId, update, allExternalStatus) {
   // Strip worktree session prefix so 'feat-x~dev' resolves to 'dev' templates
   const baseRole = agentId.includes('~') ? agentId.split('~').pop() : agentId
 
-  const { status, task, label, hint } = update
+  const { status, task, label, hint, skill } = update
   const ctx = extractContext(label)
   const action = toolToAction(task)
 
@@ -102,6 +129,16 @@ export function generateContextBubble(agentId, update, allExternalStatus) {
     const doneBubble = fromTemplate(`${baseRole}-done`, ctx)
       || fromTemplate('any-done', ctx)
     if (doneBubble) return doneBubble
+  }
+
+  // 2.5 Skill activation (AVO-104) — a real SubagentStart working-phase event. Blocked/done returned
+  // above, and the explicit guard keeps a skill bubble off any blocked/done update (honest: skill is a
+  // working-phase announcement only, never a 2nd channel over a real state). Announce the skill once
+  // ("🧐 Reviewing"); it then competes at `working` priority in the bubble cap and expires on the
+  // existing clearBubble timer — no persistence, no new over-head element (AVO-131 line held).
+  if (skill && status !== 'blocked' && status !== 'done') {
+    const skillBubble = skillBubbleText(skill)
+    if (skillBubble) return skillBubble
   }
 
   // 3. Role × action specific (e.g., dev-edit, qa-search, ops-bash)

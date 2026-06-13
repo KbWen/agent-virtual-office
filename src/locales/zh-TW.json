@@ -132,6 +132,19 @@
     "awaiting-approval": "等待核准",
     "thinking": "思考中"
   },
+  "skillBubbles": {
+    "plan": "📊 規劃中",
+    "spec": "📋 寫規格中",
+    "review": "🧐 Review 中",
+    "test": "🧪 跑測試中",
+    "implement": "⌨️ 開發中",
+    "fix": "🔧 修 bug 中",
+    "ship": "🚀 部署中",
+    "research": "🔬 研究中",
+    "architect": "🏗️ 設計架構中",
+    "security": "🛡️ 安全檢查中",
+    "generic": "💼 {ctx}"
+  },
   "contextBubbles": {
     "dev-edit": ["{ctx} 這段...嗯讓我想想", "改 {ctx} 中，手感不錯", "{ctx} 又要動刀了", "嗯 {ctx} 這裡可以更好", "{ctx} 重構一下~", "動 {ctx}，別催我"],
     "dev-write": ["來寫 {ctx}！", "新檔案 {ctx}，從零開始", "{ctx} 我來搞定"],
@@ -246,6 +259,7 @@
   "ui": {
     "live": "即時",
     "fallbackAgents": "{0} 個 agent",
+    "gateInferred": "推測",
     "run": "執行",
     "test": "測試",
     "testHint": "設定 agent 狀態以改變行為權重 — 工作中：更多打字，卡住：焦躁，完成：慶祝",
@@ -282,9 +296,12 @@
   "status": {
     "offline": "離線",
     "apiOffline": "狀態 API 離線",
-    "apiRetrying": "狀態 API 重試中"
+    "apiRetrying": "狀態 API 重試中",
+    "local": "本機"
   },
   "aria": {
+    "health": "連線狀態",
+    "gateWaiting": "{0} 個在等你處理 — 點擊看詳情",
     "pause": "暫停",
     "resume": "繼續",
     "switchLang": "切換語言",
@@ -300,15 +317,23 @@
   },
   "settings": {
     "weather": "天氣動畫",
+    "lighting": "時段光線",
+    "soundscape": "環境音",
     "pet": "辦公室寵物",
     "petSkin": "寵物造型",
     "notifications": "桌面通知",
     "testPanel": "測試面板",
+    "language": "語言",
+    "view": "檢視",
+    "run": "執行流程動畫",
+    "help": "說明與快捷鍵",
     "on": "開",
     "off": "關",
     "blocked": "已封鎖",
     "enable": "啟用",
-    "skin": { "cat": "貓", "vacuum": "掃地機器人", "dog": "狗", "rabbit": "兔子", "bird": "鳥", "hamster": "倉鼠" }
+    "theme": "主題",
+    "skin": { "cat": "貓", "vacuum": "掃地機器人", "dog": "狗", "rabbit": "兔子", "bird": "鳥", "hamster": "倉鼠" },
+    "themeNames": { "default": "預設", "winter": "冬季", "autumn": "秋季" }
   },
   "time": {
     "now": "剛剛",
