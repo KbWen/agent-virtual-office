@@ -28,7 +28,7 @@ last_updated: 2026-06-13
 | AVO-104 | Skill activation badge | product | real-ai-behavior | P2 | docs/specs/skill-activation-badge.md | feature | Shipped | #30; transient skill bubble (panel Option B), reuses bubble cap, working-tier, honest |
 | AVO-105 | Handoff arrows | product | multi-agent | P0 | — | feature | Done | — |
 | AVO-106 | Pair-programming huddle | product | multi-agent | P1 | docs/specs/pair-programming-huddle.md | feature | Done | co-editing pair overlay (desk-to-desk link, edit-only); redesigned from a huddle per expert panel (PR #80) |
-| AVO-107 | Review-gate queue | product | multi-agent | P1 | — | feature | Pending | — |
+| AVO-107 | Review-gate queue | product | multi-agent | P1 | docs/specs/review-gate-waiting.md | feature | Shipped | #112; honest reframe → gate-desk "waiting" in-tray (awaiting-approval only, no queue/type fabrication); panel-decided |
 | AVO-108 | Token & cost meter | product | info-density | P0 | — | feature | Done | — |
 | AVO-109 | Recent-files heatmap | product | info-density | P2 | — | feature | Pending | — |
 | AVO-110 | Blocked-reason tags | product | info-density | P1 | docs/specs/blocked-reason-tags.md | feature | Done | unblocks AVO-117; Phase-2 (permission/auth/rate-limit) deferred |
