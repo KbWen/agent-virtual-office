@@ -16,7 +16,12 @@ describe('getTargetForBehavior socialTargetOverride', () => {
       pm: pmAgent
     }
 
-    // ارسال آبجکت کامل (مطابق انتظار کد اصلی)
+    // De-flake (#147 follow-up): pin Math.random so the social-approach angle/dist are
+    // deterministic. Without this the target is random AND avoidOverlap can shove it away from the
+    // peer-as-obstacle — ~14% of calls landed outside the box below (e.g. y≈173), making this test
+    // intermittently fail in full-suite runs. Fixed seed (0.5) → target (440,500): a clean point
+    // 60px left of the peer, exactly the "walk up beside them" behavior this test means to assert.
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
     const target = movementSystem.getTargetForBehavior('dev', 'chat', agents, pmAgent)
 
     expect(target).toBeDefined()
