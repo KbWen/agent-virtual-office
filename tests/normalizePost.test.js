@@ -9,14 +9,14 @@ describe('normalizePost', () => {
       expect(result.agents).toHaveLength(1)
       // toEqual pins the complete agent shape — AVO-146: shorthand branch now also carries
       // reasonCode/activeFile (previously silently dropped); null is the correct default.
-      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: null, label: null, hint: null, reasonCode: null, activeFile: null })
+      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: null, label: null, hint: null, reasonCode: null, activeFile: null, skill: null })
       expect(result.activeCount).toBe(1)
     })
 
     it('treats non-status values as tasks with status "working"', () => {
       const result = normalizePost({ dev: 'writing tests' })
       // AVO-146: shorthand branch now also carries reasonCode/activeFile (additive change).
-      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: 'writing tests', label: null, hint: null, reasonCode: null, activeFile: null })
+      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: 'writing tests', label: null, hint: null, reasonCode: null, activeFile: null, skill: null })
     })
 
     it('handles multiple agents', () => {
@@ -69,9 +69,9 @@ describe('normalizePost', () => {
   })
 
   describe('full format (type: office-status)', () => {
-    it('full-format agent shape is exactly {role,status,task,label,hint,reasonCode,activeFile}', () => {
+    it('full-format agent shape is exactly {role,status,task,label,hint,reasonCode,activeFile,skill}', () => {
       const result = normalizePost({ type: 'office-status', agents: [{ role: 'dev', status: 'working' }] })
-      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: null, label: null, hint: null, reasonCode: null, activeFile: null })
+      expect(result.agents[0]).toEqual({ role: 'dev', status: 'working', task: null, label: null, hint: null, reasonCode: null, activeFile: null, skill: null })
     })
 
     it('passes through valid agents', () => {
@@ -103,7 +103,7 @@ describe('normalizePost', () => {
       }
       const result = normalizePost(body)
       expect(result.agents).toHaveLength(2)
-      expect(result.agents[1]).toEqual({ role: 'qa', status: 'idle', task: null, label: null, hint: null, reasonCode: null, activeFile: null })
+      expect(result.agents[1]).toEqual({ role: 'qa', status: 'idle', task: null, label: null, hint: null, reasonCode: null, activeFile: null, skill: null })
     })
 
     it('coerces null / undefined / missing status to idle (#52)', () => {

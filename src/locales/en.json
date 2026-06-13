@@ -132,6 +132,19 @@
     "awaiting-approval": "Awaiting approval",
     "thinking": "Thinking"
   },
+  "skillBubbles": {
+    "plan": "📊 Planning",
+    "spec": "📋 Writing spec",
+    "review": "🧐 Reviewing",
+    "test": "🧪 Testing",
+    "implement": "⌨️ Coding",
+    "fix": "🔧 Debugging",
+    "ship": "🚀 Deploying",
+    "research": "🔬 Researching",
+    "architect": "🏗️ Designing",
+    "security": "🛡️ Security check",
+    "generic": "💼 {ctx}"
+  },
   "contextBubbles": {
     "dev-edit": ["tweaking {ctx}...", "hmm {ctx} needs work", "{ctx} again, let's go", "refactoring {ctx}~", "one sec, fixing {ctx}", "{ctx} could be cleaner..."],
     "dev-write": ["writing {ctx} from scratch!", "new file {ctx}, here we go", "{ctx} coming right up"],

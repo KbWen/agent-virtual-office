@@ -179,6 +179,7 @@ describe('AC-2 field survival for AGENT_CARRY_FIELDS', () => {
     hint:       'synthetic-hint-value',
     reasonCode: 'blocked-unknown',   // valid enum; overridden for blocked-status fields
     activeFile: 'src/synthetic.js',
+    skill:      'review',            // AVO-104: raw skill name
   }
 
   for (const field of AGENT_CARRY_FIELDS) {

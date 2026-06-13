@@ -25,7 +25,7 @@ last_updated: 2026-06-13
 | AVO-101 | Plan-Mode visualization | product | real-ai-behavior | P0 | — | feature | Done | — |
 | AVO-102 | Extended-thinking aura | product | real-ai-behavior | P1 | — | feature | Done | — |
 | AVO-103 | Tool inventory label | product | real-ai-behavior | P1 | — | feature | Done | — |
-| AVO-104 | Skill activation badge | product | real-ai-behavior | P2 | — | feature | Pending | — |
+| AVO-104 | Skill activation badge | product | real-ai-behavior | P2 | docs/specs/skill-activation-badge.md | feature | Shipped | #30; transient skill bubble (panel Option B), reuses bubble cap, working-tier, honest |
 | AVO-105 | Handoff arrows | product | multi-agent | P0 | — | feature | Done | — |
 | AVO-106 | Pair-programming huddle | product | multi-agent | P1 | docs/specs/pair-programming-huddle.md | feature | Done | co-editing pair overlay (desk-to-desk link, edit-only); redesigned from a huddle per expert panel (PR #80) |
 | AVO-107 | Review-gate queue | product | multi-agent | P1 | — | feature | Pending | — |

@@ -839,6 +839,7 @@ function processEvent(event) {
   let role, task, status, label, hint = null
   let reasonCode = null  // AVO-110: language-neutral blocked-reason; stamped only on a trusted error
   let activeFile = null  // AVO-106: full path of the file this agent is co-EDITING (Edit/Write only); null otherwise
+  let skill = null       // AVO-104: raw skill/subagent name, set ONLY on SubagentStart (transient activation event)
   let clearWorkflow = false
   let workflowOverride = null  // only SubagentStart sets this; PreToolUse/PostToolUse must not clobber workflow
   let capturedPromptId = null  // PreToolUse captures current _promptId for straggler detection
@@ -948,6 +949,7 @@ function processEvent(event) {
       task = agentType
       status = 'working'
       label = skillLabel(agentType, false)
+      skill = agentType  // AVO-104: announce this skill once as a transient bubble on the client
       workflowOverride = agentType  // set workflow to the subagent type on start
       // Persist skill context so tool calls within this subagent stay on the right role
       if (agentId) saveSkillContext(agentId, role, agentType)
@@ -1203,14 +1205,13 @@ function processEvent(event) {
           .map(a => ({
             role: a.role,
             status: typeof a.status === 'string' ? a.status : 'working',
+            skill: null,  // AVO-104: transient activation event — never carried forward (see SITE 1)
             task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
             label: typeof a.label === 'string' ? a.label.slice(0, 200) : null,
             hint: typeof a.hint === 'string' ? a.hint.slice(0, 200) : null,
-            // AVO-110: carry a still-blocked agent's reason forward so another agent's event
-            // can't stale-clear it (EPHEMERAL cross-agent path); non-blocked → no reason.
+            // AVO-110: carry a still-blocked agent's reason forward (EPHEMERAL); non-blocked → none.
             reasonCode: pickReason(a.status, a.reasonCode),
-            // AVO-106: carry the OTHER agents' last-known file forward (only this event's role is
-            // replaced below). Recency is enforced downstream by activeFileAt + the huddle window.
+            // AVO-106: carry OTHER agents' last-known file forward; recency enforced downstream.
             activeFile: typeof a.activeFile === 'string' ? a.activeFile.slice(0, 200) : null,
           }))
       : []
@@ -1257,6 +1258,9 @@ function processEvent(event) {
       reasonCode: pickReason(status, reasonCode),
       // AVO-106: the file this agent is on (Edit/Write/Read); null for non-file tools / events.
       activeFile: typeof activeFile === 'string' ? activeFile.slice(0, 200) : null,
+      // AVO-104: raw skill name, set only on SubagentStart (null on every other event) → the client
+      // renders a one-shot localized skill bubble, which then expires on the existing bubble timer.
+      skill: typeof skill === 'string' ? skill.slice(0, 200) : null,
     },
   ]
 

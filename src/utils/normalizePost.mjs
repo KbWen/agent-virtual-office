@@ -31,13 +31,14 @@ const MAX_MOOD_DURATION = 3_600_000
 const BLOCKED_REASONS = ['test-run-failed', 'build-failed', 'deps-failed', 'blocked-unknown', 'permission-denied', 'api-rate-limit', 'api-auth-failed']
 
 // ─── Inlined AGENT_CARRY_FIELDS + FIELD_SANITIZERS (mirrors src/utils/statusFields.js) ─
-const AGENT_CARRY_FIELDS = ['task', 'label', 'hint', 'reasonCode', 'activeFile']
+const AGENT_CARRY_FIELDS = ['task', 'label', 'hint', 'reasonCode', 'activeFile', 'skill']
 const FIELD_SANITIZERS = {
   task:       (v) => typeof v === 'string' ? v.slice(0, 200) : null,
   label:      (v) => typeof v === 'string' ? v.slice(0, 200) : null,
   hint:       (v) => typeof v === 'string' ? v.slice(0, 200) : null,
   reasonCode: (v) => BLOCKED_REASONS.includes(v) ? v : null,
   activeFile: (v) => typeof v === 'string' ? v.slice(0, 200) : null,
+  skill:      (v) => typeof v === 'string' ? v.slice(0, 200) : null,  // AVO-104
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
