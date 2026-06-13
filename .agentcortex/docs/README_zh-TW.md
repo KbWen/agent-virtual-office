@@ -1,4 +1,4 @@
-# Agentic OS v1.5.1 (Runtime v1.1 Anti-Drift Edition)
+# Agentic OS v1.5.2 (Runtime v1.1 Anti-Drift Edition)
 
 [English Version](../README.md)
 
@@ -132,10 +132,7 @@ flowchart LR
 
 ### 高風險指令安全設定
 
-以下命令預設禁止直接執行，需先提出風險與回退方案：
-
-- `rm -rf`、`git reset --hard`、`git clean -fdx`
-- `docker system prune -a`、`chown -R`、`curl ... | bash`、`chmod -R 777`
+`rm -rf`、`git reset --hard`、force push 等高風險指令預設禁止直接執行：執行前需先說明爆炸半徑與回退方案（必須涵蓋未追蹤／gitignored 狀態），並取得使用者確認。正式規範與完整指令清單以 `AGENTS.md §Core Directives`（Destructive Command Gate）為準。
 
 ## 快速開始
 

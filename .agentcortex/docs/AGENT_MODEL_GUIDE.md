@@ -1,4 +1,4 @@
-# Agentic OS v1.5.1 — Model Selection Guide
+# Agentic OS v1.5.2 — Model Selection Guide
 
 > For human reference only — this file is not loaded into AI context.
 
