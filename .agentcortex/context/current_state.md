@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-13T05:30:00Z
-- **Update Sequence**: 83
+- **Last Updated**: 2026-06-13T06:30:00Z
+- **Update Sequence**: 84
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -71,6 +71,7 @@
   - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Frozen]  *(AVO-126/127/128/129/131/132 — branch feat/ux-vibe-rebalance, not yet merged)*
   - [living-office] docs/specs/living-office-events.md [DRAFT, review-gated]  *(P1-P4 shipped to branch feat/ux-vibe-rebalance, not merged; AC-3 pixel-dominance pending owner visual confirm)*
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
+  - [vibe-rebalance] docs/specs/control-bar-reduction.md [Shipped]  *(AVO-130 / #116 — 4 health pills→1 expandable health dot; lang/run/view/help/platform demoted into ⚙ menu / info popover)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
@@ -602,3 +603,10 @@
 - **Review**: 5-axis + OWASP A01–A10 + secrets clean; 1 MEDIUM advisory (two-watchdog scope), 1 LOW accepted (watchdog suppressed for full active lifetime, mitigated + tested).
 - **Ship incident (self-corrected)**: the first ship commit used `guard_context_write.py` with a guard receipt (`337ffd90`) cached from a prior codex session; `replace` mode wrote stale seq-26 content over this consolidated SSoT, dropping the 7 most recent Ship History entries. Caught in post-merge verification; current_state.md restored from `5c4bf49` + this entry, re-committed directly. Lesson: do not reuse stale guard receipts across sessions; verify SSoT seq/entry-count after a guarded write.
 - Tests: Pass
+
+### Ship-feat-avo-130-control-bar-reduction-2026-06-13 (#116 — control-bar reduction: single health dot + gear demotion)
+- Feature shipped: AVO-130. The resting control bar's 2–4 side-by-side connection/integration pills (live / fallback / API-offline / API-retrying) collapse into ONE focusable health dot whose color encodes the single highest-severity state (precedence offline > degraded > fallback > live > idle, pure-tested `healthDotState`). Language switch, list-view (☰), run-workflow, help (?), and the platform label demoted off the bar into the ⚙ gear menu / info popover. Resting cluster = health-dot · pause · ⚙. Applied in both full and panel mode.
+- Honesty/legibility guard: agent presence rail + STATUS_COLORS untouched (the #1 status channel); trouble states auto-show their inline label (not hover-only) so a real offline/degraded/fallback is never hidden; calm states reveal detail on hover/focus/click. Global L/Space shortcuts still work.
+- Spec: docs/specs/control-bar-reduction.md (status: shipped; §4.4 DSoT for procedural UI). Commit 8947d3e.
+- SSoT written directly (not via guard_context_write.py) to avoid the known stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions` block + this is an incremental UI re-layer covered by existing `ui-rendering` L1 — no new domain decision; consolidation skipped with justification.
+- Tests: Pass (6 new healthDotState unit tests; full suite 1943; vite build clean 460.88 kB; render-smoke PASS 4 viewports / 0 errors; live preview + Playwright responsive checks).

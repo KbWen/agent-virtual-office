@@ -282,9 +282,11 @@
   "status": {
     "offline": "離線",
     "apiOffline": "狀態 API 離線",
-    "apiRetrying": "狀態 API 重試中"
+    "apiRetrying": "狀態 API 重試中",
+    "local": "本機"
   },
   "aria": {
+    "health": "連線狀態",
     "pause": "暫停",
     "resume": "繼續",
     "switchLang": "切換語言",
@@ -306,6 +308,10 @@
     "petSkin": "寵物造型",
     "notifications": "桌面通知",
     "testPanel": "測試面板",
+    "language": "語言",
+    "view": "檢視",
+    "run": "執行流程動畫",
+    "help": "說明與快捷鍵",
     "on": "開",
     "off": "關",
     "blocked": "已封鎖",
