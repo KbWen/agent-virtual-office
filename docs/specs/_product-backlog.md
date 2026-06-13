@@ -57,7 +57,7 @@ last_updated: 2026-06-13
 | AVO-133 | Blocked reads from posture (physical legibility) | product | vibe-rebalance | P1 | — | quick-win | Done | AVO-110 |
 | AVO-134 | BehaviorIndicator micro-telegraphs | product | game-feel | P2 | — | quick-win | Done | — |
 | AVO-135 | Status-ring distance encoding (breathe/flash) | product | game-feel | P2 | — | quick-win | Done | — |
-| AVO-136 | Event juice pass (reaction beats / shake / confetti) | product | game-feel | P2 | — | feature | Pending | AVO-112 |
+| AVO-136 | Event juice pass (reaction beats / shake / confetti) | product | game-feel | P2 | docs/specs/event-juice-pass.md | feature | Shipped | #117; deploy confetti + eureka sparkle + desk-slam local shake; rare/capped/reduced-motion-safe; AVO-112 cascade can layer on the particle idiom |
 | AVO-137 | Density-layer foundation (glance-L1 default + zen far-view) | product | vibe-rebalance | P1 | — | architecture-change | Pending | AVO-126, AVO-127, AVO-128 |
 | AVO-138 | Subagent helper huddle (desk-side capped figures + heavy-load cue) | product | game-feel | P1 | docs/specs/subagent-helper-huddle.md | feature | Done | AVO-106 |
 | AVO-139 | Responsive office width-fill + readable labels (no whitespace/crop) | product | vibe-rebalance | P0 | docs/specs/responsive-office-roster.md | feature | Done | — |

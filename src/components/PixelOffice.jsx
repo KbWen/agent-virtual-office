@@ -8,6 +8,7 @@ import { startStatusIntegration } from '../inference/inferStatus'
 import { startDesktopNotifier } from '../inference/desktopNotifier'
 import { startIdleGapInference } from '../inference/idleGapInfer'
 import { startWorkflowHandoffs } from '../inference/workflowHandoff'
+import { juiceForEvent } from '../systems/eventJuice'
 import { eventName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import PairLinkOverlay from './PairLink'
@@ -228,6 +229,48 @@ function WhiteboardAnimation() {
           !
         </text>
       )}
+    </g>
+  )
+}
+
+// AVO-136 — event juice overlay. One-shot, capped particle bursts for RARE meaningful events only,
+// rendered BENEATH no status element (it's a pointer-events-none cosmetic layer above the floor but
+// it never occludes a ring/badge — particles are tiny ✦ that fade). `juiceForEvent` returns null
+// under reduced-motion (motion fully disabled — the event's bubbles/behaviors still convey it) and
+// for any non-juiced event, so this renders nothing at rest. Particles are keyed by event id so a
+// NEW event remounts them (CSS animation replays once); within one event they don't re-fire.
+function EventJuice() {
+  const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
+  const reducedMotion = useOfficeStore((s) => s.reducedMotion)
+  const juice = juiceForEvent(activeEvent?.id, { reducedMotion })
+  if (!juice) return null
+  const ek = activeEvent.id
+  if (juice.kind === 'confetti') {
+    // deploy-success: a brief office-wide ✦ burst in the upper-centre, drifting up + fading.
+    const cx = 360, cy = 130
+    const hues = ['#F5C842', '#E24B4A', '#378ADD', '#1D9E75', '#9B59B6']
+    return (
+      <g pointerEvents="none" aria-hidden="true">
+        {Array.from({ length: juice.count }).map((_, i) => (
+          <text key={`${ek}-${i}`} x={cx + (i - juice.count / 2) * 9 + (i % 3 - 1) * 3} y={cy}
+            fontSize="9" fill={hues[i % hues.length]} textAnchor="middle"
+            style={{ animation: `office-confetti ${juice.durationMs}ms ease-out ${i * 40}ms both` }}>✦</text>
+        ))}
+      </g>
+    )
+  }
+  // eureka: a small ✦ sparkle ring near the whiteboard (matches WhiteboardAnimation at 537,282).
+  const bx = 537, by = 282
+  return (
+    <g pointerEvents="none" aria-hidden="true">
+      {Array.from({ length: juice.count }).map((_, i) => {
+        const ang = (i / juice.count) * Math.PI * 2
+        return (
+          <text key={`${ek}-${i}`} x={bx + 35 + Math.cos(ang) * 15} y={by + 10 + Math.sin(ang) * 12}
+            fontSize="8" fill="#F5C842" textAnchor="middle"
+            style={{ animation: `office-sparkle ${juice.durationMs}ms ease-out ${i * 70}ms both` }}>✦</text>
+        )
+      })}
     </g>
   )
 }
@@ -1233,6 +1276,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {/* ═══ FLYING DOCUMENTS (handoff animation) ═══ */}
       <FlyingDocuments />
       <WhiteboardAnimation />
+      <EventJuice />
 
       {/* ═══ AGENT INSPECTOR (click-to-inspect popover) ═══ */}
       <AgentInspector />
