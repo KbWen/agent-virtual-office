@@ -5,6 +5,9 @@ import {
   pickQuipIndex,
   pickPokeReaction,
   POKE_RESET_MS,
+  POKE_WINDOW_MS,
+  LONG_AT,
+  TURNAWAY_AT,
 } from './pokeReaction.js'
 import { useOfficeStore } from './store.js'
 
@@ -78,6 +81,28 @@ describe('pickPokeReaction — AC-4 cozy escalation then honest reset', () => {
     const after = pickPokeReaction('working', hist, t + POKE_RESET_MS + 1000)
     expect(after.intensity).toBe('normal')
     expect(after.streak).toBe(1)
+  })
+
+  it('escalation flips at exactly LONG_AT and TURNAWAY_AT (symbolic, not hard-coded)', () => {
+    let hist = []
+    let t = 0
+    const seen = {}
+    for (let i = 1; i <= TURNAWAY_AT; i++) {
+      t += 300 // all within POKE_WINDOW_MS
+      const r = pickPokeReaction('working', hist, t)
+      hist = r.nextHistory
+      seen[r.streak] = r.intensity
+    }
+    expect(seen[LONG_AT - 1]).toBe('normal')
+    expect(seen[LONG_AT]).toBe('long')
+    expect(seen[TURNAWAY_AT]).toBe('turnaway')
+  })
+
+  it('POKE_WINDOW_MS boundary is exclusive (strict <): a poke exactly one window later does not stack', () => {
+    // a prior poke at t=0; poking again at exactly t=POKE_WINDOW_MS → the old one is OUT of window.
+    expect(pickPokeReaction('working', [0], POKE_WINDOW_MS).streak).toBe(1)
+    // one ms inside the window → both count.
+    expect(pickPokeReaction('working', [0], POKE_WINDOW_MS - 1).streak).toBe(2)
   })
 
   it('carries the honest pool key + never mutates input history', () => {

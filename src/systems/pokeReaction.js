@@ -28,8 +28,8 @@ export function poolKeyForStatus(status) {
 // Escalation thresholds (cozy, not punishing).
 export const POKE_WINDOW_MS = 5000   // pokes within this window count toward escalation
 export const POKE_RESET_MS = 10000   // idle gap that resets the streak
-const LONG_AT = 3                     // 3rd poke in-window → longer bob
-const TURNAWAY_AT = 5                 // 5th+ poke in-window → brief "turn away / ok ok"
+export const LONG_AT = 3              // 3rd poke in-window → longer bob
+export const TURNAWAY_AT = 5          // 5th+ poke in-window → brief "turn away / ok ok"
 
 // Append `now` to history, dropping pokes older than the reset gap. Returns the trimmed,
 // chronologically-ordered timestamp list (most-recent last).

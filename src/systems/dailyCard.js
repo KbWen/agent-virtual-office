@@ -133,6 +133,10 @@ export function buildCardModel(input = {}) {
 const W = 760
 const H = 820
 const MARGIN = 44
+// Layout zones (named so the aspect ratio is tunable from one place, not diff-grepped).
+const CARD_SKY_H = 300      // weather hero height
+const CARD_ZONE_GAP = 22    // gap between sky and office room
+const CARD_ROOM_H = 232     // office-room band height
 
 // Warm cream postcard base + per-weather sky palette.
 const PALETTE = {
@@ -291,7 +295,16 @@ function drawOfficeRoom(ctx, x, y, w, h, hero) {
   ctx.restore()
 }
 
-function wrapText(ctx, text, maxWidth) {
+// Clamp to at most `max` lines, ellipsizing the last — so a long (e.g. zh-TW) caption can never
+// grow a 3rd line that collides with the footer divider.
+function clampLines(lines, max = 2) {
+  if (lines.length <= max) return lines
+  const kept = lines.slice(0, max)
+  kept[max - 1] = kept[max - 1].replace(/…?$/, '') + '…'
+  return kept
+}
+
+function wrapText(ctx, text, maxWidth, maxLines = 2) {
   const words = String(text).split(/\s+/).filter(Boolean)
   const lines = []
   let line = ''
@@ -316,9 +329,9 @@ function wrapText(ctx, text, maxWidth) {
       else cur = test
     }
     if (cur) out.push(cur)
-    return out
+    return clampLines(out, maxLines)
   }
-  return lines
+  return clampLines(lines, maxLines)
 }
 
 // Draw the model to a 2D context. Exported for the live/Playwright check.
@@ -335,24 +348,22 @@ export function drawCard(ctx, model) {
   const innerW = W - MARGIN * 2
 
   // ZONE 1 — weather hero, with the mood word centered along its lower edge
-  const skyH = 300
-  drawHeroSky(ctx, model.hero, MARGIN, MARGIN, innerW, skyH)
+  drawHeroSky(ctx, model.hero, MARGIN, MARGIN, innerW, CARD_SKY_H)
   ctx.fillStyle = 'rgba(74,64,54,0.66)'
   ctx.font = '600 30px system-ui, sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText(model.moodWord, W / 2, MARGIN + skyH - 26)
+  ctx.fillText(model.moodWord, W / 2, MARGIN + CARD_SKY_H - 26)
 
   // ZONE 2 — a populated little office (ambient art, not a chart)
-  const roomY = MARGIN + skyH + 22
-  const roomH = 232
-  drawOfficeRoom(ctx, MARGIN, roomY, innerW, roomH, model.hero)
+  const roomY = MARGIN + CARD_SKY_H + CARD_ZONE_GAP
+  drawOfficeRoom(ctx, MARGIN, roomY, innerW, CARD_ROOM_H, model.hero)
 
   // ZONE 3 — one warm derived caption (the single gentle number lives here)
   ctx.fillStyle = PALETTE.ink
   ctx.font = '600 36px system-ui, sans-serif'
   ctx.textAlign = 'center'
   const lines = wrapText(ctx, model.caption, innerW - 24)
-  let ty = roomY + roomH + 58
+  let ty = roomY + CARD_ROOM_H + 58
   for (const line of lines) {
     ctx.fillText(line, W / 2, ty)
     ty += 46
@@ -424,5 +435,3 @@ function downloadBlob(blob, filename) {
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
-
-export const __CARD_DIMS__ = { W, H }
