@@ -10,14 +10,14 @@
 
 ![Agent Virtual Office — pixel-art virtual office visualizing AI coding agents (Claude Code, Codex, Gemini CLI) working, blocked, and shipping in real time](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.png)
 
-<sub><i>The whole office, mid-session — someone heads-down, someone blocked, someone just shipped. All live.</i></sub>
+<sub><i>The office mid-session: someone heads-down, someone blocked, someone just shipped — all from a live session.</i></sub>
 
 While Claude Code grinds through your codebase, a pixel version of it sits at a desk doing the same
 thing — typing, getting blocked, stomping off to argue with QA about whether that's *really* a bug.
 Point it at your Claude Code / Codex / CI session and your agents clock in for real: `working`,
 `blocked`, shipping, bickering — live.
 
-It's not a dashboard. It's useful for approximately nothing, and you'll leave it open all day anyway.
+It does approximately nothing useful, and you'll leave it open all day anyway.
 
 [Quick Start](#quick-start) · [Meet the Team](#meet-the-team) · [FAQ](#faq) · [中文版](README.zh-TW.md)
 
@@ -31,21 +31,21 @@ It's not a dashboard. It's useful for approximately nothing, and you'll leave it
 <tr>
 <td width="50%" align="center">
 <img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-hero.png" alt="The pixel office mid-session: agents at desks working, a blocked agent, speech bubbles, a pet wandering the lounge" /><br>
-<sub><b>The whole office, live.</b> Heads-down, blocked, bickering — driven by your real session.</sub>
+<sub><b>The office, live.</b> Each character is a real agent in your session.</sub>
 </td>
 <td width="50%" align="center">
 <img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.png" alt="A character showing a speech bubble after being poked, reacting in place" /><br>
-<sub><b>Poke a character</b> and it reacts in place — a little bob + a line from its <i>real</i> status. Never moves, never lies.</sub>
+<sub><b>Poke a character</b> and it bobs and shows what it's doing. It never moves or changes state.</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" align="center">
 <img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/share-card.png" alt="A cozy pixel-art postcard summarizing the day's office activity" height="300" /><br>
-<sub><b>End-of-day card.</b> One click → a cozy postcard of the day. Honest numbers only; a quiet day says so.</sub>
+<sub><b>End-of-day card.</b> One click exports the day as a PNG. A quiet day says so.</sub>
 </td>
 <td width="50%" align="center">
 <img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-zh.png" alt="The office rendered in Traditional Chinese with localized labels and speech bubbles" /><br>
-<sub><b>繁體中文 built in.</b> Labels, bubbles, names — the whole office speaks your language.</sub>
+<sub><b>繁體中文 built in.</b> Labels, bubbles, and names all localized.</sub>
 </td>
 </tr>
 </table>
@@ -85,15 +85,19 @@ dead gutters. Hit **☰** for a vertical roster: who's working, who's blocked, a
 
 ## Why it's nice
 
-- **Pure SVG pixel art** — 8 hand-drawn characters. No canvas, no GPU, no GB-sized bundle.
-- **Role-aware animations** — same tool, different role, different scene: `qa + Bash` → magnifier, `ops + Bash` → deploy button, `designer + Edit` → whiteboard.
-- **Honest, signal-driven life** — events fire from your *real* session; an agent's status is never faked.
-- **"Stuck on what?" tells** — a blocked agent shows *why*: 🧪 test run · 🔨 build · 📦 install · ❔ unknown, plus a ↻ mark when the same kind keeps failing. Specific only when the signal proves it — never a guessed cause.
-- **Poke 'em** — click any character and it bobs and says what it's *actually* up to (a line drawn from its real status). Pure acknowledgement — it never moves or fakes a state. `Space` re-pokes; right-click pokes without opening the inspector.
-- **Take the day home** — one click turns the day's real activity into a cozy pixel-art **postcard** to share. It's a charming snapshot, not a stats card; an empty day honestly reads *"a quiet day at the office."*
-- **Calm by design** — mood-driven weather, idle-gap inference (`working+45s` → thinking), reduced-motion + a11y, and a never-stuck behavior watchdog.
+It's pure SVG — 8 hand-drawn characters, no canvas, no GPU, tiny bundle.
 
-→ Full internals (classifier tiers, movement, behavior engine, weather, inference) live in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+The same tool animates differently per role. `qa + Bash` pulls out a magnifier; `ops + Bash` hits the deploy button; `designer + Edit` walks to the whiteboard.
+
+Everything you see is real. Events fire from your actual session, and an agent's status is never made up. When one gets stuck you see *why* — 🧪 test run, 🔨 build, 📦 install, or just ❔ unknown — with a ↻ when the same thing keeps failing. It only names a cause when the hook actually reports one; otherwise it stays vague on purpose.
+
+Click a character and it bobs and tells you what it's doing right now. It won't move or change state. `Space` pokes again; right-click pokes without opening the inspector.
+
+One click saves the day as a little pixel-art postcard you can share. Slow day with nothing finished? The card says so.
+
+The quieter stuff: weather follows the room's mood, 45 seconds of silence reads as thinking instead of stuck, reduced-motion and a11y are respected, and a watchdog keeps anyone from freezing mid-walk.
+
+→ The classifier, movement, and behavior engine are written up in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ---
 
@@ -248,7 +252,7 @@ GitHub Actions, or your own scripts. See the [Integration guide](docs/INTEGRATIO
 ### Is it a dashboard or a token/cost tracker?
 
 No. It doesn't chart tokens, spend, or productivity. It's an honest visualization: an agent's status
-is shown only when a real signal proves it, and activity is never faked. Think desk toy, not metrics.
+only updates when a real signal comes in, and activity is never faked. It's a desk toy, not a metrics tool.
 
 ### Does it send my code or data anywhere?
 
@@ -263,8 +267,8 @@ requirement is Node.js ≥ 22.
 
 ## Tech stack
 
-React 19 + Vite 8 · SVG (no canvas, no GPU) · Zustand · Tailwind CSS v4 · `requestAnimationFrame` · zero backend.
-2000+ tests (classifier, inference, store, movement, event honesty, blocked-reason + recurring detection, poke, share-card). Deep dive → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+React 19 + Vite 8 · SVG · Zustand · Tailwind CSS v4 · `requestAnimationFrame`. Runs in the browser, no backend.
+2000+ tests cover the classifier, inference, store, movement, event honesty, blocked-reason detection, poke, and the share card. Deep dive → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Contributing
 
