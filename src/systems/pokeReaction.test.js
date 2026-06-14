@@ -6,6 +6,7 @@ import {
   pickPokeReaction,
   POKE_RESET_MS,
 } from './pokeReaction.js'
+import { useOfficeStore } from './store.js'
 
 describe('poolKeyForStatus — AC-3 quips drawn from real status, no cross-status leak', () => {
   it('maps each status to its own honest pool', () => {
@@ -85,5 +86,33 @@ describe('pickPokeReaction — AC-4 cozy escalation then honest reset', () => {
     expect(r.poolKey).toBe('blocked')
     expect(hist).toEqual([10]) // input not mutated
     expect(r.nextHistory).toEqual([10, 20])
+  })
+})
+
+// AC-2 honesty guard: the ONLY store write the poke path performs is `setSelectedAgent`
+// (firePoke otherwise touches only local React state). This locks that selection NEVER
+// rewrites an agent's position or status — so a poke can never lie about where/what an agent
+// is. (If a future edit adds a position/status write to the poke path, extend this guard.)
+describe('AC-2 honesty — selection (the poke path store write) never touches position/status', () => {
+  it('setSelectedAgent changes only selectedAgent; agent position + status untouched', () => {
+    const store = useOfficeStore
+    const id = Object.keys(store.getState().agents)[0]
+    expect(id).toBeTruthy()
+    const before = store.getState().agents[id]
+    const snapPos = { ...before.position }
+    const snapStatus = before.status
+
+    store.getState().setSelectedAgent(id)
+    let a = store.getState().agents[id]
+    expect(store.getState().selectedAgent).toBe(id)
+    expect(a.position).toEqual(snapPos)
+    expect(a.status).toBe(snapStatus)
+
+    // toggle off — still no position/status drift
+    store.getState().setSelectedAgent(id)
+    a = store.getState().agents[id]
+    expect(store.getState().selectedAgent).toBe(null)
+    expect(a.position).toEqual(snapPos)
+    expect(a.status).toBe(snapStatus)
   })
 })
