@@ -49,7 +49,7 @@ Claude/Codex hooks      Bridge page/API       File/session scanner
 |------|------|------|
 | 框架 | React + Vite | 快速開發、artifact 相容 |
 | 繪圖 | SVG（內嵌在 React） | 輕量、不需 GPU、dark mode 友好 |
-| 動畫 | requestAnimationFrame + SVG animate | 角色移動用 RAF 插值（80px/s），行為指示器 25 種 SVG 動畫圖標 |
+| 動畫 | requestAnimationFrame + SVG animate | 角色移動用 RAF 插值（60px/s），行為指示器 25 種 SVG 動畫圖標 |
 | 狀態管理 | zustand | 輕量、簡單、不需 Redux 那麼重 |
 | 樣式 | Tailwind CSS | 快速迭代面板 UI |
 | 時間 | `new Date()` | 不需要伺服器，純本地 |
@@ -173,7 +173,7 @@ visualPosRef (真實渲染位置) → RAF 每幀插值 → renderPos (React stat
 targetPosRef (目標位置) ← startWalkTo() ← doSchedule()
 ```
 
-- 移動速度：80px/秒，恆速直線
+- 移動速度：60px/秒，恆速直線
 - 到達判定：距離 < 1.5px 時繼續移動，< 0.1px 時 snap 到目標
 - 多段路徑：`pathRef` 儲存剩餘 waypoints，到達後自動切換下一段
 - `movingRef`：防止行為排程在走路中觸發新行為
@@ -188,7 +188,7 @@ doSchedule() {
     if (isPaused) → 2s 後重試
     if (inGroupEvent) → 2s 後重試（群體事件控制中）
     if (isMoving) → 1.5s 後重試 + 卡住計數器
-      └─ 連續 15 次仍在走 → 強制重置移動狀態
+      └─ 連續 10 次仍在走 → 強制重置移動狀態
     正常流程：getNextBehavior() → 播放行為 → setTimeout(doSchedule, duration)
   } catch (error) {
     console.error(error)
@@ -198,7 +198,7 @@ doSchedule() {
 ```
 
 **看門狗計時器**（每 10 秒檢查一次）：
-- 如果同一個行為持續超過 45 秒沒變 → 強制清除所有移動狀態 → 重啟 doSchedule
+- 如果同一個行為持續超過 120 秒沒變 → 強制清除所有移動狀態 → 重啟 doSchedule
 - 防止任何未預期的情況導致角色永久卡住
 
 ### 群體事件系統（officeLife.js）
@@ -245,8 +245,9 @@ event.duration 到期後
 ### 防重疊系統
 
 ```js
-const MIN_AGENT_DIST = 35  // 角色間最小距離
-avoidOverlap(pos, occupied) // 檢查其他角色位置，偏移避免重疊
+// 分離契約是「視覺橢圓」而非 35px 圓（#103 幾何教訓：35px 垂直其實仍重疊）。
+const SPRITE_CLEAR_RX = 32, SPRITE_CLEAR_RY = 44   // (dx/32)² + (dy/44)² < 1 視為重疊
+avoidOverlap(pos, occupied) // 檢查其他角色位置，依橢圓偏移避免重疊（target-time 去衝突）
 ```
 
 ### 走廊路由系統
@@ -446,22 +447,15 @@ async function inferStatus(projectRoot: string): Promise<OfficeVibe> {
 
 ```bash
 npm run build:single
-# 輸出 dist/virtual-office.html
-# 包含所有 CSS + JS + SVG
+# 輸出 dist-single/index.html（inline 所有 CSS + JS + SVG）
 # 直接雙擊就能開
 ```
 
 用途：丟進任何專案、本地開啟、嵌入網頁。
 
-### 模式 2：React 元件
+### 模式 2：React 元件（規劃中，尚未實作）
 
-```bash
-npm run build:lib
-# 輸出 lib/
-# import { VirtualOffice } from './lib'
-```
-
-用途：嵌入其他 React 應用。
+目前沒有 `build:lib` script。嵌入其他 React 應用請直接 import `src/` 元件（如 `PixelOffice`、`ControlPanel`），或先用模式 1 的單一 HTML 以 iframe 嵌入。一個正式的 library build（`import { VirtualOffice } from 'agent-virtual-office'`）尚未實作。
 
 ### 模式 3：Claude Desktop Artifact
 
