@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
-import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName, locale } from '../i18n'
+import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName } from '../i18n'
 import { requestNotificationPermission, getNotificationState } from '../inference/desktopNotifier'
 import { PET_TYPES } from '../systems/petState.js'
 import { THEMES } from '../systems/theme.js'

@@ -78,16 +78,27 @@ function blockedTailKey(blockedTotal) {
   return blockedTotal <= 2 ? 'snagsFew' : 'snagsMany'
 }
 
+// Non-negative integer or 0. Rejects fractional, negative, NaN, and Infinity so the card
+// can never render a fractional/garbage number (the "cozy postcard, not a stats card" guard).
+function safeCount(v) {
+  const n = Math.floor(Number(v))
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
 // PURE: build the renderable model. No canvas, no globals.
 export function buildCardModel(input = {}) {
   const {
     dayKey = '',
-    doneTotal = 0,
-    blockedTotal = 0,
     mood = 'normal',
     weather = 'clear',
     locale = 'en',
   } = input
+  // Coerce counts to non-negative integers up front. The ledgers always sum to ints, but
+  // this is the live guard for the owner's non-negotiable "cozy postcard, NOT a stats card"
+  // rule: a fractional/garbage count (e.g. 3.75) would otherwise render "3.75" and inflate
+  // the body number count past the ≤2 invariant. NaN/negative/undefined → 0 → empty variant.
+  const doneTotal = safeCount(input.doneTotal)
+  const blockedTotal = safeCount(input.blockedTotal)
   const s = resolveCardStrings(locale)
   const hero = heroFor(weather)
   const captionKey = captionKeyFor(doneTotal, mood)

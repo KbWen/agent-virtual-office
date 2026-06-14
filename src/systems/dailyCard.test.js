@@ -62,6 +62,17 @@ describe('buildCardModel — AC-3 honest empty day / AC-6 cozy not stats / AC-4 
     expect(buildCardModel({ weather: 'thunderstorm', doneTotal: 1, mood: 'stuck' }).hero).toBe('thunderstorm')
   })
 
+  it('AC-6 live guard: fractional / huge / garbage done never breaks the ≤2-number rule', () => {
+    // The owner's non-negotiable: a stats-card number explosion must be impossible.
+    for (const done of [3.75, 7.0001, 1e6, '12', Infinity, -4, NaN, null, undefined]) {
+      const m = buildCardModel({ dayKey: '2026-06-14', doneTotal: done, mood: 'smooth', weather: 'clear', locale: 'en' })
+      expect(m.numericTokenCount).toBeLessThanOrEqual(2)
+      expect(m.caption).not.toMatch(/\d\.\d/)   // never a fractional number (sentence period is fine)
+      expect(m.caption).not.toContain('NaN')
+      expect(m.caption).not.toContain('Infinity')
+    }
+  })
+
   it('renders zh-TW copy when locale is zh-TW (no English leakage)', () => {
     const m = buildCardModel({ dayKey: '2026-06-14', doneTotal: 4, mood: 'smooth', weather: 'clear', locale: 'zh-TW' })
     expect(m.caption).toContain('件')

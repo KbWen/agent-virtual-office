@@ -113,8 +113,10 @@ no fabricated counts; ZONE 1/2 still render the real (calm) weather + scene.
   rendering** (pure client canvas). Verify: unit test calls the render fn and asserts a
   non-empty PNG blob/dataURL; manual: file downloads and opens.
 - **AC-2** All card + control strings render in **en and zh-TW with no clipped text**.
-  Verify: render at both locales; a test asserts text-measurement ≤ its box width for
-  the longest strings in both locales.
+  Verify: canvas text-measurement is not available in the vitest env (no jsdom/canvas),
+  so this is verified LIVE via headless Playwright (scripts/daily-card-shot.mjs) — both
+  locales rendered; `wrapText` (word-wrap + zh-TW char-wrap fallback) keeps copy inside
+  the card box (visually confirmed, multi-line caption wraps cleanly).
 - **AC-3** **Empty/slow day renders honestly** — zero done/blocked/events produces the
   quiet-day variant with NO fabricated numbers. Verify: unit test with empty ledgers
   asserts the prose contains no count and no highlight line.
@@ -131,8 +133,10 @@ no fabricated counts; ZONE 1/2 still render the real (calm) weather + scene.
   download with no error. Verify: test stubs missing `navigator.share`/clipboard and
   asserts download path still resolves.
 - **AC-8** Share control is **opt-in** — not present in the default glance layer or the
-  resting control bar (lives in ⚙). Verify: snapshot of default view has no Share
-  button; ⚙ menu does.
+  resting control bar (lives in ⚙). Verify: rendered conditionally inside `{showSettings
+  && …}` (ControlPanel.jsx). Confirmed LIVE (scripts/daily-card-shot.mjs):
+  share-in-default-bar=false, share-in-gear-menu=true. (Default-view snapshot test needs
+  jsdom, unavailable in vitest — the live DOM check is the verification mechanism.)
 
 ## Non-goals
 
