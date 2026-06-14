@@ -189,7 +189,8 @@ export default function NarrowRoster() {
   )
   const requestNotify = () => {
     if (typeof Notification === 'undefined') return
-    Notification.requestPermission().then((p) => setNotifyPerm(p)).catch(() => {})
+    Notification.requestPermission().then((p) => setNotifyPerm(p))
+      .catch((err) => console.warn('[Office] Notification.requestPermission failed:', err))
   }
 
   // Build rows from ground-truth via getState(), keyed on the signature → no per-movement-tick

@@ -283,11 +283,20 @@ function EventJuice() {
 // glyph from activeWorkflow). Pure overlay anchored at the gate desk — never relocates an agent
 // (R1). Renders nothing when 0 wait; clears the SAME frame a waiter resolves (no phantom queue).
 function GateWaitingTray() {
-  const agents = useOfficeStore(useShallow((s) => s.agents))
-  const activeWorkflow = useOfficeStore((s) => s.activeWorkflow)
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
   const [open, setOpen] = React.useState(false)
-  const { count, names, phaseGlyph } = gateWaiting(agents, activeWorkflow)
+  // AVO-159: subscribe to a cheap PRIMITIVE signature of only the gate-relevant state
+  // (awaiting-approval agent ids + the active workflow — all `gateWaiting` reads). The tray then
+  // re-renders only when that changes, not on every agent position tick. Behavior-identical.
+  const gateSig = useOfficeStore((s) => {
+    let ids = ''
+    for (const id of Object.keys(s.agents)) if (s.agents[id]?.status === 'awaiting-approval') ids += id + ','
+    return ids + '|' + (s.activeWorkflow || '')
+  })
+  const { count, names, phaseGlyph } = React.useMemo(() => {
+    const s = useOfficeStore.getState()
+    return gateWaiting(s.agents, s.activeWorkflow)
+  }, [gateSig])
   React.useEffect(() => { if (count === 0 && open) setOpen(false) }, [count, open])
   if (count === 0) return null
   const ax = 116, ay = 70   // near WAYPOINTS.gate {100,80}, offset clear of the Gatekeeper sprite
@@ -468,8 +477,10 @@ function OfficeDog() {
 // safe given the single known call site (the agentList useMemo below).
 function sortByY(agents) {
   return agents.sort((a, b) => {
-    const ay = (a.targetPosition || a.position || {}).y || 0
-    const by = (b.targetPosition || b.position || {}).y || 0
+    // AVO-159: key on current position.y (matches getAgentOrderSignature) so the re-sort trigger
+    // and the actual paint order use the same value.
+    const ay = (a.position || a.targetPosition || {}).y || 0
+    const by = (b.position || b.targetPosition || {}).y || 0
     return ay - by
   })
 }
@@ -711,9 +722,13 @@ const DESK_DATA = [
 ]
 const DESK_IDS = DESK_DATA.map(({ id }) => id)
 
+// AVO-159: paint-order signature keys on the agent's CURRENT position.y (snaps at waypoint
+// arrival), not targetPosition.y (set at waypoint start). Both are O(handful)/walk, but keying on
+// position.y matches sortByY below (same key) so the rendered z-order and the re-sort trigger stay
+// consistent. position is always present; targetPosition is the early/fallback.
 function getAgentOrderSignature(agents) {
   return Object.keys(agents).map((id) => {
-    const y = agents[id]?.targetPosition?.y ?? agents[id]?.position?.y ?? 0
+    const y = agents[id]?.position?.y ?? agents[id]?.targetPosition?.y ?? 0
     return `${id}|${Math.round(y)}`
   })
 }

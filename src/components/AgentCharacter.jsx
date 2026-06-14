@@ -12,6 +12,10 @@ import BehaviorBubble from './BehaviorBubble'
 import { shouldShakeDesk } from '../systems/eventJuice.js'
 import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
 
+// Character sprite scale. The root <g> scales by this; the name-tag/bubble group undoes it with
+// 1/CHAR_SCALE. Keep both in sync via this one constant.
+const CHAR_SCALE = 1.35
+
 // Pure guard: returns true if a social arriver's TARGET should face back.
 // R1: tracked agents (live externalStatus entry) are NEVER modulated.
 // Also skip agents currently in a group event.
@@ -1230,6 +1234,10 @@ function AgentCharacter({ agent }) {
   const [pokeQuip, setPokeQuip] = useState(null)   // string | null
   const pokeHistoryRef = useRef([])
   const pokeSeqRef = useRef(0)
+  // Poke timers use dedicated refs (NOT the `scheduleDeferred` Set) on purpose: a re-poke must
+  // CLEAR-and-REPLACE the in-flight timer by reference, which the fire-once Set pattern can't do
+  // without leaving stale handles in the Set. Leak-safe: firePoke clears before re-arming, and this
+  // unmount cleanup clears both. (Audit AVO-159 follow-up: divergence is deliberate, documented.)
   const pokeQuipTimerRef = useRef(null)
   const pokeBobTimerRef = useRef(null)
   useEffect(() => () => {
@@ -1294,7 +1302,7 @@ function AgentCharacter({ agent }) {
   const showName = hovered || (state.status && state.status !== 'idle')
 
   return (
-    <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}
+    <g transform={`translate(${pos.x}, ${pos.y}) scale(${CHAR_SCALE})`}
       style={{ cursor: 'pointer' }} onClick={handleClick} onContextMenu={handleContextMenu}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       data-agent-id={id}
@@ -1411,7 +1419,7 @@ function AgentCharacter({ agent }) {
           scale-the-whole-group) so a counter-scaled label gets bigger without floating upward into
           the agent above it — that float was what made adjacent active agents' tags collide. At
           labelScale 1 (office ≥ native) this is byte-identical to the prior `scale(1/1.35)`. */}
-      <g transform={`scale(${1 / 1.35})`}>
+      <g transform={`scale(${1 / CHAR_SCALE})`}>
         <g transform={`translate(0, -48) scale(${labelScale})`}>
           {/* Session branch badge — shown above name tag for worktree agents */}
           {session && (
