@@ -34,8 +34,8 @@ It does approximately nothing useful, and you'll leave it open all day anyway.
 <sub><b>The office, live.</b> Each character is a real agent in your session.</sub>
 </td>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.png" alt="A character showing a speech bubble after being poked, reacting in place" /><br>
-<sub><b>Poke a character</b> and it bobs and shows what it's doing. It never moves or changes state.</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.gif" alt="Animated: poking a character makes it bob and pop a speech bubble showing its current status" /><br>
+<sub><b>Poke a character</b> and it bobs and pops a bubble with its current status. It never moves or changes state.</sub>
 </td>
 </tr>
 <tr>
