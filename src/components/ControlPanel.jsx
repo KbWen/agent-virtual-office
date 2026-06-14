@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
-import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName } from '../i18n'
+import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName, locale } from '../i18n'
 import { requestNotificationPermission, getNotificationState } from '../inference/desktopNotifier'
 import { PET_TYPES } from '../systems/petState.js'
 import { THEMES } from '../systems/theme.js'
+import { classifyMood } from '../systems/classify.js'
+import { renderDailyCard, shareOrDownloadCard, todayKey } from '../systems/dailyCard.js'
 
 const statusOptions = ['idle', 'working', 'blocked', 'done']
 
@@ -79,6 +81,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const setPetType = useOfficeStore((s) => s.setPetType)
   const theme = useOfficeStore((s) => s.theme)              // AVO-123
   const setTheme = useOfficeStore((s) => s.setTheme)
+  const mood = useOfficeStore((s) => s.mood)                // AVO-115 share card hero
   // #28: RAF-watchdog stall counter — surfaced as a DEV-only diagnostic chip (see render). Cheap
   // primitive subscription; re-renders only when a stall actually bumps the count (rare).
   const watchdogRestarts = useOfficeStore((s) => s.watchdogRestarts)
@@ -130,6 +133,34 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
     setNotifyState(r)
   }
   const lang = useLocale()
+  // AVO-115: opt-in cozy postcard. Gathers ONLY honest signals (done/blocked from the
+  // existing ledgers + live mood), renders client-side, then shares-or-downloads. The
+  // button is disabled while busy (no double-render).
+  const [cardBusy, setCardBusy] = useState(false)
+  const handleShareCard = async () => {
+    if (cardBusy) return
+    setCardBusy(true)
+    try {
+      const dayKey = todayKey()
+      const blob = await renderDailyCard({
+        dayKey,
+        doneTotal: totalDoneToday,
+        blockedTotal: totalBlockedToday,
+        mood,
+        weather: classifyMood(mood).family,
+        locale: lang,
+      })
+      const filename = t('dailyCard.filename', 'agent-office-{date}.png').replace('{date}', dayKey)
+      await shareOrDownloadCard(blob, filename, {
+        title: t('dailyCard.shareTitle', 'Today at the office'),
+        text: t('dailyCard.shareText', ''),
+      })
+    } catch (err) {
+      console.warn('[Office] share card failed:', err)
+    } finally {
+      setCardBusy(false)
+    }
+  }
   const isPanel = mode === 'panel'
 
   const setStatus = (id, status) => {
@@ -349,6 +380,14 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-200">
             <span>{t('settings.testPanel', 'Test panel')}</span>
             <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${showTest ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>{showTest ? t('settings.on', 'On') : t('settings.off', 'Off')}</span>
+          </button>
+          <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+          {/* AVO-115: opt-in cozy share postcard — an action, not a toggle. Lives here in ⚙, never the resting bar. */}
+          <button onClick={handleShareCard} disabled={cardBusy}
+            aria-label={t('dailyCard.shareAria', 'Generate and download today\'s office postcard')}
+            className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-200 disabled:opacity-60 disabled:cursor-wait">
+            <span>{t('settings.shareCard', "Share today's card")}</span>
+            <span aria-hidden="true">{cardBusy ? '…' : '🖼️'}</span>
           </button>
           {/* Triangle pointer (right-anchored) */}
           <div className="absolute top-full right-3 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-white dark:border-t-gray-800" />

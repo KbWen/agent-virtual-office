@@ -333,7 +333,33 @@
     "enable": "啟用",
     "theme": "主題",
     "skin": { "cat": "貓", "vacuum": "掃地機器人", "dog": "狗", "rabbit": "兔子", "bird": "鳥", "hamster": "倉鼠" },
-    "themeNames": { "default": "預設", "winter": "冬季", "autumn": "秋季" }
+    "themeNames": { "default": "預設", "winter": "冬季", "autumn": "秋季" },
+    "shareCard": "分享今日小卡"
+  },
+  "dailyCard": {
+    "source": "Agent Virtual Office",
+    "shareAria": "產生並下載今天的辦公室明信片",
+    "shareTitle": "今天的辦公室",
+    "shareText": "今天辦公室的一張小明信片。",
+    "filename": "agent-office-{date}.png",
+    "moodWord": {
+      "clear": "晴朗的天空",
+      "cloudy": "有點多雲",
+      "rain": "下著小雨",
+      "thunderstorm": "風雨的一段"
+    },
+    "caption": {
+      "empty": "辦公室安靜的一天。",
+      "smooth": "順手的一天——今天收尾了 {done} 件。",
+      "busy": "忙碌的一天——今天收尾了 {done} 件。",
+      "rainy": "有點陰雨的一天——還是收尾了 {done} 件。",
+      "stormy": "風雨的一天，但還是推進了 {done} 件。",
+      "headsdown": "埋頭苦幹的一天——收尾了 {done} 件。"
+    },
+    "blocked": {
+      "snagsFew": "……也扛過了一兩個卡關。",
+      "snagsMany": "……也扛過了幾個卡關。"
+    }
   },
   "time": {
     "now": "剛剛",

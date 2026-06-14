@@ -333,7 +333,33 @@
     "enable": "Enable",
     "theme": "Theme",
     "skin": { "cat": "Cat", "vacuum": "Robot vacuum", "dog": "Dog", "rabbit": "Rabbit", "bird": "Bird", "hamster": "Hamster" },
-    "themeNames": { "default": "Default", "winter": "Winter", "autumn": "Autumn" }
+    "themeNames": { "default": "Default", "winter": "Winter", "autumn": "Autumn" },
+    "shareCard": "Share today's card"
+  },
+  "dailyCard": {
+    "source": "Agent Virtual Office",
+    "shareAria": "Generate and download today's office postcard",
+    "shareTitle": "Today at the office",
+    "shareText": "A little postcard from my Agent Virtual Office today.",
+    "filename": "agent-office-{date}.png",
+    "moodWord": {
+      "clear": "clear skies",
+      "cloudy": "a cloudy hum",
+      "rain": "a gentle drizzle",
+      "thunderstorm": "a stormy stretch"
+    },
+    "caption": {
+      "empty": "A quiet day at the office.",
+      "smooth": "A smooth day — wrapped up {done} today.",
+      "busy": "A busy day — wrapped up {done} today.",
+      "rainy": "A drizzly day — still wrapped up {done}.",
+      "stormy": "A stormy day, but we pushed {done} through.",
+      "headsdown": "A heads-down day — {done} wrapped up."
+    },
+    "blocked": {
+      "snagsFew": "…and weathered a snag or two.",
+      "snagsMany": "…and weathered a few snags."
+    }
   },
   "time": {
     "now": "now",
