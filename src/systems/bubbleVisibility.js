@@ -60,7 +60,10 @@ export function selectVisibleBubbles(agents, externalStatus, cap = BUBBLE_VISIBL
   const ids = candidates.map((c) => c.id).sort()
   const period = rotateMs > 0 ? rotateMs : 1
   const offset = ids.length ? (Math.floor(Math.max(0, now) / period) % ids.length) : 0
-  const rankOf = (id) => (ids.indexOf(id) - offset + ids.length) % ids.length
+  // Precompute id→rank once (O(n)) instead of an O(n) indexOf per comparator call (was O(n²)
+  // per sort, run for every agent on every store write). Behavior-identical.
+  const rankMap = new Map(ids.map((id, i) => [id, (i - offset + ids.length) % ids.length]))
+  const rankOf = (id) => rankMap.get(id) ?? 0
   // tier asc → recency desc → rotated rank asc
   candidates.sort((x, y) => x.pri - y.pri || y.changedAt - x.changedAt || rankOf(x.id) - rankOf(y.id))
   const n = Math.max(0, cap)

@@ -404,7 +404,9 @@ export async function shareOrDownloadCard(blob, filename, shareMeta = {}) {
       return 'shared'
     } catch (err) {
       if (err && err.name === 'AbortError') return 'cancelled'
-      // fall through to download on any share failure
+      // A non-abort share failure (network, permission, browser bug) falls through to
+      // download — but log it so the real reason is observable, not silently swallowed.
+      console.warn('[Office] Web Share failed, falling back to download:', err)
     }
   }
   downloadBlob(blob, filename)

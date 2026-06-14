@@ -38,7 +38,7 @@
   - **Done (branch `main`, 2026-05-29)**:
     - #6 底部效能指標 — `dailyBlockedLedger` transition counter parallel to `dailyDoneLedger`; ControlPanel Full + Panel chip `✓N / ✗M` with i18n + sr-only + tooltip
     - #14 天氣系統 — `moodToWeather()` pure mapping + `WeatherOverlay` SVG (rain/cloudy/thunderstorm); WallWindow weather prop wired to `store.mood`; reducedMotion drops animations; lightning capped 0.35/5s for photosensitivity safety
-    - #15 白板手寫動畫 — confirmed pre-existing (`PixelOffice.jsx:146` `WhiteboardAnimation`); closure-documented at #14 ship time (similar to #7 pattern)
+    - #15 白板手寫動畫 — confirmed pre-existing (`PixelOffice.jsx:169` `WhiteboardAnimation`); closure-documented at #14 ship time (similar to #7 pattern)
     - **#A1 classifier foundation** — pure module `src/systems/classify.js` (Tier 0 builtin + Tier 3 W3C verb + Tier 4 MCP namespace + Tier 5 unknown) with 90 unit tests; standards-aligned (W3C Activity Streams 2.0 / OpenTelemetry GenAI / MCP spec per panel discussion). Foundation only — downstream wiring is #A2.
     - **#A2 classifier wiring** — `store.applyExternalStatus` now falls back to `familyToBehavior(classifyTask(task).family)` for non-built-in tasks; `moodToWeather` delegates to `classifyMood(mood).family`. Bash/Read/Grep/Glob keep byte-identical behavior (regression-tested); MCP / verb-classified / unknown tasks now get family-appropriate animations (`writeFile`→writing-notes, `authenticate`→shield-verify, `dispatchJob`→gantt-chart, etc.). Bundle +6 KB raw / +2.4 KB gzip.
     - **#A2.1 role-aware classifier** — added `classifyRole`, `classifyWorkflow`, `decideBehavior` 4-priority resolver (status > workflow > role > family-default). Drove `store.applyExternalStatus` to use it. Same tool now produces different animations based on role + active workflow phase: `qa+Bash`→magnifier, `ops+Bash`→deploy-button, `gate+Bash`→shield-verify, `designer+Edit`→whiteboard, `pm+Write`→gantt-chart, `dev+Bash` during `/test`→magnifier, `dev+Bash` during `/ship`→deploy-button. dev role keeps zero overrides → all prior tests stay green. Driven by feedback "don't classify too casually" (saved as memory).
@@ -69,8 +69,8 @@
   - [v1.1.0 inference] docs/specs/desktop-notifications.md [Shipped]  *(#8)*
   - [v1.1.0 inference] docs/specs/idle-gap-inference.md [Shipped]  *(#C)*
   - [v1.1.0 compatibility] docs/specs/csp-compatibility.md [Shipped]  *(#27)*
-  - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Frozen]  *(AVO-126/127/128/129/131/132 — branch feat/ux-vibe-rebalance, not yet merged)*
-  - [living-office] docs/specs/living-office-events.md [DRAFT, review-gated]  *(P1-P4 shipped to branch feat/ux-vibe-rebalance, not merged; AC-3 pixel-dominance pending owner visual confirm)*
+  - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Shipped]  *(AVO-126/127/128/129/131/132 — MERGED to main via squash PR #44, v1.2.0, 2026-06-05)*
+  - [living-office] docs/specs/living-office-events.md [Shipped]  *(AVO-140 — MERGED to main via squash PR #44, v1.2.0, 2026-06-05)*
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
   - [vibe-rebalance] docs/specs/control-bar-reduction.md [Shipped]  *(AVO-130 / #116 — 4 health pills→1 expandable health dot; lang/run/view/help/platform demoted into ⚙ menu / info popover)*
   - [real-ai-behavior] docs/specs/skill-activation-badge.md [Shipped]  *(AVO-104 / #30 — transient skill bubble on SubagentStart via existing bubble cap (working-tier); panel Option B, honest no-over-head-element)*
