@@ -71,12 +71,13 @@ export const PAIR_HUDDLE_WINDOW = 90000                // 90s shared-file recenc
 
 // API
 export const STATUS_POLL_INTERVAL = 1000   // ms — matches startFilePolling default
-export const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
-export const VALID_STATUSES = ['idle', 'working', 'blocked', 'done', 'planning']  // 'planning' = AVO-101 plan mode
-export const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
+// AVO-146 (#122): VALID_ROLES / VALID_STATUSES / VALID_MOODS / MAX_MOOD_DURATION are defined
+// ONCE in the node-safe transport contract (statusContract.mjs) and re-exported here, so every
+// existing `import { VALID_ROLES } from '../systems/constants.js'` site is unchanged while the
+// server runtime (bare Node) imports the same source. 'planning' = AVO-101 plan mode.
+export { VALID_ROLES, VALID_STATUSES, VALID_MOODS, MAX_MOOD_DURATION } from '../utils/statusContract.mjs'
 // AVO-102: Claude Code effort levels (ordinal). The thinking aura intensity scales with this.
 export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max']
-export const MAX_MOOD_DURATION = 3_600_000  // 1 hour in ms
 
 export const STATUS_COLORS = {
   idle: '#888',

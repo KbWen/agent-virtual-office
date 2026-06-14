@@ -21,7 +21,8 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { AGENT_CARRY_FIELDS, FIELD_SANITIZERS } from '../src/utils/statusFields.js'
 import { normalizePost } from '../src/utils/normalizePost.js'
@@ -30,7 +31,7 @@ import {
   AGENT_CARRY_FIELDS as MJS_CARRY_FIELDS,
   FIELD_SANITIZERS as MJS_FIELD_SANITIZERS,
 } from '../src/utils/normalizePost.mjs'
-import { BLOCKED_REASONS } from '../src/systems/classify.js'
+import { BLOCKED_REASONS, BLOCKED_REASON_TABLE_CODES } from '../src/systems/classify.js'
 import { BLOCKED_REASONS as MJS_BLOCKED_REASONS } from '../src/utils/normalizePost.mjs'
 import { normalizeStatusMessage } from '../src/inference/inferStatus.js'
 import { routeExternalAgents } from '../src/inference/agentRouter.js'
@@ -90,17 +91,21 @@ const SYNTHETIC = {
   skill:      'review',            // AVO-104: raw skill name
 }
 
-// ── (c) SITE 9 drift guard: the .mjs bare-Node runtime copy ─────────────────
-// server.mjs runs normalizePost from src/utils/normalizePost.mjs (a self-contained
-// copy — bare Node cannot load the ESM-.js src chain under "type":"commonjs").
-// Its sync contract is enforced HERE mechanically, not by the comment convention.
+// ── (c) Single-source wiring guard (#122) ───────────────────────────────────
+// Before #122, src/utils/normalizePost.mjs INLINED a second copy of every constant +
+// sanitizer + the normalizePost logic, and these tests proved the two copies matched.
+// #122 eliminated the mirror: both the canonical `.js` side and the bare-Node `.mjs` side
+// now re-export the SINGLE source of truth, src/utils/statusContract.mjs. These checks are
+// retained as a regression guard — they catch any future re-introduction of a divergent
+// copy (they pass trivially while the single-source wiring holds, and fail loudly if the
+// .mjs and .js exports ever stop resolving to the same contract).
 
-describe('normalizePost.mjs runtime copy — drift guard vs canonical (SITE 9)', () => {
-  it('inlined AGENT_CARRY_FIELDS list is identical to canonical', () => {
+describe('transport contract — single-source wiring guard (#122)', () => {
+  it('.mjs and canonical AGENT_CARRY_FIELDS resolve to the same list', () => {
     expect(MJS_CARRY_FIELDS).toEqual(AGENT_CARRY_FIELDS)
   })
 
-  it('inlined FIELD_SANITIZERS behave identically to canonical (probe table)', () => {
+  it('.mjs and canonical FIELD_SANITIZERS behave identically (probe table)', () => {
     const probes = [
       'plain-string', '', 'x'.repeat(300), 42, null, undefined, {}, [],
       'test-run-failed', 'build-failed', 'deps-failed', 'blocked-unknown', 'not-a-reason',
@@ -141,13 +146,22 @@ describe('normalizePost.mjs runtime copy — drift guard vs canonical (SITE 9)',
     {}, null, { type: 'office-status', agents: 'not-an-array' },
   ]
 
-  // AVO-148: list equality check — the .mjs mirror must contain the exact same token list
-  // as the canonical classify.js BLOCKED_REASONS (not just probe-subset equivalence).
-  it('inlined BLOCKED_REASONS list equals canonical classify.js list (AVO-148 H2 gate)', () => {
+  // The .mjs and classify.js BLOCKED_REASONS resolve to the same contract list (was: mirror
+  // equality; now: single-source wiring). AVO-148 H2 gate retained.
+  it('.mjs and classify.js BLOCKED_REASONS resolve to the same list', () => {
     expect(MJS_BLOCKED_REASONS).toEqual(BLOCKED_REASONS)
   })
 
-  it('normalizePost behavior is identical between .js (canonical) and .mjs (runtime copy)', () => {
+  // #122 — the ONE real drift point that remains: the rich presentation table in classify.js
+  // (iconId/hue/a11y) lives separately from the contract's code list, so its key set MUST equal
+  // the contract codes, IN ORDER. A code in the contract but missing from the table would make
+  // classifyBlockedReason fall back to 'blocked-unknown' metadata (wrong icon); an extra table
+  // entry would be a dead reason normalizePost rejects. Either way this guard fails loudly.
+  it('classify.js presentation table covers exactly the contract codes, in order (#122)', () => {
+    expect(BLOCKED_REASON_TABLE_CODES).toEqual([...BLOCKED_REASONS])
+  })
+
+  it('normalizePost behaves identically via the .js and .mjs entry points', () => {
     for (const payload of PARITY_PAYLOADS) {
       const a = normalizePost(payload ? JSON.parse(JSON.stringify(payload)) : payload)
       const b = normalizePostMjs(payload ? JSON.parse(JSON.stringify(payload)) : payload)
@@ -155,6 +169,28 @@ describe('normalizePost.mjs runtime copy — drift guard vs canonical (SITE 9)',
       delete b._seq
       expect(b, `behavior drift for payload ${JSON.stringify(payload)?.slice(0, 80)}`).toEqual(a)
     }
+  })
+
+  // #122 AC-2 — the whole reason the .mjs exists: package.json "type":"commonjs" makes the ESM
+  // `.js` sources unloadable by BARE Node, so server.mjs imports the `.mjs`. This spawns a real
+  // `node` (NOT vitest's Vite runtime) and imports the normalizePost.mjs → statusContract.mjs
+  // chain, then runs normalizePost. A regression that makes the .mjs depend on a `.js` source
+  // (re-introducing the transpile requirement) fails HERE, not in production.
+  it('normalizePost.mjs loads + runs under bare Node — no Vite/transpile (AC-2)', () => {
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    const url = pathToFileURL(path.join(here, '..', 'src', 'utils', 'normalizePost.mjs')).href
+    const script = `
+      import('${url}').then(m => {
+        const r = m.normalizePost({ dev: 'working', qa: 'running tests' })
+        const dev = r.agents.find(a => a.role === 'dev')
+        if (!dev || dev.status !== 'working') { console.error('normalizePost output wrong'); process.exit(2) }
+        if (!m.VALID_ROLES.includes('dev') || !m.BLOCKED_REASONS.includes('test-run-failed')) { console.error('exports missing'); process.exit(3) }
+        if (typeof m.nextSeq() !== 'string') { console.error('nextSeq wrong'); process.exit(4) }
+        process.stdout.write('OK')
+      }).catch(e => { console.error(String(e)); process.exit(5) })
+    `
+    const out = execFileSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf-8' })
+    expect(out).toContain('OK')
   })
 })
 
