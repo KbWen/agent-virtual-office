@@ -6,7 +6,7 @@ import { eventBubble, charName, useLocale, t } from '../i18n'
 import { BlockedReasonBadge } from './blockedReasonBadge'
 import { recurringInfo } from '../systems/recurringFailure'
 import { selectVisibleBubbles, BUBBLE_VISIBLE_CAP } from '../systems/bubbleVisibility.js'
-import { stepWalkFrame } from '../systems/walkFrame.js'
+import { stepWalkFrame, GAP_SNAP_MS } from '../systems/walkFrame.js'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
 import { shouldShakeDesk } from '../systems/eventJuice.js'
@@ -25,6 +25,30 @@ export function shouldFaceBack(targetExtStatus, targetAgent) {
   if (!targetAgent) return false             // agent not in store
   if (targetAgent.inGroupEvent) return false // group event owns facing
   return true
+}
+
+// RAF watchdog is only for a genuinely stale visible walk loop. Visible jank in the 1.5-5s range
+// should resume smoothly; stepWalkFrame uses the same >GAP_SNAP_MS boundary to snap real freezes.
+export function shouldRestartRafWatchdog(lastFrameWallTime, now, visibilityState, stallMs = GAP_SNAP_MS) {
+  if (visibilityState !== 'visible') return false
+  if (!Number.isFinite(lastFrameWallTime) || lastFrameWallTime <= 0) return false
+  return now - lastFrameWallTime > stallMs
+}
+
+export function shouldStopStaleLocalWalk(isWalking, agentState) {
+  return Boolean(isWalking && agentState && agentState.isMoving === false)
+}
+
+export function isDocumentFocused(doc) {
+  return !!doc && typeof doc.hasFocus === 'function' && doc.hasFocus()
+}
+
+export function shouldRecordRafWatchdogRestart(hadPendingFrame, isFocused, consecutiveLostRestarts = 0) {
+  return !hadPendingFrame && isFocused && consecutiveLostRestarts >= 2
+}
+
+export function hasRafHandle(value) {
+  return value !== null && value !== undefined
 }
 
 // ═══ PIXEL ART SPRITE SYSTEM ═══
@@ -718,6 +742,7 @@ function AgentCharacter({ agent }) {
   const rafRef = useRef(null)
   const lastTimeRef = useRef(null)
   const lastFrameWallTimeRef = useRef(0)
+  const lostRafRestartRef = useRef(0)
   const isUnmountedRef = useRef(false)
   const [renderPos, setRenderPos] = useState(null)
   const [isWalking, setIsWalking] = useState(false)
@@ -765,6 +790,20 @@ function AgentCharacter({ agent }) {
     isWalking,
   ])
 
+  // Store is authoritative for whether an agent is walking. If a reset/arrival clears
+  // `agentState.isMoving` while the component-local flag is still true, stop the RAF loop instead
+  // of letting the watchdog repeatedly "recover" a walk that no longer exists.
+  useEffect(() => {
+    if (!shouldStopStaleLocalWalk(isWalking, agentState)) return
+    if (hasRafHandle(rafRef.current)) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    lastTimeRef.current = null
+    movingRef.current = false
+    setIsWalking(false)
+  }, [agentState?.isMoving, isWalking, agentState])
+
   // Walk animation timer (leg alternation)
   useEffect(() => {
     if (!isWalking) return
@@ -776,7 +815,7 @@ function AgentCharacter({ agent }) {
   // Throttled to ~30fps React updates (physics still runs at 60fps for smooth position)
   const frameSkipRef = useRef(false)
   const startRaf = useCallback(() => {
-    if (rafRef.current) return // already running
+    if (hasRafHandle(rafRef.current)) return // already running
     lastTimeRef.current = null
     lastFrameWallTimeRef.current = Date.now()
 
@@ -786,6 +825,9 @@ function AgentCharacter({ agent }) {
         return
       }
       lastFrameWallTimeRef.current = Date.now()
+      // Any delivered RAF callback proves the walk loop recovered. Reset the lost-chain counter
+      // even when this frame immediately snaps/arrives at a waypoint after a long host pause.
+      lostRafRestartRef.current = 0
 
       if (!lastTimeRef.current) lastTimeRef.current = timestamp
       const gapMs = timestamp - lastTimeRef.current
@@ -837,13 +879,19 @@ function AgentCharacter({ agent }) {
       // A backgrounded tab pauses RAF; skip the watchdog while hidden to avoid
       // false-positive stall diagnostics and spurious RAF re-queues.
       if (document.visibilityState !== 'visible') return
-      if (Date.now() - lastFrameWallTimeRef.current < 1500) return
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      if (!shouldRestartRafWatchdog(lastFrameWallTimeRef.current, Date.now(), document.visibilityState)) return
+      const hadPendingFrame = hasRafHandle(rafRef.current)
+      if (hadPendingFrame) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
-      // Surface the stall instead of restarting silently — a rising count means frames
-      // are being dropped somewhere (tab throttling, HMR, an exception in animate()).
-      useOfficeStore.getState().recordWatchdogRestart()
-      if (import.meta.env?.DEV) console.warn(`[watchdog] restarted stalled walk loop for "${id}"`)
+      lostRafRestartRef.current = hadPendingFrame ? 0 : lostRafRestartRef.current + 1
+      // Only count a truly lost RAF chain. A pending frame that has not fired yet usually means the
+      // host WebView/browser automation throttled rendering; restarting keeps the walk alive, but
+      // surfacing it as an app watchdog fault made Codex Browser sessions look broken while sprites
+      // were still moving normally.
+      if (shouldRecordRafWatchdogRestart(hadPendingFrame, isDocumentFocused(document), lostRafRestartRef.current)) {
+        useOfficeStore.getState().recordWatchdogRestart()
+        if (import.meta.env?.DEV) console.warn(`[watchdog] restarted stalled walk loop for "${id}"`)
+      }
       // NO fast-forward here (A/B-proven regression, 2026-06-11): the watchdog fires at
       // 1.5s, which heavy-load render jank hits constantly on this machine — snapping made
       // every such stall a visible teleport (20 jumps in a 3-min audit vs 0 on baseline).
@@ -860,7 +908,7 @@ function AgentCharacter({ agent }) {
     const deferred = deferredTimersRef.current
     return () => {
       isUnmountedRef.current = true
-      if (rafRef.current) {
+      if (hasRafHandle(rafRef.current)) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null
       }
@@ -1055,7 +1103,7 @@ function AgentCharacter({ agent }) {
           socialTargetRef.current = null  // abort: clear social target so no stale face-on-arrival
           store.setAgentJourney(id, null) // abort: a dead walk must not keep claiming its landing spot
           setIsWalking(false)
-          if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
+          if (hasRafHandle(rafRef.current)) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         } else {
           timerRef.current = setTimeout(doSchedule, BEHAVIOR_STUCK_RETRY_MS)
           return
@@ -1211,7 +1259,7 @@ function AgentCharacter({ agent }) {
         // this anyway; the explicit clear keeps the invariant local and refactor-proof).
         socialTargetRef.current = null
         useOfficeStore.getState().setAgentJourney(id, null) // abort: release the claimed landing spot
-        if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
+        if (hasRafHandle(rafRef.current)) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         setIsWalking(false)
         timerRef.current = setTimeout(doSchedule, 500)
         lastBehaviorRef.since = Date.now()
