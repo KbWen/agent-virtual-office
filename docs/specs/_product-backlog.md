@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-06-13
+last_updated: 2026-06-14
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -63,7 +63,8 @@ last_updated: 2026-06-13
 | AVO-139 | Responsive office width-fill + readable labels (no whitespace/crop) | product | vibe-rebalance | P0 | docs/specs/responsive-office-roster.md | feature | Done | — |
 | AVO-140 | Living-office honest events (L2 team-affect + honesty gating + reluctant + real-seed) | product | real-ai-behavior | P1 | docs/specs/living-office-events.md | feature | Done | AVO-138 |
 | AVO-141 | Comms / vertical (☰ roster) deeper optimization — "still lots of room" | product | vibe-rebalance | P2 | docs/specs/living-office-events.md | feature | Pending | AVO-140 |
-| AVO-142 | Drag-to-move agents (manual reposition for realer interaction) | product | game-feel | P2 | — | feature | Pending | — |
+| AVO-142 | Drag-to-move agents (manual reposition for realer interaction) | product | game-feel | P2 | docs/adr/ADR-005-no-user-drag-to-move-agents.md | feature | Deferred | REJECTED-by-decision (ADR-005, 4-lens panel unanimous): position=state honesty violation + drag-vs-click conflict + fake-command toy. Interaction goal redirected to AVO-158 (Poke). Re-open conditions in ADR-005 |
+| AVO-158 | Poke / acknowledge micro-interaction (in-place reaction, honest) | product | game-feel | P3 | — | feature | Pending | replaces AVO-142 per ADR-005; click-and-hold a character → it reacts IN PLACE (bounce/turn-to-camera/blink) + a short bubble drawn from its REAL state, then returns to work; ZERO position/state write; nickname/identity "make it mine" → AVO-124 |
 | AVO-143 | applyExternalStatus: skip no-op agent re-allocation (don't re-render all agents each poll) | chore | tech-debt | P3 | — | quick-win | Done | hardening-wave H6a; shipped 2026-06-10 |
 | AVO-144 | Sustained inter-agent separation in free movement (agents pass THROUGH each other in transit; RAF loop has no per-frame separation — only gather targets are deconflicted) | product | game-feel | P2 | docs/adr/ADR-004-no-per-frame-agent-separation.md | feature | Deferred | hardening-wave H6b — RESOLVED BY DECISION (3-lens panel unanimous): per-frame separation rejected (doorway geometry + unverifiable visuals + R1); re-open conditions in ADR-004 |
 | #20 | Hook read-modify-write atomic | chore | tech-debt | P1 | docs/specs/hook-status-write-lock.md | quick-win | Done | hardening-wave H3; shipped 2026-06-10 |

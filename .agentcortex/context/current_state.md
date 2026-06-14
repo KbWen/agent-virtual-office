@@ -19,6 +19,7 @@
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
   - docs/adr/ADR-003-status-source-parity-for-codex.md — status-source parity for Codex
   - docs/adr/ADR-004-no-per-frame-agent-separation.md — AVO-144 resolved by decision: per-frame separation rejected (3-lens panel); re-open conditions recorded
+  - docs/adr/ADR-005-no-user-drag-to-move-agents.md — AVO-142 rejected by decision: user drag-to-move rejected (4-lens panel unanimous); position=state honesty; interaction redirected to AVO-158 Poke; re-open conditions recorded
   - .agentcortex/adr/ADR-001-vnext-self-managed-architecture.md — framework scaffold mirror of ADR-001
 - **Active Backlog**: `docs/specs/_product-backlog.md`
   - 15 features across 5 themes: 辦公室生命感、資訊密度、互動性、整合延伸、視覺升級
