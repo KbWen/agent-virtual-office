@@ -1,4 +1,7 @@
 import { recordUnknown } from './unknownLog.js'
+// AVO-146 (#122): the ordered blocked-reason CODES are owned by the node-safe transport
+// contract (statusContract.mjs). The rich presentation TABLE (iconId/hue/a11y) stays here.
+import { BLOCKED_REASONS } from '../utils/statusContract.mjs'
 
 /**
  * #A1 — Pure classifier for AI agent signals (task / status / mood).
@@ -294,7 +297,14 @@ const BLOCKED_REASON_TABLE = Object.freeze({
   'api-auth-failed':   { iconId: 'key-broken',   hue: '#7a5c99', a11yKey: 'blockedReason.api-auth-failed.a11y' },
 })
 
-export const BLOCKED_REASONS = Object.freeze(Object.keys(BLOCKED_REASON_TABLE))
+// Re-export the contract's ordered codes so existing `import { BLOCKED_REASONS } from
+// './classify.js'` sites are unchanged. The presentation TABLE's key set MUST equal this list
+// (same codes, same order) — pinned mechanically by tests/statusFieldsDriftGuard.test.js via
+// the exported table codes below. A code present here but missing from the table would make
+// classifyBlockedReason fall back to 'blocked-unknown' metadata (wrong icon), so the guard
+// is the real enforcement, not this comment.
+export { BLOCKED_REASONS }
+export const BLOCKED_REASON_TABLE_CODES = Object.keys(BLOCKED_REASON_TABLE)
 
 export function classifyBlockedReason(reasonCode) {
   const code = (typeof reasonCode === 'string' && BLOCKED_REASON_TABLE[reasonCode])
