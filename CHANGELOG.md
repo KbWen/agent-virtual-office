@@ -5,17 +5,38 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
-## Unreleased
+## v1.5.0 — 2026-06-14 — Make it yours: share it, poke it, theme it
+
+The office got more personal and more *fun to keep open*. You can poke your agents and watch
+them react, save the day as a cozy postcard, re-skin the room — and the resting UI got quieter.
+Everything new stays honest by construction: nothing fakes an agent's state.
 
 ### Added
 
-- **Shareable end-of-day card (AVO-115)** — a one-click cozy pixel-art **postcard** of
-  today's office (weather/mood hero + a tiny office vignette + one warm caption), saved as
-  a PNG to share. Opt-in from the ⚙ menu; rendered entirely in your browser (no upload),
-  with download + native Share where available, in English and 繁體中文. Deliberately a
-  charming snapshot, **not** a stats/leaderboard card — the one number it shows (today's
-  finished count) and the weather are drawn only from real activity; a quiet day honestly
-  reads "A quiet day at the office."
+- **Poke / acknowledge (AVO-158)** — click any character and it bobs and says what it's
+  *actually* up to (a line drawn from its real status). `Space` re-pokes; right-click pokes
+  without opening the inspector. Pure acknowledgement — it never moves or fakes a state.
+  *(User drag-to-move was considered and rejected on honesty grounds — ADR-005 — because a
+  character's position is itself an honest signal.)*
+- **Shareable end-of-day card (AVO-115)** — one click turns the day's real activity into a
+  cozy pixel-art **postcard** (weather/mood hero + one gentle number + a warm caption), saved
+  as a PNG to share. Browser-only (no upload), download + native Share, in English and
+  繁體中文. A snapshot, **not** a stats card; an empty day honestly reads *"a quiet day at the office."*
+- **Office theme selector (AVO-123)** — re-skin the room from the ⚙ menu (Default / Winter /
+  Autumn light tints), legibility-guarded so status colors always stay readable.
+- **Skill activation badge (AVO-104)** — a transient skill bubble when a subagent picks up a skill.
+- **Rare-event juice (AVO-136)** — deploy confetti, eureka sparkle, a local desk-slam shake —
+  rare, capped, and reduced-motion-safe.
+- **Chill-fun ambience** — smooth 24-hour time-of-day lighting + desk-lamp halos + an optional
+  100%-procedural ambient soundscape (0 KB, off by default).
+
+### Changed
+
+- **Calmer control bar (AVO-130)** — four health pills collapse to a single dot; language /
+  view / run / help demote into a ⚙ gear menu, so the resting bar stays lean.
+- **Honest review-gate "waiting" tray (AVO-107)** — the Gatekeeper shows an awaiting-approval
+  in-tray driven only by real awaiting-approval signals (no fabricated queue or ticket types).
+- **Build** — Vite 6 → 8 (clears the esbuild advisory); React 19.2, Tailwind CSS 4.3, Zustand 5.0.
 
 ## v1.4.0 — 2026-06-10 — A calmer, honest office that can't pile up — and watches itself overnight
 
