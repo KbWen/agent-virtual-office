@@ -1,6 +1,6 @@
 ---
 title: AVO-115 Shareable end-of-day office card (cozy postcard)
-status: draft
+status: shipped
 created: 2026-06-14
 signal_tier: none
 backlog: AVO-115

@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-06-13
+last_updated: 2026-06-14
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -36,7 +36,7 @@ last_updated: 2026-06-13
 | AVO-112 | Eureka cascade | product | game-feel | P3 | — | feature | Pending | — |
 | AVO-113 | OpenTelemetry GenAI export | infra | observability | P1 | — | feature | Pending | — |
 | AVO-114 | Event-stream replay scrubber | product | observability | P2 | — | feature | Pending | — |
-| AVO-115 | Shareable daily card | product | brand | P1 | — | feature | Pending | — |
+| AVO-115 | Shareable daily card | product | brand | P1 | docs/specs/shareable-daily-card.md | feature | Shipped | #31; cozy pixel-art postcard (weather/mood hero + 1 number + warm caption); client-side canvas→PNG, opt-in ⚙ Share; honest (no event counting — Option C, derived from done+mood); store.js untouched |
 | AVO-116 | Per-agent cost attribution & daily $ trend | product | info-density | P1 | — | feature | Pending | AVO-108 |
 | AVO-117 | Recurring failure-mode detection | product | observability | P1 | docs/specs/recurring-failure-detection.md | feature | Done | AVO-110 |
 | AVO-118 | Workflow graph minimap (DAG view) | product | multi-agent | P2 | — | feature | Pending | AVO-105 |
