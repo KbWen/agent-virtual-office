@@ -48,12 +48,27 @@ The interaction desire is **valid** and is redirected to an honest mechanism (be
 ## Redirect — the honest interaction (new backlog item)
 
 All four lenses independently converged on the same replacement: a **"Poke / acknowledge"
-micro-interaction** — click-and-hold a character → it reacts **in place** (gentle bounce /
-turns toward camera / blink) and shows a short bubble whose text is drawn from its **real
-state** ("Deep in thought…", "Waiting on review…"), then returns to work. **Zero position
-write, zero state change** → fully honest, cozy, cheap, REDUCE-safe. Filed as a new backlog
-item (Poke acknowledgment). The "make it mine" identity desire (nickname / emoji badge) folds
-into **AVO-124** (agent appearance customization), not a position mechanic.
+micro-interaction** — the character reacts **in place** (turns toward camera + a single bob)
+and shows a short bubble whose text is drawn from its **real state** ("Deep in thought…",
+"Waiting on review…"), then returns to work. **Zero position write, zero state change** →
+fully honest, cozy, cheap, REDUCE-safe. Filed as new backlog item **AVO-158**. The "make it
+mine" identity desire (nickname / emoji badge) folds into **AVO-124**, not a position mechanic.
+
+**Interaction model — Model A "layered, no new gesture"** (decided by a follow-up 3-lens
+gesture panel — input-engineering · cozy game-feel · a11y/discoverability — unanimous, after
+the owner asked how Poke differs from the existing click=inspect): **do NOT add a competing
+gesture.** A normal click both opens the inspector AND fires the acknowledge reaction;
+re-clicking a character whose inspector is already open fires the reaction only. Rationale:
+long-press/right-click on a 16–40px AUTO-MOVING sprite is an input trap (pointercancel on
+drift; iOS/Android contextmenu+selection hijack) AND ~0% discoverable AND keyboard-hostile —
+paying a second-gesture cost for a dead feature, against REDUCE. Layering is zero-learn (reuses
+the existing "click the character" contract) and makes every click feel alive. Spec essentials:
+face-camera + single bob ~200ms + bubble ~1.2s; seeded per-status quip variation with cozy
+repeat-escalation (3rd→longer, 5th→brief turn-away, reset on 10s idle), variation in TEXT not
+animation; keyboard Enter=inspector+poke / Space (inspector focused)=re-poke; reaction
+`aria-hidden`, bubble `role="status" aria-live="polite"` 1s auto-clear; `prefers-reduced-motion`
+→ static bubble only, no motion; right-click(mouse)=reaction+preventDefault, touch=reaction on
+every tap (no long-press path).
 
 ## Re-opening conditions (ALL required)
 
