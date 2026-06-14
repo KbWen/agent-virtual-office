@@ -101,10 +101,28 @@ export function healthDotState({ statusSource, integrationHealth, externalCount 
   }
 }
 
-// #28 — DEV-only diagnostics gate for the RAF-watchdog restart counter. Shown only in dev builds AND
-// only once a stall has happened (count > 0), so it's invisible at rest and zero-cost in production
+// #28 — opt-in debug flag for the RAF-watchdog diagnostic chip. The chip is non-actionable for
+// everyone except a dev actively chasing a walk-loop stall, so it is OFF by default even in dev and
+// only renders when explicitly opted in: `?debug=raf` in the URL or localStorage `avo.debug.raf=on`
+// (same load-time pattern as `?lang` / `avo.theme`). The watchdog's `console.warn` is unaffected —
+// that remains the always-on dev signal for anyone who opens devtools. Reads window lazily so it
+// stays safe in SSR/test (no window → false).
+export function isRafDebugEnabled(win = typeof window !== 'undefined' ? window : undefined) {
+  if (!win) return false
+  try {
+    const params = new URLSearchParams(win.location?.search || '')
+    if (params.get('debug') === 'raf') return true
+    return win.localStorage?.getItem('avo.debug.raf') === 'on'
+  } catch {
+    return false
+  }
+}
+
+// #28 — DEV-only diagnostics gate for the RAF-watchdog restart counter. Shown only in dev builds, only
+// once a stall has happened (count > 0), AND only when the debug flag is opted in (isRafDebugEnabled),
+// so it's invisible at rest, off-by-default for everyone, and zero-cost in production
 // (`import.meta.env.DEV` is a compile-time constant → the render branch is dead-code-eliminated from
-// the prod bundle). Pure so it can be unit-tested without a DOM.
-export function shouldShowWatchdogDiag(count, isDev = import.meta.env.DEV) {
-  return !!isDev && typeof count === 'number' && count > 0
+// the prod bundle). `debugEnabled` is injectable for DOM-free unit testing.
+export function shouldShowWatchdogDiag(count, isDev = import.meta.env.DEV, debugEnabled = isRafDebugEnabled()) {
+  return !!isDev && !!debugEnabled && typeof count === 'number' && count > 0
 }
