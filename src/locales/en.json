@@ -361,6 +361,15 @@
       "snagsMany": "…and weathered a few snags."
     }
   },
+  "poke": {
+    "quips": {
+      "working": ["Deep in thought…", "Almost there!", "On it~", "Focusing!", "Mm, busy~"],
+      "blocked": ["Stuck on this…", "Hmm, wedged.", "Waiting on a fix…", "Send help 😅"],
+      "done": ["All wrapped up!", "Nailed it ✓", "Done for now~", "Phew!"],
+      "idle": ["Just chilling~", "Taking a breather", "Oh, hi!", "What's up?"]
+    },
+    "turnaway": ["ok ok, I see you", "haha enough~", "back to work~"]
+  },
   "time": {
     "now": "now",
     "secondsAgo": "{0}s ago",
