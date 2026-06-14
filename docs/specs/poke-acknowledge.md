@@ -1,6 +1,6 @@
 ---
 title: AVO-158 Poke / acknowledge micro-interaction (Model A, layered)
-status: draft
+status: shipped
 created: 2026-06-14
 signal_tier: none
 backlog: AVO-158

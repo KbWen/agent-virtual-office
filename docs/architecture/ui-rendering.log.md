@@ -45,3 +45,12 @@ source_sha: 36ddafb
 - [DECISION] No event counting: the only frontend eureka/deploy signals are office theater + demo clicks, and real CI deploys arrive as agent status (not activeEvent), so counting them would fabricate activity. The highlight is derived purely from the honest done+mood signals. (Owner Option C, 2026-06-14.)
 - [CONSTRAINT] Share is opt-in (⚙ menu), never in the default glance layer or resting bar — preserves the REDUCE-not-add discipline. New share/export surfaces follow the same opt-in placement.
 - [CONSTRAINT] Card text legibility across en + zh-TW relies on `wrapText` (word-wrap + zh-TW char-wrap fallback); verify new card copy live (Playwright) — canvas measurement is unavailable in vitest.
+
+### [ui-rendering][2026-06-14][feat/avo-158-poke]
+source_spec: docs/specs/poke-acknowledge.md
+source_sha: 09478fc
+
+- [CONSTRAINT] User interaction with agents is OBSERVE/ACKNOWLEDGE, never CONTROL: a poke reaction NEVER writes position or status, and quips derive ONLY from the agent's real status (pure pickPokeReaction, idle fallback, no cross-status leak). Guarded by a store-level no-mutation test. Any future agent-interaction must keep this (ADR-005).
+- [DECISION] Poke uses Model A (layered onto the existing click — no new gesture): click = inspector + in-place bob + real-status quip bubble; re-click while inspector open = reaction only; Space = poke-only; right-click = poke + preventDefault. Long-press/right-click-primary rejected (input trap on small auto-moving sprites + undiscoverable + keyboard-hostile). Full rationale: ADR-005.
+- [CONSTRAINT] The poke bob reuses the AVO-136 `<animateTransform>` additive idiom (key=seq to replay per poke), is reduced-motion-gated, and is `aria-hidden`; the quip bubble is `role=status aria-live=polite` and preempts the ambient BehaviorBubble slot (no overlap). New in-scene reactions follow this animate-additive + a11y pattern.
+- [TRADEOFF] v1 reaction is a bob + bubble (not a literal sprite-facing turn); the inspector popover can occlude the quip bubble on the just-clicked agent (bob stays visible). Accepted; richer facing / non-occluding placement is a later refinement.
