@@ -5,6 +5,16 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.5.1 — 2026-06-14 — Card + poke polish
+
+### Fixed
+
+- **Share card looks better** — redesigned the postcard into a populated little office
+  (wall + windows, a row of desks with agents, a plant) with fuller weather and tighter
+  spacing, instead of the earlier mostly-empty layout. The data behind it is unchanged.
+- **Poke is shown as a GIF** — the README now demonstrates the poke reaction with a short
+  animation instead of a static frame that didn't read as anything happening.
+
 ## v1.5.0 — 2026-06-14 — Make it yours: share it, poke it, theme it
 
 A more personal release: poke your agents, save the day as a card, re-skin the room. The
