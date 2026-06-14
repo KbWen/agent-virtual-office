@@ -84,6 +84,8 @@ test-results/
 # will land ONE tracked harness; until then these stay session-local.
 .pet-shots/
 scripts/*-shot.mjs
+scripts/*-shots.mjs
+scripts/*-gif.mjs
 scripts/pet-*.mjs
 
 # Agentic OS brain deploy helpers (canonical source: KbWen/agentic-os; local copies only)
