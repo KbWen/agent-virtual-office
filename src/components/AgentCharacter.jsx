@@ -10,6 +10,7 @@ import { stepWalkFrame } from '../systems/walkFrame.js'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
 import { shouldShakeDesk } from '../systems/eventJuice.js'
+import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
 
 // Pure guard: returns true if a social arriver's TARGET should face back.
 // R1: tracked agents (live externalStatus entry) are NEVER modulated.
@@ -1221,18 +1222,59 @@ function AgentCharacter({ agent }) {
 
   const setSelectedAgent = useOfficeStore((s) => s.setSelectedAgent)
 
+  // AVO-158 Poke (Model A, layered). The acknowledge reaction is purely visual + local —
+  // it NEVER writes position or status (ADR-005 honesty contract). `pokeBob` drives a
+  // re-mountable bob animateTransform (key=seq so each poke replays); `pokeQuip` shows a
+  // transient real-status bubble. Escalation/quip selection lives in pure pokeReaction.js.
+  const [pokeBob, setPokeBob] = useState(null)     // { seq, intensity } | null
+  const [pokeQuip, setPokeQuip] = useState(null)   // string | null
+  const pokeHistoryRef = useRef([])
+  const pokeSeqRef = useRef(0)
+  const pokeQuipTimerRef = useRef(null)
+  const pokeBobTimerRef = useRef(null)
+  useEffect(() => () => {
+    if (pokeQuipTimerRef.current) clearTimeout(pokeQuipTimerRef.current)
+    if (pokeBobTimerRef.current) clearTimeout(pokeBobTimerRef.current)
+  }, [])
+
+  const firePoke = useCallback(() => {
+    const now = Date.now()
+    // Read the agent's REAL status fresh from the store at call time (stable empty-deps
+    // closure; never stale). Honest by construction — we only READ status, never write.
+    const status = (useOfficeStore.getState().agents[id]?.status) || 'idle'
+    const r = pickPokeReaction(status, pokeHistoryRef.current, now)
+    pokeHistoryRef.current = r.nextHistory
+    const pool = t(r.turnAway ? 'poke.turnaway' : `poke.quips.${r.poolKey}`, [])
+    const quip = Array.isArray(pool) && pool.length ? pool[pickQuipIndex(pool.length, r.streak)] : null
+    pokeSeqRef.current += 1
+    setPokeQuip(quip)
+    setPokeBob({ seq: pokeSeqRef.current, intensity: r.intensity })
+    if (pokeQuipTimerRef.current) clearTimeout(pokeQuipTimerRef.current)
+    pokeQuipTimerRef.current = setTimeout(() => setPokeQuip(null), 1200)
+    if (pokeBobTimerRef.current) clearTimeout(pokeBobTimerRef.current)
+    pokeBobTimerRef.current = setTimeout(() => setPokeBob(null), r.intensity === 'normal' ? 460 : 720)
+  }, [id])
+
   const handleClick = useCallback((e) => {
     e.stopPropagation()
-    setSelectedAgent(id)
-  }, [id, setSelectedAgent])
+    setSelectedAgent(id)   // inspector (idempotent if already selected → re-click = reaction only)
+    firePoke()
+  }, [id, setSelectedAgent, firePoke])
+
+  // Right-click = poke-only (desktop bonus); suppress the browser context menu.
+  const handleContextMenu = useCallback((e) => {
+    e.preventDefault(); e.stopPropagation()
+    firePoke()
+  }, [firePoke])
 
   // Stable keyboard handler — the root <g> re-renders ~30fps while the character walks
   // (setRenderPos). A fresh inline `onKeyDown={(e) => ...}` arrow allocated a new closure
-  // on every one of those frames; useCallback over the already-stable handleClick keeps
-  // one closure for the component's lifetime.
+  // on every one of those frames; useCallback keeps one closure for the lifetime.
+  // Enter = click (inspector + poke); Space = poke-only (re-poke without toggling inspector).
   const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(e) }
-  }, [handleClick])
+    if (e.key === 'Enter') { e.preventDefault(); handleClick(e) }
+    else if (e.key === ' ') { e.preventDefault(); firePoke() }
+  }, [handleClick, firePoke])
 
   const state = agentState || {}
   const pos = renderPos || state.position || { x: 0, y: 0 }
@@ -1253,7 +1295,7 @@ function AgentCharacter({ agent }) {
 
   return (
     <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}
-      style={{ cursor: 'pointer' }} onClick={handleClick}
+      style={{ cursor: 'pointer' }} onClick={handleClick} onContextMenu={handleContextMenu}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       data-agent-id={id}
       data-agent-status={state.status || 'idle'}
@@ -1261,6 +1303,18 @@ function AgentCharacter({ agent }) {
       data-supervising={hasActiveHelper ? '1' : '0'}
       role="button" aria-label={`${name} — ${t(`statusLabels.${state.status || 'idle'}`, state.status || 'idle')}`} tabIndex={0}
       onKeyDown={handleKeyDown}>
+      {/* AVO-158 Poke: a brief in-place acknowledge bob, additive on top of the base
+          translate/scale. key={seq} remounts per poke so each click replays. Reduced-motion
+          drops the motion (the quip bubble still acknowledges the poke). Decorative → aria-hidden. */}
+      {!reducedMotion && pokeBob && (
+        <animateTransform key={`poke-${pokeBob.seq}`} attributeName="transform" type="translate" additive="sum"
+          values={pokeBob.intensity === 'turnaway' ? '0 0;-3 0;3 0;-2 0;0 0'
+            : pokeBob.intensity === 'long' ? '0 0;0 -5;0 -2;0 -5;0 0'
+            : '0 0;0 -4;0 0'}
+          keyTimes={pokeBob.intensity === 'normal' ? '0;0.5;1' : '0;0.25;0.5;0.75;1'}
+          dur={pokeBob.intensity === 'normal' ? '0.32s' : pokeBob.intensity === 'long' ? '0.6s' : '0.5s'}
+          repeatCount="1" fill="freeze" aria-hidden="true" />
+      )}
       {/* AVO-136: desk-slam → a brief LOCAL jitter on this agent only. `additive="sum"` composes the
           shake ON TOP of the base translate/scale (a CSS transform would override positioning). One
           play; mounts only while in desk-slam, so it fires once on onset (anti-nag). Gated off under
@@ -1402,12 +1456,20 @@ function AgentCharacter({ agent }) {
         {(() => {
           const bubbleTopAbove = pos.y - 68 - 34 * labelScale
           const below = bubbleTopAbove < 6
+          // AVO-158: a live poke quip momentarily PREEMPTS the ambient bubble (reuses the same
+          // slot → no overlap, inherits edge-clamping). When a quip is showing, mark the group
+          // as a polite live region so the acknowledge is announced once (reaction bob is
+          // aria-hidden separately). aria-atomic so the whole short quip reads as one unit.
+          const bubbleMsg = pokeQuip || (bubbleVisible ? state.bubble : null)
           return (
-            <g transform={`translate(0, ${below ? 6 : -68}) scale(${labelScale})`}>
+            <g transform={`translate(0, ${below ? 6 : -68}) scale(${labelScale})`}
+              role={pokeQuip ? 'status' : undefined}
+              aria-live={pokeQuip ? 'polite' : undefined}
+              aria-atomic={pokeQuip ? 'true' : undefined}>
               {/* #47: pass the agent's absolute scene x + net local→scene scale (labelScale, since
                   the char's 1.35 scale is undone above) so the bubble self-clamps horizontally and
                   far-left/right desks no longer clip the bubble at the office edge. */}
-              <BehaviorBubble x={0} y={0} below={below} message={bubbleVisible ? state.bubble : null} absX={pos.x} scale={labelScale} sceneMinX={sceneMinX} sceneW={sceneW} />
+              <BehaviorBubble x={0} y={0} below={below} message={bubbleMsg} absX={pos.x} scale={labelScale} sceneMinX={sceneMinX} sceneW={sceneW} />
             </g>
           )
         })()}

@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-14T10:00:00Z
-- **Update Sequence**: 89
+- **Last Updated**: 2026-06-14T12:00:00Z
+- **Update Sequence**: 90
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -80,6 +80,7 @@
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
   - [ui-rendering] docs/specs/shareable-daily-card.md [Shipped]  *(AVO-115 / #31 — cozy pixel-art postcard share card; weather/mood hero + 1 number + warm caption; client-side canvas→PNG, opt-in ⚙ Share; honest (no event counting — Option C, derived from done+mood); store.js untouched)*
+  - [ui-rendering] docs/specs/poke-acknowledge.md [Shipped]  *(AVO-158 — Poke / acknowledge micro-interaction (Model A, layered on existing click); honest in-place bob + real-status quip; ZERO position/status write; replaces rejected AVO-142 per ADR-005)*
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
   - [office-runtime] docs/specs/blocked-reason-tags.md [Shipped]  *(AVO-110 / #29 — honest-narrow blocked-reason badge; reasonCode contract)*
   - [office-runtime] docs/specs/recurring-failure-detection.md [Shipped]  *(AVO-117 — recurring blocked-reason detection; downstream of AVO-110)*
@@ -158,6 +159,15 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-avo-158-poke-2026-06-14 (AVO-158 — Poke / acknowledge micro-interaction)
+
+- Feature shipped: AVO-158 Poke — the honest, panel-decided replacement for rejected AVO-142 drag (ADR-005). Model A (layered, no new gesture): clicking a character opens the inspector AND fires an in-place acknowledge — a gentle bob + a transient quip bubble drawn from the agent's REAL status; re-click while inspector open = reaction only; keyboard Space = poke-only; right-click = poke + preventDefault; reduced-motion drops the bob (quip still shows); a11y role=status aria-live + bob aria-hidden.
+- Honesty: ZERO position/status write. Quips derive only from real status (pure `pickPokeReaction`, idle fallback, no cross-status leak). Guarded by a store-level no-mutation test + live DOM proof (status+transform unchanged across a poke) + code trace.
+- New: `src/systems/pokeReaction.js` (status→pool + escalation 3rd→long/5th→turnaway/reset 10s) + 11 tests; AgentCharacter wiring; en/zh-TW quip pools. Commits 6d3f2785 + 09478fc.
+- Known minor: inspector popover can occlude the quip bubble on the just-clicked agent (bob still visible; quip shows via Space/right-click/other agents).
+- Verify: fresh adversarial review = READY; 2001/2001 tests; build clean; live headless poke proof both locales.
+- Tests: Pass
 
 ### Ship-feat-shareable-daily-card-2026-06-14 (AVO-115 / #31 — cozy share postcard)
 
