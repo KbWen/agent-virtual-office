@@ -44,7 +44,21 @@ export const BUBBLE_ROTATE_MS = 2500
  * @param {number} rotateMs        rotation period (default BUBBLE_ROTATE_MS)
  * @returns {Set<string>}          agent ids permitted to show their bubble this frame
  */
+// AVO-159: single-entry memo. Every AgentCharacter calls this in the SAME store-write tick with
+// the SAME `agents`/`externalStatus` refs and `Date.now()` values inside the same rotation epoch —
+// so without a cache the full sort + new Set ran N times per write (~30fps × N while walking).
+// The result is a pure function of (agents ref, externalStatus ref, cap, rotation epoch, rotateMs):
+// keying on those collapses N computes into 1 per write (and 0 while idle), BEHAVIOR-IDENTICAL —
+// same Set contents, same reference returned to every caller in the tick. Zustand clones agents on
+// each write so the ref-key invalidates correctly; the epoch term keeps the 2.5s rotation advancing.
+let _memo = null
 export function selectVisibleBubbles(agents, externalStatus, cap = BUBBLE_VISIBLE_CAP, now = 0, rotateMs = BUBBLE_ROTATE_MS) {
+  const period = rotateMs > 0 ? rotateMs : 1
+  const epoch = Math.floor(Math.max(0, now) / period)
+  if (_memo && _memo.agents === agents && _memo.ext === externalStatus
+      && _memo.cap === cap && _memo.epoch === epoch && _memo.rotateMs === rotateMs) {
+    return _memo.result
+  }
   const ext = externalStatus || {}
   const candidates = []
   for (const id of Object.keys(agents || {})) {
@@ -54,18 +68,23 @@ export function selectVisibleBubbles(agents, externalStatus, cap = BUBBLE_VISIBL
     const changedAt = ext[id] && Number.isFinite(ext[id].changedAt) ? ext[id].changedAt : 0
     candidates.push({ id, pri: bubblePriority(status), changedAt })
   }
-  if (candidates.length === 0) return new Set()
-  // Rotated rank: cycle the id order every rotateMs so equal-priority, equal-recency candidates take
-  // turns over time instead of the same low-id ones always winning. Real recency still dominates.
-  const ids = candidates.map((c) => c.id).sort()
-  const period = rotateMs > 0 ? rotateMs : 1
-  const offset = ids.length ? (Math.floor(Math.max(0, now) / period) % ids.length) : 0
-  // Precompute id→rank once (O(n)) instead of an O(n) indexOf per comparator call (was O(n²)
-  // per sort, run for every agent on every store write). Behavior-identical.
-  const rankMap = new Map(ids.map((id, i) => [id, (i - offset + ids.length) % ids.length]))
-  const rankOf = (id) => rankMap.get(id) ?? 0
-  // tier asc → recency desc → rotated rank asc
-  candidates.sort((x, y) => x.pri - y.pri || y.changedAt - x.changedAt || rankOf(x.id) - rankOf(y.id))
-  const n = Math.max(0, cap)
-  return new Set(candidates.slice(0, n).map((c) => c.id))
+  let result
+  if (candidates.length === 0) {
+    result = new Set()
+  } else {
+    // Rotated rank: cycle the id order every rotateMs so equal-priority, equal-recency candidates
+    // take turns over time instead of the same low-id ones always winning. Recency still dominates.
+    const ids = candidates.map((c) => c.id).sort()
+    const offset = ids.length ? (epoch % ids.length) : 0   // epoch = floor(now/period)
+    // Precompute id→rank once (O(n)) instead of an O(n) indexOf per comparator call (was O(n²)
+    // per sort, run for every agent on every store write). Behavior-identical.
+    const rankMap = new Map(ids.map((id, i) => [id, (i - offset + ids.length) % ids.length]))
+    const rankOf = (id) => rankMap.get(id) ?? 0
+    // tier asc → recency desc → rotated rank asc
+    candidates.sort((x, y) => x.pri - y.pri || y.changedAt - x.changedAt || rankOf(x.id) - rankOf(y.id))
+    const n = Math.max(0, cap)
+    result = new Set(candidates.slice(0, n).map((c) => c.id))
+  }
+  _memo = { agents, ext: externalStatus, cap, epoch, rotateMs, result }
+  return result
 }
