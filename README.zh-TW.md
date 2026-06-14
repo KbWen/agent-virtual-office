@@ -122,6 +122,27 @@ http://localhost:5174?lang=zh-TW     # 強制繁體中文
 
 預設英文；繁體中文可透過 `?lang=zh-TW`、應用內 **EN/中** 切換、`--lang` 旗標，或瀏覽器自動偵測（`zh-TW` / `zh-Hant`）啟用。
 
+## 命名與換色角色
+
+把角色改成你的團隊或自訂名稱（也可換色）。兩種方式，都是**覆寫既有角色**（`pm`、`arch`、`dev`、`qa`、`ops`、`res`、`gate`、`designer`）：
+
+```
+# URL 參數 — 依角色改名（name:role，逗號分隔）：
+http://localhost:5174?agents=Alice:dev,Bob:qa,Chen:pm
+```
+
+```js
+// 在 app 載入前（例如自訂頁面的 inline <script>）— 改名 + 換色：
+window.__office_config__ = {
+  agents: {
+    dev: { name: 'Alice', color: '#E8927C' },
+    qa:  { name: 'Bob',   color: '#7CA7E8' },
+  },
+}
+```
+
+`?agents=` 只改**名字**；`window.__office_config__` 可改**名字 + 顏色**。這是改既有角色「是誰」，不是改它們的像素外觀——自訂 sprite 美術（帽子、服裝、配件）是另一條**尚未實作**的軌道（見 `docs/SPRITE_REQUIREMENTS.md`）。
+
 ---
 
 ## 疑難排解

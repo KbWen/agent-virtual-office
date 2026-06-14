@@ -35,7 +35,7 @@ curl -X POST http://localhost:5174/api/status \
 ```
 
 **Supported roles:** `pm` · `arch` · `dev` · `qa` · `ops` · `res` · `gate` · `designer`
-**Supported statuses:** `idle` · `working` · `blocked` · `done`
+**Supported statuses:** `idle` · `working` · `blocked` · `done` · `planning`
 
 ---
 
