@@ -25,6 +25,31 @@ It's not a dashboard. It's useful for approximately nothing, and you'll leave it
 
 ---
 
+## ✨ A look around
+
+<table>
+<tr>
+<td width="50%" align="center">
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-hero.png" alt="The pixel office mid-session: agents at desks working, a blocked agent, speech bubbles, a pet wandering the lounge" /><br>
+<sub><b>The whole office, live.</b> Heads-down, blocked, bickering — driven by your real session.</sub>
+</td>
+<td width="50%" align="center">
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.png" alt="A character showing a speech bubble after being poked, reacting in place" /><br>
+<sub><b>Poke a character</b> and it reacts in place — a little bob + a line from its <i>real</i> status. Never moves, never lies.</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/share-card.png" alt="A cozy pixel-art postcard summarizing the day's office activity" height="300" /><br>
+<sub><b>End-of-day card.</b> One click → a cozy postcard of the day. Honest numbers only; a quiet day says so.</sub>
+</td>
+<td width="50%" align="center">
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-zh.png" alt="The office rendered in Traditional Chinese with localized labels and speech bubbles" /><br>
+<sub><b>繁體中文 built in.</b> Labels, bubbles, names — the whole office speaks your language.</sub>
+</td>
+</tr>
+</table>
+
 ## Meet the Team
 
 | Character | Personality | Usually spotted... |
@@ -64,6 +89,8 @@ dead gutters. Hit **☰** for a vertical roster: who's working, who's blocked, a
 - **Role-aware animations** — same tool, different role, different scene: `qa + Bash` → magnifier, `ops + Bash` → deploy button, `designer + Edit` → whiteboard.
 - **Honest, signal-driven life** — events fire from your *real* session; an agent's status is never faked.
 - **"Stuck on what?" tells** — a blocked agent shows *why*: 🧪 test run · 🔨 build · 📦 install · ❔ unknown, plus a ↻ mark when the same kind keeps failing. Specific only when the signal proves it — never a guessed cause.
+- **Poke 'em** — click any character and it bobs and says what it's *actually* up to (a line drawn from its real status). Pure acknowledgement — it never moves or fakes a state. `Space` re-pokes; right-click pokes without opening the inspector.
+- **Take the day home** — one click turns the day's real activity into a cozy pixel-art **postcard** to share. It's a charming snapshot, not a stats card; an empty day honestly reads *"a quiet day at the office."*
 - **Calm by design** — mood-driven weather, idle-gap inference (`working+45s` → thinking), reduced-motion + a11y, and a never-stuck behavior watchdog.
 
 → Full internals (classifier tiers, movement, behavior engine, weather, inference) live in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
@@ -236,8 +263,8 @@ requirement is Node.js ≥ 22.
 
 ## Tech stack
 
-React 19 + Vite 6 · SVG (no canvas, no GPU) · Zustand · Tailwind CSS v4 · `requestAnimationFrame` · zero backend.
-1411 tests (classifier, inference, store, movement, event honesty, blocked-reason + recurring detection). Deep dive → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+React 19 + Vite 8 · SVG (no canvas, no GPU) · Zustand · Tailwind CSS v4 · `requestAnimationFrame` · zero backend.
+2000+ tests (classifier, inference, store, movement, event honesty, blocked-reason + recurring detection, poke, share-card). Deep dive → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Contributing
 

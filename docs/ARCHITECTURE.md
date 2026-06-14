@@ -712,3 +712,19 @@ piece live in `docs/specs/`:
 - [[weather-system]] · [[csp-compatibility]]
 - [[desktop-notifications]] · [[idle-gap-inference]] · [[workflow-handoff-arrows]]
 - [[tool-inventory-label]] · [[perf-metrics-chip]]
+
+## Brand & interaction wave (2026-06-14)
+
+Player-facing additions shipped after v1.4.0. Both are pure-logic-first and honesty-bound (numbers/quips derive only from real signals; the live office store is never faked).
+
+### Shareable daily card (`src/systems/dailyCard.js`, AVO-115)
+
+Client-side `canvas` → PNG "cozy postcard" of the day. Split design: pure `buildCardModel(input)` (copy + number selection, empty-day variant, `safeCount` integer guard so the body can never render a fractional/garbage number) is vitest-testable; `renderDailyCard` paints it to a canvas (DOM-only, Playwright-verified — vitest has no canvas). Honest by construction: numbers come only from the existing `dailyDoneLedger` / `dailyBlockedLedger` + live `mood` (no new counters; `store.js` untouched). Opt-in Share in the ⚙ menu; download + feature-detected Web Share. Spec: [[shareable-daily-card]].
+
+### Poke / acknowledge (`src/systems/pokeReaction.js` + `AgentCharacter.jsx`, AVO-158)
+
+An honest in-place "it noticed you" reaction layered onto the existing agent click (Model A — no new gesture; decided in ADR-005 after user drag-to-move was rejected). Pure `pickPokeReaction(status, history, now)` maps the agent's REAL status to a quip pool (idle fallback, no cross-status leak) and computes cozy repeat-escalation (3rd → longer bob, 5th → brief turn-away, reset after 10 s idle). The component fires a reduced-motion-gated `<animateTransform>` bob (`aria-hidden`) + a `role=status aria-live` quip bubble that preempts the ambient bubble slot. **ZERO position/status write** — guarded by a store-level no-mutation test + a live DOM proof (status + transform unchanged across a poke). Click = inspector + poke; `Space` = poke-only; right-click = poke + `preventDefault`. Spec: [[poke-acknowledge]]; decision: ADR-005.
+
+### Per-feature specs (cont.)
+
+- [[shareable-daily-card]] · [[poke-acknowledge]] · ADR-005 (user drag rejected → poke redirect)
