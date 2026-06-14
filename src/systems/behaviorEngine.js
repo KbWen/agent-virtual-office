@@ -10,11 +10,18 @@ import { randomBubble } from '../i18n'
 // alone). Solo meeting is removed (officeLife group events still gather agents there —
 // that's the legible, honest channel for meeting-room use); desk durations lengthened so
 // the office reads "alive but calm"; break-room dwells lengthened so visits are SEEN.
-const baseWeights = { work: 65, daily: 12, social: 13, away: 10 }
+// Calm-rhythm round 2 (owner 2026-06-15 "一直看到很多人在走動 / 只有兩個人在座位"): the
+// structural OUT-TRIP rate was still too high — measured category split for an ambient agent
+// was 45% out-trips (idle/normal) and 55% (idle-mood), so with 8 agents independently rolling
+// there was almost always someone in transit. Walk speed/duration are NOT the lever (already
+// long); the fix is to sit more often. `work` raised, trimmed from `away`/`daily`; `social`
+// deliberately PRESERVED (chatting is the "alive/fun" channel, not the clutter). Only ambient
+// weights move — `working` (real-work, R1 honesty) / `done` / `blocked` are untouched.
+const baseWeights = { work: 74, daily: 8, social: 13, away: 5 }
 
 const statusOverrides = {
   working: { work: 82, daily: 8, social: 5, away: 5 },
-  idle: { work: 55, daily: 18, social: 15, away: 12 },
+  idle: { work: 68, daily: 12, social: 14, away: 6 },
   done: { work: 25, daily: 25, social: 30, away: 20 },
   blocked: { work: 10, daily: 10, social: 10, away: 10, frustrated: 60 },
 }
@@ -155,7 +162,11 @@ const moodModifiers = {
   stuck:      { work: 30, daily: 10, social: 10, away: 10, frustrated: 40 },
   smooth:     { work: 30, daily: 20, social: 35, away: 15 },
   intense:    { work: 80, daily: 8,  social: 7,  away: 5 },
-  idle:       { work: 20, daily: 30, social: 20, away: 30 },
+  // Calm-rhythm round 2 (2026-06-15): idle-mood is the quiet-office case the owner watches, and
+  // the old {work:20, away:30, daily:30} turned a bored office into a walkathon (55% out-trips).
+  // Eased toward sitting — still the MOST relaxed/social mood (out-trips stay above `normal`),
+  // just not a clutter of constant transit. `social` kept at 20 (chatting is the charm).
+  idle:       { work: 42, daily: 22, social: 20, away: 16 },
 }
 
 export function getNextBehavior(agentId, status = 'idle', hour = new Date().getHours(), mood = 'normal', teamPulse = 0) {

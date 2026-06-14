@@ -23,9 +23,10 @@ describe('behaviorEngine teamPulse lean-in', () => {
   it('teamPulse=0 leaves the distribution at the un-nudged baseline (AC-5: no regression)', () => {
     // Calling with teamPulse 0 must be equivalent to not passing it (the nudge is guarded `>0`).
     const a = workShare(0)
-    // Baseline idle work weight is 55/100 → ~0.55 work share; sanity band only.
-    expect(a.work).toBeGreaterThan(0.45)
-    expect(a.work).toBeLessThan(0.65)
+    // Baseline idle work weight is 68/100 (calm-rhythm round 2, 2026-06-15) → ~0.68 work share;
+    // sanity band only — confirms pulse-0 sits at baseline, NOT nudged up toward the hot ~0.9.
+    expect(a.work).toBeGreaterThan(0.58)
+    expect(a.work).toBeLessThan(0.78)
   })
 
   it('a hot session (teamPulse=1) raises work and lowers casual behaviors (AC-4)', () => {

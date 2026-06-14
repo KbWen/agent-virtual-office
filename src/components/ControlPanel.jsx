@@ -15,8 +15,8 @@ const statusOptions = ['idle', 'working', 'blocked', 'done']
 // existing importers (NarrowRoster, tests). NOTE: `export { x } from './m'` alone re-exports without
 // binding x into THIS module's scope — the component's internal calls would then crash with
 // "x is not defined" (regression caught only by actually loading the page).
-import { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, shouldShowWatchdogDiag, healthDotState } from './controlPanelLabels.js'
-export { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, shouldShowWatchdogDiag, healthDotState }
+import { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState } from './controlPanelLabels.js'
+export { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState }
 
 // #39 types: emoji shown on the "change pet" button per current skin.
 const PET_TYPE_EMOJI = { cat: '🐈', vacuum: '🤖', dog: '🐕', rabbit: '🐇', bird: '🐦', hamster: '🐹' }
@@ -82,8 +82,8 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const theme = useOfficeStore((s) => s.theme)              // AVO-123
   const setTheme = useOfficeStore((s) => s.setTheme)
   const mood = useOfficeStore((s) => s.mood)                // AVO-115 share card hero
-  // #28: RAF-watchdog stall counter — surfaced as a DEV-only diagnostic chip (see render). Cheap
-  // primitive subscription; re-renders only when a stall actually bumps the count (rare).
+  // #28: RAF-watchdog stall counter — surfaced as an opt-in DEV diagnostic chip (see render; off by
+  // default, `?debug=raf`). Cheap primitive subscription; re-renders only when a stall bumps the count.
   const watchdogRestarts = useOfficeStore((s) => s.watchdogRestarts)
   const triggerWorkflow = useOfficeStore((s) => s.triggerWorkflow)
   const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
@@ -455,15 +455,17 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         </div>
       </div>
 
-      {/* #28: DEV-only RAF-watchdog diagnostic. Invisible until a stall bumps the counter. The gate
+      {/* #28: DEV-only, OPT-IN RAF-watchdog diagnostic. Off by default for everyone — it's a
+          non-actionable internal signal that was just visual noise — and only appears when a dev
+          explicitly opts in via `?debug=raf` (or localStorage `avo.debug.raf=on`). The gate still
           LEADS with the literal `import.meta.env.DEV` so esbuild statically evaluates `false && …` in
           prod and dead-code-eliminates this whole branch (JSX + strings) — true zero prod cost. The
-          pure `shouldShowWatchdogDiag` mirror is kept for unit testing the count>0 logic. */}
+          always-on `console.warn` in AgentCharacter's watchdog remains the default dev signal. */}
       {import.meta.env.DEV && shouldShowWatchdogDiag(watchdogRestarts) && (
         <div
           className="mt-1 text-[10px] text-amber-600 dark:text-amber-400"
           data-watchdog-diag={watchdogRestarts}
-          title="AgentCharacter RAF walk-loop watchdog restarts — a rising count means dropped frames (tab throttling, HMR, or an exception in animate()). DEV-only diagnostic."
+          title="AgentCharacter RAF walk-loop watchdog restarts — a rising count means dropped frames (tab throttling, HMR, or an exception in animate()). Opt-in DEV diagnostic (?debug=raf)."
         >
           ⚠ {watchdogRestarts} RAF watchdog restart{watchdogRestarts === 1 ? '' : 's'} (dev)
         </div>
