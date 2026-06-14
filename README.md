@@ -184,6 +184,31 @@ http://localhost:5174?lang=zh-TW     # force Traditional Chinese
 English is the default; Traditional Chinese is available via `?lang=zh-TW`, the in-app **EN/中** toggle,
 the `--lang` flag, or browser auto-detect (`zh-TW` / `zh-Hant`).
 
+## Name & recolor your agents
+
+Make the roster yours — rename the characters (and optionally recolor them) to match your real team
+or your own naming. Two ways, both override the **existing** roles (`pm`, `arch`, `dev`, `qa`, `ops`,
+`res`, `gate`, `designer`):
+
+```
+# URL param — rename by role (name:role, comma-separated):
+http://localhost:5174?agents=Alice:dev,Bob:qa,Chen:pm
+```
+
+```js
+// Before the app loads (e.g. an inline <script> in a custom host page) — rename AND recolor:
+window.__office_config__ = {
+  agents: {
+    dev: { name: 'Alice', color: '#E8927C' },
+    qa:  { name: 'Bob',   color: '#7CA7E8' },
+  },
+}
+```
+
+The `?agents=` URL param sets **names only**; `window.__office_config__` sets **names + colors**. This
+changes who the existing characters *are*, not their pixel-art looks — custom sprite art (hats,
+outfits, per-agent accessories) is a separate, not-yet-built track (see `docs/SPRITE_REQUIREMENTS.md`).
+
 ---
 
 ## Diagnostics & soak testing

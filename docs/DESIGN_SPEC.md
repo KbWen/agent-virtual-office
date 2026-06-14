@@ -1,8 +1,17 @@
 # 設計規格書 — AgentCortex Virtual Office
 
+> [!WARNING]
+> **這是早期「設計意圖」文件，部分內容已與實作分歧——程式碼才是 SSoT。** 已知重大演進：
+> - 視覺實際為 **俯視（top-down）2D 像素**，**不是**下方所述的 2.5D 等距 / `skewY`（設計後來改向；以截圖與 `SPRITE_REQUIREMENTS.md`「俯視非等距」為準）。
+> - 多數**數值**（行為時長、看門狗、卡住次數、ViewBox 等）是後續調校前的舊值——權威值見
+>   `src/systems/constants.js`、`src/systems/behaviorEngine.js`、`src/config/*.json`、`docs/ARCHITECTURE.md`。
+> - 少數段落把**未實作**的東西寫成現況（`inferStatus.sh`、`getLighting()` 程式碼、sprite 自動載入）——下方已就地標註。
+>
+> 具體運行行為一律以程式碼/ARCHITECTURE.md 為準；本文保留作為設計脈絡。
+
 ---
 
-## 視覺風格：2.5D 等距
+## 視覺風格：2.5D 等距（⚠️ 歷史設計——實作改為俯視 top-down）
 
 ### 為什麼 2.5D？
 
@@ -13,7 +22,7 @@
 ### 等距參數
 
 - 投影角度：30° 等距（`skewY(26.57°)` / `skewY(-26.57°)`）
-- ViewBox：680 × 520（可依內容調整高度）
+- ViewBox：800 × 560（實際；舊值 680×520 已過時）
 - 安全區域：x=40 到 x=640
 - 桌子等距高度：20px
 - 角色站立高度：桌面上方 30-40px
@@ -73,6 +82,7 @@
 | DevOps | hard-hat（安全帽） | 男 | 橘色安全帽 |
 | 研究員 | long（長髮） | **女** | 長直髮垂肩、裙子、睫毛 |
 | 門神 | spiky（刺蝟頭） | 男 | 黑色尖髮 |
+| 設計師 | long（長髮） | **女** | 長髮、耳環、iPad（粉色 #E8688A） |
 
 ### 女性角色差異
 
@@ -106,20 +116,20 @@
 ```javascript
 // 每個角色獨立的行為計時器（doSchedule setTimeout 鏈）
 // 角色 70-80% 時間待在桌前（類似 Stardew Valley NPC 風格）
-// 每次行為持續 12-35 秒（工作行為）或 5-18 秒（日常行為）
+// 行為時長已多次調校；權威值見 behaviorEngine.js（工作 ~20-65s、日常 ~8-35s，非下方舊註）
 // 行為切換後如需移動，使用 RAF 動畫平滑走到目的地
 
 function doSchedule(agentId) {
   // try/catch 包裹，確保 setTimeout 鏈永遠不會斷
   // 群體事件進行中時跳過（officeLife 控制行為）
-  // 走路中時等待 1.5s 重試（含卡住偵測，15 次後強制重置）
+  // 走路中時等待 1.5s 重試（含卡住偵測，BEHAVIOR_STUCK_RETRIES=10 次後強制重置）
   const weights = getWeights(agent.status);  // 根據狀態選權重
   const category = weightedRandom(weights);   // work/daily/social/away
   const behavior = pickBehavior(category);    // 隨機選行為
   playBehavior(agent, behavior);              // 播放動畫 + 行為指示器
-  scheduleNext(agent, behavior.duration);     // 12-35 秒後下一個
+  scheduleNext(agent, behavior.duration);     // 依 behaviorEngine.js 的時長排下一個
 }
-// 看門狗：每 10 秒檢查行為是否卡住 >45 秒，自動重啟排程
+// 看門狗（WATCHDOG_INTERVAL=10s 檢查一次）：行為卡住 >WATCHDOG_TIMEOUT=120s 自動重啟排程
 ```
 
 ### 狀態感知對話
@@ -184,7 +194,7 @@ function doSchedule(agentId) {
 | 用放大鏡 | QA 專屬：旁邊顯示放大鏡 + ✓ | qa | 12-25s |
 | 按部署鈕 | Ops 專屬：旁邊顯示按鈕圖標 | ops | 6-15s |
 | 舉盾驗證 | Gate 專屬：旁邊顯示盾牌圖標 | gate | 10-20s |
-| 開會 | 走到會議室，坐在會議桌旁 | 全部 | 20-40s |
+| ~~開會（單人）~~ | **已移除**：個別角色不再單獨走去會議室；開會只透過 officeLife 的 `group-meeting` 群體事件觸發（見 behaviorEngine.js「no solo meeting」） | — | — |
 
 #### ☕ 日常行為（daily）— 權重 12%
 
@@ -242,7 +252,11 @@ const overrides = {
 };
 ```
 
-### 推斷腳本（inferStatus.sh）
+### 推斷腳本（inferStatus.sh）— ⚠️ 舊概念，未實作於產品
+
+> 此 bash 腳本是早期構想，**並未被任何程式碼引用/執行**。產品的推斷層是 JS：
+> `src/inference/inferStatus.js`、`idleGapInfer.js`、`workflowHandoff.js`、`desktopNotifier.js`
+> （另見 `ARCHITECTURE.md` 的「Legacy Lightweight Inference Concept」）。以下保留作脈絡。
 
 ```bash
 #!/bin/bash
@@ -343,7 +357,11 @@ echo "{\"mode\":\"agentcortex\",\"phase\":\"$PHASE\",\"active\":\"$AGENT\",\"com
 | 零食袋 | 吃零食後出現 | 隨機位置 |
 | 飛行文件 | 任務派發時生成 | 拋物線飛行 |
 
-### 光線系統
+### 光線系統 — ⚠️ 程式碼已換掉，下方為舊設計
+
+> 實作已改為 `src/systems/lighting.js` 的 `getLightingOverlay(hour)`：15 keyframe 平滑 LERP，
+> 回傳 `{ fill: 'rgb(r,g,b)', opacity }`（無 `color`/`angle`；`MAX_OPACITY = 0.38`）。
+> 下方的 `getLighting()` if-ladder（含 `#1A1A2E`、opacity 0.6）**已不存在**，僅保留作設計脈絡。
 
 ```javascript
 function getLighting(hour) {
@@ -503,7 +521,7 @@ Design tuning:
   `style-src 'self'` environments work without `'unsafe-inline'`.
 
 The whiteboard handwriting animation (#15) was pre-existing at
-`PixelOffice.jsx:146` `WhiteboardAnimation` (subscribes `activeEvent`,
+`PixelOffice.jsx:169` `WhiteboardAnimation` (subscribes `activeEvent`,
 triggers on `eureka`, animates 3 lines + circle + `!` over 3000ms via
 `stroke-dashoffset`). Closure-documented in the v1.1.0 wave; no new
 work needed.

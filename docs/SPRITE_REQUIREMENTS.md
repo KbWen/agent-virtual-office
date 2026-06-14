@@ -7,19 +7,21 @@
 
 ## Characters / 角色清單
 
-### AgentCortex Mode（7 位角色）
+### AgentCortex Mode（8 位角色）
 
-完整功能模式下的 AI 代理角色，每位都有獨特的視覺風格與配件。
+完整功能模式下的 AI 代理角色，每位都有獨特的視覺風格與配件。視覺風格欄以實際渲染器
+（`AgentCharacter.jsx` 的 `CHAR_STYLES` / `getBaseSprite`）為準。
 
 | 角色 | ID | 主題色 | 視覺風格 | 配件 |
 |---|---|---|---|---|
 | PM | `pm` | `#378ADD` (藍色) | 整齊髮型、乾淨俐落 | 剪貼板、甘特圖 |
 | 建築師 Architect | `arch` | `#7F77DD` (紫色) | 方帽/貝雷帽 | 白板筆 |
-| 開發者 Developer | `dev` | `#1D9E75` (綠色) | 雙馬尾髮型 | 到處都是咖啡杯 |
+| 開發者 Developer | `dev` | `#1D9E75` (綠色) | 雙馬尾髮型（女） | 到處都是咖啡杯 |
 | QA Engineer | `qa` | `#BA7517` (琥珀色) | 短髮 | 放大鏡 |
 | DevOps | `ops` | `#D85A30` (橘色) | 安全帽 | 部署按鈕 |
-| 研究員 Researcher | `res` | `#5DCAA5` (青色) | 瀏海髮型 | 書本 |
-| 門神 Gatekeeper | `gate` | `#E24B4A` (紅色) | 嚴肅表情、短髮 | 盾牌 |
+| 研究員 Researcher | `res` | `#5DCAA5` (青色) | 長髮（女） | 書本 |
+| 門神 Gatekeeper | `gate` | `#E24B4A` (紅色) | 嚴肅表情、刺蝟頭 | 盾牌 |
+| 設計師 Designer | `designer` | `#E8688A` (粉色) | 長髮（女）、耳環 | iPad |
 
 ### Lightweight Mode（3 位角色）
 
@@ -151,36 +153,44 @@ virtual-office/public/sprites/
 
 ## Integration Notes / 整合注意事項
 
-### 載入方式
+> [!IMPORTANT]
+> **狀態：尚未實作（planned）。** 目前角色是由 `AgentCharacter.jsx` 的 `getBaseSprite` **程序化即時繪製**
+> 的 SVG 像素風，**沒有任何外部 PNG / sprite-sheet 載入器**，`public/sprites/` 目錄也不存在。以下
+> 「載入方式 / 整合步驟」描述的是這份規格**未來實作後**的目標行為，不是現況——照著做目前不會生效。
 
-精靈圖將透過 SVG `<image>` 標籤或 CSS `background-image` 載入。目前程式碼中已有 SVG 像素風格的備用渲染器（fallback），當偵測到外部精靈圖檔案時，會自動優先使用圖片素材。
+### 載入方式（規劃中）
 
-### 放置路徑
+規劃：精靈圖透過 SVG `<image>` 或 CSS `background-image` 載入；偵測到 `public/sprites/` 下有對應檔案時，
+優先使用圖片素材，否則沿用現有的程序化 SVG 渲染（fallback）。**此偵測/切換邏輯尚未實作。**
 
-將完成的 PNG 檔案放入以下目錄：
+### 放置路徑（規劃中）
+
+實作後，將完成的 PNG 放入專案的：
 
 ```
-virtual-office/public/sprites/
+public/sprites/
 ```
-
-程式碼會自動偵測並使用這些檔案，取代 SVG fallback 渲染。
 
 ### 運動與縮放參數
 
 | 參數 | 數值 | 說明 |
 |---|---|---|
-| 行走速度 | ~100px/sec | 在辦公室 SVG 中的移動速度 |
+| 行走速度 | 60px/sec | 在辦公室 SVG 中的移動速度（`constants.js` `WALK_SPEED`） |
 | SVG ViewBox | 800 x 560 | 辦公室場景的座標系統 |
 | 動畫幀率 | 4-8 FPS | 像素動畫的播放速度 |
 | 渲染大小 | 約 28-36px 高 | 角色在 SVG 中的實際顯示尺寸 |
 
-### 程式碼整合步驟
+### 程式碼整合步驟（規劃中，待實作）
 
-1. 將 sprite sheet PNG 放入 `virtual-office/public/sprites/` 目錄
+實作這條管線後，預期流程為：
+
+1. 將 sprite sheet PNG 放入 `public/sprites/` 目錄
 2. 確認檔名與角色 ID 對應（如 `pm.png` 對應 `pm` 角色）
-3. 程式碼會在載入時檢查 `sprites/` 目錄下是否有對應檔案
-4. 若找到圖片，自動切換為圖片渲染模式，取代 SVG 備用方案
-5. 若圖片載入失敗，自動降級回 SVG fallback，確保系統穩定運作
+3. 渲染器在載入時檢查 `public/sprites/` 下是否有對應檔案
+4. 若找到圖片，切換為圖片渲染模式，取代程序化 SVG
+5. 若圖片缺失/載入失敗，沿用程序化 SVG fallback，確保穩定
+
+> 追蹤項：見 backlog「自訂角色 sprite 美術管線」與 AVO-124（外觀客製）。
 
 ---
 
@@ -233,7 +243,7 @@ virtual-office/public/sprites/expressions/
 建議按以下順序製作：
 
 1. **第一批**（核心角色）：`pm`, `dev`, `arch` — 最常出現的三位
-2. **第二批**（完整團隊）：`qa`, `ops`, `res`, `gate` — 補齊 AgentCortex 七人組
+2. **第二批**（完整團隊）：`qa`, `ops`, `res`, `gate`, `designer` — 補齊 AgentCortex 八人組
 3. **第三批**（輕量模式）：`planner`, `worker`, `checker` — 輕量模式專用
 4. **第四批**（選用）：表情圖示 — 提升互動體驗
 
