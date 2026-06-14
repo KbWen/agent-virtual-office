@@ -35,3 +35,13 @@ note: Routed from Ship History per audit routing_actions (docs/reviews/2026-06-0
 - [CONSTRAINT] Per the "畫面清楚好懂、不過分花俏" brief, new in-scene tells stay sub-dominant to the pixel scene. The reluctant-participant ⏳ is a PURE OVERLAY (`store.reluctant`) — it never touches status/behavior/bubble/position and real bubbles preempt it. Any future overlay must follow this never-touch-live-channels rule (cross-ref office-runtime).
 - [CONSTRAINT] Pixel/visual correctness is owner-confirm only in this env (`preview_screenshot` hangs; `preview_eval` can't reach the running store due to module duplication). Behavioral correctness is test-authoritative (vitest = real modules). Verify layout/scale changes by getBoundingClientRect/computed-font measurement AND owner visual confirm — never claim "works" from code/tests alone. (SSoT Protected Surfaces.)
 - [TODO/AC-3] Pixel-dominance + keep-out routing for set-piece overlays is design-asserted + structurally tested (overlay never touches live channels) but still needs owner visual confirmation — open at routing time.
+
+### [ui-rendering][2026-06-14][feat/shareable-daily-card]
+source_spec: docs/specs/shareable-daily-card.md
+source_sha: 36ddafb
+
+- [CONSTRAINT] The shareable daily card is a cozy pixel-art postcard, NEVER a stats/power-level/sports card: no bars/gauges/grids/rankings, weather/mood is the hero, ≤2 numbers total in body copy (guarded by `safeCount()` + numericTokenCount). Owner hard steer; same anti-pattern that closed AVO-120.
+- [DECISION] Card rendering is 100% client-side canvas → PNG (`src/systems/dailyCard.js`), local-only (no upload) — zero backend/privacy surface. Pure `buildCardModel` (vitest-testable) is split from the DOM-only `renderDailyCard`/`drawCard` (Playwright-verified, since vitest has no jsdom/canvas).
+- [DECISION] No event counting: the only frontend eureka/deploy signals are office theater + demo clicks, and real CI deploys arrive as agent status (not activeEvent), so counting them would fabricate activity. The highlight is derived purely from the honest done+mood signals. (Owner Option C, 2026-06-14.)
+- [CONSTRAINT] Share is opt-in (⚙ menu), never in the default glance layer or resting bar — preserves the REDUCE-not-add discipline. New share/export surfaces follow the same opt-in placement.
+- [CONSTRAINT] Card text legibility across en + zh-TW relies on `wrapText` (word-wrap + zh-TW char-wrap fallback); verify new card copy live (Playwright) — canvas measurement is unavailable in vitest.

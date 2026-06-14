@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-13T08:30:00Z
-- **Update Sequence**: 88
+- **Last Updated**: 2026-06-14T10:00:00Z
+- **Update Sequence**: 89
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -78,6 +78,7 @@
   - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
+  - [ui-rendering] docs/specs/shareable-daily-card.md [Shipped]  *(AVO-115 / #31 — cozy pixel-art postcard share card; weather/mood hero + 1 number + warm caption; client-side canvas→PNG, opt-in ⚙ Share; honest (no event counting — Option C, derived from done+mood); store.js untouched)*
   - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
   - [office-runtime] docs/specs/blocked-reason-tags.md [Shipped]  *(AVO-110 / #29 — honest-narrow blocked-reason badge; reasonCode contract)*
   - [office-runtime] docs/specs/recurring-failure-detection.md [Shipped]  *(AVO-117 — recurring blocked-reason detection; downstream of AVO-110)*
@@ -140,6 +141,8 @@
 
 - [Category: verification][Severity: HIGH][Trigger: green-tests-hide-defects][prev: 0d9a1cd6] A full green suite + clean build can still hide HIGH correctness/honesty defects: a fresh adversarial reviewer (review.md freshness invariant — diff+spec only, no implementer rationale) caught a regex word-boundary that leaked colon/dot-suffixed inputs AND a 4th/5th data-path whitelist silently dropping a new field, both invisible to 1385 passing tests. For truth/data features: a fresh reviewer is mandatory, and 'trace the new field through EVERY normalizer/whitelist' must be an explicit review item.
 - [Category: honesty-design][Severity: MEDIUM][Trigger: adversarial-reason-taxonomy][prev: 6dcab086] When designing a classifier/taxonomy that asserts meaning to users, run an adversarial honesty audit per proposed category BEFORE building — it refuted 6 of 7 candidate reasons here (over-claiming a specific cause from a coincidental signal). Default every category to refuted/unknown until a real observable signal proves it; ship the honest 'unknown' floor as the load-bearing default (mirrors the pet hide-on-blocker guarantee).
+- [Category: text-integrity][Severity: MEDIUM][Trigger: append-existing-file-eol][prev: 9672c90b] Appending to an existing tracked file via a bash heredoc (cat >>) writes LF lines; if that file is CRLF in the working tree it becomes mixed-EOL and fails validate.sh text integrity. Prefer the Edit tool (preserves EOL) or normalize the whole file to one EOL after appending.
+- [Category: gate-chain][Severity: MEDIUM][Trigger: gate-receipt-ordering][prev: 6c281ae5] validate.sh parses Work Log Gate Evidence receipts in FILE ORDER, not by timestamp. Inserting a missing receipt (e.g. bootstrap) out of phase order triggers illegal gate phase progression even when its timestamp is earlier. Always place receipts in bootstrap, plan, implement, review, test, handoff, ship order.
 ## Protected Surfaces (layout/movement/scale-critical — DO NOT casually edit)
 
 > These have caused repeated visual regressions. `preview_screenshot` is BROKEN here and `preview_eval`
@@ -155,7 +158,13 @@
 
 ## Ship History
 
-### Ship-fix-line-hits-rect-epsilon-2026-06-11 (chip task_4be9264a — lineHitsRect 軸向 epsilon 洞)
+### Ship-feat-shareable-daily-card-2026-06-14 (AVO-115 / #31 — cozy share postcard)
+
+- Feature shipped: AVO-115 shareable end-of-day office card — a cozy pixel-art PNG postcard (weather/mood hero + tiny office vignette + ONE warm derived caption with a single number + date/source footer). Opt-in ⚙ Share (client-side canvas→PNG; download + feature-detected Web Share); en + zh-TW; honest empty-day variant.
+- Honesty: highlight derived purely from existing done/blocked ledgers + live mood. Original `dailyEventLedger` (eureka/deploy) was DROPPED mid-implement after finding the only frontend signals are office theater + demo clicks (real CI deploys arrive as agent status, not activeEvent) — counting them would fabricate activity (same anti-pattern that closed AVO-120). Owner chose Option C. `store.js` untouched.
+- New: `src/systems/dailyCard.js` (pure `buildCardModel` + canvas render + `shareOrDownloadCard` + `safeCount` number guard); `src/components/ControlPanel.jsx` ⚙ Share row; i18n en/zh-TW. Commits 2feff92 + 36ddafb (review remediation).
+- Verify: fresh adversarial review = READY (8/8 AC proven); 13 unit tests + live Playwright (6 variants, both locales); full suite 1990/1990; build clean (149.4 KB gzip).
+- Tests: Pass
 
 - Branch `fix/line-hits-rect-epsilon`, quick-win。Chip 由 owner 回貼主對話執行(zone-mouth review 的 reviewer 自行開的 chip)。**既有精度洞**:`lineHitsRect` 對 |dx|≤0.1(或 |dy|≤0.1)的近軸線段只用**起點**做 slab 檢查——x 漂移 <0.1px 跨過家具邊緣平面的近垂直線段被誤判為 miss;jittered Dijkstra 節點據此產生 0.005–0.3px 真實擦邊(隨機 in-rect 對 ~0.3% 率,reviewer 於 main 復現)。視覺上 sub-pixel,但屬種子化尋路 oracle 的潛在 flake 源。
 - **修(2 行,保守方向)**:近軸分支改測**兩端點座標範圍**(min/max vs slab)——絕不漏報真相交;≤0.1px 級過度標記只會讓 jitter 候選退回精確節點(該鏈本有的 fallback)。函數 export 供直接單元釘。
