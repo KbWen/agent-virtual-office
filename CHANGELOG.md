@@ -5,6 +5,18 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## Unreleased
+
+### Added
+
+- **Shareable end-of-day card (AVO-115)** — a one-click cozy pixel-art **postcard** of
+  today's office (weather/mood hero + a tiny office vignette + one warm caption), saved as
+  a PNG to share. Opt-in from the ⚙ menu; rendered entirely in your browser (no upload),
+  with download + native Share where available, in English and 繁體中文. Deliberately a
+  charming snapshot, **not** a stats/leaderboard card — the one number it shows (today's
+  finished count) and the weather are drawn only from real activity; a quiet day honestly
+  reads "A quiet day at the office."
+
 ## v1.4.0 — 2026-06-10 — A calmer, honest office that can't pile up — and watches itself overnight
 
 The "characters keep stacking / teleporting / rushing around" era ends here. Every fix in
