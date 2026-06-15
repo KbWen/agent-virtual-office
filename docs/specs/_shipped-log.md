@@ -145,3 +145,74 @@ last_updated: 2026-06-02
 | **設計師角色** — 粉色女生角色，設計角落，對 CSS/SVG/設計檔案有感 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
 | **#11 多 worktree 支援** — 每個 session 寫獨立 JSON，merge 時 1 session = 1 代表角色，入口大廳展示訪客 | 2026-04-02 | `fix/agent-inspector-hooks-crash` |
 | **#5 Inspector 資訊加強** — durable done count、mood / workflow rows、Codex CLI/App parity | 2026-04-08 | `main` |
+
+---
+
+## 🚀 AVO-101+ Wave (rotated 2026-06-15)
+
+> 54 Done/Shipped rows rotated out of `_product-backlog.md` on 2026-06-15, plus AVO-156 and
+> AVO-157 (shipped earlier but tracked only in the SSoT Spec Index) folded in for a complete
+> wave archive — 56 rows total. Covers the real-AI-behavior / multi-agent / info-density /
+> game-feel / vibe-rebalance / chill-fun waves plus the hardening (H1–H6), stability (W1–W5),
+> and tech-debt audit (#120–#128) waves. Full detail lives in each item's spec + the SSoT Spec
+> Index + Ship History (`current_state.md`). Off-mission items closed in the same cleanup are in
+> `_product-backlog.md → Deferred / Closed` (ADR-006), not here.
+
+| # | Feature | Tier | Ship ref / note |
+|---|---------|------|-----------------|
+| AVO-101 | Plan-Mode visualization | feature | `92198e5` — hook emits `status:'planning'` on plan mode; scrolling-outline polish deferred |
+| AVO-102 | Extended-thinking aura | feature | `a62cd14` — violet aura from `effort.level` |
+| AVO-103 | Tool inventory label | feature | 2026-05-29; `AgentCharacter` TaskLabel; spec `tool-inventory-label.md` |
+| AVO-104 | Skill activation badge | feature | #30; transient skill bubble (panel Option B); spec `skill-activation-badge.md` |
+| AVO-105 | Handoff arrows | feature | 2026-05-29; `workflowHandoff.js`; spec `workflow-handoff-arrows.md` |
+| AVO-106 | Pair-programming huddle | feature | PR #80; co-editing pair overlay; spec `pair-programming-huddle.md` |
+| AVO-107 | Review-gate queue | feature | #112; honest gate-desk "waiting" in-tray; spec `review-gate-waiting.md` |
+| AVO-108 | Token & cost meter (honest core) | feature | `11c73f8` — 🪙 ctx + model chip (demoted to inspector per AVO-127). $/rolling/sparkline remainder descoped (ADR-006) |
+| AVO-110 | Blocked-reason tags | feature | spec `blocked-reason-tags.md`; unblocks AVO-117 |
+| AVO-111 | Time-of-day lighting | quick-win | chill-fun wave; `src/systems/lighting.js` (smooth 24h grade) |
+| AVO-115 | Shareable daily card | feature | #31; cozy pixel-art postcard; spec `shareable-daily-card.md` |
+| AVO-117 | Recurring failure-mode detection | feature | spec `recurring-failure-detection.md` (downstream of AVO-110) |
+| AVO-121 | Office pet (signal-driven barometer) | feature | PR #62; spec `office-pet-barometer.md` |
+| AVO-122 | Ambient soundscape (toggle) | feature | chill-fun wave; 0-KB procedural Web Audio; spec `ambient-soundscape.md` |
+| AVO-123 | Office theme / skin selector | feature | #41; light overlay tints; spec `office-theme-selector.md` |
+| AVO-125 | Cozy micro-interactions | feature | chill-fun wave; spec `cozy-micro-interactions.md` |
+| AVO-126 | Bubble register unification | quick-win | spec `ux-vibe-rebalance.md` |
+| AVO-127 | Token meter off the default view | quick-win | spec `ux-vibe-rebalance.md` (amends AVO-108) |
+| AVO-128 | Name pills → reveal-on-active | feature | spec `ux-vibe-rebalance.md` |
+| AVO-129 | Done/blocked KPI off the persistent bar | quick-win | spec `ux-vibe-rebalance.md` |
+| AVO-130 | Control-bar reduction (gear menu + single health dot) | feature | #116; spec `control-bar-reduction.md` |
+| AVO-131 | TaskLabel pill → inspector-only | quick-win | spec `ux-vibe-rebalance.md` (amends AVO-103) |
+| AVO-132 | ThinkingAura → fold into glow ring | quick-win | spec `ux-vibe-rebalance.md` (amends AVO-102) |
+| AVO-133 | Blocked reads from posture | quick-win | physical legibility (relates AVO-110) |
+| AVO-134 | BehaviorIndicator micro-telegraphs | quick-win | anticipation pop-in / squash |
+| AVO-135 | Status-ring distance encoding (breathe/flash) | quick-win | pre-attentive far-read |
+| AVO-136 | Event juice pass (confetti / sparkle / desk-slam shake) | feature | #117; spec `event-juice-pass.md` |
+| AVO-138 | Subagent helper huddle | feature | spec `subagent-helper-huddle.md` (downstream of AVO-106) |
+| AVO-139 | Responsive office width-fill + readable labels | feature | spec `responsive-office-roster.md` |
+| AVO-140 | Living-office honest events (L2 team-affect + honesty gating) | feature | spec `living-office-events.md` |
+| AVO-143 | applyExternalStatus: skip no-op agent re-allocation | quick-win | hardening H6a; 2026-06-10 |
+| AVO-145 | CI render-smoke gate | feature | hardening H1; spec `ci-render-smoke.md` |
+| AVO-146 | Transport field-whitelist unification | feature | hardening H2; spec `status-field-schema-unification.md` |
+| AVO-147 | Validator zero-noise + repo hygiene | quick-win | hardening H4; 2026-06-10 (branch `chore/hardening-h4-zero-noise`) — was stale-"In Progress", reconciled to Done 2026-06-15 |
+| AVO-148 | Structured error payload for blocked reasons | feature | hardening H5; spec `structured-error-reasons.md` |
+| AVO-149 | CI reproducibility: npm install → npm ci | quick-win | stability W1; 2026-06-10 |
+| AVO-150 | Transport-spine e2e in CI | feature | stability W2; spec `transport-spine-e2e.md` |
+| AVO-151 | npm-pack install smoke | feature | stability W3; spec `npm-pack-install-smoke.md` |
+| AVO-152 | Bundle-size budget gate in CI | quick-win | stability W5; baseline 450069 B |
+| AVO-153 | Hook-runtime payload fixture corpus | feature | stability W4; spec `hook-runtime-contract.md` (found AVO-154) |
+| AVO-154 | Reconcile hook result-field reads with runtime truth | quick-win | 2026-06-11; `tool_response`/`tool_result` divergence + 26-fixture corpus |
+| AVO-155 | Same-pick guarantee test for socialTargetOverride | quick-win | #131; de-flaked #148, BOM-stripped #147 |
+| AVO-156 | Standing-overlap deconfliction (5-channel root cause) | feature | PR #105; spec `standing-overlap-deconfliction.md` |
+| AVO-157 | Sim-soak gate (nightly world-invariant soak) | infra | spec `sim-soak-gate.md` |
+| AVO-158 | Poke / acknowledge micro-interaction | feature | #158; spec `poke-acknowledge.md` (replaces rejected AVO-142 per ADR-005) |
+| AVO-159 | Render-path perf: bubble memo + order-signature + tray narrow | feature | 2026-06-14 perf audit; +10 bubbleVisibility tests |
+| #20 | Hook read-modify-write atomic | quick-win | hardening H3; spec `hook-status-write-lock.md` |
+| #120 | Prepublish build-before-test contract | quick-win | `0a1aa93`; `prepublishOnly` runs build before test |
+| #121 | Monolith extraction map | quick-win | doc-only; `docs/architecture/monolith-extraction-map.md` |
+| #122 | normalizePost.mjs runtime mirror → statusContract.mjs single source | feature | PR #163; node-safe single source; −224 lines |
+| #123 | Bridge dynamic rendering hardening | quick-win | `0a1aa93`; external `bridge-ui.js`, no inline handlers |
+| #124 | Silent catch observability classification | quick-win | `docs/architecture/silent-catch-policy.md` |
+| #125 | Dependency maintenance wave | quick-win | vite 6→8 + plugin-react 6 + vitest 4 (clears esbuild RCE advisory) |
+| #126 | Semgrep baseline + fail-on-new serious findings | feature | #136; security.yml two-pass (ERROR-severity blocks) |
+| #127 | Architecture overview refresh | quick-win | `docs/ARCHITECTURE.md` |
+| #128 | Resolve audit routing_actions | quick-win | audit findings routed to backlog + architecture decision logs |

@@ -12,18 +12,20 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-15T01:11:58Z
-- **Update Sequence**: 91
+- **Last Updated**: 2026-06-15T03:07:38Z
+- **Update Sequence**: 92
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
   - docs/adr/ADR-003-status-source-parity-for-codex.md — status-source parity for Codex
   - docs/adr/ADR-004-no-per-frame-agent-separation.md — AVO-144 resolved by decision: per-frame separation rejected (3-lens panel); re-open conditions recorded
   - docs/adr/ADR-005-no-user-drag-to-move-agents.md — AVO-142 rejected by decision: user drag-to-move rejected (4-lens panel unanimous); position=state honesty; interaction redirected to AVO-158 Poke; re-open conditions recorded
+  - docs/adr/ADR-006-no-observability-cost-dashboard-scope.md — AVO is not an observability/cost dashboard; Cancels off-mission AVO-109/113/114/116/118/119/120 + descopes AVO-108 $ remainder; conditions for opening a NEW item recorded
   - docs/adr/ADR-007-dialogue-channel-separation-and-honesty-gate.md — dialogue layer: bubble=voice / status=symbol+ring (detail→inspector, blocked=exception) + open-ended non-conclusive content rule + inter-agent honesty gate G1–G10 (reject relationship-memory); applies_to: src/systems/{banter,behaviorEngine,officeLife,contextBubble}, src/components/{AgentCharacter,BehaviorBubble}, src/locales/*.json
   - .agentcortex/adr/ADR-001-vnext-self-managed-architecture.md — framework scaffold mirror of ADR-001
 - **Active Backlog**: `docs/specs/_product-backlog.md`
-  - 15 features across 5 themes: 辦公室生命感、資訊密度、互動性、整合延伸、視覺升級
+  - **As of 2026-06-15 cleanup** — **no-"Deferred" hygiene rule**: every item is DO / REFINE / CLOSE, never parked. **3 open on-mission items**: AVO-160 (sprite-asset pipeline, P3) · AVO-124 (sprite cosmetics, P3) · AVO-141 (comms rail optimization, P2). 54 Done/Shipped rows rotated to `_shipped-log.md` (AVO-101+ wave). **11 items Cancelled**: 7 off-mission per **ADR-006** (cost/observability/analytics out of scope) + AVO-142/144 (rejected by ADR-005/004) + AVO-112 (eureka cascade — honesty flaw: real eureka can't cluster in 10s) + AVO-137 (density-layer — glance-default already shipped, zen far-view not a target). Drift reconciled: AVO-147 stale-"In Progress"→Done, AVO-120 stale-"Pending"→Cancelled. The highest next-value work (sprite ART, dialogue/text 台詞文字) is intentionally **unticketed** until scoped — do not backfill busywork (REDUCE-not-add). Pre-AVO historical notes below retained for provenance only.
+  - 15 features across 5 themes (historical, pre-AVO): 辦公室生命感、資訊密度、互動性、整合延伸、視覺升級
   - **Done (branch `fix/agent-inspector-hooks-crash`, 2026-04-02)**:
     - #10 smart file routing (fileToRole in hook)
     - #11 multi-worktree (session slug files, 1-per-session merge)
@@ -161,6 +163,16 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-backlog-hygiene-2026-06-15 (backlog rotation + closures + ADR-006 + no-Deferred rule)
+
+- Branch `chore/backlog-hygiene-2026-06-15`, quick-win, docs/SSoT-only (zero app code). Owner: "都要做吧。完整處理，我們才知道真的要做的東西是啥" + "沒有 Deferred 這種選擇，要嘛就做、不然就變成更精確的項目、不然就關掉".
+- **New backlog hygiene rule** (owner): there is no `Deferred` limbo. Every item is DO / REFINE / CLOSE (`Cancelled` with a reason). Codified at the top of `_product-backlog.md` + Status Key.
+- **Rotated** 54 Done/Shipped AVO-101+ rows into `_shipped-log.md` (new "🚀 AVO-101+ Wave" section; AVO-156/157 folded in → 56-row wave archive).
+- **Cancelled 11 items** (no longer "Deferred"): 7 off-mission under new **ADR-006** (AVO is not an observability/cost dashboard) — AVO-109/113/114/116/118/119/120 (file heatmap · OTLP telemetry · replay scrubber · DAG minimap · WakaTime breakdown · cost $ · leaderboard), AVO-108 $/rolling/sparkline remainder descoped; AVO-142/144 (rejected by ADR-005/004); **AVO-112** eureka cascade (honesty flaw — real eureka = slow `mood→smooth` distillation, can't cluster in 10s → only fires on whiteboard-click theater; AVO-136 already sparkles); **AVO-137** density-layer (glance-default already shipped via vibe-rebalance + PR #81; zen far-view not a target use case). Owner ratified each via AskUserQuestion.
+- **Drift reconciled**: AVO-147 stale-"In Progress"→Done (proven shipped under `chore/hardening-h4-zero-noise`); AVO-120 stale-"Pending"→Cancelled (AVO-115 ship note already recorded the honesty closure).
+- **Result**: backlog now lists **3 open on-mission items** (AVO-160 sprite pipeline · AVO-124 sprite cosmetics · AVO-141 comms) + a `## Closed` ledger. The real next-value work (sprite ART, dialogue/text) is intentionally unticketed until scoped — flagged in the backlog reality-check note.
+- Verify: `validate.sh` — ADR Index / Feature Inventory / Status-enum / backlog↔SSoT all PASS post-edit; all four edited files uniform CRLF (no mixed EOL). Squash-merge pending (PR to be opened). Tests: N/A (no app code).
 
 ### Ship-refactor-avo-146-statuscontract-single-source-2026-06-14 (#122 — eliminate normalizePost.mjs runtime mirror)
 
