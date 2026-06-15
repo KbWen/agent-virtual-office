@@ -96,6 +96,8 @@
     "review-qa-3": "讚",
     "deploy-success": "部署成功！🚀",
     "deploy-celebrate": ["🎉 耶！", "太好了！", "終於...", "慶祝！", "下班！", "完美~"],
+    "deploy-idle": ["還不行 🤚", "現在沒東西可上", "👀 等等", "別急"],
+    "eureka-idle": ["嗯... 🤔", "還在想", "✏️ 還沒靈感", "再等一下"],
     "meeting-start": ["開會囉", "來了來了", "又開會..."],
     "meeting-lead": "所以方向是...",
     "meeting-agree": "嗯嗯同意",

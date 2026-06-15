@@ -5,7 +5,7 @@ import { TIME_CHECK_INTERVAL } from '../src/systems/constants.js'
 // Minimal fake store — officeLife only calls getState() and the actions it returns.
 // The agents map is mutated in place so group-event state changes are observable
 // (mirrors how the real zustand store survives across an officeLife teardown/re-init).
-function makeFakeStore() {
+function makeFakeStore(externalStatus = {}) {
   let updateTimeCalls = 0
   const state = {
     isPaused: false,
@@ -14,7 +14,7 @@ function makeFakeStore() {
       dev: { id: 'dev', inGroupEvent: false, groupTarget: null, behavior: 'typing', expression: 'normal', bubble: null, position: { x: 100, y: 100 } },
       qa: { id: 'qa', inGroupEvent: false, groupTarget: null, behavior: 'typing', expression: 'normal', bubble: null, position: { x: 200, y: 200 } },
     },
-    externalStatus: {},
+    externalStatus,
     hour: 9,
   }
   const api = {
@@ -71,7 +71,7 @@ describe('officeLife — lifecycle teardown', () => {
   })
 
   it('cleanup stops the time interval — updateTime is not called after teardown', () => {
-    const store = makeFakeStore()
+    const store = makeFakeStore({ gate: { changedAt: Date.now() } })
     const cleanup = startOfficeLife(store)
 
     vi.advanceTimersByTime(TIME_CHECK_INTERVAL * 2)
@@ -106,7 +106,7 @@ describe('officeLife — lifecycle teardown', () => {
   })
 
   it('teardown cancels in-flight interactive events — deferred callbacks do not fire after cleanup', () => {
-    const store = makeFakeStore()
+    const store = makeFakeStore({ gate: { changedAt: Date.now() } })
     const cleanup = startOfficeLife(store)
 
     // Trigger a multi-stage interactive event (review-debate has 6s/12s deferred steps).
@@ -122,7 +122,7 @@ describe('officeLife — lifecycle teardown', () => {
   })
 
   it('teardown mid-event releases participants — no agent stranded inGroupEvent: true', () => {
-    const store = makeFakeStore()
+    const store = makeFakeStore({ gate: { changedAt: Date.now() } })
     const cleanup = startOfficeLife(store)
 
     // Start a group event that locks dev + qa into inGroupEvent: true.
@@ -141,7 +141,7 @@ describe('officeLife — lifecycle teardown', () => {
   })
 
   it('double-init mid-event releases the prior instance participants', () => {
-    const store = makeFakeStore()
+    const store = makeFakeStore({ gate: { changedAt: Date.now() } })
     startOfficeLife(store) // intentionally NOT cleaned up — simulates HMR / missed cleanup
 
     expect(triggerInteractiveEvent(store, 'review-debate')).toBe(true)
@@ -182,7 +182,7 @@ describe('officeLife — rare event (participants: all) lifecycle', () => {
 
   for (const { id, duration } of RARE) {
     it(`${id}: all participants are marked inGroupEvent then released on duration`, () => {
-      const store = makeFakeStore()
+      const store = makeFakeStore({ gate: { changedAt: Date.now() } })
       const cleanup = startOfficeLife(store)
 
       expect(triggerInteractiveEvent(store, id)).toBe(true)
@@ -209,7 +209,7 @@ describe('officeLife — rare event (participants: all) lifecycle', () => {
     // pickParticipants("all") returns Object.keys(agents) — including a composite
     // worktree id. group-stretch sets EVERY participant inGroupEvent; the cleanup
     // must release the dynamic agent too, not strand it inGroupEvent: true.
-    const store = makeFakeStore()
+    const store = makeFakeStore({ gate: { changedAt: Date.now() } })
     // Add a dynamic worktree agent.
     store.getState().agents['feat-x~dev'] = {
       id: 'feat-x~dev', session: 'feat-x', inGroupEvent: false, groupTarget: null,
@@ -229,7 +229,7 @@ describe('officeLife — rare event (participants: all) lifecycle', () => {
   })
 
   it('a second event cannot start while a rare event is active', () => {
-    const store = makeFakeStore()
+    const store = makeFakeStore({ gate: { changedAt: Date.now() } })
     const cleanup = startOfficeLife(store)
 
     expect(triggerInteractiveEvent(store, 'boss-visit')).toBe(true)
@@ -272,7 +272,7 @@ describe('officeLife — hour-14 drowsiness respects group events (R72)', () => 
   })
 
   it('does NOT overwrite an agent that is locked in a group event', () => {
-    const store = makeFakeStore()
+    const store = makeFakeStore({ gate: { changedAt: Date.now() } })
     store._setHour(14)
     const cleanup = startOfficeLife(store)
 
@@ -298,7 +298,7 @@ describe('officeLife — hour-14 drowsiness respects group events (R72)', () => 
   })
 
   it('the 30s release reverts only the agents it made drowsy, skipping group events', () => {
-    const store = makeFakeStore()
+    const store = makeFakeStore({ gate: { changedAt: Date.now() } })
     store._setHour(14)
     const cleanup = startOfficeLife(store)
 
@@ -386,7 +386,7 @@ describe('officeLife — pickParticipants filtering', () => {
   })
 
   it('array participants: both dev+qa free → review-debate locks both', () => {
-    const store = make3AgentStore({})
+    const store = make3AgentStore({ gate: { changedAt: Date.now() } })
     const cleanup = startOfficeLife(store)
 
     expect(triggerInteractiveEvent(store, 'review-debate')).toBe(true)
@@ -431,7 +431,7 @@ describe('officeLife — pickParticipants filtering', () => {
   })
 
   it('random-1-neighbor (coffee-spill): always produces 1-2 participants', () => {
-    const store = make3AgentStore({})
+    const store = make3AgentStore({ gate: { changedAt: Date.now() } })
     const cleanup = startOfficeLife(store)
 
     expect(triggerInteractiveEvent(store, 'coffee-spill')).toBe(true)
@@ -447,6 +447,7 @@ describe('officeLife — pickParticipants filtering', () => {
   it('done/idle external status is treated as available — not excluded', () => {
     const store = make3AgentStore({
       dev: { status: 'done', expiresAt: Date.now() + 10000 },
+      gate: { changedAt: Date.now() },
     })
     const cleanup = startOfficeLife(store)
 
@@ -540,7 +541,7 @@ describe('officeLife — Fix 1: lunch-nap sets activeEvent (mutex participation)
   })
 
   it('hour-12 lunch-nap sets activeEvent so concurrent scheduled events are blocked', () => {
-    const store = makeFakeStore()
+    const store = makeFakeStore({ gate: { changedAt: Date.now() } })
     store._setHour(12)
     const cleanup = startOfficeLife(store)
 
