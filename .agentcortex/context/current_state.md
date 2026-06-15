@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-15T03:07:38Z
-- **Update Sequence**: 92
+- **Last Updated**: 2026-06-15T08:22:58Z
+- **Update Sequence**: 93
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -163,6 +163,15 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-dialogue-interaction-layer-waveA-2026-06-15 (PR #166 — voices + reduction + de-fabricate)
+
+- Feature **Wave A** shipped: the dialogue/text (台詞、文字) layer S1/S1b/S2 (ADR-007 + frozen spec `docs/specs/dialogue-interaction-layer.md`; AVO-161). **S1** = quiet the over-talky office (working bubble chance 0.55→0.20 across BOTH emitters, new `rng.js` seeded seam, `pickMessage` caller-owned anti-repeat, committed baseline fixture + AC-C1b liveliness floor). **S1b** = honesty: `generateCrossReaction` gated on `recentSignal`/`WORK_CLAIM_SIGNAL_WINDOW` (closes the G7 cross-process fabrication leak) + pruned named gossip leaks + de-fabricated `react-colleague-done` (en+zh). **S2** = 5 per-role voice archetypes (Sprinter/Skeptic/Sage/Coordinator/Aesthete × 8 roles, en+zh 1:1 natural繁中) + open-ended ambient pools + the **AC-O2 no-conclusion lint guard** (en work-outcome stems + zh completion verb+了/啦/囉 collocations with negation-lookbehind — bare 了 NOT banned).
+- Process: full governed flow bootstrap→adr(ADR-007)→spec(FROZEN v3)→plan→implement→review(PASS)→test→handoff→ship. Spec hardened by an adversarial red-team (15H/19M) + an expert/PM review (4H/10M, incl. a real zh `了`-lint linguistic-bug fix); code passed a fresh adversarial review (PASS; 3 MED/LOW folded in `efb7cee`).
+- Honesty: no relationship/affinity memory (G4 — persist whitelist unchanged); banter NOT built (Wave B); the only fabrication path (`generateCrossReaction`) is now real-signal-gated.
+- Verify: full vitest **2153 pass / 0 fail** (+117 dialogue tests); build clean; live headless server 0 console errors, 8 agents, voices firing (取捨無處不在… / 我就說吧。 / 鍵盤啪啪啪), liveliness floor holds. Rebased onto #165-cleaned main (merge 3b4990c, kept ADR-006+007). Squash-merge pending (PR #166).
+- **Wave B DEFERRED** (open follow-up, owner "先A後B" — decide after living with A): S3 (≤7-symbol channel-separation, 10px hard gate), S4 (banter — Valve-followup, judged against the now-alive baseline; ADR-007's "no inter-agent dialogue" is the honest fallback), S5 (stale-ring decay). Tracked as AVO-161.
+- Tests: Pass
 
 ### Ship-chore-backlog-hygiene-2026-06-15 (backlog rotation + closures + ADR-006 + no-Deferred rule)
 
