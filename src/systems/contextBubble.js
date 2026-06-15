@@ -13,10 +13,13 @@
  */
 
 import { t } from '../i18n'
+import { rng } from './rng.js'
+import { WORK_CLAIM_SIGNAL_WINDOW } from './constants.js'
+import { findSharedFilePair } from './pairHuddle.js'
 
 function pick(arr) {
   if (!Array.isArray(arr) || arr.length === 0) return null
-  return arr[Math.floor(Math.random() * arr.length)]
+  return arr[Math.floor(rng() * arr.length)]
 }
 
 /**
@@ -151,14 +154,14 @@ export function generateContextBubble(agentId, update, allExternalStatus) {
   const working = fromTemplate(`${baseRole}-working`, ctx)
   if (working) return working
 
-  // 5. Cross-agent awareness — react to other agents
-  if (Math.random() < 0.25) {
-    const reaction = generateCrossReaction(agentId, allExternalStatus)
+  // 5. Cross-agent awareness — react to other agents (AC-H4: gated on recentSignal)
+  if (rng() < 0.25) {
+    const reaction = generateCrossReaction(agentId, allExternalStatus, Date.now())
     if (reaction) return reaction
   }
 
   // 6. Random gossip (low chance, adds life)
-  if (Math.random() < 0.1) {
+  if (rng() < 0.1) {
     const gossip = fromTemplate('gossip', null)
     if (gossip) return gossip
   }
@@ -167,10 +170,26 @@ export function generateContextBubble(agentId, update, allExternalStatus) {
 }
 
 /**
- * Generate a reaction to another agent's current state
+ * Generate a reaction to another agent's current state.
+ *
+ * AC-H4 (ADR-007 D3 G2/G3/G7): returns null UNLESS the reacted-to agent's changedAt is
+ * within WORK_CLAIM_SIGNAL_WINDOW (recentSignal). This prevents fabricating awareness of
+ * another agent's state when the signal is stale.
+ *
+ * - react-colleague-blocked: gated on recentSignal alone (not co-edit).
+ * - react-colleague-done: gated on recentSignal alone (not co-edit).
+ *   (shared-artifact lines in S4 banter additionally require findSharedFilePair; that is S4
+ *   scope, not S1b — included here only as the import is present for future use.)
+ *
+ * @param {string} agentId
+ * @param {object|null} allExternalStatus
+ * @param {number} now  Date.now() — callers pass this so tests can control time
  */
-function generateCrossReaction(agentId, allExternalStatus) {
+export function generateCrossReaction(agentId, allExternalStatus, now = Date.now()) {
   if (!allExternalStatus) return null
+
+  const recentSignal = (es) =>
+    !!(es && Number.isFinite(es.changedAt) && (now - es.changedAt) < WORK_CLAIM_SIGNAL_WINDOW)
 
   // Iterate keys directly — Object.entries() allocates an array of [id,ext] pair
   // arrays. This runs on the SSE/poll message path (generateContextBubble per
@@ -179,13 +198,13 @@ function generateCrossReaction(agentId, allExternalStatus) {
     if (otherId === agentId) continue
     const ext = allExternalStatus[otherId]
 
-    // React to blocked colleague
-    if (ext.status === 'blocked') {
+    // React to blocked colleague — gated on recentSignal
+    if (ext.status === 'blocked' && recentSignal(ext)) {
       return fromTemplate('react-colleague-blocked', null)
     }
 
-    // React to done colleague
-    if (ext.status === 'done') {
+    // React to done colleague — gated on recentSignal
+    if (ext.status === 'done' && recentSignal(ext)) {
       return fromTemplate('react-colleague-done', null)
     }
   }

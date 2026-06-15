@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-15T03:07:38Z
-- **Update Sequence**: 92
+- **Last Updated**: 2026-06-15T08:22:58Z
+- **Update Sequence**: 93
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -21,6 +21,7 @@
   - docs/adr/ADR-004-no-per-frame-agent-separation.md — AVO-144 resolved by decision: per-frame separation rejected (3-lens panel); re-open conditions recorded
   - docs/adr/ADR-005-no-user-drag-to-move-agents.md — AVO-142 rejected by decision: user drag-to-move rejected (4-lens panel unanimous); position=state honesty; interaction redirected to AVO-158 Poke; re-open conditions recorded
   - docs/adr/ADR-006-no-observability-cost-dashboard-scope.md — AVO is not an observability/cost dashboard; Cancels off-mission AVO-109/113/114/116/118/119/120 + descopes AVO-108 $ remainder; conditions for opening a NEW item recorded
+  - docs/adr/ADR-007-dialogue-channel-separation-and-honesty-gate.md — dialogue layer: bubble=voice / status=symbol+ring (detail→inspector, blocked=exception) + open-ended non-conclusive content rule + inter-agent honesty gate G1–G10 (reject relationship-memory); applies_to: src/systems/{banter,behaviorEngine,officeLife,contextBubble}, src/components/{AgentCharacter,BehaviorBubble}, src/locales/*.json
   - .agentcortex/adr/ADR-001-vnext-self-managed-architecture.md — framework scaffold mirror of ADR-001
 - **Active Backlog**: `docs/specs/_product-backlog.md`
   - **As of 2026-06-15 cleanup** — **no-"Deferred" hygiene rule**: every item is DO / REFINE / CLOSE, never parked. **3 open on-mission items**: AVO-160 (sprite-asset pipeline, P3) · AVO-124 (sprite cosmetics, P3) · AVO-141 (comms rail optimization, P2). 54 Done/Shipped rows rotated to `_shipped-log.md` (AVO-101+ wave). **11 items Cancelled**: 7 off-mission per **ADR-006** (cost/observability/analytics out of scope) + AVO-142/144 (rejected by ADR-005/004) + AVO-112 (eureka cascade — honesty flaw: real eureka can't cluster in 10s) + AVO-137 (density-layer — glance-default already shipped, zen far-view not a target). Drift reconciled: AVO-147 stale-"In Progress"→Done, AVO-120 stale-"Pending"→Cancelled. The highest next-value work (sprite ART, dialogue/text 台詞文字) is intentionally **unticketed** until scoped — do not backfill busywork (REDUCE-not-add). Pre-AVO historical notes below retained for provenance only.
@@ -96,6 +97,7 @@
   - [hook-io] docs/specs/hook-runtime-contract.md [Shipped]  *(AVO-153 / stability-wave W4 — live-captured fixtures + 143 contract tests; found the tool_response/tool_result divergence → AVO-154)*
   - [game-feel] docs/specs/cozy-micro-interactions.md [Shipped]  *(AVO-125 / chill-fun wave — night desk-lamp halos beneath the status layer; status-tinted monitor glow DROPPED on honesty (desk-fixed glow vs walking agents))*
   - [game-feel] docs/specs/ambient-soundscape.md [Shipped]  *(AVO-122 / chill-fun wave — off-by-default 0-KB procedural Web Audio; clatter∝teamPulse (silent@0) + double-gated rain; coffee gurgle DROPPED on honesty (tea-break is a clock event))*
+  - [ui-rendering] docs/specs/dialogue-interaction-layer.md [Frozen]  *(dialogue layer — ADR-007 channel separation + open-ended content + honesty gate; S1/S1b reduction commits, S2–5 killable hypotheses; red-team + expert/PM hardened)*
   - When reading specs: only open files tagged with the current task's module.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
@@ -161,6 +163,15 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-feat-dialogue-interaction-layer-waveA-2026-06-15 (PR #166 — voices + reduction + de-fabricate)
+
+- Feature **Wave A** shipped: the dialogue/text (台詞、文字) layer S1/S1b/S2 (ADR-007 + frozen spec `docs/specs/dialogue-interaction-layer.md`; AVO-161). **S1** = quiet the over-talky office (working bubble chance 0.55→0.20 across BOTH emitters, new `rng.js` seeded seam, `pickMessage` caller-owned anti-repeat, committed baseline fixture + AC-C1b liveliness floor). **S1b** = honesty: `generateCrossReaction` gated on `recentSignal`/`WORK_CLAIM_SIGNAL_WINDOW` (closes the G7 cross-process fabrication leak) + pruned named gossip leaks + de-fabricated `react-colleague-done` (en+zh). **S2** = 5 per-role voice archetypes (Sprinter/Skeptic/Sage/Coordinator/Aesthete × 8 roles, en+zh 1:1 natural繁中) + open-ended ambient pools + the **AC-O2 no-conclusion lint guard** (en work-outcome stems + zh completion verb+了/啦/囉 collocations with negation-lookbehind — bare 了 NOT banned).
+- Process: full governed flow bootstrap→adr(ADR-007)→spec(FROZEN v3)→plan→implement→review(PASS)→test→handoff→ship. Spec hardened by an adversarial red-team (15H/19M) + an expert/PM review (4H/10M, incl. a real zh `了`-lint linguistic-bug fix); code passed a fresh adversarial review (PASS; 3 MED/LOW folded in `efb7cee`).
+- Honesty: no relationship/affinity memory (G4 — persist whitelist unchanged); banter NOT built (Wave B); the only fabrication path (`generateCrossReaction`) is now real-signal-gated.
+- Verify: full vitest **2153 pass / 0 fail** (+117 dialogue tests); build clean; live headless server 0 console errors, 8 agents, voices firing (取捨無處不在… / 我就說吧。 / 鍵盤啪啪啪), liveliness floor holds. Rebased onto #165-cleaned main (merge 3b4990c, kept ADR-006+007). Squash-merge pending (PR #166).
+- **Wave B DEFERRED** (open follow-up, owner "先A後B" — decide after living with A): S3 (≤7-symbol channel-separation, 10px hard gate), S4 (banter — Valve-followup, judged against the now-alive baseline; ADR-007's "no inter-agent dialogue" is the honest fallback), S5 (stale-ring decay). Tracked as AVO-161.
+- Tests: Pass
 
 ### Ship-chore-backlog-hygiene-2026-06-15 (backlog rotation + closures + ADR-006 + no-Deferred rule)
 
