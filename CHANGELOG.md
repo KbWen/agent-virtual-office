@@ -5,6 +5,39 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.0 — 2026-06-15 — Everyone finds their voice — quietly, and honestly
+
+The office learned to talk in character — and got calmer and more honest at the same time.
+
+### Added
+
+- **Agent voices (dialogue layer, wave A)** — each role now speaks in its own voice: short,
+  in-character lines from per-role archetypes (Sprinter, Skeptic, Sage, Coordinator, Aesthete),
+  fully bilingual (English + 繁體中文). Lines are open-ended on purpose — they never claim a
+  work outcome that didn't happen.
+
+### Changed
+
+- **Quieter by default** — working agents talk a lot less (the over-chatty baseline was cut)
+  and the office walks around less. The room reads calmer without going dead.
+- **Dev RAF diagnostic is opt-in** — the frame-rate watchdog chip now only appears with
+  `?debug=raf` instead of always sitting in the corner.
+
+### Fixed
+
+- **Clicking the deploy button or whiteboard no longer fakes a result** — a click used to pop
+  "Deploy Success! 🚀" / "got it! 💡" (plus confetti and the pet celebrating) with nothing real
+  behind it. Those celebrations now fire only when a real signal backs them; an idle click gets
+  an honest, non-committal reaction instead. The office still never fakes activity.
+- **De-fabricated cross-agent reactions** — an agent reacts to a colleague's state only when
+  there's a fresh real signal for it, not stale or absent state.
+
+### Internal
+
+- Bubble-render perf (one compute/write per tick instead of N), single-sourced the office-status
+  transport contract, refreshed the README imagery + a branded social-preview card, and a
+  backward-audit pass that corrected stale docs.
+
 ## v1.5.1 — 2026-06-14 — Card + poke polish
 
 ### Fixed
