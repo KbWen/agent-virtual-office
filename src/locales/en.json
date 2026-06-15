@@ -96,6 +96,8 @@
     "review-qa-3": "nice",
     "deploy-success": "Deploy Success! 🚀",
     "deploy-celebrate": ["🎉 yay!", "awesome!", "finally...", "celebrate!", "time to go!", "perfect~"],
+    "deploy-idle": ["not yet 🤚", "nothing to ship right now", "👀 ...soon", "patience"],
+    "eureka-idle": ["hmm... 🤔", "still thinking", "✏️ no eureka yet", "give me a sec"],
     "meeting-start": ["meeting time", "coming!", "another meeting..."],
     "meeting-lead": "so the direction is...",
     "meeting-agree": "mm agreed",

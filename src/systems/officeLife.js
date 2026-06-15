@@ -554,12 +554,42 @@ function executeEvent(store, event, participants, cancelled) {
   }
 }
 
+// Honest neutral reaction when a clicked work-claim object is gated out (no real signal).
+// Mirrors the Poke micro-interaction (AVO-158): an in-place, NON-conclusive INTENT bubble on the
+// responsible agent — never a work-outcome claim, never activeEvent/confetti/pet-celebrate. Keeps
+// the click tactile while the office stays honest. SOCIAL clicks (tea-break) are never gated.
+const INTERACTION_REACTOR = { 'deploy-success': 'ops', 'eureka': 'arch' }
+const INTERACTION_BUBBLE_KEY = { 'deploy-success': 'deploy-idle', 'eureka': 'eureka-idle' }
+function fireInteractionReaction(store, eventId) {
+  const reactorId = INTERACTION_REACTOR[eventId]
+  if (!reactorId) return
+  const s = store.getState()
+  const agent = s.agents?.[reactorId]
+  // R1-safe: never override an agent genuinely locked in a real group event.
+  if (!agent || agent.inGroupEvent) return
+  const line = eventBubble(INTERACTION_BUBBLE_KEY[eventId])
+  if (!line) return
+  s.setAgentBehavior(reactorId, agent.behavior, agent.expression, line)
+  let t
+  t = setTimeout(() => { store.getState().clearBubble(reactorId); interactiveDeregTimers.delete(t) }, 2600)
+  interactiveDeregTimers.add(t)
+}
+
 export function triggerInteractiveEvent(store, eventId) {
   const state = store.getState()
   if (state.isPaused || state.activeEvent) return false
 
   const event = EVENT_BY_ID[eventId]
   if (!event) return false
+
+  // Honesty gate (panel-decided): a user click on a work-claim object (deploy button → deploy-success,
+  // whiteboard → eureka) must NOT manufacture a work outcome with no real signal — the same eventEligible
+  // gate the autonomous (pickEligibleEvent) and seed (fireSeed) paths enforce. Gated out → fire a neutral
+  // non-conclusive reaction instead of the claim set-piece. SOCIAL/WORLD clicks (tea-break) carry no gate.
+  if (!eventEligible(event, state)) {
+    fireInteractionReaction(store, eventId)
+    return false
+  }
 
   const participants = pickParticipants(event, state.agents, state.externalStatus)
   const cancelled = { value: false }
