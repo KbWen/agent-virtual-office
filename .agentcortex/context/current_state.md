@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-14T12:00:00Z
-- **Update Sequence**: 90
+- **Last Updated**: 2026-06-15T01:11:58Z
+- **Update Sequence**: 91
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -86,7 +86,7 @@
   - [office-runtime] docs/specs/recurring-failure-detection.md [Shipped]  *(AVO-117 — recurring blocked-reason detection; downstream of AVO-110)*
   - [multi-agent] docs/specs/pair-programming-huddle.md [Shipped]  *(AVO-106 — co-editing pair OVERLAY (desk-to-desk link); per-agent activeFile, edit-only; redesigned from a huddle per expert panel)*
   - [ci-infra] docs/specs/ci-render-smoke.md [Shipped]  *(AVO-145 / hardening-wave H1 — blocking render-smoke gate; AC-6 test-the-test proven)*
-  - [data-path] docs/specs/status-field-schema-unification.md [Shipped]  *(AVO-146 / hardening-wave H2 — AGENT_CARRY_FIELDS canonical schema; 9-site map; drift-guarded)*
+  - [data-path] docs/specs/status-field-schema-unification.md [Shipped] [Updated: 2026-06-14 — #122 runtime mirror eliminated → statusContract.mjs single source]  *(AVO-146 / hardening-wave H2 — AGENT_CARRY_FIELDS canonical schema; 9-site map; drift-guarded)*
   - [hook-io] docs/specs/hook-status-write-lock.md [Shipped]  *(#20 / hardening-wave H3 — bounded-wait RMW lock; multi-process proof)*
   - [office-runtime] docs/specs/structured-error-reasons.md [Shipped]  *(AVO-148 / hardening-wave H5 — event-driven permission-denied / api-rate-limit / api-auth-failed)*
   - [ci-infra] docs/specs/npm-pack-install-smoke.md [Shipped]  *(AVO-151 / stability-wave W3 — pack→install→setup/hook/boot smoke gate)*
@@ -159,6 +159,20 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-refactor-avo-146-statuscontract-single-source-2026-06-14 (#122 — eliminate normalizePost.mjs runtime mirror)
+
+- Shipped: AVO-146 follow-up (#122). Collapsed the hand-maintained `normalizePost.mjs` runtime MIRROR (constants + sanitizers + normalizePost logic) into ONE node-safe ESM module `src/utils/statusContract.mjs` (zero imports → bare Node loads it directly). constants.js / classify.js / statusFields.js / normalizePost.js / normalizePost.mjs now thin-re-export from it; all import paths + server.mjs unchanged. classify.js keeps its rich BLOCKED_REASON_TABLE (UI metadata) + a keys-equality guard vs the contract codes. Net -224 lines.
+- Honesty/safety: byte-identical on the A04 untrusted-POST sanitization boundary (definition-site move only); enum arrays left UNFROZEN to match pre-#122.
+- Review: owner-requested 3-lens expert panel (correctness/equivalence · security/A04 · bare-node/ESM) — all READY, 0 findings. AC-1 (one source) / AC-2 (bare node — live server POST + spawned-node smoke) / AC-3 (drift guard → single-source wiring + classify-table-keys guard, AC-6 e2e retained) all met.
+- Verify: full suite 2036/2036 on merged main; CI green (SAST/Semgrep, TruffleHog, render-smoke, test×2). Squash-merged as 27c1161 (PR #163).
+- Tests: Pass
+
+### Ship-chore-reduce-noise-raf-diag-and-walk-rhythm-2026-06-14 (two quick-wins — RAF diag gate + calm walking)
+
+- Shipped: (1) DEV-only RAF-watchdog diagnostic chip is now opt-in behind `?debug=raf` (was constant left-panel noise; console.warn unchanged; prod cost zero via DCE). (2) Ambient walk rhythm calmed — raised `work` weight in baseWeights/idle/moodModifiers.idle, trimmed away/daily, social preserved; measured out-trip rate -28% (idle/normal 45%→32%, idle-mood 55%→40%); `working` (real-work, R1) untouched.
+- Verify: full suite green; before/after measured via getNextBehavior category split (12k samples); live browser confirmed chip gating. Squash-merged as 055f69d (PR #162).
+- Tests: Pass
 
 ### Ship-feat-avo-158-poke-2026-06-14 (AVO-158 — Poke / acknowledge micro-interaction)
 
