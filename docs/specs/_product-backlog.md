@@ -32,7 +32,7 @@ last_updated: 2026-06-15
 | AVO-160 | Custom sprite-asset pipeline (public/sprites/ PNG auto-load → replace procedural SVG) | product | brand | P3 | docs/SPRITE_REQUIREMENTS.md | feature | Pending | foundation for hand-drawn art + AVO-124(b) |
 | AVO-124 | Agent appearance customization (sprite cosmetics — hats/accessories/outfits) | product | brand | P3 | — | feature | Pending | AVO-160 for PNG path |
 | AVO-141 | Comms / vertical (☰ roster) deeper optimization — "still lots of room" | product | vibe-rebalance | P2 | docs/specs/living-office-events.md | feature | Pending | AVO-140 (shipped) |
-| AVO-161 | Dialogue & interaction layer (台詞/文字) — Wave A SHIPPED, Wave B open | product | game-feel | P1 | docs/specs/dialogue-interaction-layer.md | feature | In Progress | ADR-007. **Wave A SHIPPED 2026-06-15 (PR #166)**: S1 quiet-worker reduction + rng seam · S1b de-fabricate generateCrossReaction · S2 5 voice archetypes (en+zh) + open-ended pools + AC-O2 lint. **Wave B = OPEN** (owner "先A後B", decide after living with A): S3 ≤7 status symbols (10px hard gate) · S4 banter (judged vs alive baseline; ADR-007 fallback = no inter-agent dialogue) · S5 stale-ring decay. |
+| AVO-161 | Dialogue & interaction layer (台詞/文字) — Wave A SHIPPED, Wave B open | product | game-feel | P1 | docs/specs/dialogue-interaction-layer.md | feature | In Progress | ADR-007. **Wave A SHIPPED 2026-06-15 (PR #166)**: S1 quiet-worker reduction + rng seam · S1b de-fabricate generateCrossReaction · S2 5 voice archetypes (en+zh) + open-ended pools + AC-O2 lint. **Wave B**: **S5 = KILL** (2026-06-15 — redundant with shipped `idleGapInfer`; evidence in notes below) · **S3/S4 = open, GATED** on owner cold-watch of live A → S4 banter stop-question, whose outcome also sets S3 scope (ADR-007 fallback = no inter-agent dialogue). |
 
 > [!NOTE]
 > **Reality check (2026-06-15):** the planned-feature backlog is essentially exhausted. After the
@@ -101,6 +101,23 @@ NOT consume (CHAR_STYLES is authoritative) — reconcile when building.
 The ☰ roster → living-presence rail (PR #44) left "still lots of room". Tighter use of the
 vertical comms column — denser presence + activity without adding new chrome. Spec context lives
 in `docs/specs/living-office-events.md`.
+
+### AVO-161 Dialogue layer — Wave B verdicts (P1, game-feel)
+Wave A shipped (PR #166). Wave B closes per AC-SEQ (`do|refine|kill` + evidence):
+- **S5 (stale-working ring decay) → `kill`** (2026-06-15). Shipped `idleGapInfer`
+  (`PixelOffice.jsx:851`, production) already reclassifies `working → thinking` after **45s** of no
+  (status,task) change (`WORKING_GAP_MS=45000`); `changedAt` advances only on a real sig change
+  (`store.js:993`) and co-moves with idleGapInfer's clock. So `{status==working ∧ changedAt age
+  ≥120s}` is **unreachable** in production — S5 would render nothing; forcing it on a stable-sig
+  long task violates S5's own kill-criterion ("never dim a genuine long task"). The honesty goal (a
+  frozen agent must not keep showing a confident active ring) is already met earlier + better by
+  idleGapInfer (45s) + the 5-min `expiresAt` (`store.js:992`). The `WATCHDOG_TIMEOUT=120000` the
+  spec cites is the **animation-chain** restart timer (`AgentCharacter.jsx:1251`), not a status
+  timer — a spec conflation.
+- **S3 (≤7 status symbols) / S4 (banter) → open, GATED.** Per owner "先A後B": decide after
+  cold-watching live A. Trigger = the S4 pre-build stop-question (is banter still wanted, judged vs
+  the now-alive S2 baseline?); its outcome also sets whether S3 builds full or descopes to
+  ring+prop-icon. No content/vocabulary authoring before that gate (AC-SEQ).
 
 ---
 
