@@ -180,6 +180,39 @@ describe('AC-O2 — zh ambient lint: no completion-verb+了 collocations (with n
     it('差點修好了 → PASS (negation prefix 差點 before 修好了)', () => {
       expect(zhMatchesCollocation('差點修好了')).toBeNull()
     })
+
+    // ─── 啦/囉 suffix variant test cases (AC-O2 denylist extension) ──────────
+    // Spec: completion-verb stems followed by optional 啦/囉 are banned.
+    // Non-completion verbs with 啦/囉 must still pass.
+
+    it('收工啦 → FAIL (completion collocation + 啦 suffix)', () => {
+      expect(zhMatchesCollocation('收工啦')).not.toBeNull()
+    })
+
+    it('搞定啦 → FAIL (completion collocation + 啦 suffix)', () => {
+      expect(zhMatchesCollocation('搞定啦')).not.toBeNull()
+    })
+
+    it('做完啦 → FAIL (completion collocation + 啦 suffix)', () => {
+      expect(zhMatchesCollocation('做完啦')).not.toBeNull()
+    })
+
+    it('收工囉 → FAIL (completion collocation + 囉 suffix)', () => {
+      expect(zhMatchesCollocation('收工囉')).not.toBeNull()
+    })
+
+    it('搞定囉 → FAIL (completion collocation + 囉 suffix)', () => {
+      expect(zhMatchesCollocation('搞定囉')).not.toBeNull()
+    })
+
+    it('卡住啦 → PASS (not a completion verb, 啦 suffix is fine)', () => {
+      expect(zhMatchesCollocation('卡住啦')).toBeNull()
+    })
+
+    it('快好了 → PASS (bare 了 particle, not a banned collocation)', () => {
+      // Already covered above; repeated here for 啦/囉 contrast documentation.
+      expect(zhMatchesCollocation('快好了')).toBeNull()
+    })
   })
 })
 

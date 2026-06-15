@@ -52,6 +52,7 @@ function _storeFallbackBubble(agentId, status) {
 
 // Exported for tests only.
 export function __clearStoreFallbackPicks() { _storeRecentPicks.clear() }
+export { _storeFallbackBubble as __storeFallbackBubble }
 
 // ─── Persistence helpers ───
 const PERSIST_KEY = 'office-state'

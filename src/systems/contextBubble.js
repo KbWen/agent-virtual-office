@@ -161,7 +161,7 @@ export function generateContextBubble(agentId, update, allExternalStatus) {
   }
 
   // 6. Random gossip (low chance, adds life)
-  if (Math.random() < 0.1) {
+  if (rng() < 0.1) {
     const gossip = fromTemplate('gossip', null)
     if (gossip) return gossip
   }

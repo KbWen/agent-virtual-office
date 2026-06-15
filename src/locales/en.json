@@ -210,7 +210,7 @@
     "any-error": ["uh oh...", "something broke", "what now...", "not good..."],
 
     "react-colleague-blocked": ["someone's stuck...need help?", "who's calling for help?", "another blocker over there", "let me see what's wrong"],
-    "react-colleague-done": ["oh nice~", "that was fast~", "good pace!", "that was quick~"],
+    "react-colleague-done": ["oh nice~", "good pace~", "someone's on a roll~", "hm, interesting~"],
 
     "gossip": [
       "what should we eat for lunch...",

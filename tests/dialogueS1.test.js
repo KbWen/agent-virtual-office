@@ -12,7 +12,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { makeMulberry32, __setRng, resetRng } from '../src/systems/rng.js'
 import { pickMessage, getNextBehavior, __clearRecentPicks } from '../src/systems/behaviorEngine.js'
 import { generateCrossReaction } from '../src/systems/contextBubble.js'
-import { __clearStoreFallbackPicks } from '../src/systems/store.js'
+import { __clearStoreFallbackPicks, __storeFallbackBubble } from '../src/systems/store.js'
 import { WORK_CLAIM_SIGNAL_WINDOW } from '../src/systems/constants.js'
 
 // ─── Mulberry32 seeding ──────────────────────────────────────────────────────
@@ -162,87 +162,57 @@ describe('AC-C1 + AC-C1b — working-bubble emission reduction + liveliness floo
   const SEED = 0xBA5E0001
   const N = 10000
 
-  it('AC-C1: afterRate ≤ baselineRate × 0.45 (working-status emission, seeded N=10000)', () => {
-    // LEGACY BASELINE: model the old 0.55-chance world by measuring how many working-status
-    // bubbles would fire if the status gate was always 0.55. We simulate this by counting
-    // coin flips from the rng stream (accurate because the rng is consumed identically per tick).
-    // Simpler: use a fixed legacy baseline of 0.55 (the chance value itself as the upper bound
-    // of what the status gate could contribute — this is a ceiling, not the exact combined rate).
-    // The real combined old rate was higher (+ behavior.msgs path), so using 0.55 as baseline
-    // is conservative and makes AC-C1 easier to pass.
+  it('AC-C1 emitter-1: getNextBehavior working-STATUS-pool hit rate ≤ 0.2475 (= 0.55 × 0.45), seeded N=10000', async () => {
+    // Measurement against REAL getNextBehavior, isolating working-status-pool hits only.
+    // AC-C1 measures the reduction in working-STATUS bubble emission specifically —
+    // not the combined rate (which includes behavior.msgs fallback, unchanged from legacy).
+    //
+    // Method: run REAL getNextBehavior N=10000 with seeded rng; count ticks where the
+    // returned bubble string is a member of the working-status pool. This directly measures
+    // the STATUS gate contribution without counting the unchanged msgs-fallback path.
+    //
+    // Legacy STATUS gate fired at rng() < 0.55. New gate: rng() < 0.20.
+    // Expected working-status hit rate ≈ 0.20 × 0.60 = 0.12 (gate × P(pool over msgs)).
+    // Threshold: 0.55 × 0.45 = 0.2475.
+    const enLocale = (await import('../src/locales/en.json')).default
+    const workingStatusPool = new Set(enLocale.bubbles?.['working-status'] ?? [])
 
-    // AFTER RATE: measure working-status-specific emission.
-    // We count only bubbles that came from the working-status pool.
-    // Strategy: run N ticks and count how many generated any bubble while in 'working' status.
     seedRng(SEED)
     __clearRecentPicks()
     __clearStoreFallbackPicks()
-    let afterBubbles = 0
+    let statusPoolHits = 0
     for (let i = 0; i < N; i++) {
       const r = getNextBehavior('dev', 'working', 10, 'normal')
-      if (r.bubble) afterBubbles++
+      if (r.bubble && workingStatusPool.has(r.bubble)) statusPoolHits++
     }
-    const afterRate = afterBubbles / N
+    const afterRate = statusPoolHits / N
 
-    // AC-C1 COMMITTED BASELINE FIXTURE (S1, chance=0.20):
-    // The "legacy" combined working emission was empirically ~0.55 (status gate alone);
-    // the spec says AC-C1: afterRate ≤ baselineRate × 0.45.
-    // Legacy baseline (0.55 status gate only, conservatively) × 0.45 = 0.2475.
-    // We assert against this committed value.
-    const LEGACY_STATUS_GATE_RATE = 0.55  // the old chance constant — committed fixture
+    const LEGACY_STATUS_GATE_RATE = 0.55  // committed old chance constant
     const AC_C1_THRESHOLD = LEGACY_STATUS_GATE_RATE * 0.45  // 0.2475
 
-    // The combined afterRate includes behavior.msgs fallback (~40% of ticks) which is UNCHANGED.
-    // So afterRate > AC_C1_THRESHOLD is expected for the COMBINED rate.
-    // The AC-C1 spec says to measure ONLY working-bubble emission, not ALL bubbles.
-    // The correct interpretation: count only working-STATUS emissions (not behavior.msgs
-    // which is an ambient/behavior bubble, not a working-status bubble).
-    //
-    // Since we can't easily distinguish in the combined output, we assert AC-C1 via
-    // the gate itself: with chance=0.20, the status gate fires 0.20 of ticks (≤ 0.09 = 0.20×0.45).
-    // The combined rate will be ~0.20 + 0.80×0.5×P(msgs) ≈ 0.55. But the REDUCTION relative
-    // to the old combined rate is real and provable with the store fallback test below.
-    //
-    // For the store fallback path (the SECOND emitter): it is now gated at 0.20.
-    // Old store: 100% emission on every sigChanged → now 20%.
-    // Ratio: 0.20 / 1.00 = 0.20 ≤ 0.45. PASSES AC-C1 for the store path.
-    //
-    // So AC-C1 is validated SEPARATELY per emitter:
-    // - behaviorEngine working.chance: 0.20 vs 0.55 → ratio 0.364 ≤ 0.45 ✓
-    // - store fallback working gate: 0.20 vs ~1.00 → ratio 0.20 ≤ 0.45 ✓
-
-    // Assert the status chance reduction: afterRate for status-gate-only = ~0.20 of ticks
-    // that hit the status gate. Proxy: count ticks where getNextBehavior would have fired
-    // the status gate. We verify via the constant directly.
-    expect(afterRate).toBeGreaterThan(0)  // liveliness: not dead
-
-    // Store fallback specific assertion:
-    // With chance=0.20, the store fallback should emit ~20% of sigChanged working events.
-    // Old rate was ~100% (no gate). Ratio: 0.20 ≤ 0.45. Assert via store helper test below.
+    expect(afterRate, `emitter-1 working-status hit rate=${afterRate.toFixed(4)} must be ≤ ${AC_C1_THRESHOLD}`).toBeLessThanOrEqual(AC_C1_THRESHOLD)
+    expect(afterRate).toBeGreaterThan(0)  // liveliness: status pool still fires
   })
 
-  it('AC-C1 store fallback: working-status gate is 0.20 (≤ 45% of old ~100%)', () => {
-    // Directly test the store working-bubble fallback by simulating N sigChanged working events.
-    // The fallback is _storeFallbackBubble which gates working at rng() < 0.20.
-    // With a seeded rng: measure emission rate.
+  it('AC-C1 emitter-2: __storeFallbackBubble working-bubble rate ≤ 0.2475, seeded N=10000', () => {
+    // Measurement against REAL __storeFallbackBubble (not a coin-flip proxy).
+    // Drive the exported __storeFallbackBubble directly with a seeded rng.
+    // The function gates working at rng() < 0.20 → expected emission rate ≈ 0.20.
+    // Legacy store path emitted unconditionally (rate ≈ 1.0) → 0.20 / 1.0 = 0.20 ≤ 0.45. ✓
     seedRng(SEED)
     __clearStoreFallbackPicks()
-
-    // The store gate: rng() >= 0.20 → null (no bubble). So emission rate = fraction where rng() < 0.20.
-    const prng = makeMulberry32(SEED)
     let fires = 0
     for (let i = 0; i < N; i++) {
-      if (prng() < 0.20) fires++  // mirrors rng() >= 0.20 → null in _storeFallbackBubble
+      const result = __storeFallbackBubble('dev', 'working')
+      if (result !== null && result !== undefined) fires++
     }
     const storeAfterRate = fires / N
-    const OLD_STORE_RATE = 1.0  // old code: randomBubble always called (no gate)
-    const ratio = storeAfterRate / OLD_STORE_RATE
 
-    // S1 COMMITTED BASELINE FIXTURE: store fallback rate
-    // storeAfterRate ≈ 0.20 ± noise at N=10000
-    expect(storeAfterRate).toBeGreaterThan(0.15)
-    expect(storeAfterRate).toBeLessThan(0.25)
-    expect(ratio).toBeLessThanOrEqual(0.45)  // AC-C1: ratio must be ≤ 0.45
+    const LEGACY_STATUS_GATE_RATE = 0.55  // old chance constant (conservative baseline)
+    const AC_C1_THRESHOLD = LEGACY_STATUS_GATE_RATE * 0.45  // 0.2475
+
+    expect(storeAfterRate, `emitter-2 rate=${storeAfterRate.toFixed(4)} must be ≤ ${AC_C1_THRESHOLD}`).toBeLessThanOrEqual(AC_C1_THRESHOLD)
+    expect(storeAfterRate).toBeGreaterThan(0)  // liveliness: emitter-2 not dead
   })
 
   it('AC-C1b: liveliness floor — fraction of ticks with a bubble stays above FLOOR_MIN (seeded N=10000)', () => {
@@ -262,34 +232,40 @@ describe('AC-C1 + AC-C1b — working-bubble emission reduction + liveliness floo
     expect(livelinessRate, `livelinessRate=${livelinessRate.toFixed(4)} must be ≥ ${FLOOR_MIN}`).toBeGreaterThanOrEqual(FLOOR_MIN)
   })
 
-  it('AC-C1 FIXTURE: commits measured S1 baseline rates for AC-SEQ comparison', () => {
+  it('AC-C1 FIXTURE: commits measured S1 baseline rates for AC-SEQ comparison', async () => {
     // COMMITTED S1 BASELINE FIXTURE — DO NOT CHANGE without re-measuring.
+    // Both emitters measured against REAL code (not arithmetic proxies).
     // These numbers are captured here for future slices (S2–S5) to compare against.
+
+    // Emitter 1: REAL getNextBehavior — working-STATUS-pool hit rate (not combined).
+    // Only count bubbles that came from the working-status pool (pool-membership filter).
+    const enLocale2 = (await import('../src/locales/en.json')).default
+    const workingStatusPool2 = new Set(enLocale2.bubbles?.['working-status'] ?? [])
     seedRng(SEED)
     __clearRecentPicks()
     __clearStoreFallbackPicks()
-
-    // Emitter 1: behaviorEngine working-bubble rate (combined: status gate + behavior.msgs fallback)
     let emitter1Bubbles = 0
     for (let i = 0; i < N; i++) {
       const r = getNextBehavior('dev', 'working', 10, 'normal')
-      if (r.bubble) emitter1Bubbles++
+      if (r.bubble && workingStatusPool2.has(r.bubble)) emitter1Bubbles++
     }
     const S1_EMITTER1_COMBINED_RATE = emitter1Bubbles / N
 
-    // Emitter 2: store fallback gate rate (fraction of sigChanged that would emit, seeded separately)
-    const prng2 = makeMulberry32(SEED + 1)
+    // Emitter 2: REAL __storeFallbackBubble working-bubble rate
+    seedRng(SEED + 1)
+    __clearStoreFallbackPicks()
     let storeEmits = 0
     for (let i = 0; i < N; i++) {
-      if (prng2() < 0.20) storeEmits++
+      const result = __storeFallbackBubble('dev', 'working')
+      if (result !== null && result !== undefined) storeEmits++
     }
     const S1_EMITTER2_STORE_RATE = storeEmits / N
 
-    // Legacy estimates:
-    const S1_LEGACY_EMITTER1_ESTIMATE = 0.55  // old status gate chance (conservative lower bound)
-    const S1_LEGACY_EMITTER2_ESTIMATE = 1.00  // old store: unconditional
+    // Legacy baselines (committed constants):
+    const S1_LEGACY_EMITTER1_ESTIMATE = 0.55  // old STATUS_BUBBLE.working.chance
+    const S1_LEGACY_EMITTER2_ESTIMATE = 1.00  // old store: unconditional emission
 
-    const S1_RATIO_EMITTER1 = 0.20 / S1_LEGACY_EMITTER1_ESTIMATE  // 0.364
+    const S1_RATIO_EMITTER1 = S1_EMITTER1_COMBINED_RATE / S1_LEGACY_EMITTER1_ESTIMATE
     const S1_RATIO_EMITTER2 = S1_EMITTER2_STORE_RATE / S1_LEGACY_EMITTER2_ESTIMATE
 
     // Both ratios must be ≤ 0.45 (AC-C1)
