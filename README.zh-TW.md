@@ -13,10 +13,8 @@
 <sub><i>整間辦公室，session 進行中 —— 有人埋頭、有人卡關、有人剛出貨。全是即時的。</i></sub>
 
 當 Claude Code 在你的 codebase 裡埋頭苦幹，一個像素版的它正坐在桌前做一樣的事 —— 打字、卡關、氣呼呼地跑去跟
-QA 吵那到底算不算 bug。把它接上你的 Claude Code / Codex / CI session，你的 agent 就真的來上班了：`working`、
-`blocked`、出貨、鬥嘴，即時上演。
-
-它不是儀表板。對工作毫無幫助，但你就是會一整天開著它。
+QA 吵那到底算不算 bug。把它接上你的 Claude Code / Codex / CI session，你的 agent 就真的來上班了 —— `working`、
+`blocked`、出貨、鬥嘴，即時上演。它不是儀表板，對工作毫無幫助，但你就是會一整天開著它。
 
 [快速開始](#快速開始) · [他們在幹嘛](#他們在幹嘛) · [常見問答](#常見問答) · [English](README.md)
 

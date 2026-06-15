@@ -12,12 +12,10 @@
 
 <sub><i>The office mid-session: someone heads-down, someone blocked, someone just shipped — all from a live session.</i></sub>
 
-While Claude Code grinds through your codebase, a pixel version of it sits at a desk doing the same
-thing — typing, getting blocked, stomping off to argue with QA about whether that's *really* a bug.
-Point it at your Claude Code / Codex / CI session and your agents clock in for real: `working`,
-`blocked`, shipping, bickering — live.
-
-It does approximately nothing useful, and you'll leave it open all day anyway.
+While Claude Code grinds through your codebase, a pixel version sits at a desk doing the same — typing,
+getting blocked, stomping off to argue with QA about whether that's *really* a bug. Point it at your
+Claude Code / Codex / CI session and your agents clock in for real — `working`, `blocked`, shipping,
+bickering, live. It does approximately nothing useful, and you'll leave it open all day anyway.
 
 [Quick Start](#quick-start) · [Meet the Team](#meet-the-team) · [FAQ](#faq) · [中文版](README.zh-TW.md)
 
