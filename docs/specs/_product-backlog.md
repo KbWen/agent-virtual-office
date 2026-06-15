@@ -111,7 +111,7 @@ Wave A shipped (PR #166). Wave B closes per AC-SEQ (`do|refine|kill` + evidence)
   ≥120s}` is **unreachable** in production — S5 would render nothing; forcing it on a stable-sig
   long task violates S5's own kill-criterion ("never dim a genuine long task"). The honesty goal (a
   frozen agent must not keep showing a confident active ring) is already met earlier + better by
-  idleGapInfer (45s) + the 5-min `expiresAt` (`store.js:992`). The `WATCHDOG_TIMEOUT=120000` the
+  idleGapInfer (45s→thinking) + the 120s staleness sweep (`inferStatus.js` clearExternalStatus). The `WATCHDOG_TIMEOUT=120000` the
   spec cites is the **animation-chain** restart timer (`AgentCharacter.jsx:1251`), not a status
   timer — a spec conflation.
 - **S3 (≤7 status symbols) / S4 (banter) → open, GATED.** Per owner "先A後B": decide after

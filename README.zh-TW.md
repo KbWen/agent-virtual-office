@@ -203,8 +203,8 @@ subagent、回合都會自動更新辦公室 —— 不用手動接線、不用 
 
 ## 技術選型
 
-React 19 + Vite 6 · SVG（不用 canvas、不吃 GPU）· Zustand · Tailwind CSS v4 · `requestAnimationFrame` · 零後端。
-1276 個測試（分類器、推論、store、移動、事件誠實性）。深入細節 → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**。
+React 19 + Vite 8 · SVG（不用 canvas、不吃 GPU）· Zustand · Tailwind CSS v4 · `requestAnimationFrame` · 零後端。
+2000+ 個測試（分類器、推論、store、移動、事件誠實性）。深入細節 → **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**。
 
 ## 貢獻
 
