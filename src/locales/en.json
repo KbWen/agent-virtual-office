@@ -210,12 +210,10 @@
     "any-error": ["uh oh...", "something broke", "what now...", "not good..."],
 
     "react-colleague-blocked": ["someone's stuck...need help?", "who's calling for help?", "another blocker over there", "let me see what's wrong"],
-    "react-colleague-done": ["oh nice, they finished", "someone's done already~", "good pace!", "that was quick~"],
+    "react-colleague-done": ["oh nice~", "someone's done already~", "good pace!", "that was quick~"],
 
     "gossip": [
-      "heard the other team changed their API again",
       "what should we eat for lunch...",
-      "who wrote that bug yesterday",
       "it's Friday...want to leave early",
       "AI is getting crazy good",
       "who drank my coffee!?",
@@ -229,7 +227,6 @@
       "this PR review is taking forever...",
       "we should get an office cat",
       "my hands shake before every deploy",
-      "heard the new hire is really good",
       "time to write the weekly report...",
       "new coffee shop opened downstairs",
       "anyone want to order delivery together"

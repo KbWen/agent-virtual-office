@@ -1,4 +1,5 @@
 // Lightweight i18n — no dependencies, ~30 lines
+// S1: randomBubble + eventBubble route through rng() for seedable tests (AC-C1 / AC-S1a).
 // Usage: import { t, locale, setLocale } from './i18n'
 //   t('behaviorLabels.typing')  → "Typing" or "打字中"
 //   t('bubbles.typing')         → ["hmm...", ...] (array)
@@ -7,6 +8,7 @@
 import { useState, useEffect } from 'react'
 import en from './locales/en.json'
 import zhTW from './locales/zh-TW.json'
+import { rng } from './systems/rng.js'
 
 const LOCALES = { en, 'zh-TW': zhTW }
 
@@ -101,19 +103,21 @@ export function eventName(eventId) {
 }
 
 // Convenience: get a random bubble from a pool
+// S1: uses rng() so tests can seed this path (AC-C1).
 export function randomBubble(poolKey) {
   const pool = t(`bubbles.${poolKey}`)
   if (Array.isArray(pool) && pool.length > 0) {
-    return pool[Math.floor(Math.random() * pool.length)]
+    return pool[Math.floor(rng() * pool.length)]
   }
   return null
 }
 
 // Convenience: get event-specific bubble
+// S1: uses rng() so tests can seed this path.
 export function eventBubble(key) {
   const val = t(`eventBubbles.${key}`)
   if (Array.isArray(val)) {
-    return val[Math.floor(Math.random() * val.length)]
+    return val[Math.floor(rng() * val.length)]
   }
   return typeof val === 'string' ? val : null
 }

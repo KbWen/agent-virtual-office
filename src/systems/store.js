@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
 import { HOME_POSITIONS, OVERFLOW_POSITIONS, OVERFLOW_SLOT_BY_XY, clampToFloor, avoidOverlap, visuallyOverlapping } from './movementSystem.js'
-import { randomBubble, setNameResolver, behaviorLabel } from '../i18n'
+import { randomBubble, setNameResolver, behaviorLabel, t as i18nT } from '../i18n'
 import { generateContextBubble } from './contextBubble'
+import { rng } from './rng.js'
 import { detectProjectMode } from './platformDetect'
 import { STATUS_COLORS } from './constants.js'
 import { classifyTask, familyToBehavior, decideBehavior } from './classify.js'
@@ -13,6 +14,44 @@ import { recordEpisode, isNewBlockedEpisode } from './recurringFailure.js'
 import { AGENT_CARRY_FIELDS } from '../utils/statusFields.js'
 
 export { STATUS_COLORS }
+
+// ─── Store working-bubble fallback (AC-S1b / AC-C1) ───────────────────────────────────────────
+// The store's sigChanged path previously called randomBubble('working-status') unconditionally
+// on every real status/task change — effectively ~100% emission on every hook event. That is
+// the SECOND working-bubble emitter counted by AC-C1. Apply the same 0.20 chance gate + anti-
+// repeat as behaviorEngine (AC-S1b) so both paths are gated identically.
+// blocked-status and done-status are EXEMPT from the gate (those states deserve voice; honesty).
+const _storeRecentPicks = new Map()
+
+function _pickWithAntiRepeat(poolKey, agentId) {
+  const pool = i18nT(`bubbles.${poolKey}`)
+  if (!Array.isArray(pool) || pool.length === 0) return null
+  const recent = _storeRecentPicks.get(agentId) || []
+  const filtered = pool.length > recent.length
+    ? pool.filter((m) => !recent.includes(m))
+    : pool
+  return (filtered.length > 0 ? filtered : pool)[Math.floor(rng() * (filtered.length > 0 ? filtered : pool).length)]
+}
+
+function _storeFallbackBubble(agentId, status) {
+  // blocked and done always emit a bubble (no gate); working is gated at 0.20.
+  if (status === 'blocked') return randomBubble('blocked-status')
+  if (status === 'done')    return randomBubble('done-status')
+  // working: apply 0.20 chance gate (AC-S1b / AC-C1)
+  if (rng() >= 0.20) return null
+  // Anti-repeat ring (last 2 picks per agent)
+  if (!_storeRecentPicks.has(agentId)) _storeRecentPicks.set(agentId, [])
+  const picked = _pickWithAntiRepeat('working-status', agentId)
+  if (picked !== null && picked !== undefined) {
+    const recent = _storeRecentPicks.get(agentId)
+    recent.push(picked)
+    if (recent.length > 2) recent.shift()
+  }
+  return picked ?? null
+}
+
+// Exported for tests only.
+export function __clearStoreFallbackPicks() { _storeRecentPicks.clear() }
 
 // ─── Persistence helpers ───
 const PERSIST_KEY = 'office-state'
@@ -1011,7 +1050,7 @@ export const useOfficeStore = create((set) => ({
         // now keeps the prior bubble, which clears on its own doSchedule timer.
         if (sigChanged && !inGroup) {
           const bubble = generateContextBubble(u.agentId, u, ext)
-            || randomBubble(u.status === 'blocked' ? 'blocked-status' : u.status === 'done' ? 'done-status' : 'working-status')
+            || _storeFallbackBubble(u.agentId, u.status)
           if (bubble) nextAgent.bubble = bubble
         }
         agents[u.agentId] = nextAgent

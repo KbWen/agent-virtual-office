@@ -1,5 +1,6 @@
 import eventsData from '../config/officeEvents.json'
-import { randomBubble } from '../i18n'
+import { randomBubble, t } from '../i18n'
+import { rng } from './rng.js'
 
 // 70-80% desk time like Stardew Valley NPCs / Pixel-Agents
 // Characters stay at desks 30-120s, walk only occasionally.
@@ -78,7 +79,7 @@ function weightedRandom(weights) {
   const keys = Object.keys(weights)
   let total = 0
   for (const key of keys) total += weights[key]
-  let r = Math.random() * total
+  let r = rng() * total
   for (const key of keys) {
     r -= weights[key]
     if (r <= 0) return key
@@ -114,17 +115,40 @@ function pickBehavior(agentId, category) {
   const baseRole = agentId.includes('~') ? agentId.split('~').pop() : agentId
   const valid = getValidBehaviors(category, baseRole)
   if (valid.length === 0) return FALLBACK_BEHAVIOR
-  return valid[Math.floor(Math.random() * valid.length)]
+  return valid[Math.floor(rng() * valid.length)]
 }
 
-function pickMessage(msgKey) {
+/**
+ * Pick a random message from the pool identified by msgKey.
+ *
+ * AC-S1a: caller-owned anti-repeat ring buffer. `recent` is a caller-managed array of the
+ * last N picks (max 2). pickMessage filters out those entries before selecting, so in a pool
+ * of ≥3 lines the same line can never be returned twice in a row. The buffer is NOT
+ * module-global — it lives in the caller's scope (getNextBehavior / transient agent slot).
+ * pickMessage itself is a pure function given (msgKey, recent).
+ *
+ * @param {string|null} msgKey
+ * @param {string[]} recent  caller-owned last-picks ring (max 2); default []
+ * @returns {string|null}
+ */
+export function pickMessage(msgKey, recent = []) {
   if (!msgKey) return null
-  // Try i18n locale first, fall back to officeEvents.json
-  const localized = randomBubble(msgKey)
-  if (localized) return localized
-  const pool = eventsData.bubbleMessages?.[msgKey]
-  if (!pool || pool.length === 0) return null
-  return pool[Math.floor(Math.random() * pool.length)]
+  // Try i18n locale first (full array), then fall back to officeEvents.json
+  let pool = null
+  const i18nPool = t(`bubbles.${msgKey}`)
+  if (Array.isArray(i18nPool) && i18nPool.length > 0) {
+    pool = i18nPool
+  } else {
+    const evtPool = eventsData.bubbleMessages?.[msgKey]
+    if (Array.isArray(evtPool) && evtPool.length > 0) pool = evtPool
+  }
+  if (!pool) return null
+  // Anti-repeat: filter out last-2 picks only if the pool is large enough
+  const filtered = pool.length > recent.length
+    ? pool.filter((m) => !recent.includes(m))
+    : pool
+  if (filtered.length === 0) return pool[Math.floor(rng() * pool.length)]
+  return filtered[Math.floor(rng() * filtered.length)]
 }
 
 // Resolve a duration range to a concrete ms value. Guards against a malformed
@@ -135,12 +159,14 @@ function randomDuration(range) {
   if (!Array.isArray(range) || range.length < 2) return DEFAULT_DURATION
   const [min, max] = range
   if (!Number.isFinite(min) || !Number.isFinite(max)) return DEFAULT_DURATION
-  return min + Math.random() * (max - min)
+  return min + rng() * (max - min)
 }
 
-// Status-specific bubble chance and message pools
+// Status-specific bubble chance and message pools.
+// AC-S1b: working.chance lowered 0.55 → 0.20 (REDUCE-not-add; see spec AC-C1 / baseline fixture).
+// blocked and done are UNCHANGED (honesty: those states deserve voice).
 const STATUS_BUBBLE = {
-  working: { chance: 0.55, pool: 'working-status' },
+  working: { chance: 0.20, pool: 'working-status' },
   blocked: { chance: 0.75, pool: 'blocked-status' },
   done:    { chance: 0.65, pool: 'done-status' },
 }
@@ -168,6 +194,27 @@ const moodModifiers = {
   // just not a clutter of constant transit. `social` kept at 20 (chatting is the charm).
   idle:       { work: 42, daily: 22, social: 20, away: 16 },
 }
+
+// AC-S1a: caller-owned anti-repeat ring buffer, per-agent transient slot.
+// The map is keyed by agentId; each slot holds the last 2 picked message strings.
+// NOT persisted — exists only in module memory for the lifetime of the page/process.
+// Mirrors the pairHuddle.js / pokeReaction.js pattern for transient per-agent state.
+const _recentPicks = new Map()
+
+function getRecentPicks(agentId) {
+  if (!_recentPicks.has(agentId)) _recentPicks.set(agentId, [])
+  return _recentPicks.get(agentId)
+}
+
+function pushRecentPick(agentId, msg) {
+  if (!msg) return
+  const buf = getRecentPicks(agentId)
+  buf.push(msg)
+  if (buf.length > 2) buf.shift()
+}
+
+// Exported for tests only — allows clearing the ring in beforeEach.
+export function __clearRecentPicks() { _recentPicks.clear() }
 
 export function getNextBehavior(agentId, status = 'idle', hour = new Date().getHours(), mood = 'normal', teamPulse = 0) {
   // Start with status-based weights, then apply hour modifiers
@@ -205,24 +252,30 @@ export function getNextBehavior(agentId, status = 'idle', hour = new Date().getH
   const category = weightedRandom(weights)
   const behavior = pickBehavior(agentId, category)
 
+  // AC-S1a: use per-agent ring buffer for anti-repeat
+  const recent = getRecentPicks(agentId)
+
   // Mood-specific messages get first priority
   let message = null
   const moodBubble = MOOD_BUBBLE[mood]
-  if (moodBubble && Math.random() < moodBubble.chance) {
-    message = pickMessage(moodBubble.pool)
+  if (moodBubble && rng() < moodBubble.chance) {
+    message = pickMessage(moodBubble.pool, recent)
   }
 
   // Then status-specific messages
   if (!message) {
     const statusBubble = STATUS_BUBBLE[status]
-    if (statusBubble && Math.random() < statusBubble.chance) {
-      message = Math.random() < 0.6
-        ? pickMessage(statusBubble.pool)
-        : pickMessage(behavior.msgs)
+    if (statusBubble && rng() < statusBubble.chance) {
+      message = rng() < 0.6
+        ? pickMessage(statusBubble.pool, recent)
+        : pickMessage(behavior.msgs, recent)
     } else {
-      message = Math.random() < 0.5 ? pickMessage(behavior.msgs) : null
+      message = rng() < 0.5 ? pickMessage(behavior.msgs, recent) : null
     }
   }
+
+  // Record pick in ring buffer for anti-repeat
+  pushRecentPick(agentId, message)
 
   const duration = randomDuration(behavior.duration)
 
