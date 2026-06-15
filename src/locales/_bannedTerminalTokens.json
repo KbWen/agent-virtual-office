@@ -1,0 +1,17 @@
+{
+  "_comment": "AC-O2 denylist — open-ended ambient pools only (gossip, react-colleague-*, banter, murmurs). Status-ack pools (*-working/*-done/*-error) are EXEMPT (licensed status echo). This file is the T1 machine-gate artifact for ADR-007 D2.",
+  "_scope_note": "Lint targets: gossip, react-colleague-*, banter (future), murmurs (future). Out of scope: contextBubbles.*-working, *-done, *-error, bubbles.*, eventBubbles.*, skillBubbles.*, statusLabels.*.",
+  "en": {
+    "_comment": "Case-insensitive word-boundary match on these work-outcome STEMS.",
+    "stems": ["fix", "solv", "decid", "final", "done", "nail", "ship", "merg", "wrap"]
+  },
+  "zh": {
+    "_comment": "Substring match on completion verb+了 collocations. NOT the bare particle 了. Negation lookbehind: if immediately preceded by a zhNegationPrefix, the match does NOT fire.",
+    "completionCollocations": [
+      "搞定了", "修好了", "弄好了", "做完了", "完成了", "解決了",
+      "處理好了", "結案了", "收工了", "上線了", "改完了", "收尾了",
+      "決定了", "定案", "大功告成", "通過了", "搞掂"
+    ],
+    "zhNegationPrefixes": ["沒", "未", "不", "還沒", "難", "很難", "快", "差點", "還在"]
+  }
+}
