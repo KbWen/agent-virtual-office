@@ -988,7 +988,9 @@ export const useOfficeStore = create((set) => ({
           // working/blocked: 5 min expiry — long-running tool calls (build, test suite, npm install)
           // can take >30s with no hook event between PreToolUse and PostToolUse; a shorter
           // expiry caused the workflow banner to flicker off mid-run and then self-heal.
-          // done: 10s expiry (brief celebration then back to idle)
+          // NOTE: in practice the 120s staleness sweep (inferStatus.js clearExternalStatus) clears a
+          // static external status first, so this 5-min value is a rarely-reached backstop, not the
+          // primary expiry path. done: 10s expiry (brief celebration then back to idle)
           expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
           changedAt: sigChanged ? now : (Number.isFinite(prevExt.changedAt) ? prevExt.changedAt : now),
         }

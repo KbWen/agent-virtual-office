@@ -350,7 +350,7 @@ agent.groupTarget   // { x, y } — AgentCharacter useEffect 監聽此值觸發�
 
 ## 多 Worktree 會話架構
 
-See also: [ADR-002 — Multi-Worktree Session Design](../adr/ADR-002-multi-worktree-session-design.md)
+See also: [ADR-002 — Multi-Worktree Session Design](adr/ADR-002-multi-worktree-session-design.md)
 
 ### 會話文件命名
 
