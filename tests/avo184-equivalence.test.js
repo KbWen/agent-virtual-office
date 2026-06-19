@@ -62,6 +62,24 @@ describe('A. fresh status transitions', () => {
     expect(dev.behavior).toBe(decideBehavior({ task: 'Bash', role: 'dev', status: 'working', workflow: null }))
   })
 
+  it('A1b carry fields (label/hint/reasonCode/skill) pass through; absent → null', () => {
+    // AGENT_CARRY_FIELDS = task,label,hint,reasonCode,activeFile,skill — buildExtEntry carries each
+    // via `u[f] || null` (activeFile handled separately). Closes the review-flagged coverage gap:
+    // reasonCode is honesty-relevant (drives blocked-reason tags) and must not silently drift.
+    apply([{ agentId: 'dev', status: 'working', task: 'Bash', label: 'Running tests', hint: 'npm test', reasonCode: 'permission-denied', skill: 'tdd' }])
+    const ext = st().externalStatus.dev
+    expect(ext.label).toBe('Running tests')
+    expect(ext.hint).toBe('npm test')
+    expect(ext.reasonCode).toBe('permission-denied')
+    expect(ext.skill).toBe('tdd')
+    apply([{ agentId: 'qa', status: 'working', task: 'Bash' }])
+    const qa = st().externalStatus.qa
+    expect(qa.label).toBeNull()
+    expect(qa.hint).toBeNull()
+    expect(qa.reasonCode).toBeNull()
+    expect(qa.skill).toBeNull()
+  })
+
   it('A2 blocked: scratch-head/confused + blocked-ledger +1 + activity logged', () => {
     apply([{ agentId: 'dev', status: 'working', task: 'Bash' }])
     apply([{ agentId: 'dev', status: 'blocked', task: 'Bash' }])
