@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-19T05:14:49Z
-- **Update Sequence**: 94
+- **Last Updated**: 2026-06-19T05:23:18Z
+- **Update Sequence**: 95
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -163,6 +163,12 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-avo-174-title-inference-honesty-2026-06-19 (PR #174 — title channel can't fake blocked/done)
+
+- Shipped AVO-174 (quick-win, honesty). The document-title inference channel (`inferStatus.js` `listenTitleChanges`, wired at the channel list) injected `status:'blocked'` from any tab title matching `error|failed|blocked|stuck` and `status:'done'` from `done|complete|success|finished` — fabricating the most-alarming / a conclusive state from the weakest signal (e.g. an unrelated browser tab titled "build failed"). Removed both conclusive patterns; the channel is now capped to the working role-hints only. Extracted a pure `classifyTitle(title)` (exported) that can only ever return `status:'working'` or null; `listenTitleChanges` uses it.
+- Verify: new `tests/titleInference.test.js` (working-hint regression + "never blocked/done" + null cases); **test-the-test verified** (re-adding the blocked pattern fails the honesty assertion). Full suite **2172 pass** (+3); build clean.
+- Tests: Pass
 
 ### Ship-fix-honesty-a11y-bugs-2026-06-19 (PR #173 — AVO-171/172/173 + AVO-175/176/177 + audit catalogue)
 

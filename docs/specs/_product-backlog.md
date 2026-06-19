@@ -104,7 +104,9 @@ last_updated: 2026-06-15
 > +8 tests), AVO-172 (notifier recurring-prune + reset-helper, +1 test), **AVO-173** (idle-gap now reads
 > `task` from externalStatus so a busy tool-using agent isn't mislabelled `thinking`; the old test used a
 > non-production store shape — production-shape regression added + test-the-test verified, +1 test),
-> AVO-175/176/177 (a11y). **Open:** AVO-174 (P3 — read `inferStatus.js` first), AVO-178/179 (test debt).
+> AVO-175/176/177 (a11y). **AVO-174** (title-inference channel can no longer inject `blocked`/`done` —
+> removed both conclusive patterns; channel capped to working role-hints; pure `classifyTitle` extracted
+> + tested, test-the-test verified; PR #174). **Open:** AVO-178/179 (test debt), AVO-163..170 (optimizations).
 
 | # | Defect | Severity | Evidence (file:line) | Fix (small + reversible) | Verified |
 |---|---|---|---|---|---|
