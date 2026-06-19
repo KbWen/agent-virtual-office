@@ -147,6 +147,25 @@ last_updated: 2026-06-15
 
 ---
 
+## Round-2 Sweep — verified LOW/MED items (2026-06-19)
+
+> A second multi-agent bug/tech-debt sweep (owner: "多多測試檢查"). **No CRITICAL/HIGH bugs; the
+> codebase is mature/healthy.** Every item below was re-verified by reading the cited file:line.
+> Findings are PRE-EXISTING (the just-shipped AVO-165/167/169 passed a fresh adversarial review =
+> clean). Dismissed FALSE POSITIVES (the agents only grepped `tests/`, missing co-located
+> `src/systems/*.test.js`): "dailyCard/lighting/ambientSound have no tests" — all three DO have
+> co-located tests (same class as the AVO-178/179 false positives). [[reference_agents_slice_vs_externalstatus]]
+
+| # | Item | Sev | Evidence (file:line) | Fix |
+|---|---|---|---|---|
+| AVO-180 | **Eviction memory-leak** — `_recentPicks` (`behaviorEngine.js:210`), `_storeRecentPicks` (`store.js:24`), and per-agent `recurringFailureLog` keys are NOT pruned when a dynamic `slug~role` worktree agent is evicted (`store.js:~1141`). Slow unbounded growth in long multi-worktree sessions. **Owner-relevant** (runs many parallel worktree agents). | MED | grep: only `__clearRecentPicks()` (test-only); `idleGapInfer` DOES prune on eviction (precedent) | export `pruneRecentPicks(id)` + delete the 3 keys at the eviction site, mirroring `idleGapInfer` |
+| AVO-181 | **Duplicated set/constant drift** — the blocked-family set lives in 4 copies (`petState.js:58` · `desktopNotifier.js:44` · `recurringFailure.js` · `agentInspectorModel.js:21` — AVO-169 added the 4th); `VALID_ROLES` ×3; the "working\|blocked" active-count rule ×3 (and `planning` is silently excluded from all 3). | MED | grep-confirmed | hoist canonical sets into `statusContract.mjs`, import everywhere |
+| AVO-182 | **Defensive-guard gaps (latent)** — `charName(null)` has no guard (`i18n.js:96`); `darken()` returns `#NaNNaNNaN` and caches it for a non-`#RRGGBB` config color (`AgentCharacter.jsx:248`); `u[f] \|\| null` coerces a valid empty-string carry field to null (`store.js:980`, `agentRouter.js:128`); ambientSound gesture listeners use `{once:false}` (`ambientSound.js:292`); `validatePersistedDailyDoneLedger` has no upper cap. | LOW | all read-verified | add the cheap guards (nullish not falsy; hex validation; `{once:true}`) |
+| AVO-183 | **INVESTIGATE (MED edge)** — `pushOutOfObstacle` single-pass: a point escaped from rect A can land in rect B (`movementSystem.js:94-108`); shorthand-POST copies body-level `activeFile` to ALL roles → could falsely trigger the pair-huddle overlay (`statusContract.mjs:148-157`). Both are rare geometry/payload edges; verify with a repro before fixing. | MED | reported, needs a repro | confirm-then-fix |
+| AVO-184 | **Complexity / dead code** — `applyExternalStatus` is a 372-line god-reducer on the hot path (`store.js:827`); `startStatusIntegration` 287-line closure (`inferStatus.js:709`); dead `MIN_AGENT_DIST` export (`constants.js:47`); `package-lock.json` version skew (1.4.0 vs 1.6.0). | MED maint. | grep-confirmed | extract named helpers; delete dead export; regen lockfile |
+
+---
+
 ## Closed
 
 > Decided-out items, kept so they are not silently re-proposed. `Cancelled` = won't build. Each
