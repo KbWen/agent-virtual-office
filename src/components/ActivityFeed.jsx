@@ -13,25 +13,25 @@ const typeIcons = {
 export default function ActivityFeed({ mode = 'full' }) {
   useLocale()
   const [collapsed, setCollapsed] = useState(true)
-  const activityLog = useOfficeStore(useShallow((s) => s.activityLog))
-  const activeEvent = useOfficeStore(useShallow((s) => s.activeEvent))
+  // AVO-141: source the REAL-events eventFeed (FEED_ORIGINS = hook/event/inferred), NOT the all-origins
+  // activityLog. The old source surfaced organic officeLife theater (the 8-50/min behavior ticks) PLUS an
+  // unshift'd decorative activeEvent banner (lunch/tea/meeting set-pieces) as if they were real activity —
+  // fabricated liveliness (ADR-008). The roster already fixed this internally via eventFeed; this floating
+  // feed was never migrated. eventFeed is the same write-time, FEED_ORIGINS-filtered buffer the roster reads.
+  // Subscribe to eventFeed + rosterMode so the widget re-renders when either changes, but READ the
+  // values via getState() below so render reflects CURRENT store state. A bare reactive selector returns
+  // the INITIAL snapshot under react-dom/server (this project's render-test tool), so getState() is the
+  // SSR-correct read — the same dual-read idiom NarrowRoster uses (a sig subscription + getState()).
+  const eventFeedSig = useOfficeStore(useShallow((s) => s.eventFeed))
+  const rosterMode = useOfficeStore((s) => s.rosterMode)
 
-  // Inject live event into feed
-  const entries = useMemo(() => {
-    const items = [...activityLog]
-    if (activeEvent) {
-      items.unshift({
-        id: 'live-event',
-        timestamp: Date.now(),
-        type: 'event',
-        agentId: null,
-        message: activeEvent.id ? eventName(activeEvent.id) : activeEvent.name,
-      })
-    }
-    return items.slice(0, 20)
-  }, [activityLog, activeEvent])
+  const entries = useMemo(() => useOfficeStore.getState().eventFeed.slice(0, 20), [eventFeedSig])
 
-  if (mode === 'panel') return null // too compact for panel mode
+  if (mode === 'panel') return null  // too compact for panel mode
+  // AVO-141 dedup: in roster mode the inline presence-rail feed already shows these real events, so the
+  // floating widget is redundant — self-hide (mirrors the mode==='panel' guard). Office mode keeps it.
+  // `rosterMode` (reactive) re-renders on toggle; getState() is the authoritative current value (SSR-safe).
+  if (rosterMode || useOfficeStore.getState().rosterMode) return null
 
   const hasEntries = entries.length > 0
   const unreadCount = entries.filter(e => Date.now() - e.timestamp < 30000).length
@@ -105,7 +105,7 @@ function ActivityEntry({ entry }) {
           <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto shrink-0">{ago}</span>
         </div>
         <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
-          {entry.message}
+          {entry.type === 'event' ? (eventName(entry.message) || entry.message) : entry.message}
         </div>
       </div>
     </div>
