@@ -1,4 +1,5 @@
 import { classifyTask } from '../systems/classify.js'
+import { formatTimeAgo } from '../utils/formatTime'
 
 // The single line of "what is this agent doing" the inspector shows. The hook's
 // human `label` ("✏️ 改 App.jsx", "❌ npm test failed") is richest, so it wins.
@@ -11,6 +12,20 @@ export function inspectorTaskLabel(ext) {
   if (ext.label) return ext.label
   if (ext.task) return classifyTask(ext.task).visualLabel
   return null
+}
+
+// AVO-169: how long the agent has been in an ACTIONABLE waiting state, shown inline in the inspector.
+// Honest by construction — driven only by the real `changedAt` (stamped on a real status/task change),
+// returns null below 30s or when `changedAt` is missing (NEVER a fabricated "0m" freshly-entered
+// reading). Compact form (e.g. "3m"). Restricted to the two states where "how long" is actionable.
+const STATE_DURATION_STATUSES = new Set(['blocked', 'awaiting-approval'])
+const STATE_DURATION_MIN_MS = 30000
+
+export function stateDurationLabel(status, changedAt, now = Date.now()) {
+  if (!STATE_DURATION_STATUSES.has(status)) return null
+  if (!Number.isFinite(changedAt)) return null
+  if (now - changedAt < STATE_DURATION_MIN_MS) return null
+  return formatTimeAgo(changedAt, { compact: true })
 }
 
 export function countAgentDoneToday(activityLog, agentId, now = Date.now()) {

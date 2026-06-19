@@ -85,4 +85,8 @@ export const STATUS_COLORS = {
   done: '#5CB88A',
   blocked: '#E24B4A',
   planning: '#8B7FD6',
+  // AVO-167: 'awaiting-approval' ("waiting on YOU", idle-gap-inferred from blocked+90s) gets its own
+  // cool cyan so it is visually distinct from a normal idle agent in the scene — and distinct from
+  // working amber + blocked red. Contrast-guarded (theme.test.js iterates STATUS_COLORS).
+  'awaiting-approval': '#1E9FD4',
 }

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { charName, behaviorLabel, t, useLocale } from '../i18n'
 import { formatTimeAgo } from '../utils/formatTime'
-import { buildAgentInspectorMeta, inspectorTaskLabel } from './agentInspectorModel'
+import { buildAgentInspectorMeta, inspectorTaskLabel, stateDurationLabel } from './agentInspectorModel'
 
 // POINT 2 follow-up: the inspector counter-scales so its small detail fonts (8–9px) stay readable
 // at ANY office scale. Only ONE inspector is ever open and it is clamped inside the viewBox, so it
@@ -18,6 +18,7 @@ const statusEmoji = {
   done: '✅',
   blocked: '🚫',
   planning: '🧠',
+  'awaiting-approval': '⏳',  // AVO-167: "waiting on you"
 }
 
 export default function AgentInspector() {
@@ -66,6 +67,8 @@ export default function AgentInspector() {
   const name = charName(selectedAgent)
   const status = agent.status || 'idle'
   const statusLabel = t(`statusLabels.${status}`, status)
+  // AVO-169: inline "how long" for the actionable waiting states (honest, real changedAt, ≥30s only).
+  const stateSince = stateDurationLabel(status, ext?.changedAt)
   const currentBehavior = behaviorLabel(agent.behavior)
   const task = inspectorTaskLabel(ext)
   const color = agent.color || '#888'
@@ -159,7 +162,7 @@ export default function AgentInspector() {
         {/* Status badge */}
         <circle cx={12} cy={42} r={5} fill={STATUS_COLORS[status] || color || '#888'} />
         <text x={22} y={45} fontSize="10" fontFamily="monospace" fill={STATUS_COLORS[status] || color || '#888'} fontWeight="bold">
-          {statusEmoji[status]} {statusLabel}
+          {statusEmoji[status]} {statusLabel}{stateSince ? ` · ${stateSince}` : ''}
         </text>
 
         {/* Current behavior */}

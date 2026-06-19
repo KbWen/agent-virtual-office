@@ -1,7 +1,7 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { countAgentDoneToday, inspectorTaskLabel } = await import('../src/components/agentInspectorModel.js')
+const { countAgentDoneToday, inspectorTaskLabel, stateDurationLabel } = await import('../src/components/agentInspectorModel.js')
 const { useOfficeStore } = await import('../src/systems/store.js')
 
 describe('inspectorTaskLabel — task line for the inspector', () => {
@@ -466,6 +466,43 @@ describe('STATUS_COLORS — planning entry (AVO-132)', () => {
     expect(planning).not.toBe(blocked)
     expect(planning).not.toBe(done)
     expect(planning).not.toBe(idle)
+  })
+})
+
+describe('STATUS_COLORS — awaiting-approval entry (AVO-167)', () => {
+  it('has an awaiting-approval entry distinct from every other status colour', async () => {
+    const { STATUS_COLORS } = await import('../src/systems/constants.js')
+    const c = STATUS_COLORS['awaiting-approval']
+    expect(c).toBeDefined()
+    expect(c).toMatch(/^#/)
+    for (const other of ['working', 'blocked', 'done', 'idle', 'planning']) {
+      expect(c).not.toBe(STATUS_COLORS[other])
+    }
+  })
+})
+
+describe('stateDurationLabel — inline waiting-state duration (AVO-169)', () => {
+  it('returns a compact duration for blocked/awaiting-approval once past 30s', () => {
+    const now = Date.now()
+    expect(stateDurationLabel('blocked', now - 120_000, now)).toBe('2m')
+    expect(stateDurationLabel('awaiting-approval', now - 45_000, now)).toBe('45s')
+  })
+  it('returns null below the 30s floor (no noise)', () => {
+    const now = Date.now()
+    expect(stateDurationLabel('blocked', now - 10_000, now)).toBeNull()
+    expect(stateDurationLabel('awaiting-approval', now - 29_000, now)).toBeNull()
+  })
+  it('returns null for non-waiting statuses', () => {
+    const now = Date.now()
+    expect(stateDurationLabel('working', now - 120_000, now)).toBeNull()
+    expect(stateDurationLabel('idle', now - 120_000, now)).toBeNull()
+    expect(stateDurationLabel('done', now - 120_000, now)).toBeNull()
+  })
+  it('never fabricates a duration when changedAt is missing/invalid', () => {
+    const now = Date.now()
+    expect(stateDurationLabel('blocked', null, now)).toBeNull()
+    expect(stateDurationLabel('blocked', undefined, now)).toBeNull()
+    expect(stateDurationLabel('blocked', NaN, now)).toBeNull()
   })
 })
 
