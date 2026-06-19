@@ -26,6 +26,7 @@
  */
 import { t, charName } from '../i18n.js'
 import { recurringInfo } from '../systems/recurringFailure.js'
+import { BLOCKED_FAMILY } from '../systems/constants.js'  // AVO-181: single source for the blocked family
 
 const DEFAULT_BLOCKED_THRESHOLD_MS = 30_000
 const POLL_INTERVAL_MS = 5_000
@@ -37,11 +38,10 @@ const notifiedFor  = new Map()  // agentId → blocked-since timestamp we alread
 // Reset on leaving the blocked family so a fresh recurrence (after recovery) can re-fire once.
 const recurringNotifiedFor = new Map()
 
-// Statuses that the idle-gap inferrer reclassifies FROM 'blocked' (fix #2).
-// These are still considered part of the same blocked episode for dedupe
-// purposes — clearing blockedSince/notifiedFor here would cause a 2nd OS
-// notification when the same unanswered prompt re-asserts 'blocked'.
-const BLOCKED_DERIVED = new Set(['awaiting-approval'])
+// AVO-181: the blocked family (real `blocked` + its idle-gap-inferred `awaiting-approval`) is
+// `BLOCKED_FAMILY` (imported). Both are the SAME blocked episode for dedupe — clearing
+// blockedSince/notifiedFor on the awaiting-approval flap would cause a 2nd OS notification when
+// 'blocked' re-asserts for the same unanswered prompt.
 
 export function getNotificationState() {
   if (typeof Notification === 'undefined') return 'unsupported'
@@ -133,7 +133,7 @@ function tick(store, opts, now = Date.now) {
   const agents = store.getState().agents
   for (const id of Object.keys(agents)) {
     const a = agents[id]
-    if (a?.status === 'blocked' || BLOCKED_DERIVED.has(a?.status)) {
+    if (BLOCKED_FAMILY.has(a?.status)) {
       // 'blocked' and derived statuses (e.g. 'awaiting-approval' inferred by idle-gap)
       // are treated as the SAME episode. If the episode started while status was 'blocked'
       // and idle-gap reclassified to 'awaiting-approval', we must not clear blockedSince —

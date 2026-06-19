@@ -32,6 +32,13 @@ export const ACTIVE_SESSION_STATUSES = new Set([
   'working', 'thinking', 'blocked', 'awaiting-approval', 'planning',
 ])
 
+// AVO-181: the "needs-you" blocked family — a real `blocked` + its idle-gap-inferred
+// `awaiting-approval` counterpart (an unanswered permission prompt). SINGLE source for the pet
+// hide-on-blocker guard (petState), the recurring-episode continuation check (recurringFailure), the
+// inspector duration line (agentInspectorModel), and the notifier episode gate (desktopNotifier) —
+// so extending the family is ONE edit, not 4 drifting copies.
+export const BLOCKED_FAMILY = new Set(['blocked', 'awaiting-approval'])
+
 // The behavior watchdog (AgentCharacter) restarts the scheduling chain when a
 // behavior value sits unchanged past WATCHDOG_TIMEOUT, treating it as a dead
 // chain. Skip that restart when behavior is being driven/held externally:
