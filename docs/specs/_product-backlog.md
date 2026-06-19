@@ -62,7 +62,7 @@ last_updated: 2026-06-15
 | AVO-163 | Static idle agents get a phase-desynced **breathing/blink micro-loop** (+ ease-out motion) so they read "alive" with zero new assets. | Fires ONLY in genuine idle; breathe is IDENTICAL regardless of status (never implies progress/emotion); distinct from the existing supervising-breathe / working-pulse rings. | ~ (polish on existing motion) | `AgentCharacter.jsx` `CharacterPixelSprite` (idle body is static today, ~L368-397) |
 | AVO-164 | An all-idle office renders a deliberate **"all quiet / all caught up"** calm state (vs reading dead) → honest permission-to-stop. | No streak, no "agents miss you", no fake activity to fill the screen. | ✅ (reframes empty, adds nothing) | new calm-state branch; not present today |
 | ✅ AVO-165 | **Walk-rhythm — concurrent out-trip soft-cap** (panel chose this over weight reduction: the felt "always walking" is a CONCURRENCY effect, 8×~32%≈94%, not a per-agent rate the two prior tunes could fix). `MAX_CONCURRENT_OUT_TRIPS=2`; at cap an ambient agent stays at its desk this cycle. | R1-safe (keeps agent AT desk, never relocates a working agent); `social` weight untouched; +4 tests. | ✅✅ (fewer simultaneous walkers) | `behaviorEngine.js` getNextBehavior + `AgentCharacter.jsx` journeyTarget count |
-| AVO-166 | Codify a **"no-fabricated-need" rule** (ban streak / decay-if-you-leave / fake urgency / relationship-memory / unbound decorative channels) into the guardrails — makes the honesty boundary enforceable for every future ambient/pet proposal. | Doc/guardrail only — gates future proposals, fabricates nothing. | ✅ (a guard, not a feature) | `.agent/rules/` guardrails |
+| ✅ AVO-166 | **DONE (ADR-008, 2026-06-19)** — codified the "no-fabricated-need" rule as an N1–N7 checklist that gates every future ambient/pet/companion/charm/notification feature (anti decay/streak/loot; pet hides on blocker; no unbound decorative channel; honest-neutral degrade; real-clock variety; no engagement notification). | enforceable honesty boundary | ✅ (a guard, not a feature) | `docs/adr/ADR-008-no-fabricated-need-ambient-honesty.md` |
 | AVO-167 | Give the **`awaiting-approval` ("waiting on you") state its own ring + name-tag colour** — today it falls back to identity colour and reads like a normal idle agent. | State already inferred from real signals (`idleGapInfer`); new colour must pass the existing contrast guard. | ~ (one colour entry + one ring branch) | `constants.js:82-88` STATUS_COLORS · `AgentCharacter.jsx:1411` ring branch |
 | AVO-168 | **Ambient events rarer + more rewarding**: widen the daily/rare event intervals and give a rare event a slightly bigger juice payload. | Juice stays gated on real signals (`eventEligible`); no new event types added. | ✅ (less churn) | `constants.js:53-54` intervals · `eventJuice.js:15-16` counts |
 | AVO-169 | Show **elapsed-time-in-state** ("blocked for 3m" / "waiting for 3m") in the agent inspector. | Driven only by real `changedAt`; inspector-only (no scene clutter). | ✅ (reuses `formatTimeAgo`) | `AgentInspector.jsx:~200` · `NarrowRoster.jsx:~59` |
@@ -71,12 +71,12 @@ last_updated: 2026-06-15
 > **AC-SEQ:** each resolves to `do | refine | kill` with evidence when picked up. Likely first
 > pickups (owner pacing lean + core status-visibility value): **AVO-165** (walk-rhythm — measure
 > `getNextBehavior` split first) + **AVO-167** (await-you visibility). AVO-168/169/170 are cheap
-> measurable tunes; AVO-163/164 need the chill panel first; AVO-166 is a doc landable anytime (→ ADR-008, PR #176).
+> measurable tunes; AVO-163/164 need the chill panel first; **AVO-166 is DONE (ADR-008)**.
 >
-> **Expert panel + build (2026-06-19, PR #177):** a 4-lens adversarial panel (cozy / honesty / REDUCE-skeptic
+> **Expert panel + build (2026-06-19, PR #177 — SHIPPED):** a 4-lens adversarial panel (cozy / honesty / REDUCE-skeptic
 > / status-legibility) verdicted **AVO-165 + AVO-167 + AVO-169 → DO**; **AVO-168 → descope (rarity-only,
 > drop the bigger-juice)**; **AVO-163 / AVO-164 → defer** (163 fights the owner's "calmer" goal; 164
-> contested). The three DOs are **built + tested, awaiting owner vibe confirm**: AVO-167 cyan
+> contested). The three DOs shipped (visually verified via headless render): AVO-167 cyan
 > `awaiting-approval` ring + name-pill (contrast-guarded), AVO-169 inline "blocked · 3m" in the inspector
 > (honest `changedAt`, ≥30s, hide-when-null), AVO-165 concurrent out-trip soft-cap (`MAX_CONCURRENT_OUT_TRIPS=2`).
 >
