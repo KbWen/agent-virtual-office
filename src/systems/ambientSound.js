@@ -289,8 +289,8 @@ export function startAmbientSound(store) {
       window.removeEventListener('keydown', onGesture)
       gestureCleanup = null
     }
-    window.addEventListener('pointerdown', onGesture, { once: false })
-    window.addEventListener('keydown', onGesture, { once: false })
+    window.addEventListener('pointerdown', onGesture, { once: true })  // AVO-182: the fired listener auto-removes even if removeGesture no-ops
+    window.addEventListener('keydown', onGesture, { once: true })
     gestureCleanup = removeGesture
   }
 

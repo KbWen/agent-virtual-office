@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-19T05:39:23Z
-- **Update Sequence**: 96
+- **Last Updated**: 2026-06-19T07:01:38Z
+- **Update Sequence**: 97
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -164,6 +164,13 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-round2-leaks-and-guards-2026-06-19 (PR #179 — AVO-180 eviction leak + AVO-182 guards)
+
+- Shipped the verified, well-scoped items from the round-2 bug/tech-debt sweep (quick-win). **AVO-180**: the multi-session eviction site (`store.js`) now prunes the per-agent transient module state of an evicted dynamic worktree agent — `pruneRecentPicks(id)` (new export from `behaviorEngine.js`), `_storeRecentPicks.delete(id)`, and a cloned-then-deleted `recurringFailureLog[id]` (never mutates a published log). Mirrors `idleGapInfer`'s existing eviction prune; closes an unbounded-Map leak relevant to the owner's many-worktree workflow. +1 regression test (rfLog pruned on eviction). **AVO-182** (crash/corruption guards): `charName` null/non-string guard (was `charId.includes('~')` → throw; +2 tests) · `darken` non-`#RRGGBB` passthrough (was caching `#NaNNaNNaN`) · ambientSound gesture listeners `{once:true}`.
+- Deferred (catalogued, NOT in this PR): AVO-181 (blocked-family/VALID_ROLES set-consolidation — a multi-file refactor of honesty-critical code, do deliberately) · AVO-183 (two MED movement/POST edge cases — verify with a repro first) · AVO-184 (god-reducer extraction — explicit refactor, ADR/plan-gated).
+- Verify: full suite **2184 pass** (+3); build clean; EOL/whitespace clean. The round-2 sweep also dismissed the "dailyCard/lighting/ambientSound untested" FALSE POSITIVES (co-located `src/systems/*.test.js` exist).
+- Tests: Pass
 
 ### Ship-fix-avo-174-title-inference-honesty-2026-06-19 (PR #174 — title channel can't fake blocked/done)
 

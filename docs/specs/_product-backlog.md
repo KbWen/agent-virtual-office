@@ -164,6 +164,14 @@ last_updated: 2026-06-15
 | AVO-183 | **INVESTIGATE (MED edge)** — `pushOutOfObstacle` single-pass: a point escaped from rect A can land in rect B (`movementSystem.js:94-108`); shorthand-POST copies body-level `activeFile` to ALL roles → could falsely trigger the pair-huddle overlay (`statusContract.mjs:148-157`). Both are rare geometry/payload edges; verify with a repro before fixing. | MED | reported, needs a repro | confirm-then-fix |
 | AVO-184 | **Complexity / dead code** — `applyExternalStatus` is a 372-line god-reducer on the hot path (`store.js:827`); `startStatusIntegration` 287-line closure (`inferStatus.js:709`); dead `MIN_AGENT_DIST` export (`constants.js:47`); `package-lock.json` version skew (1.4.0 vs 1.6.0). | MED maint. | grep-confirmed | extract named helpers; delete dead export; regen lockfile |
 
+> **Fix status (PR #179):** ✅ **AVO-180** (eviction prune — `pruneRecentPicks` + `_storeRecentPicks` +
+> cloned-`rfLog` delete at the multi-session eviction site; +1 regression test) · ✅ **AVO-182** (the
+> crash/corruption guards: `charName` null-guard +2 tests, `darken` non-`#RRGGBB` passthrough,
+> ambientSound `{once:true}`). **Open:** AVO-181 (set-consolidation — deferred: it's a multi-file
+> refactor of honesty-critical code, do deliberately not in a fix-sweep) · AVO-183 (verify the two MED
+> edge cases with a repro first) · AVO-184 (the god-reducer extraction is an explicit refactor — ADR/
+> plan-gated, not a casual fix).
+
 ---
 
 ## Closed

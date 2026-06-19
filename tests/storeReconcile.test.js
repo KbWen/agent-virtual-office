@@ -64,6 +64,30 @@ describe('applyExternalStatus — multi-session ghost reconciliation (R63)', () 
     expect(s.externalStatus['feat-a~dev']).toBeTruthy()
   })
 
+  it('AVO-180: prunes recurringFailureLog for an evicted dynamic agent (no unbounded leak)', () => {
+    const { applyExternalStatus } = useOfficeStore.getState()
+
+    // Tick 1: feat-b enters a recurring-reason blocked episode → it gets a recurringFailureLog entry.
+    applyExternalStatus(
+      [
+        { agentId: 'feat-a~dev', status: 'working', task: null, label: null, session: 'feat-a' },
+        { agentId: 'feat-b~dev', status: 'blocked', reasonCode: 'build-failed', task: null, label: null, session: 'feat-b' },
+      ],
+      { source: 'multi-session' },
+    )
+    expect(useOfficeStore.getState().recurringFailureLog['feat-b~dev']).toBeTruthy()
+
+    // Tick 2: feat-b's session ended → it is evicted. Its rfLog history must be pruned, not retained.
+    applyExternalStatus(
+      [{ agentId: 'feat-a~dev', status: 'working', task: null, label: null, session: 'feat-a' }],
+      { source: 'multi-session' },
+    )
+    const s = useOfficeStore.getState()
+    expect(s.agents['feat-b~dev']).toBeUndefined()                 // evicted
+    expect(s.recurringFailureLog['feat-b~dev']).toBeUndefined()    // AVO-180: pruned, not leaked
+    expect(s.agents['feat-a~dev']).toBeTruthy()                    // survivor unaffected
+  })
+
   it('does NOT evict dynamic agents on a non-multi-session update (single agent deliveries)', () => {
     const { applyExternalStatus } = useOfficeStore.getState()
 
