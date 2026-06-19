@@ -106,7 +106,13 @@ last_updated: 2026-06-15
 > non-production store shape — production-shape regression added + test-the-test verified, +1 test),
 > AVO-175/176/177 (a11y). **AVO-174** (title-inference channel can no longer inject `blocked`/`done` —
 > removed both conclusive patterns; channel capped to working role-hints; pure `classifyTitle` extracted
-> + tested, test-the-test verified; PR #174). **Open:** AVO-178/179 (test debt), AVO-163..170 (optimizations).
+> + tested, test-the-test verified; PR #174). **AVO-178/179 CLOSED as audit false-positives** — both
+> modules are already well-tested (movementSystem 54 cases / agentRouter 40 / contextBubble 27;
+> re-grep 2026-06-19). **Open:** AVO-163..170 (optimizations — need a chill panel + owner visual confirm).
+>
+> **All 9 Bugs & Correctness items resolved**: AVO-171/172/173/174/175/176/177 fixed+merged (PR #173/#174);
+> AVO-178/179 closed as false positives. Lesson: a subagent "no test coverage / glob-verified" claim must
+> be re-verified by a direct `grep tests/` — the audit agent saw only 5 of 100 test files.
 
 | # | Defect | Severity | Evidence (file:line) | Fix (small + reversible) | Verified |
 |---|---|---|---|---|---|
@@ -117,8 +123,8 @@ last_updated: 2026-06-15
 | AVO-175 | Reduced-motion gaps: `animate-pulse` ungated on `reducedMotion` at the health-dot + activeEvent pill + connection-hint (HTML layer; the SVG layer is fully gated). | P2 a11y | `ControlPanel.jsx:47,424` · `PixelOffice.jsx:1255` | read `reducedMotion`, conditionally drop `animate-pulse` | ✅ pattern-verified |
 | AVO-176 | Agent inspector ✕ close is a bare SVG `<text onClick>` — no keyboard path, no role/aria (Esc closes, but the visual target is keyboard/AT-invisible). | P2 a11y | `AgentInspector.jsx:150-152` | wrap in `role=button tabIndex=0 aria-label` + Enter/Space keydown | ✅ read-verified |
 | AVO-177 | i18n/AT leaks: `aria-label="working"` hardcoded English (zh-TW AT hears English); `aria.showOffice`/`aria.showList` missing from both locales; ActivityFeed toggle has `title` but no `aria-label`. | P3 a11y | `NarrowRoster.jsx:28,30` · `ControlPanel.jsx:296` · `ActivityFeed.jsx:42-45` | route through `t()` / add the two locale keys / add `aria-label` | ✅ read-verified |
-| AVO-178 | No test coverage for `movementSystem` (`calculatePath`/`lineHitsRect`) — the most complex pure-function cluster, with a documented past fuzz regression; a renderer-less regression is CI-invisible but visually obvious (agents through desks). | P2 debt | `movementSystem.js:281-307,635-673`; no `movementSystem.test.js` | add ~15 pure-function cases (no behavior change) | ✅ glob-verified |
-| AVO-179 | No test coverage for honesty-path inference (`agentRouter` routing, `contextBubble` generation) — a wrong-agent or mis-triggered cross-reaction would be CI-invisible. | P3 debt | `inference/agentRouter.js`, `systems/contextBubble.js` (no tests) | start with the pure mapping / `extractContext` functions | ✅ glob-verified |
+| ~~AVO-178~~ | **CLOSED — audit FALSE POSITIVE.** `movementSystem` is among the MOST-tested modules: `movementSystem.test.js` (54 cases, `calculatePath` ×18) · `lineHitsRect.test.js` (7) · `movementPathingDeep/Fuzz/Wedged` seeded suites. The audit's "no `movementSystem.test.js`" claim was wrong (it saw a stale 5-file glob). | — | none | no work — already covered | ❌ false positive (re-grep 2026-06-19) |
+| ~~AVO-179~~ | **CLOSED — audit FALSE POSITIVE.** Honesty-path inference is well-tested: `agentRouter.test.js` (40 cases: routeTaskToAgent ×57 / routeExternalAgents / distributeFallbackCount) · `contextBubble.test.js` (27: extractContext ×29 / generateContextBubble / toolToAction) · `generateCrossReaction` in `dialogueS1.test.js`. | — | none | no work — already covered | ❌ false positive (re-grep 2026-06-19) |
 
 > **Minor cleanups (low value — recorded, likely decline):** hour-14 drowsiness fires N sequential
 > `setAgentBehavior` writes vs one `setMultipleAgentGroupEvents` batch (`officeLife.js:812-817`, once/day)
