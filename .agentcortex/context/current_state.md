@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-19T07:01:38Z
-- **Update Sequence**: 97
+- **Last Updated**: 2026-06-19T10:15:10Z
+- **Update Sequence**: 98
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -722,3 +722,11 @@
 - Spec: docs/specs/office-theme-selector.md (status: shipped; §4.4 DSoT + panel). Commit a38adcb. Built on main AFTER #116/#30/#117/#112 merged → conflict-free.
 - SSoT written directly (not guard) to avoid the stale-receipt bug; logged in Work Log Drift Log. Knowledge consolidation: spec has no `## Domain Decisions`; incremental overlay covered by existing `ui-rendering` L1 — skipped with justification.
 - Tests: Pass (7 new theme unit tests incl. the contrast guard; suite 1975; build clean; render-smoke PASS 4 viewports / 0 errors; live — Winter swatch applied an `rgb(150,180,210)@0.14` tint beneath the status layer + persisted to localStorage, 0 console errors).
+
+### Ship-refactor-avo-184-god-reducer-extraction-2026-06-19 (AVO-184 Option 1 — applyExternalStatus helper extraction)
+
+- Shipped AVO-184 god-reducer extraction (quick-win, **Option 1 scope** — owner-chosen after an honest "this is a user-invisible internal refactor; user feels nothing by design" stop-question). Extracted 3 pure, file-local helpers from the 372-line `applyExternalStatus` reducer (`store.js`), **byte-identical behavior, no signature/module change**: `buildExtEntry` (ext entry + sigChanged + AVO-106 activeFile pairing + AVO-146 carry fields), `resolveAgentVisual` (decideBehavior + STATUS_BEHAVIOR_MAP expression + inGroup guard), `assembleIntegrationPatch` (statusSource/integrationSource/activeWorkflow + clearSourceIfEmpty). Reducer body ~372->~297 lines; file net +16 (rich rationale comments MOVED into helper docs, not deleted).
+- **Equivalence-harness-first** (owner directive): new `tests/avo184-equivalence.test.js` (27 characterization tests) — proven a TRUE characterization lock: green on BOTH the un-refactored baseline (26923e3) AND head. A fresh adversarial reviewer (no implementer rationale, review.md Freshness Invariant) proved all 3 helpers byte-equivalent by line-level diff (0 Critical/High/Medium); flagged carry-field coverage gap -> closed by A1b (label/hint/reasonCode/skill, honesty-relevant reasonCode).
+- **Explicitly DEFERRED** (NOT this ship): `startStatusIntegration` (inferStatus.js — diff empty, untouched); batch B (ledger/overflow bookkeeping); dynamic-create/eviction extraction. Off-mission tech-debt; the durable win is the regression net + 3 safe hoists (REDUCE-not-add).
+- Verify: full suite **2213/2213** (+27), build clean (236ms), harness 27/27 (baseline + head), git diff --check clean, security A01-A03 + secrets clean. 5 commits (ad55026 harness; 3191c8d/a127c06/f71cea5 hoists; 2d9589d A1b).
+- Tests: Pass

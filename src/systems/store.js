@@ -314,6 +314,94 @@ const ROLE_GROWTH_ITEMS = {
   gate: 'sticky', designer: 'sticky',
 }
 
+// AVO-184: build the externalStatus entry for ONE update. Pure given (prevExt, u, now); returns
+// the entry PLUS the `sigChanged` flag the per-update loop reuses to gate bubble/activity/no-op
+// writes. Byte-identical to the prior inline construction — extraction only.
+//
+// `changedAt` = when this agent's status/task last MEANINGFULLY changed. Stamped only on a real
+// signature change — NOT on every poll refresh (expiresAt moves each tick, so deriving "since" from
+// it always read ~now → the "0s everywhere" bug). Carry the prior stamp forward on a same-signature
+// refresh so the roster shows "since last change". label/hint excluded — cosmetic, they flap.
+//
+// AVO-106: activeFileAt stamps when the active FILE last changed, INDEPENDENT of sigChanged (task
+// carries the TOOL name, not the file — editing a.js then b.js is task='Edit' both times, so
+// sigChanged stays false while the file changes). Deliberately NOT folded into sigChanged so it
+// never re-pops a bubble.
+//
+// AVO-146: iterate AGENT_CARRY_FIELDS for the free-carry fields. activeFile is excluded here because
+// it carries a DERIVED companion (activeFileAt) and must be written as a pair. task/label/hint/
+// reasonCode all use `u.<field> || null` (same as the prior inline literals).
+//
+// expiresAt — working/blocked: 5 min (long-running tool calls can take >30s with no hook event
+// between PreToolUse and PostToolUse; a shorter expiry flickered the workflow banner). In practice
+// the 120s staleness sweep (inferStatus.js) clears a static external status first, so 5 min is a
+// rarely-reached backstop. done: 10s (brief celebration then back to idle).
+function buildExtEntry(prevExt, u, now) {
+  const sigChanged = !prevExt || prevExt.status !== u.status || (prevExt.task || '') !== (u.task || '')
+  const nextActiveFile = u.activeFile || null
+  const fileChanged = !prevExt || (prevExt.activeFile || null) !== nextActiveFile
+  const activeFileAt = nextActiveFile == null
+    ? null
+    : (fileChanged ? now : (Number.isFinite(prevExt.activeFileAt) ? prevExt.activeFileAt : now))
+  const carryFields = {}
+  for (const f of AGENT_CARRY_FIELDS) {
+    if (f === 'activeFile') continue  // handled separately with its activeFileAt stamp
+    carryFields[f] = u[f] || null
+  }
+  const entry = {
+    status: u.status,
+    ...carryFields,
+    activeFile: nextActiveFile,
+    activeFileAt,
+    expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
+    changedAt: sigChanged ? now : (Number.isFinite(prevExt.changedAt) ? prevExt.changedAt : now),
+  }
+  return { entry, sigChanged }
+}
+
+// AVO-184: resolve an agent's visual (behavior + expression) for ONE update. Pure given the update,
+// the active workflow, the prior agent, and the inGroup flag. Byte-identical to the prior inline
+// resolution — extraction only.
+//
+// #A2.1: decideBehavior is the single resolver for animation choice — priority status (blocked/done)
+// > workflow phase > role override > family default. For working it gives MCP/verb/role/phase-aware
+// results; for blocked/done it returns scratch-head/thumbs-up, so STATUS_BEHAVIOR_MAP supplies only
+// the expression for those. During a group event officeLife owns behavior/expression, so the agent's
+// current values are preserved (the inGroup guard).
+function resolveAgentVisual(u, activeWorkflow, prevAgent, inGroup) {
+  const bm = STATUS_BEHAVIOR_MAP[u.status] || {}
+  const bmBehavior = decideBehavior({ task: u.task, role: u.agentId, status: u.status, workflow: activeWorkflow })
+  const nextBehavior = inGroup ? prevAgent.behavior : (bmBehavior || prevAgent.behavior)
+  const nextExpression = inGroup ? prevAgent.expression : (bm.expression || prevAgent.expression)
+  return { nextBehavior, nextExpression }
+}
+
+// AVO-184: assemble the integration-channel patch (statusSource / integrationSource / activeWorkflow)
+// folded into applyExternalStatus's single set(). Pure given (s, meta, ext). Each field is applied
+// ONLY when meta carries it AND the value actually differs, so an unchanged field is omitted (no
+// spurious subscriber invalidation). clearSourceIfEmpty (a multi-session eviction that left zero
+// external agents) reverts to 'organic' and takes precedence over meta.statusSource. Byte-identical
+// to the prior inline construction — extraction only.
+function assembleIntegrationPatch(s, meta, ext) {
+  const patch = {}
+  const revertToOrganic = meta.clearSourceIfEmpty && Object.keys(ext).length === 0
+  if (revertToOrganic) {
+    if (s.statusSource !== 'organic') patch.statusSource = 'organic'
+    if (s.integrationSource !== null) patch.integrationSource = null
+  } else {
+    if (meta.statusSource !== undefined && meta.statusSource !== s.statusSource) {
+      patch.statusSource = meta.statusSource
+    }
+    if (meta.integrationSource !== undefined && (meta.integrationSource || null) !== s.integrationSource) {
+      patch.integrationSource = meta.integrationSource || null
+    }
+  }
+  if (meta.hasWorkflow && (meta.workflow ?? null) !== s.activeWorkflow) {
+    patch.activeWorkflow = meta.workflow ?? null
+  }
+  return patch
+}
+
 // Every OTHER agent's claimed standing spot, for group-target deconfliction (AVO-156/157
 // follow-up). Resolution mirrors movementSystem.getOccupiedPositions: a walker's journey
 // END > a group destination > the current leg target > the standing position. Excluding
@@ -954,47 +1042,12 @@ export const useOfficeStore = create((set) => ({
           createdThisUpdate = true
           agentsMutated = true
         }
-        // `changedAt` = when this agent's status/task last MEANINGFULLY changed. Stamped only on a
-        // real signature change — NOT on every poll refresh (expiresAt moves each tick, so deriving
-        // "since" from it always read ~now → the "0s everywhere" bug). Carry the prior stamp forward
-        // on a same-signature refresh so the roster shows "since last change". Transient (rides in
-        // externalStatus, which is never persisted). label/hint excluded — cosmetic, they flap.
+        // AVO-184: buildExtEntry owns the externalStatus entry + sigChanged (byte-identical to the
+        // prior inline build; full rationale in its module-scope doc). prevExt stays in scope below
+        // for isNewBlockedEpisode.
         const prevExt = ext[u.agentId]
-        const sigChanged = !prevExt || prevExt.status !== u.status || (prevExt.task || '') !== (u.task || '')
-        // AVO-106: stamp when this agent's active FILE last changed. Independent of sigChanged
-        // (task carries the TOOL name, not the file — editing a.js then b.js is task='Edit' both
-        // times, so sigChanged stays false while the file changes). The pair-huddle detector gates
-        // on this freshness; deliberately NOT folded into sigChanged so it never re-pops a bubble.
-        const nextActiveFile = u.activeFile || null
-        const fileChanged = !prevExt || (prevExt.activeFile || null) !== nextActiveFile
-        const activeFileAt = nextActiveFile == null
-          ? null
-          : (fileChanged ? now : (Number.isFinite(prevExt.activeFileAt) ? prevExt.activeFileAt : now))
-        // AVO-146: iterate AGENT_CARRY_FIELDS for the free-carry fields. activeFile is excluded
-        // here because it carries a DERIVED companion (activeFileAt) computed above — it must be
-        // written as a pair, not as a simple passthrough. Semantics of each field are preserved
-        // byte-identically: task/label/hint/reasonCode all use `u.<field> || null` (same as prior
-        // inline literals); activeFile + activeFileAt remain unchanged.
-        const carryFields = {}
-        for (const f of AGENT_CARRY_FIELDS) {
-          if (f === 'activeFile') continue  // handled separately with its activeFileAt stamp
-          carryFields[f] = u[f] || null
-        }
-        ext[u.agentId] = {
-          status: u.status,
-          ...carryFields,
-          // AVO-106: per-agent active file + the freshness stamp the pair-huddle detector reads.
-          activeFile: nextActiveFile,
-          activeFileAt,
-          // working/blocked: 5 min expiry — long-running tool calls (build, test suite, npm install)
-          // can take >30s with no hook event between PreToolUse and PostToolUse; a shorter
-          // expiry caused the workflow banner to flicker off mid-run and then self-heal.
-          // NOTE: in practice the 120s staleness sweep (inferStatus.js clearExternalStatus) clears a
-          // static external status first, so this 5-min value is a rarely-reached backstop, not the
-          // primary expiry path. done: 10s expiry (brief celebration then back to idle)
-          expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
-          changedAt: sigChanged ? now : (Number.isFinite(prevExt.changedAt) ? prevExt.changedAt : now),
-        }
+        const { entry: extEntry, sigChanged } = buildExtEntry(prevExt, u, now)
+        ext[u.agentId] = extEntry
         // AVO-117: record a blocked EPISODE only on a real edge (pure isNewBlockedEpisode owns the
         // rule: transition INTO blocked from a non-blocked-family state, or a reason-change while
         // blocked, with a SPECIFIC reason). A poll re-read OR an idle-gap blocked↔awaiting-approval
@@ -1007,30 +1060,14 @@ export const useOfficeStore = create((set) => ({
         // the previous code re-spread agents[u.agentId] up to three times per
         // update (status, then bubble, then deskItemCount), allocating three
         // objects where one suffices.
-        const bm = STATUS_BEHAVIOR_MAP[u.status] || {}
-        // #A2.1: `decideBehavior` is the single resolver for animation choice.
-        // Priority: status (blocked/done) > workflow phase > role override > family default.
-        // For status==='working' this gives MCP / verb / role / phase-aware results;
-        // for status==='blocked' / 'done' it returns scratch-head / thumbs-up so the
-        // STATUS_BEHAVIOR_MAP expression mapping below stays meaningful but the explicit
-        // behavior table for those statuses becomes redundant — decideBehavior owns it.
-        const bmBehavior = decideBehavior({
-          task: u.task,
-          role: u.agentId,
-          status: u.status,
-          workflow: s.activeWorkflow,
-        })
         // Don't overwrite behavior/expression during group events (officeLife controls those)
         const prevAgent = agents[u.agentId]
         const inGroup = prevAgent.inGroupEvent
-        // AVO-143: a pure poll re-apply writes the exact same field values back — skip the
-        // re-allocation entirely so the agent object keeps its identity (no re-render).
-        // Conditions guarantee every write below would be a no-op: !sigChanged → no bubble,
-        // no activity entry; status equal → no done-growth (fresh-transition gated) and no
-        // blocked-counter tick (previousStatus === u.status via prevExt); behavior/expression
-        // resolve to their current values. dayChanged/creation already broke identity above.
-        const nextBehavior = inGroup ? prevAgent.behavior : (bmBehavior || prevAgent.behavior)
-        const nextExpression = inGroup ? prevAgent.expression : (bm.expression || prevAgent.expression)
+        // AVO-184: resolveAgentVisual owns behavior/expression resolution (decideBehavior +
+        // STATUS_BEHAVIOR_MAP expression + the inGroup guard); byte-identical, see its module doc.
+        // AVO-143: on a pure poll re-apply these resolve to the agent's CURRENT values, so the no-op
+        // guard below can skip the re-allocation entirely and keep the agent's identity (no re-render).
+        const { nextBehavior, nextExpression } = resolveAgentVisual(u, s.activeWorkflow, prevAgent, inGroup)
         if (
           !createdThisUpdate && !dayChanged && !sigChanged &&
           u.status === prevAgent.status &&
@@ -1175,33 +1212,12 @@ export const useOfficeStore = create((set) => ({
       const feedLog = activities.length > 0
         ? [...activities.filter((a) => FEED_ORIGINS.has(a.origin)), ...s.eventFeed].slice(0, 30)
         : s.eventFeed
-      // Coalesce the integration-channel field writes into THIS single set().
-      // applyMessage previously called applyExternalStatus + setStatusSource +
-      // setIntegrationSource + setActiveWorkflow as four separate store writes,
-      // each waking every subscriber (zustand fires listeners synchronously per
-      // set(), independent of React 18 batching). They always change together for
-      // one incoming message, so fold them in here — one set(), one wake-up.
-      // Each is applied only when meta carries it AND the value actually differs,
-      // so an unchanged field is omitted (no spurious invalidation).
-      const integrationPatch = {}
-      // clearSourceIfEmpty (multi-session empty payload): when this eviction leaves
-      // zero external agents, the integration channel went silent — revert to 'organic'
-      // here rather than in a follow-up store write. Takes precedence over meta.statusSource.
-      const revertToOrganic = meta.clearSourceIfEmpty && Object.keys(ext).length === 0
-      if (revertToOrganic) {
-        if (s.statusSource !== 'organic') integrationPatch.statusSource = 'organic'
-        if (s.integrationSource !== null) integrationPatch.integrationSource = null
-      } else {
-        if (meta.statusSource !== undefined && meta.statusSource !== s.statusSource) {
-          integrationPatch.statusSource = meta.statusSource
-        }
-        if (meta.integrationSource !== undefined && (meta.integrationSource || null) !== s.integrationSource) {
-          integrationPatch.integrationSource = meta.integrationSource || null
-        }
-      }
-      if (meta.hasWorkflow && (meta.workflow ?? null) !== s.activeWorkflow) {
-        integrationPatch.activeWorkflow = meta.workflow ?? null
-      }
+      // AVO-184: assembleIntegrationPatch owns the integration-channel field writes (statusSource /
+      // integrationSource / activeWorkflow), coalesced into THIS single set() so one incoming message
+      // wakes subscribers once (zustand fires listeners synchronously per set(), independent of React
+      // 18 batching). Byte-identical; full rationale (omit-when-unchanged, clearSourceIfEmpty
+      // precedence) lives in its module-scope doc.
+      const integrationPatch = assembleIntegrationPatch(s, meta, ext)
       return {
         // AVO-143: when nothing reassigned an agent entry, hand back the ORIGINAL
         // s.agents reference so Object-level subscribers don't re-fire on a pure
