@@ -1115,7 +1115,11 @@ function AgentCharacter({ agent }) {
       // never modulated (R1) → pass teamPulse 0. `tracked` is reused for the focusAnchor bias below.
       const tracked = !!store.externalStatus[id]
       const teamPulse = tracked ? 0 : (store.teamPulse || 0)
-      const next = getNextBehavior(id, agent.status || 'idle', new Date().getHours(), store.mood || 'normal', teamPulse)
+      // AVO-165: count agents currently OUT (walking — non-null journeyTarget) so getNextBehavior can
+      // soft-cap concurrent out-trips and stop the "always someone walking" pile-up (a concurrency
+      // effect, not a per-agent rate). Read-only; keeping an agent at its desk is honest + R1-safe.
+      const outTripCount = Object.values(store.agents).filter((a) => a && a.journeyTarget).length
+      const next = getNextBehavior(id, agent.status || 'idle', new Date().getHours(), store.mood || 'normal', teamPulse, outTripCount)
       // Guard the re-schedule delay: a non-finite or non-positive duration would make
       // setTimeout(doSchedule, nextDelay) fire on the next tick, spinning the behavior
       // chain in a tight CPU loop. Fall back to the 8s default if the value is unusable.
@@ -1411,6 +1415,14 @@ function AgentCharacter({ agent }) {
       {state.status === 'blocked' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.4">
           {!reducedMotion && <animate attributeName="opacity" values="0.2;0.5;0.2" dur="1s" repeatCount="indefinite" />}
+        </circle>
+      )}
+      {/* AVO-167: 'awaiting-approval' (waiting on the human) — a CALM slow breathe (2.4s), deliberately
+          NOT the alarm-fast 1s blocked pulse: present but unhurried "I'm waiting for you". Honest (tied
+          to the real awaiting-approval signal); distinct cool-cyan ring + name-pill via STATUS_COLORS. */}
+      {state.status === 'awaiting-approval' && (
+        <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.45">
+          {!reducedMotion && <animate attributeName="opacity" values="0.3;0.55;0.3" dur="2.4s" repeatCount="indefinite" />}
         </circle>
       )}
       {/* AVO-135: 'done' is a ONE-SHOT celebratory flash, not a standing ring — removes the

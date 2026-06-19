@@ -20,6 +20,14 @@ import { rng } from './rng.js'
 // weights move — `working` (real-work, R1 honesty) / `done` / `blocked` are untouched.
 const baseWeights = { work: 74, daily: 8, social: 13, away: 5 }
 
+// AVO-165: concurrent out-trip soft-cap. The owner's recurring "一直有人在走動" is a CONCURRENCY effect
+// — 8 agents each ~32% out-trip → P(≥1 walking) ≈ 94% — not a per-agent rate the two prior tunes
+// (−28%, round-2) could fix. When this many agents are ALREADY out (non-null journeyTarget), an agent
+// that rolls an out-trip stays at its desk this cycle instead. Honest + R1-safe: keeping an agent AT
+// its desk never hides a real signal nor relocates a working agent (R1 forbids moving a working agent
+// AWAY — this does the opposite). Per-agent cadence + the `social` weight are untouched.
+export const MAX_CONCURRENT_OUT_TRIPS = 2
+
 const statusOverrides = {
   working: { work: 82, daily: 8, social: 5, away: 5 },
   idle: { work: 68, daily: 12, social: 14, away: 6 },
@@ -216,7 +224,7 @@ function pushRecentPick(agentId, msg) {
 // Exported for tests only — allows clearing the ring in beforeEach.
 export function __clearRecentPicks() { _recentPicks.clear() }
 
-export function getNextBehavior(agentId, status = 'idle', hour = new Date().getHours(), mood = 'normal', teamPulse = 0) {
+export function getNextBehavior(agentId, status = 'idle', hour = new Date().getHours(), mood = 'normal', teamPulse = 0, outTripCount = 0) {
   // Start with status-based weights, then apply hour modifiers
   let weights = { ...(statusOverrides[status] || baseWeights) }
   const hourMod = getHourModifiers(hour)
@@ -249,7 +257,14 @@ export function getNextBehavior(agentId, status = 'idle', hour = new Date().getH
     }
   }
 
-  const category = weightedRandom(weights)
+  let category = weightedRandom(weights)
+  // AVO-165: soft-cap concurrent out-trips (daily/social/away = leaving the desk). When the office
+  // already has MAX_CONCURRENT_OUT_TRIPS agents out, an agent that rolled an out-trip stays at its desk
+  // this cycle (reported category becomes 'work' so downstream is consistent). Trims the simultaneous
+  // pile-up the owner sees, without touching per-agent cadence or the social weight.
+  if ((category === 'daily' || category === 'social' || category === 'away') && outTripCount >= MAX_CONCURRENT_OUT_TRIPS) {
+    category = 'work'
+  }
   const behavior = pickBehavior(agentId, category)
 
   // AC-S1a: use per-agent ring buffer for anti-repeat
