@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-19T10:15:10Z
-- **Update Sequence**: 98
+- **Last Updated**: 2026-06-19T11:17:39Z
+- **Update Sequence**: 99
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -729,4 +729,12 @@
 - **Equivalence-harness-first** (owner directive): new `tests/avo184-equivalence.test.js` (27 characterization tests) — proven a TRUE characterization lock: green on BOTH the un-refactored baseline (26923e3) AND head. A fresh adversarial reviewer (no implementer rationale, review.md Freshness Invariant) proved all 3 helpers byte-equivalent by line-level diff (0 Critical/High/Medium); flagged carry-field coverage gap -> closed by A1b (label/hint/reasonCode/skill, honesty-relevant reasonCode).
 - **Explicitly DEFERRED** (NOT this ship): `startStatusIntegration` (inferStatus.js — diff empty, untouched); batch B (ledger/overflow bookkeeping); dynamic-create/eviction extraction. Off-mission tech-debt; the durable win is the regression net + 3 safe hoists (REDUCE-not-add).
 - Verify: full suite **2213/2213** (+27), build clean (236ms), harness 27/27 (baseline + head), git diff --check clean, security A01-A03 + secrets clean. 5 commits (ad55026 harness; 3191c8d/a127c06/f71cea5 hoists; 2d9589d A1b).
+- Tests: Pass
+
+### Ship-feat-avo-141-comms-rail-optimization-2026-06-19 (AVO-141 reframed B+ — comms-feed honesty + dedup)
+
+- Shipped AVO-141 (quick-win, reclassified from feature). A 4-expert /brainstorm panel REFRAMED the ticket from "densify the rail" to **comms-feed honesty + dedup** (Decisions D-1): the floating `ActivityFeed` read `activityLog` (ALL origins incl organic theater) and unshift'd the decorative `activeEvent` banner (lunch/tea/meeting) as if it were real activity = fabricated liveliness in the PRIMARY office view (ADR-008). The roster already fixed this internally via `eventFeed`; the floating widget was never migrated.
+- **Change (ActivityFeed.jsx only; App.jsx untouched)**: repoint source `activityLog` to `eventFeed` (FEED_ORIGINS = hook/event/inferred real events only); drop the activeEvent injection; render type-event messages via `eventName()`; self-hide the widget in roster mode (the inline presence-rail feed already shows these events). Reads values via `getState()` (subscriptions stay reactive) — the project SSR render-test idiom (zustand reactive selectors read the INITIAL snapshot under react-dom/server; confirmed by probe).
+- **Panel-rejected (NOT done, by design — empty calm-tech space is a feature, not a defect)**: A (condense idle rows — real waste is uniform card chrome; touches protected surfaces) · C (density-adaptive feed height — already flex-1; fake-liveliness risk) · uniform chrome trim (protected responsive/label/sprite surfaces, deferred). "Densify to fill room" framing rejected outright.
+- **Verify**: honesty unit test `tests/activityFeedHonesty.test.jsx` (5, test-the-test verified — reverting to activityLog fails the honesty assertions); headless Playwright visual proof (real browser) — office shows the floating feed, roster HIDES it + shows the inline rail, 0 console/page errors; fresh adversarial review = READY (all 6 claims PROVEN, 0 Crit/High/Med; fixed an L1 test-flake); full suite 2219 pass, render-smoke PASS (4 viewports), build clean.
 - Tests: Pass
