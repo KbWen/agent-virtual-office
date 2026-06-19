@@ -51,7 +51,8 @@ export function shouldSkipBehaviorWatchdog(agent) {
 }
 
 // Movement
-export const MIN_AGENT_DIST = 35        // minimum px between any two agents
+// AVO-184: MIN_AGENT_DIST (circular 35px) removed — dead since the separation contract moved to the
+// visual ellipse (rx32/ry44, PR #105); it was exported but imported nowhere (only stale comments).
 export const OBSTACLE_PUSH_PX = 6       // px to push character past obstacle edge
 export const CORRIDOR_JITTER = 30       // px jitter for corridor waypoints
 export const DOOR_JITTER = 20           // px jitter for door waypoints
