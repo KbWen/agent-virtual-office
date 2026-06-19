@@ -82,6 +82,32 @@ describe('idleGapInfer — working → thinking inference', () => {
     stop()
   })
 
+  it('AVO-173: a tool change on externalStatus (production shape) resets the clock — no false thinking', () => {
+    // Production: `task` lives on externalStatus[id], NOT on agents[id] (store.js applyExternalStatus
+    // writes only status/behavior/expression to the agents slice). A tool change (Bash→Read) with
+    // status staying 'working' must reset the clock so a busy agent is not mislabelled 'thinking'.
+    // Fails before the fix (computeSig read agents[id].task, always undefined → no reset → infers).
+    const apply = vi.fn()
+    let state = {
+      agents: { dev: { status: 'working' } },
+      externalStatus: { dev: { task: 'Bash' } },
+      applyExternalStatus: apply,
+    }
+    const listeners = new Set()
+    const store = {
+      getState: () => state,
+      subscribe: (l) => { listeners.add(l); return () => listeners.delete(l) },
+    }
+    const stop = startIdleGapInference(store, { intervalMs: 1000 })
+    vi.advanceTimersByTime(30000)
+    // Real hook tick: status unchanged on the agents slice, the TOOL changes on externalStatus only.
+    state = { ...state, externalStatus: { dev: { task: 'Read' } } }
+    for (const l of listeners) l(state)
+    vi.advanceTimersByTime(30000) // 60s total, but only 30s since the tool change
+    expect(apply).not.toHaveBeenCalled()
+    stop()
+  })
+
   it('configurable threshold respected', () => {
     const store = makeStore({ dev: { status: 'working', task: 'Bash' } })
     const stop = startIdleGapInference(store, { intervalMs: 500, workingGapMs: 5000 })
