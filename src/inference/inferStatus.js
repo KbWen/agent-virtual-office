@@ -648,35 +648,45 @@ function listenHashChanges(callback) {
 // Some platforms put task info in the title. We look for patterns like:
 // "Implementing auth..." or "Testing: unit tests" or "[building] feature X"
 
+// AVO-174: heuristic role-hint patterns ONLY. The conclusive/alarming `blocked` and `done` mappings
+// were REMOVED — a weak page-title match (a browser tab titled "build failed" or "all done") must
+// never fabricate the most-alarming (blocked) or a completion (done) state; those require a real hook
+// signal, not a title heuristic. The title channel can only HINT that a role is working.
+const TITLE_PATTERNS = [
+  { pattern: /implement|coding|writing code|building/i, role: 'dev', status: 'working' },
+  { pattern: /testing|reviewing|linting/i, role: 'qa', status: 'working' },
+  { pattern: /planning|spec|bootstrap/i, role: 'pm', status: 'working' },
+  { pattern: /deploy|shipping|release/i, role: 'ops', status: 'working' },
+  { pattern: /research|analyzing|exploring/i, role: 'res', status: 'working' },
+  { pattern: /design|architect|brainstorm/i, role: 'arch', status: 'working' },
+]
+
+// Exported for testing. Returns a heuristic { role, status } hint for a document title, or null.
+// By construction it can only ever return status: 'working' (AVO-174 honesty floor).
+export function classifyTitle(title) {
+  if (typeof title !== 'string') return null
+  for (const { pattern, role, status } of TITLE_PATTERNS) {
+    if (pattern.test(title)) return { role: role || 'dev', status }
+  }
+  return null
+}
+
 function listenTitleChanges(callback) {
   let lastTitle = document.title
-  const TITLE_PATTERNS = [
-    { pattern: /implement|coding|writing code|building/i, role: 'dev', status: 'working' },
-    { pattern: /testing|reviewing|linting/i, role: 'qa', status: 'working' },
-    { pattern: /planning|spec|bootstrap/i, role: 'pm', status: 'working' },
-    { pattern: /deploy|shipping|release/i, role: 'ops', status: 'working' },
-    { pattern: /research|analyzing|exploring/i, role: 'res', status: 'working' },
-    { pattern: /design|architect|brainstorm/i, role: 'arch', status: 'working' },
-    { pattern: /error|failed|blocked|stuck/i, role: null, status: 'blocked' },
-    { pattern: /done|complete|success|finished/i, role: null, status: 'done' },
-  ]
 
   const observer = new MutationObserver(() => {
     const title = document.title
     if (title === lastTitle) return
     lastTitle = title
 
-    for (const { pattern, role, status } of TITLE_PATTERNS) {
-      if (pattern.test(title)) {
-        const msg = normalizeStatusMessage({
-          type: 'office-status',
-          agents: [{ role: role || 'dev', task: title, status, label: null }],
-          source: 'title',
-        })
-        if (msg) callback(msg)
-        return
-      }
-    }
+    const hint = classifyTitle(title)
+    if (!hint) return
+    const msg = normalizeStatusMessage({
+      type: 'office-status',
+      agents: [{ role: hint.role, task: title, status: hint.status, label: null }],
+      source: 'title',
+    })
+    if (msg) callback(msg)
   })
 
   const titleEl = document.querySelector('title')
