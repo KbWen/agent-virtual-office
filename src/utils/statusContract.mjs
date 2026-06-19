@@ -143,10 +143,12 @@ export function normalizePost(body) {
     if (val == null) continue
     const isStatus = VALID_STATUSES.includes(val)
     if (!isStatus && typeof val !== 'string') continue
-    // task is set specially (the role value when not a status); apply sanitizers for the rest.
+    // task is set specially (the role value when not a status); activeFile is applied post-loop.
     const carry = {}
     for (const f of AGENT_CARRY_FIELDS) {
-      if (f === 'task') continue
+      // AVO-183b: never broadcast a single top-level `activeFile` to MULTIPLE roles — it would make
+      // them all "share" a file and fabricate a pair-huddle co-edit. Handled once, post-loop.
+      if (f === 'task' || f === 'activeFile') continue
       carry[f] = FIELD_SANITIZERS[f](body[f])
     }
     agents.push({
@@ -156,6 +158,10 @@ export function normalizePost(body) {
       ...carry,
     })
   }
+  // AVO-183b: a top-level `activeFile` in shorthand belongs to a SINGLE agent only (one editor, no
+  // fabricated co-edit pair). With 2+ roles it is dropped — use the full per-agent format for that.
+  const _af = agents.length === 1 ? FIELD_SANITIZERS.activeFile(body.activeFile) : null
+  for (const a of agents) a.activeFile = _af
   const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
   return {
     _seq: nextSeq(),
