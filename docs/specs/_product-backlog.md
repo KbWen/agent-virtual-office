@@ -162,7 +162,7 @@ last_updated: 2026-06-15
 | ◑ AVO-181 | **Duplicated set/constant drift.** ✅ **blocked-family DONE** (PR #180 — single `BLOCKED_FAMILY` in `constants.js`, imported by petState/desktopNotifier/recurringFailure/agentInspectorModel; 4 copies → 1). **Remaining:** `VALID_ROLES` ×3 (mechanical hoist) · the "working\|blocked" active-count rule ×3 where **`planning` is silently excluded from all 3** — that's a SEMANTIC question (should planning count as active?) to resolve BEFORE consolidating, not a blind hoist. | MED | grep-confirmed | blocked-family done; VALID_ROLES + active-count are follow-ups |
 | AVO-182 | **Defensive-guard gaps (latent)** — `charName(null)` has no guard (`i18n.js:96`); `darken()` returns `#NaNNaNNaN` and caches it for a non-`#RRGGBB` config color (`AgentCharacter.jsx:248`); `u[f] \|\| null` coerces a valid empty-string carry field to null (`store.js:980`, `agentRouter.js:128`); ambientSound gesture listeners use `{once:false}` (`ambientSound.js:292`); `validatePersistedDailyDoneLedger` has no upper cap. | LOW | all read-verified | add the cheap guards (nullish not falsy; hex validation; `{once:true}`) |
 | AVO-183 | **RESOLVED (PR #181) after repro.** **183a `pushOutOfObstacle` = NOT A BUG** — the residual obstacle-clipping is a *known, documented, deliberately-accepted* trade-off (`movementSystem.js` OBSTACLE_RECTS comments: server-rack/gate-booth "accepted over trapping the gate", "no waypoint places agents there"). A "fix" (re-pass/spiral) would have undone that design decision; reverted. (The original fuzz also had a bug — `OBSTACLE_RECTS` isn't exported.) **183b shorthand-POST `activeFile` broadcast = REAL, FIXED** — a 2-role shorthand + top-level `activeFile` gave BOTH agents the same file → fabricated pair-huddle co-edit. Now `activeFile` is single-role-only in shorthand; +3 regression tests. | MED | repro-verified | 183a dismissed; 183b fixed |
-| AVO-184 | **Complexity / dead code** — `applyExternalStatus` is a 372-line god-reducer on the hot path (`store.js:827`); `startStatusIntegration` 287-line closure (`inferStatus.js:709`); dead `MIN_AGENT_DIST` export (`constants.js:47`); `package-lock.json` version skew (1.4.0 vs 1.6.0). | MED maint. | grep-confirmed | extract named helpers; delete dead export; regen lockfile |
+| ◑ AVO-184 | **Complexity / dead code.** ✅ dead `MIN_AGENT_DIST` export removed (PR #182). **DEFERRED to a dedicated planned session:** the `applyExternalStatus` 372-line god-reducer (`store.js`) + `startStatusIntegration` 287-line closure (`inferStatus.js`) extractions — these are the HOTTEST, most honesty-critical functions; a careful "extract named helpers" refactor needs its own `/plan` + a before/after equivalence test harness, NOT a rushed end-of-session edit (engineering_guardrails: small/reversible, no unauthorized large refactor). `package-lock.json` version skew (1.4.0 vs 1.6.0) is cosmetic — regenerates on the next `npm install`. | MED maint. | grep-confirmed | dead export done; god-reducer = planned session |
 
 > **Fix status (PR #179):** ✅ **AVO-180** (eviction prune — `pruneRecentPicks` + `_storeRecentPicks` +
 > cloned-`rfLog` delete at the multi-session eviction site; +1 regression test) · ✅ **AVO-182** (the
@@ -170,8 +170,9 @@ last_updated: 2026-06-15
 > ambientSound `{once:true}`) · ◑ **AVO-181** (PR #180 — blocked-family consolidated 4→1 in
 > `constants.js`; VALID_ROLES + active-count remain as follow-ups, the latter has a `planning` semantic
 > question) · ✅ **AVO-183** (PR #181 — 183b shorthand activeFile broadcast fixed +3 tests; 183a confirmed
-> NOT a bug = a documented deliberately-accepted clipping trade-off, fix reverted). **Open:** AVO-184 (the
-> god-reducer extraction is an explicit refactor — ADR/plan-gated, not a casual fix).
+> NOT a bug = a documented deliberately-accepted clipping trade-off, fix reverted) · ◑ **AVO-184**
+> (PR #182 — dead `MIN_AGENT_DIST` export removed; the god-reducer extraction is DEFERRED to a dedicated
+> planned session — core hot path, needs `/plan` + an equivalence harness, not a rushed edit).
 
 ---
 
