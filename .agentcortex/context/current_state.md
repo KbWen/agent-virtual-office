@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-15T08:22:58Z
-- **Update Sequence**: 93
+- **Last Updated**: 2026-06-19T05:14:49Z
+- **Update Sequence**: 94
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -163,6 +163,14 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-honesty-a11y-bugs-2026-06-19 (PR #173 — AVO-171/172/173 + AVO-175/176/177 + audit catalogue)
+
+- Shipped 6 internal-audit defects on `fix/avo-171-pet-await-honesty-a11y` (quick-win). **AVO-171 (P1 honesty)**: the office-pet hide-on-blocker guarantee now counts `awaiting-approval` (was: pet could un-hide and CELEBRATE while an agent was stuck at a permission prompt); blocker definition centralised in `petState.js` (`countAttentionBlockers`/`firstAttentionBlockerId`/`BLOCKED_LIKE_STATUSES`) so it can't drift from `desktopNotifier` `BLOCKED_DERIVED`. **AVO-172**: `stopDesktopNotifier` now prunes `recurringNotifiedFor` by its own keys + `_resetDesktopNotifierState` no longer leaks recurring dedupe across tests. **AVO-173**: `idleGapInfer.computeSig` now reads `task` from `externalStatus` (the agents slice never carries it — `store.js` writes only status/behavior/expression), so a tool-busy agent isn't mislabelled `thinking`; the old test used a non-production store shape — production-shape regression added + test-the-test verified. **AVO-175/176/177 (a11y)**: reduced-motion gating (health-dot/activeEvent/connection-hint), keyboard-operable inspector ✕ close, i18n/aria parity (+`aria.showOffice/showList/close` en+zh-TW).
+- Catalogue (`_product-backlog.md`): new Optimization & Charm tier (AVO-163..170, AVO's own terms, no external attribution) + Bugs & Correctness tier (AVO-171..179, file:line-verified) + considered-and-declined ledger; **AVO-162 retracted** to `## Closed` (duplicate of shipped AVO-111 time-of-day lighting, caught same-session). Closed 4 stale GitHub issues (AVO-109/113/119/137) per ADR-006.
+- Verify: full suite **2169 pass** (+11); build clean; CI all green (audit/Semgrep/TruffleHog/pack-smoke/render-smoke/test×2); `validate.sh` text-integrity + backlog↔SSoT consistency PASS; uniform CRLF.
+- Open follow-ups (catalogued, NOT in this PR): AVO-174 (title-inference can inject `blocked` from a browser tab title — scope decision), AVO-178/179 (test debt: movementSystem + honesty-path inference), AVO-163..170 (optimizations).
+- Tests: Pass
 
 ### Ship-feat-dialogue-interaction-layer-waveA-2026-06-15 (PR #166 — voices + reduction + de-fabricate)
 
