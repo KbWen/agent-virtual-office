@@ -701,8 +701,8 @@ export function needsLocationChange(behaviorId) {
 }
 
 // ─── Anti-overlap system ──────────────────────────────────────────────
-// (MIN_AGENT_DIST no longer consumed here — the separation contract is the visual ellipse
-// below; the constant stays in constants.js for external readers.)
+// (the separation contract is the visual ellipse below, not a circular MIN_AGENT_DIST — that
+// constant was removed in AVO-184 as it had no remaining consumers.)
 import { OBSTACLE_PUSH_PX, CORRIDOR_JITTER, DOOR_JITTER } from './constants.js'
 
 // Get all other agents' claimed standing spots. Resolution order matters (forensic
