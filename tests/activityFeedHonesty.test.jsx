@@ -14,8 +14,9 @@ import ActivityFeed from '../src/components/ActivityFeed.jsx'
 // the data SOURCE. test-the-test: reverting the component to read `activityLog` flips BOTH the positive
 // (eventFeed → badge) and the negative (organic activityLog → no badge) assertions.
 
-const NOW = Date.now()
-const recent = (over) => ({ id: 'e1', timestamp: NOW, type: 'status', agentId: 'dev', status: 'working', message: 'Bash', origin: 'hook', ...over })
+// timestamp resolved at call time (NOT frozen at module load) so the badge's `< 30000ms` recency
+// window can never lapse between import and assertion — removes a latent flake on a slow runner.
+const recent = (over) => ({ id: 'e1', timestamp: Date.now(), type: 'status', agentId: 'dev', status: 'working', message: 'Bash', origin: 'hook', ...over })
 
 function reset({ eventFeed = [], activityLog = [], rosterMode = false, activeEvent = null } = {}) {
   useOfficeStore.setState({ eventFeed, activityLog, rosterMode, activeEvent })
