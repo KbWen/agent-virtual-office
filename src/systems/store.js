@@ -359,6 +359,23 @@ function buildExtEntry(prevExt, u, now) {
   return { entry, sigChanged }
 }
 
+// AVO-184: resolve an agent's visual (behavior + expression) for ONE update. Pure given the update,
+// the active workflow, the prior agent, and the inGroup flag. Byte-identical to the prior inline
+// resolution — extraction only.
+//
+// #A2.1: decideBehavior is the single resolver for animation choice — priority status (blocked/done)
+// > workflow phase > role override > family default. For working it gives MCP/verb/role/phase-aware
+// results; for blocked/done it returns scratch-head/thumbs-up, so STATUS_BEHAVIOR_MAP supplies only
+// the expression for those. During a group event officeLife owns behavior/expression, so the agent's
+// current values are preserved (the inGroup guard).
+function resolveAgentVisual(u, activeWorkflow, prevAgent, inGroup) {
+  const bm = STATUS_BEHAVIOR_MAP[u.status] || {}
+  const bmBehavior = decideBehavior({ task: u.task, role: u.agentId, status: u.status, workflow: activeWorkflow })
+  const nextBehavior = inGroup ? prevAgent.behavior : (bmBehavior || prevAgent.behavior)
+  const nextExpression = inGroup ? prevAgent.expression : (bm.expression || prevAgent.expression)
+  return { nextBehavior, nextExpression }
+}
+
 // Every OTHER agent's claimed standing spot, for group-target deconfliction (AVO-156/157
 // follow-up). Resolution mirrors movementSystem.getOccupiedPositions: a walker's journey
 // END > a group destination > the current leg target > the standing position. Excluding
@@ -1017,30 +1034,14 @@ export const useOfficeStore = create((set) => ({
         // the previous code re-spread agents[u.agentId] up to three times per
         // update (status, then bubble, then deskItemCount), allocating three
         // objects where one suffices.
-        const bm = STATUS_BEHAVIOR_MAP[u.status] || {}
-        // #A2.1: `decideBehavior` is the single resolver for animation choice.
-        // Priority: status (blocked/done) > workflow phase > role override > family default.
-        // For status==='working' this gives MCP / verb / role / phase-aware results;
-        // for status==='blocked' / 'done' it returns scratch-head / thumbs-up so the
-        // STATUS_BEHAVIOR_MAP expression mapping below stays meaningful but the explicit
-        // behavior table for those statuses becomes redundant — decideBehavior owns it.
-        const bmBehavior = decideBehavior({
-          task: u.task,
-          role: u.agentId,
-          status: u.status,
-          workflow: s.activeWorkflow,
-        })
         // Don't overwrite behavior/expression during group events (officeLife controls those)
         const prevAgent = agents[u.agentId]
         const inGroup = prevAgent.inGroupEvent
-        // AVO-143: a pure poll re-apply writes the exact same field values back — skip the
-        // re-allocation entirely so the agent object keeps its identity (no re-render).
-        // Conditions guarantee every write below would be a no-op: !sigChanged → no bubble,
-        // no activity entry; status equal → no done-growth (fresh-transition gated) and no
-        // blocked-counter tick (previousStatus === u.status via prevExt); behavior/expression
-        // resolve to their current values. dayChanged/creation already broke identity above.
-        const nextBehavior = inGroup ? prevAgent.behavior : (bmBehavior || prevAgent.behavior)
-        const nextExpression = inGroup ? prevAgent.expression : (bm.expression || prevAgent.expression)
+        // AVO-184: resolveAgentVisual owns behavior/expression resolution (decideBehavior +
+        // STATUS_BEHAVIOR_MAP expression + the inGroup guard); byte-identical, see its module doc.
+        // AVO-143: on a pure poll re-apply these resolve to the agent's CURRENT values, so the no-op
+        // guard below can skip the re-allocation entirely and keep the agent's identity (no re-render).
+        const { nextBehavior, nextExpression } = resolveAgentVisual(u, s.activeWorkflow, prevAgent, inGroup)
         if (
           !createdThisUpdate && !dayChanged && !sigChanged &&
           u.status === prevAgent.status &&
