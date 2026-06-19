@@ -6,6 +6,8 @@
 // Honesty guarantee: `hide` ALWAYS wins when an agent is actually blocked — the pet must never look
 // happy/asleep while someone needs a human. That single rule is what keeps the toy truthful.
 
+import { BLOCKED_FAMILY } from './constants.js'  // AVO-181: single source for the blocked family
+
 export const PET_MODES = Object.freeze({
   HIDE: 'hide',         // a real blocker, or a rough team mood — the pet crouches/hides
   NAP: 'nap',           // the team is idle/resting — the pet curls up
@@ -53,10 +55,10 @@ export function derivePetState({ mood, blockedCount = 0 } = {}) {
 // AVO-171: statuses that count as a real "needs-you" blocker for the hide-on-blocker honesty
 // guarantee. `awaiting-approval` is idle-gap-inferred from blocked+90s — an agent stuck at a
 // permission prompt is STILL blocked, so it must hide the pet (and never let it celebrate). Mirrors
-// desktopNotifier `BLOCKED_DERIVED` + recurringFailure `BLOCKED_FAMILY`; centralised here so the
-// pet's definition can't drift from the notifier's blocked-episode definition (the AVO-171 bug).
-export const BLOCKED_LIKE_STATUSES = Object.freeze(['blocked', 'awaiting-approval'])
-const BLOCKED_LIKE_SET = new Set(BLOCKED_LIKE_STATUSES)
+// Sourced from the shared `BLOCKED_FAMILY` (constants.js, AVO-181) so the pet's definition can't
+// drift from the notifier/inspector/recurring blocked-episode definition (the AVO-171 bug class).
+export const BLOCKED_LIKE_STATUSES = [...BLOCKED_FAMILY]  // AVO-181: public name kept; sourced from the SSoT
+const BLOCKED_LIKE_SET = BLOCKED_FAMILY                   // alias for internal .has()
 
 // countAttentionBlockers(externalStatus) → how many agents are in a real "needs-you" blocked state
 // (blocked OR awaiting-approval). Pure → unit-testable. The pet's blockedCount selector uses this.

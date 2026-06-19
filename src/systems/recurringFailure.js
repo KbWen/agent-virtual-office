@@ -2,7 +2,8 @@
 // Honest by construction: we aggregate ONLY the real, hook-derived reasonCode stream (AVO-110),
 // count DISTINCT blocked episodes (the store decides what an episode-edge is — this module just
 // records the timestamps it's given), and claim only a recurring PATTERN of a KIND — never a
-// specific root cause (reasonCode is the coarse, observable unit). No React, no store import.
+// specific root cause (reasonCode is the coarse, observable unit). No React, no store.
+import { BLOCKED_FAMILY } from './constants.js'  // AVO-181: shared blocked family (a pure constant, not the store)
 
 // Only AVO-110's SPECIFIC reasons can recur. 'blocked-unknown' is deliberately EXCLUDED — a
 // recurring *unknown* cause is low-actionability noise and would over-claim. (Mirrors the
@@ -23,10 +24,9 @@ function isRecurringReason(reasonCode) {
 }
 
 // The idle-gap inferrer reclassifies a single stuck agent `blocked → awaiting-approval → blocked`
-// for the SAME unanswered state (see desktopNotifier's BLOCKED_DERIVED). Counting each re-entry as
+// for the SAME unanswered state (the shared BLOCKED_FAMILY in constants.js). Counting each re-entry as
 // a new episode would manufacture a FALSE recurrence from one real block — the exact alarm the spec
 // forbids. So a blocked-family status is a CONTINUATION, not a new episode.
-const BLOCKED_FAMILY = new Set(['blocked', 'awaiting-approval'])
 
 // Is `next` the START of a NEW blocked episode (vs a continuation / poll re-read)? New episode =
 // entering 'blocked' with a SPECIFIC reason from a NON-blocked-family prior state, OR a genuine
