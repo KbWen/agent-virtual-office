@@ -243,6 +243,9 @@ function clearRow(grid, row) {
 
 const _darkenCache = new Map()
 function darken(hex, amount) {
+  // AVO-182: a non-#RRGGBB input (e.g. a CSS named colour or #RGB from a bad config) would parseInt→NaN
+  // and cache "#NaNNaNNaN" forever. Pass the input through unchanged instead of corrupting the cache.
+  if (typeof hex !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(hex)) return hex
   const key = `${hex}:${amount}`
   if (_darkenCache.has(key)) return _darkenCache.get(key)
   const r = Math.max(0, parseInt(hex.slice(1, 3), 16) - amount)

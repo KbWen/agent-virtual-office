@@ -224,6 +224,11 @@ function pushRecentPick(agentId, msg) {
 // Exported for tests only — allows clearing the ring in beforeEach.
 export function __clearRecentPicks() { _recentPicks.clear() }
 
+// AVO-180: prune one agent's anti-repeat slot when a dynamic worktree agent is evicted, so the Map
+// doesn't grow unbounded across many short-lived `slug~role` sessions (mirrors idleGapInfer's
+// eviction prune). The store calls this from its multi-session reconciliation eviction site.
+export function pruneRecentPicks(agentId) { _recentPicks.delete(agentId) }
+
 export function getNextBehavior(agentId, status = 'idle', hour = new Date().getHours(), mood = 'normal', teamPulse = 0, outTripCount = 0) {
   // Start with status-based weights, then apply hour modifiers
   let weights = { ...(statusOverrides[status] || baseWeights) }

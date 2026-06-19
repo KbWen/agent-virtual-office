@@ -88,6 +88,7 @@ export function setNameResolver(fn) { _nameResolver = fn }
 
 // Convenience: get character name (custom profile overrides i18n)
 export function charName(charId) {
+  if (typeof charId !== 'string' || !charId) return String(charId ?? '?')  // AVO-182: guard null/non-string (charId.includes below would throw)
   if (_nameResolver) {
     const custom = _nameResolver(charId)
     if (custom) return custom

@@ -9,6 +9,7 @@ import { STATUS_COLORS } from './constants.js'
 import { classifyTask, familyToBehavior, decideBehavior } from './classify.js'
 import { FEED_ORIGINS } from './rosterModel.js'
 import { PET_TYPES, nextPetType } from './petState.js'
+import { pruneRecentPicks } from './behaviorEngine.js'  // AVO-180: prune on eviction
 import { isValidTheme, DEFAULT_THEME } from './theme.js'
 import { recordEpisode, isNewBlockedEpisode } from './recurringFailure.js'
 import { AGENT_CARRY_FIELDS } from '../utils/statusFields.js'
@@ -1130,6 +1131,7 @@ export const useOfficeStore = create((set) => ({
       let evictedSelected = false
       if (meta.source === 'multi-session') {
         const present = new Set(updates.map(u => u.agentId))
+        const evicted = []
         for (const id of Object.keys(agents)) {
           const a = agents[id]
           // A dynamic agent is identified solely by a non-null `session` slug — only
@@ -1141,11 +1143,27 @@ export const useOfficeStore = create((set) => ({
             delete agents[id]
             delete ext[id]
             agentsMutated = true
+            evicted.push(id)
             // If the inspector had this now-deleted dynamic agent selected, the id would
             // dangle forever: AgentInspector renders nothing (its `agent` lookup is null)
             // but selectedAgent stays set, so a future click on the SAME id toggles the
             // panel off instead of open. Drop the selection when its target is evicted.
             if (s.selectedAgent === id) evictedSelected = true
+          }
+        }
+        // AVO-180: prune transient per-agent MODULE state for evicted dynamic agents so these Maps
+        // don't grow unbounded across many short-lived worktree sessions (mirrors idleGapInfer's
+        // eviction prune). rfLog is cloned before deleting so we never mutate an already-published
+        // recurringFailureLog object held by a prior subscriber.
+        if (evicted.length > 0) {
+          let rfCloned = false
+          for (const id of evicted) {
+            pruneRecentPicks(id)
+            _storeRecentPicks.delete(id)
+            if (rfLog[id]) {
+              if (!rfCloned) { rfLog = { ...rfLog }; rfCloned = true }
+              delete rfLog[id]
+            }
           }
         }
       }
