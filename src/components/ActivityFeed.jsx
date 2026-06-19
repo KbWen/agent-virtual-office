@@ -43,6 +43,7 @@ export default function ActivityFeed({ mode = 'full' }) {
         onClick={() => setCollapsed(!collapsed)}
         className="w-10 h-10 rounded-full bg-white/90 dark:bg-gray-800/90 backdrop-blur border border-gray-200 dark:border-gray-700 shadow-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative"
         title={collapsed ? t('activityFeed.expand', 'Activity Feed') : t('activityFeed.collapse', 'Collapse')}
+        aria-label={collapsed ? t('activityFeed.expand', 'Activity Feed') : t('activityFeed.collapse', 'Collapse')}
       >
         <span className="text-sm">📋</span>
         {collapsed && unreadCount > 0 && (

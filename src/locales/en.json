@@ -312,7 +312,10 @@
     "petOn": "Show office pet",
     "petType": "Change pet",
     "settings": "Settings",
-    "info": "Info"
+    "info": "Info",
+    "showOffice": "Show office",
+    "showList": "Show list view",
+    "close": "Close inspector"
   },
   "settings": {
     "weather": "Weather animations",

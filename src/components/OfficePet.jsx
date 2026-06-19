@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useOfficeStore } from '../systems/store.js'
 import { clampToFloor, isOnFloor, isOnObstacle } from '../systems/movementSystem.js'
-import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, runTarget, modeEmote, pickWanderTarget, PET_MODES } from '../systems/petState.js'
+import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, runTarget, modeEmote, pickWanderTarget, countAttentionBlockers, firstAttentionBlockerId, PET_MODES } from '../systems/petState.js'
 import PetSprite from './petSprites.jsx'
 import { useTransientFlag } from './useTransientFlag.js'
 
@@ -49,13 +49,15 @@ export default function OfficePet() {
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
   const mood = useOfficeStore((s) => s.mood)
   // live blocked count — primitive, so the pet re-renders only when it actually changes.
-  const blockedCount = useOfficeStore((s) =>
-    Object.values(s.externalStatus).filter((e) => e && e.status === 'blocked').length)
+  // AVO-171: counts `blocked` AND `awaiting-approval` (a permission-prompt wait is still a real
+  // "needs-you" blocker) so the hide-on-blocker honesty guarantee can't be bypassed by the 90s
+  // blocked→awaiting-approval idle-gap reclassification.
+  const blockedCount = useOfficeStore((s) => countAttentionBlockers(s.externalStatus))
   // #39: the position of a currently-blocked agent (so the pet can trot over and "point at" it). A
   // PRIMITIVE "x,y" string → stable re-render; reads the store's already-published agent.position
   // (read-only — never HOME_POSITIONS / movement internals).
   const blockedAgentPos = useOfficeStore((s) => {
-    const id = Object.keys(s.externalStatus).find((k) => s.externalStatus[k]?.status === 'blocked')
+    const id = firstAttentionBlockerId(s.externalStatus)
     const p = id && s.agents[id]?.position
     return p && Number.isFinite(p.x) ? `${Math.round(p.x)},${Math.round(p.y)}` : null
   })

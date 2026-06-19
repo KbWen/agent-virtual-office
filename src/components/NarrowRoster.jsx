@@ -25,9 +25,9 @@ function lastChangedAt(ext) {
 }
 
 function TypingDots({ reducedMotion }) {
-  if (reducedMotion) return <span className="text-gray-400" aria-label="working">…</span>
+  if (reducedMotion) return <span className="text-gray-400" aria-label={t('statusLabels.working', 'working')}>…</span>
   return (
-    <span className="inline-flex items-center gap-[3px] pr-0.5" aria-label="working">
+    <span className="inline-flex items-center gap-[3px] pr-0.5" aria-label={t('statusLabels.working', 'working')}>
       {[0, 1, 2].map((i) => (
         <span
           key={i}
