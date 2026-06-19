@@ -46,6 +46,92 @@ last_updated: 2026-06-15
 
 ---
 
+## Optimization & Charm Backlog — Existing-Item Tuning (2026-06-19, must earn place)
+
+> A 2026-06-19 internal research + code-audit pass produced these. All are framed in **AVO's own
+> terms** (no external attribution). They are **candidates, NOT commitments** — each must self-justify
+> via the per-visual-feature gate (chill/office-sim panel + automated legibility guard + adversarial
+> verify of MERGED main) before it earns a Feature Inventory row. Owner lean = **optimize existing
+> rhythm/pacing over net-new chrome.** Theme law: chill+fun, honest, REDUCE-not-add. Distinct tier
+> from the committed Feature Inventory — keeps the SSoT "3 open on-mission items" honest. Each row
+> cites the file/lever so a future `/plan` can lift it directly; every "AVO lacks X" was confirmed by
+> a read file:line (after the AVO-162 dup-proposal was caught same-session).
+
+| # | Optimization (testable) | Honesty / R1 guard | REDUCE? | Key file / lever |
+|---|---|---|---|---|
+| AVO-163 | Static idle agents get a phase-desynced **breathing/blink micro-loop** (+ ease-out motion) so they read "alive" with zero new assets. | Fires ONLY in genuine idle; breathe is IDENTICAL regardless of status (never implies progress/emotion); distinct from the existing supervising-breathe / working-pulse rings. | ~ (polish on existing motion) | `AgentCharacter.jsx` `CharacterPixelSprite` (idle body is static today, ~L368-397) |
+| AVO-164 | An all-idle office renders a deliberate **"all quiet / all caught up"** calm state (vs reading dead) → honest permission-to-stop. | No streak, no "agents miss you", no fake activity to fill the screen. | ✅ (reframes empty, adds nothing) | new calm-state branch; not present today |
+| AVO-165 | **Walk-rhythm / out-trip reduction**: trim ambient out-trips so the office reads calmer (owner's recurring "too walk-heavy"). | `statusOverrides.working` (R1) and `social` weight untouched; before/after via `getNextBehavior` category split. | ✅✅ (fewer out-trips) | `behaviorEngine.js:21` `baseWeights{work:74,away:5}` → work↑ / away↓ |
+| AVO-166 | Codify a **"no-fabricated-need" rule** (ban streak / decay-if-you-leave / fake urgency / relationship-memory / unbound decorative channels) into the guardrails — makes the honesty boundary enforceable for every future ambient/pet proposal. | Doc/guardrail only — gates future proposals, fabricates nothing. | ✅ (a guard, not a feature) | `.agent/rules/` guardrails |
+| AVO-167 | Give the **`awaiting-approval` ("waiting on you") state its own ring + name-tag colour** — today it falls back to identity colour and reads like a normal idle agent. | State already inferred from real signals (`idleGapInfer`); new colour must pass the existing contrast guard. | ~ (one colour entry + one ring branch) | `constants.js:82-88` STATUS_COLORS · `AgentCharacter.jsx:1411` ring branch |
+| AVO-168 | **Ambient events rarer + more rewarding**: widen the daily/rare event intervals and give a rare event a slightly bigger juice payload. | Juice stays gated on real signals (`eventEligible`); no new event types added. | ✅ (less churn) | `constants.js:53-54` intervals · `eventJuice.js:15-16` counts |
+| AVO-169 | Show **elapsed-time-in-state** ("blocked for 3m" / "waiting for 3m") in the agent inspector. | Driven only by real `changedAt`; inspector-only (no scene clutter). | ✅ (reuses `formatTimeAgo`) | `AgentInspector.jsx:~200` · `NarrowRoster.jsx:~59` |
+| AVO-170 | **Notification etiquette**: make the OS blocked-alert chime a user preference (don't blind-silence a functional "come back" alert) + audit the 30s-notice vs recurring-pattern paths so one episode can't double-fire unintentionally. | Visual banner unchanged; only fires while tab hidden + permission granted. | ✅ (calmer default, no new surface) | `desktopNotifier.js:94/115` `silent` · `:30` threshold |
+
+> **AC-SEQ:** each resolves to `do | refine | kill` with evidence when picked up. Likely first
+> pickups (owner pacing lean + core status-visibility value): **AVO-165** (walk-rhythm — measure
+> `getNextBehavior` split first) + **AVO-167** (await-you visibility). AVO-168/169/170 are cheap
+> measurable tunes; AVO-163/164 need the chill panel first; AVO-166 is a doc landable anytime.
+>
+> **Considered & declined 2026-06-19** (recorded so they are NOT re-proposed as actionable): auto-apply
+> a calendar season tint (conflicts with AVO-123's deliberate manual opt-in; only ½ the year has
+> tints) · a "stale-feed" glyph on idle agents (marginal; a new visual channel = clutter; unverified
+> write path) · clamping office-pet wander cadence (pet liveliness is user-chosen) · tightening the
+> time-of-day refresh below 60s (lighting changes hourly — no perceptible lag) · a spatial "error
+> corner" zone for blocked agents (**violates R1** — never relocate a real agent; the in-place
+> gate-desk tray AVO-107 is the honest equivalent).
+>
+> **Already-shipped — do NOT re-propose:** background push-ping (#8) · weather (#14) · soundscape
+> (AVO-122) · seasonal tint (AVO-123) · blocked/await-you reasons (AVO-110/148/107) · zen far-view
+> (AVO-137 closed) · time-of-day lighting (AVO-111 — `lighting.js`) · generative backstory/gossip +
+> cost/DAG charts (ADR-006).
+>
+> **Codebase-verified 2026-06-19:** **AVO-162 RETRACTED** — duplicate of shipped AVO-111 (moved to
+> `## Closed`). AVO-138 supervising-breathe / working-pulse rings already exist (AVO-163 must not
+> stack on them). AVO-165 extends the 2026-06-14 walk-rhythm ship (−28% out-trips). AVO-164/166/167/
+> 169/170 confirmed not present; AVO-168 tunes existing constants.
+
+---
+
+## Bugs & Correctness — Internal Audit (2026-06-19)
+
+> A 2026-06-19 AVO-internal code audit (tech-debt + a11y + honesty edge-cases). Unlike the
+> optimization tier above, several are **real defects** — AVO-171 violates a shipped honesty guarantee.
+> HIGH-confidence items were re-verified by reading the cited file:line; lower-confidence ones carry a
+> confirm step. AVO's own terms (no external attribution).
+>
+> **Status (branch `fix/avo-171-pet-await-honesty-a11y`, 2026-06-19):** ✅ FIXED — AVO-171 (pet honesty,
+> +8 tests), AVO-172 (notifier recurring-prune + reset-helper, +1 test), **AVO-173** (idle-gap now reads
+> `task` from externalStatus so a busy tool-using agent isn't mislabelled `thinking`; the old test used a
+> non-production store shape — production-shape regression added + test-the-test verified, +1 test),
+> AVO-175/176/177 (a11y). **Open:** AVO-174 (P3 — read `inferStatus.js` first), AVO-178/179 (test debt).
+
+| # | Defect | Severity | Evidence (file:line) | Fix (small + reversible) | Verified |
+|---|---|---|---|---|---|
+| AVO-171 | **Pet hide-on-blocker guarantee misses `awaiting-approval`** — when an agent is stuck at a permission prompt (inferred `awaiting-approval` after 90s blocked), `blockedCount`=0, so the pet un-hides and a concurrent deploy/eureka can fire CELEBRATE/confetti while a real "needs-you" item is pending. | **P1 honesty** | `OfficePet.jsx:52-53` (count) + `:57-58` (point-at) only match `status==='blocked'`; `desktopNotifier.js:44` already treats `awaiting-approval` as blocked-derived | count `awaiting-approval` in both selectors (mirror `BLOCKED_DERIVED`) | ✅ read-verified |
+| AVO-172 | `recurringNotifiedFor` not pruned on agent eviction → a re-spawned same-id agent never gets its recurring-failure OS notification (stale dedupe suppresses it). | P3 | `desktopNotifier.js:204-208` deletes `blockedSince`/`notifiedFor` but not `recurringNotifiedFor` (`:38`) | add `recurringNotifiedFor.delete(agentId)` to the cleanup loop | ✅ read-verified |
+| AVO-173 | `idleGapInfer.computeSig` reads `agents[id].task`, but `task` lives on `externalStatus[id]` (not the agents slice) → a tool-busy agent (Read→Grep→Edit, status stays `working`) may be falsely inferred `working→thinking` after 45s. | P2 | `idleGapInfer.js:89-94` reads `a?.task`; `store.js:802,1017` put `task` on `externalStatus` only | point `computeSig` at `externalStatus[id]?.task` — **CONFIRM FIRST**: repro + reconcile with the SSoT "changedAt co-moves with idleGapInfer" claim | ◐ slice-location confirmed; impact needs a repro |
+| AVO-174 | Title-inference channel can inject `blocked` for `dev` from non-agent signals (a browser tab titled "…failed/blocked") → most-alarming state from the weakest signal, persists 120s. | P3 | `inferStatus.js:651-687` (reported, not personally read) | cap this channel at `thinking`/`working`, never `blocked`; or gate it | ◌ unverified — read before acting |
+| AVO-175 | Reduced-motion gaps: `animate-pulse` ungated on `reducedMotion` at the health-dot + activeEvent pill + connection-hint (HTML layer; the SVG layer is fully gated). | P2 a11y | `ControlPanel.jsx:47,424` · `PixelOffice.jsx:1255` | read `reducedMotion`, conditionally drop `animate-pulse` | ✅ pattern-verified |
+| AVO-176 | Agent inspector ✕ close is a bare SVG `<text onClick>` — no keyboard path, no role/aria (Esc closes, but the visual target is keyboard/AT-invisible). | P2 a11y | `AgentInspector.jsx:150-152` | wrap in `role=button tabIndex=0 aria-label` + Enter/Space keydown | ✅ read-verified |
+| AVO-177 | i18n/AT leaks: `aria-label="working"` hardcoded English (zh-TW AT hears English); `aria.showOffice`/`aria.showList` missing from both locales; ActivityFeed toggle has `title` but no `aria-label`. | P3 a11y | `NarrowRoster.jsx:28,30` · `ControlPanel.jsx:296` · `ActivityFeed.jsx:42-45` | route through `t()` / add the two locale keys / add `aria-label` | ✅ read-verified |
+| AVO-178 | No test coverage for `movementSystem` (`calculatePath`/`lineHitsRect`) — the most complex pure-function cluster, with a documented past fuzz regression; a renderer-less regression is CI-invisible but visually obvious (agents through desks). | P2 debt | `movementSystem.js:281-307,635-673`; no `movementSystem.test.js` | add ~15 pure-function cases (no behavior change) | ✅ glob-verified |
+| AVO-179 | No test coverage for honesty-path inference (`agentRouter` routing, `contextBubble` generation) — a wrong-agent or mis-triggered cross-reaction would be CI-invisible. | P3 debt | `inference/agentRouter.js`, `systems/contextBubble.js` (no tests) | start with the pure mapping / `extractContext` functions | ✅ glob-verified |
+
+> **Minor cleanups (low value — recorded, likely decline):** hour-14 drowsiness fires N sequential
+> `setAgentBehavior` writes vs one `setMultipleAgentGroupEvents` batch (`officeLife.js:812-817`, once/day)
+> · two parallel 60s `setInterval` loops could merge (`officeLife.js:746-753`) · possibly-stale `esbuild`
+> override (`package.json:78`) · PixelOffice 600ms self-heal poll runs in non-panel mode too (`:980`,
+> no-ops so harmless).
+>
+> **Confirmed SAFE (audit reassurance):** clickable-object work-claims fully `eventEligible`-gated · pet
+> CELEBRATE suppressed on real `blocked` (AVO-171 is only the `awaiting-approval` sub-case) · done-counter
+> dedupe airtight · `AGENT_CARRY_FIELDS` drift CI-guarded · blocked↔awaiting flap does not double-notify ·
+> all clocks real (no accelerated/fake time). **Barrel signal:** honesty discipline is strong; AVO-171 is
+> the one materially-visible leak — further auditing yields diminishing returns.
+
+---
+
 ## Closed
 
 > Decided-out items, kept so they are not silently re-proposed. `Cancelled` = won't build. Each
@@ -64,6 +150,7 @@ last_updated: 2026-06-15
 | AVO-137 | Density-layer foundation / zen far-view | Cancelled | 2026-06-15 review | the glance-L1-default motivation already shipped (vibe-rebalance AVO-126/127/128 + declutter bubble-cap PR #81); the only unbuilt remainder was a wall-TV/streamer zen far-view, which is not a target use case |
 | AVO-142 | Drag-to-move agents | Cancelled | ADR-005 (rejected) | position=state honesty; interaction redirected to AVO-158 Poke (shipped) |
 | AVO-144 | Sustained per-frame inter-agent separation | Cancelled | ADR-004 (rejected) | doorway geometry + R1; target-time deconfliction is the mechanism |
+| AVO-162 | Real-clock time-of-day light wash | Cancelled | 2026-06-19 research | DUPLICATE — already shipped as AVO-111 (`src/systems/lighting.js`, 15-keyframe 24h grade, `lightingEnabled` toggle, real-clock `getHours`; AVO-123/125 depend on it; `_shipped-log.md:172`). Proposed in error 2026-06-19; caught same-session by codebase grep. Lesson: grep code + `_shipped-log.md` before proposing "new" candidates (AVO-111 was not in the SSoT Spec Index). |
 
 > **AVO-108 $ remainder cancelled** (ADR-006): the rolling-1h + $ cost + sparkline portion of the
 > token meter is off-mission. AVO-108's honest core (🪙 ctx + model chip, in the inspector per

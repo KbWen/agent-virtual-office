@@ -50,6 +50,35 @@ export function derivePetState({ mood, blockedCount = 0 } = {}) {
   return MOOD_TO_PET[mood] || PET_MODES.WANDER
 }
 
+// AVO-171: statuses that count as a real "needs-you" blocker for the hide-on-blocker honesty
+// guarantee. `awaiting-approval` is idle-gap-inferred from blocked+90s — an agent stuck at a
+// permission prompt is STILL blocked, so it must hide the pet (and never let it celebrate). Mirrors
+// desktopNotifier `BLOCKED_DERIVED` + recurringFailure `BLOCKED_FAMILY`; centralised here so the
+// pet's definition can't drift from the notifier's blocked-episode definition (the AVO-171 bug).
+export const BLOCKED_LIKE_STATUSES = Object.freeze(['blocked', 'awaiting-approval'])
+const BLOCKED_LIKE_SET = new Set(BLOCKED_LIKE_STATUSES)
+
+// countAttentionBlockers(externalStatus) → how many agents are in a real "needs-you" blocked state
+// (blocked OR awaiting-approval). Pure → unit-testable. The pet's blockedCount selector uses this.
+export function countAttentionBlockers(externalStatus) {
+  if (!externalStatus) return 0
+  let n = 0
+  for (const e of Object.values(externalStatus)) {
+    if (e && BLOCKED_LIKE_SET.has(e.status)) n++
+  }
+  return n
+}
+
+// firstAttentionBlockerId(externalStatus) → id of the first blocked/awaiting-approval agent (for the
+// pet's run-to-desk "point at the blocker" beat), or null. Pure.
+export function firstAttentionBlockerId(externalStatus) {
+  if (!externalStatus) return null
+  for (const id of Object.keys(externalStatus)) {
+    if (BLOCKED_LIKE_SET.has(externalStatus[id]?.status)) return id
+  }
+  return null
+}
+
 // The pet only roams in the active base modes; nap/hide and the transient reaction poses
 // (alert/celebrate) hold position so the pose itself conveys the signal.
 export function petIsMobile(mode) {

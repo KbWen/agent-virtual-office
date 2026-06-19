@@ -312,7 +312,10 @@
     "petOn": "顯示辦公室寵物",
     "petType": "更換寵物",
     "settings": "設定",
-    "info": "資訊"
+    "info": "資訊",
+    "showOffice": "顯示辦公室",
+    "showList": "顯示清單",
+    "close": "關閉資訊卡"
   },
   "settings": {
     "weather": "天氣動畫",

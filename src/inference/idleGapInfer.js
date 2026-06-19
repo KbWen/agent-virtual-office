@@ -86,12 +86,19 @@ function tick(store, opts, now = Date.now) {
  * (movementSystem mutates position 60 times per second). We track only the
  * (status, task) signature.
  */
-function computeSig(agents) {
+function computeSig(state) {
+  const agents = state?.agents
   if (!agents) return ''
+  // AVO-173: `task` lives on externalStatus in production — the agents slice never carries it
+  // (store.js applyExternalStatus writes only status/behavior/expression). Read task from there so a
+  // tool change (Read→Grep with status staying 'working') resets the clock and we don't falsely infer
+  // 'thinking' on an actively tool-using agent. Fall back to agents[id].task for robustness/older tests.
+  const externalStatus = state?.externalStatus || {}
   let sig = ''
   for (const id of Object.keys(agents)) {
     const a = agents[id]
-    sig += `${id}:${a?.status ?? ''}:${a?.task ?? ''};`
+    const task = externalStatus[id]?.task ?? a?.task ?? ''
+    sig += `${id}:${a?.status ?? ''}:${task};`
   }
   return sig
 }
@@ -101,9 +108,9 @@ function subscribeAgentUpdates(store, now = Date.now) {
   // only sees real diffs — without this, every agent in the initial roster
   // would be treated as "newly added" and get stamped on the first store
   // mutation, defeating the gap-detection logic.
-  let prevSig = computeSig(store.getState().agents)
+  let prevSig = computeSig(store.getState())
   return store.subscribe((state) => {
-    const nextSig = computeSig(state.agents)
+    const nextSig = computeSig(state)
     if (nextSig === prevSig) return
     // At least one agent's status/task changed. Diff which one and stamp.
     // For simplicity we re-stamp all agents whose signature differs from

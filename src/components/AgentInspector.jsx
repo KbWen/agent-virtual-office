@@ -147,10 +147,14 @@ export default function AgentInspector() {
         <text x={10} y={18} fontSize="12" fontFamily="monospace" fontWeight="bold" fill="white">
           {name}
         </text>
-        <text x={W - 14} y={18} fontSize="12" fontFamily="monospace" fill="white"
-          style={{ cursor: 'pointer' }} onClick={clearSelectedAgent}>
-          ✕
-        </text>
+        <g role="button" tabIndex={0} aria-label={t('aria.close', 'Close inspector')}
+          onClick={clearSelectedAgent}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); clearSelectedAgent() } }}
+          style={{ cursor: 'pointer' }}>
+          <text x={W - 14} y={18} fontSize="12" fontFamily="monospace" fill="white">
+            ✕
+          </text>
+        </g>
 
         {/* Status badge */}
         <circle cx={12} cy={42} r={5} fill={STATUS_COLORS[status] || color || '#888'} />

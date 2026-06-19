@@ -18,6 +18,7 @@ import {
   getNotificationState,
   isNotificationGranted,
   _resetDesktopNotifierState,
+  _recurringNotifiedKeys,
 } from '../src/inference/desktopNotifier.js'
 
 // Minimal store shim
@@ -382,5 +383,23 @@ describe('desktopNotifier — recurring-failure notice (AVO-117)', () => {
     const stop = startDesktopNotifier(store, { now: () => now })
     expect(recurringFires().length).toBe(0)
     stop()
+  })
+
+  it('AVO-172: prunes recurringNotifiedFor for an evicted agent on stop (re-spawn re-notifies)', () => {
+    const now = 3_000_000
+    let state = {
+      agents: { dev: { status: 'blocked' } },
+      externalStatus: { dev: { reasonCode: 'build-failed' } },
+      recurringFailureLog: { dev: { 'build-failed': [now - 2000, now - 1000, now] } },
+    }
+    const store = { getState: () => state }
+    const stop = startDesktopNotifier(store, { now: () => now }) // immediate tick fires recurring
+    expect(recurringFires().length).toBe(1)
+    expect(_recurringNotifiedKeys()).toContain('dev')
+    // Agent evicted (worktree/session ended) before stop → cleanup must prune the recurring entry,
+    // else a re-spawned same-id agent's recurring-failure notice stays suppressed.
+    state = { ...state, agents: {} }
+    stop()
+    expect(_recurringNotifiedKeys()).not.toContain('dev')
   })
 })

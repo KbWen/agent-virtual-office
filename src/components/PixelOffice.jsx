@@ -1252,7 +1252,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* ═══ CONNECTION HINT (shown until first external status is received) ═══ */}
       {!hasEverReceivedStatus && (
-        <g className="animate-pulse" opacity="0.85" pointerEvents="none">
+        <g className={reducedMotion ? '' : 'animate-pulse'} opacity="0.85" pointerEvents="none">
           <text x="400" y="28" textAnchor="middle" fontSize="11" fill="#d4c8a0" fontFamily="monospace">
             {t('hint.noConnection')}
           </text>
