@@ -314,6 +314,51 @@ const ROLE_GROWTH_ITEMS = {
   gate: 'sticky', designer: 'sticky',
 }
 
+// AVO-184: build the externalStatus entry for ONE update. Pure given (prevExt, u, now); returns
+// the entry PLUS the `sigChanged` flag the per-update loop reuses to gate bubble/activity/no-op
+// writes. Byte-identical to the prior inline construction — extraction only.
+//
+// `changedAt` = when this agent's status/task last MEANINGFULLY changed. Stamped only on a real
+// signature change — NOT on every poll refresh (expiresAt moves each tick, so deriving "since" from
+// it always read ~now → the "0s everywhere" bug). Carry the prior stamp forward on a same-signature
+// refresh so the roster shows "since last change". label/hint excluded — cosmetic, they flap.
+//
+// AVO-106: activeFileAt stamps when the active FILE last changed, INDEPENDENT of sigChanged (task
+// carries the TOOL name, not the file — editing a.js then b.js is task='Edit' both times, so
+// sigChanged stays false while the file changes). Deliberately NOT folded into sigChanged so it
+// never re-pops a bubble.
+//
+// AVO-146: iterate AGENT_CARRY_FIELDS for the free-carry fields. activeFile is excluded here because
+// it carries a DERIVED companion (activeFileAt) and must be written as a pair. task/label/hint/
+// reasonCode all use `u.<field> || null` (same as the prior inline literals).
+//
+// expiresAt — working/blocked: 5 min (long-running tool calls can take >30s with no hook event
+// between PreToolUse and PostToolUse; a shorter expiry flickered the workflow banner). In practice
+// the 120s staleness sweep (inferStatus.js) clears a static external status first, so 5 min is a
+// rarely-reached backstop. done: 10s (brief celebration then back to idle).
+function buildExtEntry(prevExt, u, now) {
+  const sigChanged = !prevExt || prevExt.status !== u.status || (prevExt.task || '') !== (u.task || '')
+  const nextActiveFile = u.activeFile || null
+  const fileChanged = !prevExt || (prevExt.activeFile || null) !== nextActiveFile
+  const activeFileAt = nextActiveFile == null
+    ? null
+    : (fileChanged ? now : (Number.isFinite(prevExt.activeFileAt) ? prevExt.activeFileAt : now))
+  const carryFields = {}
+  for (const f of AGENT_CARRY_FIELDS) {
+    if (f === 'activeFile') continue  // handled separately with its activeFileAt stamp
+    carryFields[f] = u[f] || null
+  }
+  const entry = {
+    status: u.status,
+    ...carryFields,
+    activeFile: nextActiveFile,
+    activeFileAt,
+    expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
+    changedAt: sigChanged ? now : (Number.isFinite(prevExt.changedAt) ? prevExt.changedAt : now),
+  }
+  return { entry, sigChanged }
+}
+
 // Every OTHER agent's claimed standing spot, for group-target deconfliction (AVO-156/157
 // follow-up). Resolution mirrors movementSystem.getOccupiedPositions: a walker's journey
 // END > a group destination > the current leg target > the standing position. Excluding
@@ -954,47 +999,12 @@ export const useOfficeStore = create((set) => ({
           createdThisUpdate = true
           agentsMutated = true
         }
-        // `changedAt` = when this agent's status/task last MEANINGFULLY changed. Stamped only on a
-        // real signature change — NOT on every poll refresh (expiresAt moves each tick, so deriving
-        // "since" from it always read ~now → the "0s everywhere" bug). Carry the prior stamp forward
-        // on a same-signature refresh so the roster shows "since last change". Transient (rides in
-        // externalStatus, which is never persisted). label/hint excluded — cosmetic, they flap.
+        // AVO-184: buildExtEntry owns the externalStatus entry + sigChanged (byte-identical to the
+        // prior inline build; full rationale in its module-scope doc). prevExt stays in scope below
+        // for isNewBlockedEpisode.
         const prevExt = ext[u.agentId]
-        const sigChanged = !prevExt || prevExt.status !== u.status || (prevExt.task || '') !== (u.task || '')
-        // AVO-106: stamp when this agent's active FILE last changed. Independent of sigChanged
-        // (task carries the TOOL name, not the file — editing a.js then b.js is task='Edit' both
-        // times, so sigChanged stays false while the file changes). The pair-huddle detector gates
-        // on this freshness; deliberately NOT folded into sigChanged so it never re-pops a bubble.
-        const nextActiveFile = u.activeFile || null
-        const fileChanged = !prevExt || (prevExt.activeFile || null) !== nextActiveFile
-        const activeFileAt = nextActiveFile == null
-          ? null
-          : (fileChanged ? now : (Number.isFinite(prevExt.activeFileAt) ? prevExt.activeFileAt : now))
-        // AVO-146: iterate AGENT_CARRY_FIELDS for the free-carry fields. activeFile is excluded
-        // here because it carries a DERIVED companion (activeFileAt) computed above — it must be
-        // written as a pair, not as a simple passthrough. Semantics of each field are preserved
-        // byte-identically: task/label/hint/reasonCode all use `u.<field> || null` (same as prior
-        // inline literals); activeFile + activeFileAt remain unchanged.
-        const carryFields = {}
-        for (const f of AGENT_CARRY_FIELDS) {
-          if (f === 'activeFile') continue  // handled separately with its activeFileAt stamp
-          carryFields[f] = u[f] || null
-        }
-        ext[u.agentId] = {
-          status: u.status,
-          ...carryFields,
-          // AVO-106: per-agent active file + the freshness stamp the pair-huddle detector reads.
-          activeFile: nextActiveFile,
-          activeFileAt,
-          // working/blocked: 5 min expiry — long-running tool calls (build, test suite, npm install)
-          // can take >30s with no hook event between PreToolUse and PostToolUse; a shorter
-          // expiry caused the workflow banner to flicker off mid-run and then self-heal.
-          // NOTE: in practice the 120s staleness sweep (inferStatus.js clearExternalStatus) clears a
-          // static external status first, so this 5-min value is a rarely-reached backstop, not the
-          // primary expiry path. done: 10s expiry (brief celebration then back to idle)
-          expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
-          changedAt: sigChanged ? now : (Number.isFinite(prevExt.changedAt) ? prevExt.changedAt : now),
-        }
+        const { entry: extEntry, sigChanged } = buildExtEntry(prevExt, u, now)
+        ext[u.agentId] = extEntry
         // AVO-117: record a blocked EPISODE only on a real edge (pure isNewBlockedEpisode owns the
         // rule: transition INTO blocked from a non-blocked-family state, or a reason-change while
         // blocked, with a SPECIFIC reason). A poll re-read OR an idle-gap blocked↔awaiting-approval
