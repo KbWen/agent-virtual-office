@@ -31,7 +31,7 @@ last_updated: 2026-06-15
 |---|---------|------|--------|----------|-----------|------|--------|--------------|
 | AVO-160 | Custom sprite-asset pipeline (public/sprites/ PNG auto-load → replace procedural SVG) | product | brand | P3 | docs/SPRITE_REQUIREMENTS.md | feature | Pending | foundation for hand-drawn art + AVO-124(b) |
 | AVO-124 | Agent appearance customization (sprite cosmetics — hats/accessories/outfits) | product | brand | P3 | — | feature | Pending | AVO-160 for PNG path |
-| AVO-141 | Comms / vertical (☰ roster) deeper optimization — "still lots of room" | product | vibe-rebalance | P2 | docs/specs/living-office-events.md | feature | Pending | AVO-140 (shipped) |
+| AVO-141 | Comms / vertical (☰ roster) deeper optimization — "still lots of room" | product | vibe-rebalance | P2 | docs/specs/living-office-events.md | quick-win | Shipped | **Reframed by a 4-expert panel** to comms-feed honesty + dedup (the rail was already mature; "densify to fill room" rejected). Shipped: floating ActivityFeed → real-events `eventFeed` only + self-hide in roster mode. Idle-condense / adaptive-height / chrome-trim panel-rejected. |
 | AVO-161 | Dialogue & interaction layer (台詞/文字) — Wave A SHIPPED, Wave B open | product | game-feel | P1 | docs/specs/dialogue-interaction-layer.md | feature | In Progress | ADR-007. **Wave A SHIPPED 2026-06-15 (PR #166)**: S1 quiet-worker reduction + rng seam · S1b de-fabricate generateCrossReaction · S2 5 voice archetypes (en+zh) + open-ended pools + AC-O2 lint. **Wave B**: **S5 = KILL** (2026-06-15 — redundant with shipped `idleGapInfer`; evidence in notes below) · **S3/S4 = open, GATED** on owner cold-watch of live A → S4 banter stop-question, whose outcome also sets S3 scope (ADR-007 fallback = no inter-agent dialogue). |
 
 > [!NOTE]
@@ -229,10 +229,15 @@ clothing. AVO-124 = the **sprite-cosmetic layer** (hats/accessories/outfits). Tw
 (b) PNG sprite-assets via AVO-160. `characters.json` has an `accessory` field the renderer does
 NOT consume (CHAR_STYLES is authoritative) — reconcile when building.
 
-### AVO-141 Comms / vertical roster optimization (P2)
-The ☰ roster → living-presence rail (PR #44) left "still lots of room". Tighter use of the
-vertical comms column — denser presence + activity without adding new chrome. Spec context lives
-in `docs/specs/living-office-events.md`.
+### AVO-141 Comms / vertical roster optimization (P2) — SHIPPED (reframed)
+The ☰ roster → living-presence rail (PR #44) left "still lots of room". A 4-expert design panel
+REFRAMED this from "densify the rail" to **comms-feed honesty + dedup**: the rail itself is already
+mature, and "fill the empty space" is the additive instinct to resist (empty calm-tech space is a
+feature). Shipped (quick-win): the floating `ActivityFeed` now sources the real-events `eventFeed`
+only (was the all-origins `activityLog` + a decorative `activeEvent` banner = fabricated liveliness,
+ADR-008) and self-hides in roster mode (the inline rail feed already covers it). Panel-rejected /
+deferred: idle-row condense, density-adaptive feed height, uniform card-chrome trim (touches protected
+responsive/label/sprite surfaces). Decision record: Work Log `feat-avo-141-comms-rail-optimization` D-1.
 
 ### AVO-161 Dialogue layer — Wave B verdicts (P1, game-feel)
 Wave A shipped (PR #166). Wave B closes per AC-SEQ (`do|refine|kill` + evidence):
