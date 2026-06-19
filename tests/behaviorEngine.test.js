@@ -14,7 +14,7 @@ function __mulberry32(seed) {
 const __realRandom = Math.random
 beforeAll(() => { Math.random = __mulberry32(0x0ff1ce) })
 afterAll(() => { Math.random = __realRandom })
-import { getNextBehavior, getHourModifiers } from '../src/systems/behaviorEngine.js'
+import { getNextBehavior, getHourModifiers, MAX_CONCURRENT_OUT_TRIPS } from '../src/systems/behaviorEngine.js'
 import { needsLocationChange } from '../src/systems/movementSystem.js'
 
 // Every VALID_ROLE plus a couple of composite worktree ids — getNextBehavior must
@@ -222,5 +222,43 @@ describe('getNextBehavior — calm rhythm (no solo meeting, bounded walk share)'
     for (const id of ['drink-coffee', 'drink-water', 'goto-coffee-machine']) {
       expect(seen.has(id), `${id} should still occur for an idle agent`).toBe(true)
     }
+  })
+})
+
+describe('AVO-165 — concurrent out-trip soft-cap', () => {
+  const OUT = new Set(['daily', 'social', 'away'])
+
+  it('at/above the cap, an idle agent never starts an out-trip (stays at desk)', () => {
+    let outTrips = 0
+    for (let i = 0; i < 400; i++) {
+      const c = getNextBehavior('dev', 'idle', 10, 'normal', 0, MAX_CONCURRENT_OUT_TRIPS).category
+      if (OUT.has(c)) outTrips++
+    }
+    expect(outTrips).toBe(0)
+  })
+
+  it('below the cap, out-trips still happen (the cap does not deaden the office)', () => {
+    let outTrips = 0
+    for (let i = 0; i < 400; i++) {
+      const c = getNextBehavior('dev', 'idle', 10, 'normal', 0, 0).category
+      if (OUT.has(c)) outTrips++
+    }
+    expect(outTrips).toBeGreaterThan(0)
+  })
+
+  it('a capped out-trip resolves to a real work behavior (consistent category + behaviorId)', () => {
+    const b = getNextBehavior('dev', 'idle', 10, 'normal', 0, MAX_CONCURRENT_OUT_TRIPS + 5)
+    expect(b.category).toBe('work')
+    expect(typeof b.behaviorId).toBe('string')
+    expect(b.behaviorId.length).toBeGreaterThan(0)
+  })
+
+  it('default outTripCount (0) preserves prior behavior — out-trips unaffected', () => {
+    let outTrips = 0
+    for (let i = 0; i < 400; i++) {
+      const c = getNextBehavior('dev', 'idle', 10, 'normal').category  // no outTripCount arg
+      if (OUT.has(c)) outTrips++
+    }
+    expect(outTrips).toBeGreaterThan(0)
   })
 })
