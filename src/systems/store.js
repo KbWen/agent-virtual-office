@@ -376,6 +376,32 @@ function resolveAgentVisual(u, activeWorkflow, prevAgent, inGroup) {
   return { nextBehavior, nextExpression }
 }
 
+// AVO-184: assemble the integration-channel patch (statusSource / integrationSource / activeWorkflow)
+// folded into applyExternalStatus's single set(). Pure given (s, meta, ext). Each field is applied
+// ONLY when meta carries it AND the value actually differs, so an unchanged field is omitted (no
+// spurious subscriber invalidation). clearSourceIfEmpty (a multi-session eviction that left zero
+// external agents) reverts to 'organic' and takes precedence over meta.statusSource. Byte-identical
+// to the prior inline construction — extraction only.
+function assembleIntegrationPatch(s, meta, ext) {
+  const patch = {}
+  const revertToOrganic = meta.clearSourceIfEmpty && Object.keys(ext).length === 0
+  if (revertToOrganic) {
+    if (s.statusSource !== 'organic') patch.statusSource = 'organic'
+    if (s.integrationSource !== null) patch.integrationSource = null
+  } else {
+    if (meta.statusSource !== undefined && meta.statusSource !== s.statusSource) {
+      patch.statusSource = meta.statusSource
+    }
+    if (meta.integrationSource !== undefined && (meta.integrationSource || null) !== s.integrationSource) {
+      patch.integrationSource = meta.integrationSource || null
+    }
+  }
+  if (meta.hasWorkflow && (meta.workflow ?? null) !== s.activeWorkflow) {
+    patch.activeWorkflow = meta.workflow ?? null
+  }
+  return patch
+}
+
 // Every OTHER agent's claimed standing spot, for group-target deconfliction (AVO-156/157
 // follow-up). Resolution mirrors movementSystem.getOccupiedPositions: a walker's journey
 // END > a group destination > the current leg target > the standing position. Excluding
@@ -1186,33 +1212,12 @@ export const useOfficeStore = create((set) => ({
       const feedLog = activities.length > 0
         ? [...activities.filter((a) => FEED_ORIGINS.has(a.origin)), ...s.eventFeed].slice(0, 30)
         : s.eventFeed
-      // Coalesce the integration-channel field writes into THIS single set().
-      // applyMessage previously called applyExternalStatus + setStatusSource +
-      // setIntegrationSource + setActiveWorkflow as four separate store writes,
-      // each waking every subscriber (zustand fires listeners synchronously per
-      // set(), independent of React 18 batching). They always change together for
-      // one incoming message, so fold them in here — one set(), one wake-up.
-      // Each is applied only when meta carries it AND the value actually differs,
-      // so an unchanged field is omitted (no spurious invalidation).
-      const integrationPatch = {}
-      // clearSourceIfEmpty (multi-session empty payload): when this eviction leaves
-      // zero external agents, the integration channel went silent — revert to 'organic'
-      // here rather than in a follow-up store write. Takes precedence over meta.statusSource.
-      const revertToOrganic = meta.clearSourceIfEmpty && Object.keys(ext).length === 0
-      if (revertToOrganic) {
-        if (s.statusSource !== 'organic') integrationPatch.statusSource = 'organic'
-        if (s.integrationSource !== null) integrationPatch.integrationSource = null
-      } else {
-        if (meta.statusSource !== undefined && meta.statusSource !== s.statusSource) {
-          integrationPatch.statusSource = meta.statusSource
-        }
-        if (meta.integrationSource !== undefined && (meta.integrationSource || null) !== s.integrationSource) {
-          integrationPatch.integrationSource = meta.integrationSource || null
-        }
-      }
-      if (meta.hasWorkflow && (meta.workflow ?? null) !== s.activeWorkflow) {
-        integrationPatch.activeWorkflow = meta.workflow ?? null
-      }
+      // AVO-184: assembleIntegrationPatch owns the integration-channel field writes (statusSource /
+      // integrationSource / activeWorkflow), coalesced into THIS single set() so one incoming message
+      // wakes subscribers once (zustand fires listeners synchronously per set(), independent of React
+      // 18 batching). Byte-identical; full rationale (omit-when-unchanged, clearSourceIfEmpty
+      // precedence) lives in its module-scope doc.
+      const integrationPatch = assembleIntegrationPatch(s, meta, ext)
       return {
         // AVO-143: when nothing reassigned an agent entry, hand back the ORIGINAL
         // s.agents reference so Object-level subscribers don't re-fire on a pure
