@@ -99,6 +99,10 @@ last_updated: 2026-06-15
 > optimization tier above, several are **real defects** — AVO-171 violates a shipped honesty guarantee.
 > HIGH-confidence items were re-verified by reading the cited file:line; lower-confidence ones carry a
 > confirm step. AVO's own terms (no external attribution).
+>
+> **Status (branch `fix/avo-171-pet-await-honesty-a11y`, 2026-06-19):** ✅ FIXED — AVO-171 (pet honesty,
+> +8 tests), AVO-172 (notifier recurring-prune + reset-helper, +1 test), AVO-175/176/177 (a11y). **Open:**
+> AVO-173 (P2 — needs repro), AVO-174 (P3 — read `inferStatus.js` first), AVO-178/179 (test debt).
 
 | # | Defect | Severity | Evidence (file:line) | Fix (small + reversible) | Verified |
 |---|---|---|---|---|---|

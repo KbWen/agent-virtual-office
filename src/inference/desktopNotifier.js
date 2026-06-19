@@ -207,6 +207,12 @@ export function startDesktopNotifier(store, options = {}) {
         notifiedFor.delete(agentId)
       }
     }
+    // AVO-172: recurringNotifiedFor can hold keys that blockedSince does NOT (an episode entering via
+    // the awaiting-approval branch never sets blockedSince), so prune it by its OWN keys — otherwise a
+    // re-spawned same-id agent's recurring-failure notice stays suppressed across spawned instances.
+    for (const agentId of recurringNotifiedFor.keys()) {
+      if (!(agentId in currentAgents)) recurringNotifiedFor.delete(agentId)
+    }
   }
 }
 
@@ -217,4 +223,10 @@ export function startDesktopNotifier(store, options = {}) {
 export function _resetDesktopNotifierState() {
   blockedSince.clear()
   notifiedFor.clear()
+  recurringNotifiedFor.clear()  // AVO-172: was leaking recurring dedupe state across tests
+}
+
+// Test/inspection helper: current keys of the recurring-notification dedupe map (AVO-172 prune test).
+export function _recurringNotifiedKeys() {
+  return [...recurringNotifiedFor.keys()]
 }
