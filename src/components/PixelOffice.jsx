@@ -1119,7 +1119,6 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <WallWindow x={18} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={weatherReduced} />
       <WallWindow x={72} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={weatherReduced} />
       <GateBooth x={100} y={90} />
-      <Plant x={170} y={100} />
       <Plant x={170} y={50} />
       <rect x={65} y={120} width={70} height={12} rx={2} fill="#9B8B6B" opacity="0.7" />
       <text x={100} y={129} textAnchor="middle" fontSize="6.5" fill="#C8A878" fontFamily="monospace" opacity="0.85">WELCOME</text>
@@ -1140,8 +1139,6 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <line x1={400} y1={50} x2={400} y2={80} stroke="#6B5335" strokeWidth="2" />
       <circle cx={400} cy={47} r={3} fill="#6B5335" />
       <line x1={393} y1={55} x2={407} y2={55} stroke="#6B5335" strokeWidth="1.5" />
-      <Plant x={500} y={55} />
-      <Plant x={500} y={105} />
 
       {/* Night sky visible through windows */}
       <NightSky hour={hour} />
@@ -1182,7 +1179,6 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <g style={{ cursor: 'pointer' }} onClick={() => triggerInteractiveEvent(useOfficeStore, 'eureka')}>
         <Whiteboard x={535} y={300} w={55} h={40} />
       </g>
-      <Plant x={22} y={385} />
       <Plant x={575} y={385} />
       <Plant x={22} y={290} />
 
@@ -1191,7 +1187,6 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <Rug x={633} y={70} w={148} h={120} color="#7070A0" />
       <MeetingTable x={705} y={162} w={100} h={60} />
       <Plant x={630} y={55} />
-      <Plant x={782} y={55} />
       <WallWindow x={632} y={14} w={44} h={26} hour={hour} weather={weather} reducedMotion={weatherReduced} />
       <WallWindow x={696} y={14} w={44} h={26} hour={hour} weather={weather} reducedMotion={weatherReduced} />
 
@@ -1207,7 +1202,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {/* ═══ LOUNGE ═══ */}
       <ScaledText x={120} y={432} scale={labelTextScale} textAnchor="middle" fontSize="7" fill="#507050" fontFamily="monospace" opacity="0.7">LOUNGE</ScaledText>
       <Rug x={50} y={440} w={180} h={95} color="#507050" />
-      <Couch x={55} y={450} width={90} color="#7B8FA1" />
+      <Couch x={55} y={450} width={90} color="#B97A4E" />
       <RoundTable x={175} y={490} r={22} />
       <g style={{ cursor: 'pointer' }} onClick={() => triggerInteractiveEvent(useOfficeStore, 'tea-break')}>
         <CoffeeMachine x={20} y={445} />
@@ -1215,7 +1210,6 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <WaterCooler x={48} y={448} />
       {/* Bookshelf (single, away from WC and doors) */}
       <Bookshelf x={280} y={520} width={60} rows={1} />
-      <Plant x={430} y={430} />
       <Plant x={17} y={540} />
       {/* Vending machine */}
       <rect x={22} y={505} width={18} height={22} rx={2} fill="#888" stroke="#666" strokeWidth="0.8" />
