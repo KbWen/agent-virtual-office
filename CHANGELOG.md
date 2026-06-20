@@ -5,6 +5,48 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.1 — 2026-06-20 — Calmer, cozier, and harder to fool
+
+A maintenance + polish release: the room got cozier to look at, calmer to watch, and even
+harder to mislead about what your agents are actually doing.
+
+### Added
+
+- **"Waiting on you" agents stand out** — an agent stuck at a permission prompt (`awaiting-approval`)
+  now gets its own ring + name-tag colour instead of looking like a normal idle agent.
+- **Elapsed-time-in-state in the inspector** — open an agent and you can see "blocked for 3m" /
+  "waiting for 3m", driven only by real timestamps (never a fabricated count).
+
+### Changed
+
+- **Cozy visual pass** — the office is less cluttered (decorative plants thinned to a deliberate
+  few in a balanced frame) and warmer: the lounge couch, coffee machine, and water-cooler moved
+  from cold corporate greys to a warm, lived-in palette. Status colours and every signal-bearing
+  cue were left exactly as they were.
+- **Calmer walk rhythm** — fewer agents wander the floor at the same time (a concurrent-trip cap),
+  so the room reads relaxed without going dead.
+- **Comms feed honesty + roster de-dup** — the activity feed is more honest and the roster no longer
+  double-lists.
+
+### Fixed
+
+- **A browser tab title can no longer fake a status** — the document-title channel used to inject
+  "blocked"/"done" from any unrelated tab titled e.g. "build failed". It now only ever reads as
+  working, never a conclusive state.
+- **The pet won't celebrate while you're needed** — the office-pet hide-on-blocker guarantee now
+  also covers "waiting on you", so it can't bounce happily while an agent is stuck at a prompt.
+- **No cross-role file bleed** — a shorthand status POST no longer broadcasts one role's active file
+  onto the others.
+- **Honesty + accessibility polish** — reduced-motion gating, a keyboard-operable inspector close,
+  and English/繁體中文 aria parity.
+
+### Internal
+
+- God-reducer cleanup (equivalence-guarded pure-helper extraction; blocked-family constants
+  single-sourced), a per-agent memory-leak prune on worktree-agent eviction, crash/corruption
+  guards, and **ADR-008** — a codified "no-fabricated-need" rule that gates every future
+  ambient/pet/charm/notification feature.
+
 ## v1.6.0 — 2026-06-15 — Everyone finds their voice — quietly, and honestly
 
 The office learned to talk in character — and got calmer and more honest at the same time.

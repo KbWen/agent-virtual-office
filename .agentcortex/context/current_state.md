@@ -165,6 +165,14 @@
 
 ## Ship History
 
+### Ship-feat-avo-186-cozy-visual-pass-2026-06-20 (PR #186 — declutter + warm-palette restyle) · release v1.6.1
+
+- Shipped **AVO-186** (quick-win, cosmetic). **VR-1 declutter**: decorative `<Plant>` 12→6 into a symmetric perimeter frame (dropped 4 redundant stacked pairs + the center-lounge crowder); plants carry zero status signal so fewer = pure noise removed. **VR-2 restyle** via a 5-lens design/game expert panel (cozy-interior / pixel-art / cozy-life-sim-game / color-art-director / honesty-adversary) → synthesizer; the adversary lens pulled the group back from full terracotta to a DESATURATED clay so the couch stays furniture-ground and agents stay the focal figures. Pure fill swaps (silhouettes/shading ramps unchanged): Couch grey-blue→clay ramp (base `#B97A4E` + cushions `#CC8C5E` + trim `#9A5E38` + arms `#A86B44`; component default param aligned to avoid a future half-recolor) · CoffeeMachine body `#444`→espresso `#5A4A3E` · WaterCooler housing `#ccc`→putty `#D8CDBE`. RoundTable nudge SKIPPED (panel gated it on "flat live"; it isn't). **NO signal-bearing colour touched** (windows/monitors/gate/kanban/rug hues/clocks).
+- Guard: new `tests/officeDecorationDensity.test.js` (plant count ∈ [4,6], no desk-zone plant, no <40px cluster). Origin: `docs/reviews/2026-06-20-audit.md` — a read-only delta audit that found no other actionable tech debt (god-files grew only marginally since v1.6.0).
+- Verify: full suite **2222 pass**; production build clean (484KB / 152KB gz); CI all green (Semgrep / render-smoke×2 / test 22+24 / pack-smoke / npm audit / TruffleHog); merged-main rendered live (6 plants + clay couch, 0 errors).
+- **Release v1.6.1** cut in this chore PR: `package.json` 1.6.0→1.6.1 + CHANGELOG narrative covering #173–186. SSoT appended directly (guard bypassed deliberately — avoids the documented stale-receipt hazard). Tag + `npm publish` performed manually by owner.
+- Tests: Pass
+
 ### Ship-fix-round2-leaks-and-guards-2026-06-19 (PR #179 — AVO-180 eviction leak + AVO-182 guards)
 
 - Shipped the verified, well-scoped items from the round-2 bug/tech-debt sweep (quick-win). **AVO-180**: the multi-session eviction site (`store.js`) now prunes the per-agent transient module state of an evicted dynamic worktree agent — `pruneRecentPicks(id)` (new export from `behaviorEngine.js`), `_storeRecentPicks.delete(id)`, and a cloned-then-deleted `recurringFailureLog[id]` (never mutates a published log). Mirrors `idleGapInfer`'s existing eviction prune; closes an unbounded-Map leak relevant to the owner's many-worktree workflow. +1 regression test (rfLog pruned on eviction). **AVO-182** (crash/corruption guards): `charName` null/non-string guard (was `charId.includes('~')` → throw; +2 tests) · `darken` non-`#RRGGBB` passthrough (was caching `#NaNNaNNaN`) · ambientSound gesture listeners `{once:true}`.
