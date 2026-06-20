@@ -141,15 +141,15 @@ export const Plant = React.memo(function Plant({ x, y }) {
 })
 
 // ─── Couch ───────────────────────────────────────────────────────────────
-export const Couch = React.memo(function Couch({ x, y, width = 80, color = '#7B8FA1' }) {
+export const Couch = React.memo(function Couch({ x, y, width = 80, color = '#B97A4E' }) {
   return (
     <g>
       <rect x={x} y={y} width={width} height={34} rx={5} fill={color} />
-      <rect x={x + 4} y={y + 9} width={width / 2 - 8} height={21} rx={3} fill="#8FA3B8" />
-      <rect x={x + width / 2 + 4} y={y + 9} width={width / 2 - 8} height={21} rx={3} fill="#8FA3B8" />
-      <rect x={x} y={y} width={width} height={11} rx={4} fill="#5A6E80" />
-      <rect x={x} y={y + 9} width={10} height={25} rx={3} fill="#6B7F91" />
-      <rect x={x + width - 10} y={y + 9} width={10} height={25} rx={3} fill="#6B7F91" />
+      <rect x={x + 4} y={y + 9} width={width / 2 - 8} height={21} rx={3} fill="#CC8C5E" />
+      <rect x={x + width / 2 + 4} y={y + 9} width={width / 2 - 8} height={21} rx={3} fill="#CC8C5E" />
+      <rect x={x} y={y} width={width} height={11} rx={4} fill="#9A5E38" />
+      <rect x={x} y={y + 9} width={10} height={25} rx={3} fill="#A86B44" />
+      <rect x={x + width - 10} y={y + 9} width={10} height={25} rx={3} fill="#A86B44" />
     </g>
   )
 })
@@ -191,7 +191,7 @@ export const MeetingTable = React.memo(function MeetingTable({ x, y, w = 90, h =
 export const CoffeeMachine = React.memo(function CoffeeMachine({ x, y }) {
   return (
     <g>
-      <rect x={x} y={y} width={18} height={26} rx={2} fill="#444" />
+      <rect x={x} y={y} width={18} height={26} rx={2} fill="#5A4A3E" />
       <rect x={x + 2} y={y + 2} width={14} height={10} rx={1} fill="#222" />
       <rect x={x + 3} y={y + 3} width={12} height={8} rx={0.5} fill="#0a2a1a" />
       <text x={x + 9} y={y + 9} textAnchor="middle" fontSize="4" fill="#0f0" fontFamily="monospace">CAFE</text>
@@ -207,7 +207,7 @@ export const CoffeeMachine = React.memo(function CoffeeMachine({ x, y }) {
 export const WaterCooler = React.memo(function WaterCooler({ x, y }) {
   return (
     <g>
-      <rect x={x - 5} y={y + 6} width={10} height={14} rx={2} fill="#ccc" />
+      <rect x={x - 5} y={y + 6} width={10} height={14} rx={2} fill="#D8CDBE" />
       <ellipse cx={x} cy={y + 6} rx={5} ry={6} fill="#B0D4F0" stroke="#88B4D8" strokeWidth="0.8" />
       <ellipse cx={x} cy={y} rx={3} ry={4} fill="#D8EEFF" opacity="0.8" />
       <circle cx={x - 2} cy={y + 14} r={1.5} fill="#E24B4A" opacity="0.7" />
