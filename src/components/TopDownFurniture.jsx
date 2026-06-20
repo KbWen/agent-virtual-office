@@ -141,7 +141,7 @@ export const Plant = React.memo(function Plant({ x, y }) {
 })
 
 // ─── Couch ───────────────────────────────────────────────────────────────
-export const Couch = React.memo(function Couch({ x, y, width = 80, color = '#7B8FA1' }) {
+export const Couch = React.memo(function Couch({ x, y, width = 80, color = '#B97A4E' }) {
   return (
     <g>
       <rect x={x} y={y} width={width} height={34} rx={5} fill={color} />
