@@ -144,6 +144,10 @@ The framework owns exactly these **14** skill names (do not reuse them for downs
 - **Preservation on deploy**: `custom-*` skills are net-new to the framework source, so `deploy.sh` never touches them; even a same-named framework skill edit is sidecar-protected, not silently overwritten (Ref: ADR-005, `deploy.sh get_tier` → scaffold for `.agent/skills/*`,`.agents/skills/*`).
 - **Additive-fork cleanliness**: because `custom-*` files are disjoint from the framework's file set, `git pull upstream` stays conflict-free for forks that only *add* skills (never edit framework skills in place).
 
+### 3b. Subagent Sentinel Emission (Ref: ADR-007)
+
+The `⚡ ACX` runtime sentinel is **primary-emitted**. A harness-dispatched subagent's output returns **internally to the primary**, not as a user-facing chat turn — so subagents neither emit nor need the sentinel, and a subagent output missing `⚡ ACX` is NOT a violation. The primary (the agent inside the governed phase) is the sole sentinel emitter, exactly as it is the sole Work Log writer and gate owner under `subagent_policy: read-only` (Ref: bootstrap §1b, ADR-007).
+
 ---
 
 ## 4. Ambiguity Rules

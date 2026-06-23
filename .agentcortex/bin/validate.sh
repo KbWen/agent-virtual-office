@@ -50,6 +50,7 @@ ARCHIVE_INDEX_JSONL="$ROOT/.agentcortex/context/archive/INDEX.jsonl"
 LESSON_CHAIN_CHECK="$ROOT/.agentcortex/tools/check_lesson_chain.py"
 SSOT_CURRENT_STATE="$ROOT/.agentcortex/context/current_state.md"
 COMMAND_SYNC_CHECK="$ROOT/.agentcortex/tools/check_command_sync.py"
+SKILL_PROVENANCE_CHECK="$ROOT/.agentcortex/tools/check_skill_provenance.py"
 TRIGGER_REGISTRY="$ROOT/.agentcortex/metadata/trigger-registry.yaml"
 TRIGGER_COMPACT_INDEX="$ROOT/.agentcortex/metadata/trigger-compact-index.json"
 LIFECYCLE_SCENARIOS="$ROOT/.agentcortex/metadata/lifecycle-scenarios.json"
@@ -366,6 +367,12 @@ run_python_check "guarded-write lint (governance paths)" FAIL "$GUARDED_WRITES_L
 # Files dated before 2026-04-25 are grandfathered (WARN); newer files FAIL.
 run_python_check "lifecycle frontmatter (governance docs)" FAIL "$LIFECYCLE_FRONTMATTER_CHECK" --root "$ROOT"
 
+# Skill provenance + compatibility floor (backlog #80/#81). Source-repo only:
+# the tool self-skips downstream when a .agentcortex-manifest is present, and as
+# a CI/source validator it is not in deploy.sh runtime_tools, so it is simply
+# absent downstream -> run_python_check records a graceful SKIP.
+run_python_check "skill provenance + compatibility floor" FAIL "$SKILL_PROVENANCE_CHECK" --root "$ROOT"
+
 # Verify the hash chain on the archive INDEX.jsonl. A broken chain means an
 # entry was retroactively rewritten without going through
 # .agentcortex/tools/append_chain_entry.py. Capability-by-presence: file
@@ -530,6 +537,43 @@ check_contains_literal \
   'Load Override Layer' \
   "bootstrap ships override-layer load step (ADR-004 §1a)" \
   "bootstrap missing override-layer load step (ADR-004 §1a)"
+
+# ADR-007: bootstrap MUST ship the downstream-capabilities load step (§1b).
+# Structural only — per-agent compliance is honor-system (like the override read).
+check_contains_literal \
+  "$WORKFLOWS_DIR/bootstrap.md" \
+  'Load Downstream Capabilities' \
+  "bootstrap ships downstream-capabilities load step (ADR-007 §1b)" \
+  "bootstrap missing downstream-capabilities load step (ADR-007 §1b)"
+
+# ADR-009: bootstrap MUST ship the kb-consult scope-detected row (§3.6 / §1b knowledge_sources).
+# Structural only -- per-agent consult quality is honor-system (like the override read).
+check_contains_literal \
+  "$WORKFLOWS_DIR/bootstrap.md" \
+  'kb-consult' \
+  "bootstrap ships KB-consult scope-detected row (ADR-009)" \
+  "bootstrap missing KB-consult scope-detected row (ADR-009)"
+
+# ADR-007: a present downstream-capabilities.yaml MUST be schema gate-safe
+# (gate-relaxation is REJECTED, never clamped). Absent file -> validator exits 0.
+CAP_VALIDATOR="$ROOT/.agentcortex/tools/validate_downstream_capabilities.py"
+CAP_FILE="$ROOT/.agentcortex/context/private/downstream-capabilities.yaml"
+if [[ -f "$CAP_VALIDATOR" ]]; then
+  # python-present + gate-unsafe file -> FAIL (CI always has python). No-python host ->
+  # WARN (advisory): the runtime guarantee there is bootstrap §1b agent-discipline, honest
+  # per the framework no-python doctrine. (MissingPythonLevel is WARN, not a fake FAIL.)
+  run_python_check "downstream-capabilities gate-safety" WARN "$CAP_VALIDATOR" "$CAP_FILE"
+else
+  record_result SKIP "downstream-capabilities gate-safety -- validator not deployed (safe to ignore)"
+fi
+
+# ADR-008: the committed safety nucleus MUST match the AGENTS.md fenced span (CR-normalized).
+SAFETY_NUCLEUS_GEN="$ROOT/.agentcortex/tools/generate_safety_nucleus.py"
+if [[ -f "$SAFETY_NUCLEUS_GEN" ]]; then
+  run_python_check "safety nucleus freshness" WARN "$SAFETY_NUCLEUS_GEN" --check
+else
+  record_result SKIP "safety nucleus freshness -- generator not deployed (safe to ignore)"
+fi
 
 ACTIVE_CODEX_RULES="$ROOT/codex/rules/default.rules"
 [[ -f "$ACTIVE_CODEX_RULES" ]] || ACTIVE_CODEX_RULES="$CODEX_RULES"
@@ -996,7 +1040,7 @@ if [[ -d "$WORKLOG_DIR" ]]; then
     record_result PASS "active work log sizes are within compaction thresholds"
   fi
   if [[ "$worklog_count" -gt "$ACTIVE_WORKLOG_FAIL_THRESHOLD" ]]; then
-    record_result FAIL "active work log count exceeds hard limit (${worklog_count} > ${ACTIVE_WORKLOG_FAIL_THRESHOLD}); archive completed branches via /handoff or rm"
+    record_result WARN "active work log count over hygiene hard-limit (${worklog_count} > ${ACTIVE_WORKLOG_FAIL_THRESHOLD}); archive completed branches via /handoff or rm — advisory only (work logs are gitignored, CI-invisible)"
   elif [[ "$worklog_count" -gt "$ACTIVE_WORKLOG_WARN_THRESHOLD" ]]; then
     record_result WARN "active work log count exceeds hygiene threshold (${worklog_count} > ${ACTIVE_WORKLOG_WARN_THRESHOLD}; hard limit ${ACTIVE_WORKLOG_FAIL_THRESHOLD})"
   else
@@ -1935,8 +1979,9 @@ if [[ -f "$CURRENT_STATE" ]]; then
         basename_spec="$(basename "$spec_file")"
         # Skip files starting with _
         [[ "$basename_spec" == _* ]] && continue
-        # Skip files with status: draft in frontmatter
-        if grep -qm1 '^status:[[:space:]]*draft' "$spec_file" 2>/dev/null; then
+        # Skip files with status: draft, frozen, or cancelled in frontmatter
+        # (pre-ship intermediate states — not yet required in Spec Index; /ship indexes on ship)
+        if grep -qm1 '^status:[[:space:]]*\(draft\|frozen\|cancelled\)' "$spec_file" 2>/dev/null; then
           continue
         fi
         rel_path="${spec_file#$ROOT/}"
@@ -1959,7 +2004,7 @@ if [[ -f "$CURRENT_STATE" ]]; then
   done < <(printf '%s' "$spec_index_section" | sed -n 's/.*\] \([^ ]*\.md\) .*/\1/p')
   if [[ "$spec_missing_count" -gt 0 || "$spec_phantom_count" -gt 0 ]]; then
     spec_msg=""
-    [[ "$spec_missing_count" -gt 0 ]] && spec_msg="${spec_missing_count} non-draft spec(s) not in index"
+    [[ "$spec_missing_count" -gt 0 ]] && spec_msg="${spec_missing_count} shipped/living spec(s) not in index"
     if [[ "$spec_phantom_count" -gt 0 ]]; then
       [[ -n "$spec_msg" ]] && spec_msg="$spec_msg; "
       spec_msg="${spec_msg}${spec_phantom_count} indexed spec(s) not on disk"
@@ -1969,7 +2014,7 @@ if [[ -f "$CURRENT_STATE" ]]; then
     printf '%b' "$spec_phantom_list"
     echo "  fix: update Spec Index in .agentcortex/context/current_state.md via /ship"
   else
-    record_result PASS "SSoT Spec Index completeness: all non-draft specs are indexed"
+    record_result PASS "SSoT Spec Index completeness: all shipped/living specs are indexed"
   fi
 
   # Active Backlog consistency
@@ -2399,6 +2444,29 @@ if [[ -f "$ACX_EVAL_YAML" ]]; then
     else
       record_result PASS "governance eval coverage: 0 MUST-rule section(s) with zero guarding cases" || true
     fi
+  fi
+fi
+
+# Token lifecycle drift advisory (backlog #51 / issue #157): capability-by-presence.
+# If the baseline exists AND python is available, run update_lifecycle_baseline.py
+# --dry-run and WARN when any scenario/aggregate GREW beyond slack (advisory, never
+# FAIL). Baseline absent -> WARN to seed. Shrink is intentionally not flagged
+# (trimming token cost is good). Teeth live in tests/ci/test_lifecycle_baseline_drift.py.
+ACX_LIFECYCLE_BASELINE="$ROOT/.agentcortex/metadata/lifecycle-baseline.json"
+ACX_LIFECYCLE_UPDATER="$ROOT/.agentcortex/tools/update_lifecycle_baseline.py"
+if [[ ! -f "$ACX_LIFECYCLE_BASELINE" ]]; then
+  record_result WARN "token lifecycle baseline absent (.agentcortex/metadata/lifecycle-baseline.json); seed with update_lifecycle_baseline.py --init" || true
+elif [[ -z "${PYTHON_BIN:-}" ]]; then
+  record_result SKIP "token lifecycle drift -- python unavailable or disabled (--no-python)" || true
+elif [[ ! -f "$ACX_LIFECYCLE_UPDATER" ]]; then
+  record_result SKIP "token lifecycle drift -- updater not present (update_lifecycle_baseline.py missing)" || true
+else
+  _acx_drift_out="$("$PYTHON_BIN" "$ACX_LIFECYCLE_UPDATER" --root "$ROOT" --dry-run 2>&1)" && _acx_drift_status=0 || _acx_drift_status=$?
+  if [[ "$_acx_drift_status" -eq 0 ]]; then
+    record_result PASS "token lifecycle drift: within slack" || true
+  else
+    record_result WARN "token lifecycle drift or detector error (advisory, never FAIL); see output. If drift is intended, re-baseline: update_lifecycle_baseline.py --apply" || true
+    print_indented_output "$_acx_drift_out" || true
   fi
 fi
 
