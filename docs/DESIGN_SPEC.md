@@ -71,6 +71,8 @@
   └── <BehaviorBubble> 對話氣泡
 ```
 
+> 對話氣泡＝聲音、狀態＝顏色環＋工作符號的頻道分離，per-role 語音原型，以及 inter-agent 對話的誠實閘（不捏造對話/交情），設計與決策見 **[ADR-007](adr/ADR-007-dialogue-channel-separation-and-honesty-gate.md)**（此處不重複）。
+
 ### 角色配件與性別
 
 | 角色 | 髮型 | 性別 | 特色 |
