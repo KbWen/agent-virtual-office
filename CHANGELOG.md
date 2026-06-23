@@ -5,6 +5,28 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.2 — 2026-06-23 — Docs catch up to the cozy office
+
+A docs + internal-maintenance release — **no runtime changes**. The app behaves exactly as in
+v1.6.1; this release brings the README and design docs in line with what already shipped.
+
+### Changed
+
+- **README visuals refreshed to the cozy build** — the hero and scene images were regenerated from
+  the current cozy office (decluttered plants, warm palette) introduced in v1.6.1; the prior shots
+  predated it. Staged in daylight so the hero stays sunny.
+
+### Documentation
+
+- **Dialogue / voice layer documented** — agents murmuring in their own per-role voices, with the
+  speech bubble reserved for voice while status rides the colour ring + work symbol (Wave A, ADR-007),
+  is now described in the README (English + 繁體中文) and cross-referenced from the design spec.
+
+### Internal
+
+- **Governance tooling upgraded** — the Agentic OS workflow brain used during development was updated
+  v1.5.2 → v1.8.1 (new credential/safety layer). Dev-time only; no effect on the shipped app.
+
 ## v1.6.1 — 2026-06-20 — Calmer, cozier, and harder to fool
 
 A maintenance + polish release: the room got cozier to look at, calmer to watch, and even
