@@ -89,6 +89,8 @@ The same tool animates differently per role. `qa + Bash` pulls out a magnifier; 
 
 Everything you see is real. Events fire from your actual session, and an agent's status is never made up. When one gets stuck you see *why* — 🧪 test run, 🔨 build, 📦 install, or just ❔ unknown — with a ↻ when the same thing keeps failing. It only names a cause when the hook actually reports one; otherwise it stays vague on purpose.
 
+Each role murmurs in its own voice — the skeptic QA, the brisk PM, the heads-down Researcher — but the speech bubble is *only* for that voice; status always rides the colored ring and a work symbol. Personality without faking it: no invented conversations, no made-up rapport the agents couldn't actually have.
+
 Click a character and it bobs and tells you what it's doing right now. It won't move or change state. `Space` pokes again; right-click pokes without opening the inspector.
 
 One click saves the day as a little pixel-art postcard you can share. Slow day with nothing finished? The card says so.
