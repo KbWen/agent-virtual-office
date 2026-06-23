@@ -241,6 +241,7 @@ $archiveIndexJsonl = Join-NormalPath $root '.agentcortex/context/archive/INDEX.j
 $lessonChainCheck = Join-NormalPath $root '.agentcortex/tools/check_lesson_chain.py'
 $ssotCurrentState = Join-NormalPath $root '.agentcortex/context/current_state.md'
 $commandSyncCheck = Join-NormalPath $root '.agentcortex/tools/check_command_sync.py'
+$skillProvenanceCheck = Join-NormalPath $root '.agentcortex/tools/check_skill_provenance.py'
 $triggerRegistry = Join-NormalPath $root '.agentcortex/metadata/trigger-registry.yaml'
 $triggerCompactIndex = Join-NormalPath $root '.agentcortex/metadata/trigger-compact-index.json'
 $lifecycleScenarios = Join-NormalPath $root '.agentcortex/metadata/lifecycle-scenarios.json'
@@ -418,6 +419,10 @@ Invoke-PythonCheck -Label 'guarded-write lint (governance paths)' -MissingPython
 # Lifecycle frontmatter check mirror of validate.sh integration.
 Invoke-PythonCheck -Label 'lifecycle frontmatter (governance docs)' -MissingPythonLevel 'FAIL' -ScriptPath $lifecycleFrontmatterCheck -Arguments @('--root', $root)
 
+# Skill provenance + compatibility floor (backlog #80/#81) -- mirror of validate.sh.
+# Source-repo only; absent downstream (not in deploy runtime_tools) -> graceful SKIP.
+Invoke-PythonCheck -Label 'skill provenance + compatibility floor' -MissingPythonLevel 'FAIL' -ScriptPath $skillProvenanceCheck -Arguments @('--root', $root)
+
 # Verify the hash chain on the archive INDEX.jsonl.
 if (Test-Path -Path $archiveIndexJsonl -PathType Leaf) {
     Invoke-PythonCheck -Label 'audit chain integrity (INDEX.jsonl)' -MissingPythonLevel 'FAIL' -ScriptPath $auditChainCheck -Arguments @('--path', $archiveIndexJsonl, '--quiet')
@@ -487,6 +492,38 @@ if (Test-Path -Path $ssotCurrentState -PathType Leaf) {
     Invoke-PythonCheck -Label 'lesson chain integrity (Global Lessons)' -MissingPythonLevel 'FAIL' -ScriptPath $lessonChainCheck -Arguments @('--path', $ssotCurrentState, '--quiet')
 } else {
     Add-Result -Level 'SKIP' -Message 'lesson chain integrity -- current_state.md not present'
+}
+
+# Token lifecycle drift advisory (backlog #51 / issue #157): mirror of the
+# validate.sh block. WARN when any scenario/aggregate GREW beyond slack (advisory,
+# never FAIL); baseline absent -> WARN to seed; shrink is intentionally not flagged.
+# Teeth live in tests/ci/test_lifecycle_baseline_drift.py.
+$lifecycleBaseline = Join-Path $root '.agentcortex/metadata/lifecycle-baseline.json'
+$lifecycleUpdater = Join-Path $root '.agentcortex/tools/update_lifecycle_baseline.py'
+if (-not (Test-Path -Path $lifecycleBaseline -PathType Leaf)) {
+    Add-Result -Level 'WARN' -Message 'token lifecycle baseline absent (.agentcortex/metadata/lifecycle-baseline.json); seed with update_lifecycle_baseline.py --init'
+} elseif (-not $script:PythonCommand) {
+    Add-Result -Level 'SKIP' -Message 'token lifecycle drift -- python unavailable or disabled (--NoPython)'
+} elseif (-not (Test-Path -Path $lifecycleUpdater -PathType Leaf)) {
+    Add-Result -Level 'SKIP' -Message 'token lifecycle drift -- updater not present (update_lifecycle_baseline.py missing)'
+} else {
+    $prevEap = $ErrorActionPreference
+    $hadNative = Test-Path variable:PSNativeCommandUseErrorActionPreference
+    if ($hadNative) { $prevNative = $PSNativeCommandUseErrorActionPreference; $PSNativeCommandUseErrorActionPreference = $false }
+    $ErrorActionPreference = 'Continue'
+    try {
+        $driftOut = & $script:PythonCommand.Source $lifecycleUpdater '--root' $root '--dry-run' 2>&1 | Out-String
+    } finally {
+        $ErrorActionPreference = $prevEap
+        if ($hadNative) { $PSNativeCommandUseErrorActionPreference = $prevNative }
+    }
+    $driftExit = if (Get-Variable LASTEXITCODE -ErrorAction SilentlyContinue) { $LASTEXITCODE } else { 0 }
+    if ($driftExit -eq 0) {
+        Add-Result -Level 'PASS' -Message 'token lifecycle drift: within slack'
+    } else {
+        Add-Result -Level 'WARN' -Message 'token lifecycle drift or detector error (advisory, never FAIL); see output. If drift is intended, re-baseline: update_lifecycle_baseline.py --apply'
+        Show-IndentedOutput -Text $driftOut
+    }
 }
 
 # Unresolved merge-conflict markers in tracked files (mirror of validate.sh).
@@ -639,6 +676,27 @@ else {
 Test-ContainsLiteral -Path (Join-NormalPath $workflowsDir 'bootstrap.md') -Pattern 'Recommended Skills' -SuccessMessage 'bootstrap includes Recommended Skills contract' -FailureMessage 'bootstrap missing Recommended Skills contract'
 # ADR-004: bootstrap MUST ship the override-layer load step (structural enforcement only; per-agent compliance is honor-system, not falsely test-enforced).
 Test-ContainsLiteral -Path (Join-NormalPath $workflowsDir 'bootstrap.md') -Pattern 'Load Override Layer' -SuccessMessage 'bootstrap ships override-layer load step (ADR-004 §1a)' -FailureMessage 'bootstrap missing override-layer load step (ADR-004 §1a)'
+# ADR-007: bootstrap MUST ship the downstream-capabilities load step (§1b).
+Test-ContainsLiteral -Path (Join-NormalPath $workflowsDir 'bootstrap.md') -Pattern 'Load Downstream Capabilities' -SuccessMessage 'bootstrap ships downstream-capabilities load step (ADR-007 §1b)' -FailureMessage 'bootstrap missing downstream-capabilities load step (ADR-007 §1b)'
+# ADR-009: bootstrap MUST ship the kb-consult scope-detected row (§3.6 / §1b knowledge_sources). Structural only; consult quality is honor-system.
+Test-ContainsLiteral -Path (Join-NormalPath $workflowsDir 'bootstrap.md') -Pattern 'kb-consult' -SuccessMessage 'bootstrap ships KB-consult scope-detected row (ADR-009)' -FailureMessage 'bootstrap missing KB-consult scope-detected row (ADR-009)'
+# ADR-007: a present downstream-capabilities.yaml MUST be schema gate-safe (rejected, not clamped).
+$capValidator = Join-NormalPath $root '.agentcortex/tools/validate_downstream_capabilities.py'
+$capFile = Join-NormalPath $root '.agentcortex/context/private/downstream-capabilities.yaml'
+if (Test-Path $capValidator) {
+    # python-present + gate-unsafe -> FAIL (CI always has python); no-python -> WARN
+    # (advisory; bootstrap §1b agent-discipline is the runtime guarantee there).
+    Invoke-PythonCheck -Label 'downstream-capabilities gate-safety' -MissingPythonLevel 'WARN' -ScriptPath $capValidator -Arguments @($capFile)
+} else {
+    Add-Result -Level 'SKIP' -Message 'downstream-capabilities gate-safety -- validator not deployed (safe to ignore)'
+}
+# ADR-008: the committed safety nucleus MUST match the AGENTS.md fenced span (CR-normalized).
+$safetyNucleusGen = Join-NormalPath $root '.agentcortex/tools/generate_safety_nucleus.py'
+if (Test-Path $safetyNucleusGen) {
+    Invoke-PythonCheck -Label 'safety nucleus freshness' -MissingPythonLevel 'WARN' -ScriptPath $safetyNucleusGen -Arguments @('--check')
+} else {
+    Add-Result -Level 'SKIP' -Message 'safety nucleus freshness -- generator not deployed (safe to ignore)'
+}
 $phaseSkillFiles = @(
     (Join-NormalPath $workflowsDir 'plan.md'),
     (Join-NormalPath $workflowsDir 'implement.md'),
@@ -932,7 +990,7 @@ if (Test-Path -Path $worklogDir -PathType Container) {
     }
 
     if ($worklogs.Count -gt $activeWorklogFailThreshold) {
-        Add-Result -Level 'FAIL' -Message "active work log count exceeds hard limit ($($worklogs.Count) > $activeWorklogFailThreshold); archive completed branches via /handoff or rm"
+        Add-Result -Level 'WARN' -Message "active work log count over hygiene hard-limit ($($worklogs.Count) > $activeWorklogFailThreshold); archive completed branches via /handoff or rm — advisory only (work logs are gitignored, CI-invisible)"
     }
     elseif ($worklogs.Count -gt $activeWorklogWarnThreshold) {
         Add-Result -Level 'WARN' -Message "active work log count exceeds hygiene threshold ($($worklogs.Count) > $activeWorklogWarnThreshold; hard limit $activeWorklogFailThreshold)"
@@ -1756,7 +1814,9 @@ if (Test-Path -Path $currentStatePath -PathType Leaf) {
                 ForEach-Object {
                     $relPath = $_.FullName.Replace($root + [System.IO.Path]::DirectorySeparatorChar, '').Replace('\', '/')
                     $fileContent = Get-Content -Path $_.FullName -Raw -ErrorAction SilentlyContinue
-                    if ($fileContent -and $fileContent -match '(?m)^status:\s*draft') { return }
+                    # Skip pre-ship intermediate states: draft, frozen, cancelled
+                    # (not yet required in Spec Index; /ship indexes on ship)
+                    if ($fileContent -and $fileContent -match '(?m)^status:\s*(draft|frozen|cancelled)') { return }
                     $relPath
                 })
         }
@@ -1766,7 +1826,7 @@ if (Test-Path -Path $currentStatePath -PathType Leaf) {
     $specPhantom = @($indexedSpecPaths | Where-Object { $_ -and -not (Test-Path -Path (Join-NormalPath $root $_) -PathType Leaf) })
     if ($specMissing.Count -gt 0 -or $specPhantom.Count -gt 0) {
         $specMsg = @()
-        if ($specMissing.Count -gt 0) { $specMsg += "$($specMissing.Count) non-draft spec(s) not in index" }
+        if ($specMissing.Count -gt 0) { $specMsg += "$($specMissing.Count) shipped/living spec(s) not in index" }
         if ($specPhantom.Count -gt 0) { $specMsg += "$($specPhantom.Count) indexed spec(s) not on disk" }
         Add-Result -Level 'FAIL' -Message "SSoT Spec Index completeness: $($specMsg -join '; ')"
         foreach ($m in $specMissing) { Write-Output "  not indexed: $m" }
@@ -1774,7 +1834,7 @@ if (Test-Path -Path $currentStatePath -PathType Leaf) {
         Write-Output "  fix: update Spec Index in .agentcortex/context/current_state.md via /ship"
     }
     else {
-        Add-Result -Level 'PASS' -Message 'SSoT Spec Index completeness: all non-draft specs are indexed'
+        Add-Result -Level 'PASS' -Message 'SSoT Spec Index completeness: all shipped/living specs are indexed'
     }
 
     # Active Backlog consistency

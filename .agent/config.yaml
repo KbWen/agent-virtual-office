@@ -104,6 +104,31 @@ user_preferences:
   high_cost_pin_advisory_threshold: 2
 
 
+# Downstream Capability Declaration - ADR-007 (capability-by-presence; inert if absent).
+# Lets a downstream OPT IN to register custom-* skills into auto-activation, declare a
+# subagent_policy, and declare advisory trackers - all gate-capped. Loaded present-only at
+# bootstrap §1b; schema gate-safety enforced by validate_downstream_capabilities.py.
+downstream_capabilities:
+  # Path (relative to repo root). MUST be gitignored (lives under context/private/);
+  # deploy never ships it, so a downstream's declarations are never overwritten.
+  path: .agentcortex/context/private/downstream-capabilities.yaml
+
+  # Hard caps - gate-relaxation is UNREPRESENTABLE (the validator REJECTS violations,
+  # never clamps): a declared skill id MUST be custom-*; its load_policy MUST NOT exceed
+  # the on-match ceiling; no gate / ship-edge / block_if_missed / trigger_priority /
+  # concurrent-writer / blocking-tracker key may appear anywhere.
+  load_policy_ceiling: on-match
+  custom_prefix_required: true
+
+  # knowledge_sources (ADR-009): present-only, advisory-ONLY external KB consumption
+  # pointers. role is FIXED to advisory (a KB can never gate a phase); manifest_trusted
+  # defaults false (a BYO manifest's sha is never trusted to skip a read unless the
+  # adopter's own CI keeps it fresh). Enforced by validate_downstream_capabilities.py.
+  kb_role_fixed: advisory
+  kb_manifest_trusted_default: false
+  # ACX_KB_PATH env var is referenced in bootstrap.md §1b directly; no config key needed.
+
+
 # Document lifecycle caps — prevents unbounded SSoT bloat.
 # See: docs/specs/tiered-doc-lifecycle.md
 document_lifecycle:

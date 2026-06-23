@@ -26,7 +26,7 @@ TARGET="${TARGET:-.}"
 TARGET="${TARGET%/}"
 
 MANIFEST_FILE="$TARGET/.agentcortex-manifest"
-ACX_VERSION="1.5.2"
+ACX_VERSION="1.8.1"
 
 # --- Self-deploy guard ---
 TARGET_ABS="$(cd "$TARGET" 2>/dev/null && pwd || echo "$TARGET")"
@@ -118,6 +118,7 @@ get_tier() {
         .claude/settings.json) echo "scaffold" ;;
         .github/ISSUE_TEMPLATE/*) echo "scaffold" ;;
         .github/PULL_REQUEST_TEMPLATE.md) echo "scaffold" ;;
+        .github/copilot-instructions.md) echo "scaffold" ;;
 
         # scaffold — user may customize advisory hook samples before activating
         .githooks/*) echo "scaffold" ;;
@@ -156,6 +157,7 @@ _get_tier_inline() {
         .claude/settings.json) _TIER="scaffold" ;;
         .github/ISSUE_TEMPLATE/*) _TIER="scaffold" ;;
         .github/PULL_REQUEST_TEMPLATE.md) _TIER="scaffold" ;;
+        .github/copilot-instructions.md) _TIER="scaffold" ;;
         .githooks/*) _TIER="scaffold" ;;
         .agent/skills/*|.agents/skills/*) _TIER="scaffold" ;;
         *) _TIER="core" ;;
@@ -722,7 +724,17 @@ if $DRY_RUN; then
     _dry_count=0
     # Enumerate only the files that are actually deployed (mirrors real deploy logic).
     # Runtime Python tools are a whitelist — NOT all *.py in tools/.
-    _runtime_tools="guard_context_write.py _yaml_loader.py check_command_sync.py check_text_integrity.py check_text_integrity.ps1 text_integrity_baseline.txt sync_skills.sh lint_governed_writes.py check_lifecycle_frontmatter.py check_lesson_chain.py check_adr_coverage.py append_chain_entry.py append_lesson.py recover_worklog_lock.py lint_spec_drift.py run_governance_eval.py"
+    _runtime_tools="guard_context_write.py _yaml_loader.py check_command_sync.py check_text_integrity.py check_text_integrity.ps1 text_integrity_baseline.txt sync_skills.sh lint_governed_writes.py check_lifecycle_frontmatter.py check_lesson_chain.py check_adr_coverage.py append_chain_entry.py append_lesson.py recover_worklog_lock.py lint_spec_drift.py run_governance_eval.py scan_credentials.py credential_floor.sh credential_floor.ps1 generate_safety_nucleus.py validate_downstream_capabilities.py"
+    _dry_print_file() {
+        local src="$1"
+        local rel="$2"
+        [ -f "$src" ] || return 0
+        _dry_count=$((_dry_count + 1))
+        _get_tier_inline "$rel"
+        local status="[NEW]   "
+        [ -f "$TARGET/$rel" ] && status="[UPDATE]"
+        printf '  %s %-10s %s\n' "$status" "($_TIER)" "$rel"
+    }
     for f in "$REPO_ROOT"/AGENTS.md "$REPO_ROOT"/CLAUDE.md "$REPO_ROOT"/GEMINI.md \
              "$REPO_ROOT"/.gitattributes \
              "$REPO_ROOT"/installers/deploy_brain.sh "$REPO_ROOT"/installers/deploy_brain.ps1 "$REPO_ROOT"/installers/deploy_brain.cmd \
@@ -737,27 +749,19 @@ if $DRY_RUN; then
              "$REPO_ROOT"/.claude/settings.json \
              "$REPO_ROOT"/.claude/agents/*.md \
              "$REPO_ROOT"/.codex/INSTALL.md \
-             "$REPO_ROOT"/.github/ISSUE_TEMPLATE/*.md "$REPO_ROOT"/.github/PULL_REQUEST_TEMPLATE.md; do
-        [ -f "$f" ] || continue
-        _dry_count=$((_dry_count + 1))
-        _bname="$(basename "$f")"
-        if [ -f "$TARGET/$_bname" ] || [ -f "$TARGET/.agent/rules/$_bname" ]; then
-            echo "  [UPDATE] $_bname"
-        else
-            echo "  [NEW]    $_bname"
-        fi
+             "$REPO_ROOT"/.github/ISSUE_TEMPLATE/*.md "$REPO_ROOT"/.github/PULL_REQUEST_TEMPLATE.md \
+             "$REPO_ROOT"/.github/copilot-instructions.md; do
+        _dry_print_file "$f" "${f#$REPO_ROOT/}"
     done
     # Runtime tools (whitelist only — not all *.py)
     for _bname in $_runtime_tools; do
         f="$REPO_ROOT/.agentcortex/tools/$_bname"
-        [ -f "$f" ] || continue
-        _dry_count=$((_dry_count + 1))
-        if [ -f "$TARGET/.agentcortex/tools/$_bname" ]; then
-            echo "  [UPDATE] $_bname"
-        else
-            echo "  [NEW]    $_bname"
-        fi
+        _dry_print_file "$f" ".agentcortex/tools/$_bname"
     done
+    # ADR-008 portable safety nucleus (core tier; deployed to .agentcortex/AGENTS.safety.md)
+    if [ -f "$REPO_ROOT/.agentcortex/AGENTS.safety.md" ]; then
+        _dry_print_file "$REPO_ROOT/.agentcortex/AGENTS.safety.md" ".agentcortex/AGENTS.safety.md"
+    fi
     # Skills (summarise counts instead of listing every file)
     _skill_count=0
     for skill_dir in "$REPO_ROOT/.agents/skills"/*/; do
@@ -766,18 +770,18 @@ if $DRY_RUN; then
             < <(find "$skill_dir" -type f -print0)
     done
     for sf in "$REPO_ROOT"/.agent/skills/*; do [ -f "$sf" ] && _skill_count=$((_skill_count + 1)); done
-    [ "$_skill_count" -gt 0 ] && echo "  [NEW]    ... $_skill_count skill files (.agent/skills/, .agents/skills/)"
+    [ "$_skill_count" -gt 0 ] && echo "  [NEW]    (mixed)    ... $_skill_count skill files under .agent/skills/ and .agents/skills/"
     # Docs (summarise)
     _doc_count=0
     for df in "$REPO_ROOT"/.agentcortex/docs/*.md "$REPO_ROOT"/.agentcortex/docs/guides/*.md \
               "$REPO_ROOT"/README.md "$REPO_ROOT"/docs/README_zh-TW.md; do
         [ -f "$df" ] && _doc_count=$((_doc_count + 1))
     done
-    [ "$_doc_count" -gt 0 ] && echo "  [NEW]    ... $_doc_count reference docs (.agentcortex/docs/)"
+    [ "$_doc_count" -gt 0 ] && echo "  [NEW]    (mixed)    ... $_doc_count reference docs under .agentcortex/docs/"
     # Claude commands
     _cmd_count=0
     for cf in "$REPO_ROOT"/.claude/commands/*; do [ -f "$cf" ] && _cmd_count=$((_cmd_count + 1)); done
-    [ "$_cmd_count" -gt 0 ] && echo "  [NEW]    ... $_cmd_count Claude slash command adapters (.claude/commands/)"
+    [ "$_cmd_count" -gt 0 ] && echo "  [NEW]    (core)     ... $_cmd_count Claude slash command adapters under .claude/commands/"
     echo ""
     echo "Total: ~$((_dry_count + _skill_count + _doc_count + _cmd_count)) files would be deployed."
     echo "Run without --dry-run to apply."
@@ -924,6 +928,11 @@ runtime_tools=(
   recover_worklog_lock.py
   lint_spec_drift.py
   run_governance_eval.py
+  scan_credentials.py
+  credential_floor.sh
+  credential_floor.ps1
+  generate_safety_nucleus.py
+  validate_downstream_capabilities.py
 )
 for bname in "${runtime_tools[@]}"; do
     f="$REPO_ROOT/.agentcortex/tools/$bname"
@@ -932,6 +941,13 @@ for bname in "${runtime_tools[@]}"; do
     case "$bname" in *.sh) chmod_flag="+x" ;; esac
     deploy_file "$f" ".agentcortex/tools/$bname" "$chmod_flag"
 done
+
+# --- Deploy: .agentcortex/AGENTS.safety.md (core - portable safety nucleus, ADR-008) ---
+# Committed generated file (generate_safety_nucleus.py); a non-shim harness injects it
+# into every dispatched subagent. Core tier -> reaches all downstream on update.
+if [ -f "$REPO_ROOT/.agentcortex/AGENTS.safety.md" ]; then
+    deploy_file "$REPO_ROOT/.agentcortex/AGENTS.safety.md" ".agentcortex/AGENTS.safety.md"
+fi
 
 # --- Deploy: .agentcortex/context/current_state.md (scaffold) ---
 # Use the downstream template (generic placeholders) instead of the
@@ -965,7 +981,7 @@ for f in \
   "$REPO_ROOT"/.agentcortex/docs/PROJECT_EXAMPLES*.md \
   "$REPO_ROOT"/.agentcortex/docs/PROJECT_OVERVIEW*.md \
   "$REPO_ROOT"/.agentcortex/docs/NONLINEAR_SCENARIOS*.md \
-  "$REPO_ROOT"/.agentcortex/docs/CLAUDE_PLATFORM_GUIDE.md; do
+  "$REPO_ROOT"/.agentcortex/docs/CLAUDE_PLATFORM_GUIDE*.md; do
   [ -f "$f" ] || continue
   deploy_file "$f" ".agentcortex/docs/${f##*/}"
 done
@@ -1012,6 +1028,15 @@ for f in "$REPO_ROOT"/.github/ISSUE_TEMPLATE/*.md; do
     deploy_file "$f" ".github/ISSUE_TEMPLATE/${f##*/}"
 done
 deploy_file "$REPO_ROOT/.github/PULL_REQUEST_TEMPLATE.md" ".github/PULL_REQUEST_TEMPLATE.md"
+
+# --- Deploy: .github/copilot-instructions.md (scaffold) ---
+# GitHub Copilot's repo-wide entry point (points at AGENTS.md). AGENTS.md alone
+# only covers Copilot's coding-agent surface; the IDE custom-instructions surface
+# reads this file. Scaffold tier so an adopter's own copilot-instructions.md is
+# preserved (.acx-incoming) instead of overwritten.
+if [ -f "$REPO_ROOT/.github/copilot-instructions.md" ]; then
+    deploy_file "$REPO_ROOT/.github/copilot-instructions.md" ".github/copilot-instructions.md"
+fi
 
 # --- Deploy: .githooks/ advisory hook samples (scaffold) ---
 if [ -f "$REPO_ROOT/.githooks/pre-commit.guard-ssot.sample" ]; then
@@ -1121,6 +1146,7 @@ strip_managed_ignore_blocks() {
         managed["docs/AGENT_PHILOSOPHY.md"] = 1
         managed["docs/AGENT_PHILOSOPHY_zh-TW.md"] = 1
         managed["docs/CLAUDE_PLATFORM_GUIDE.md"] = 1
+        managed["docs/CLAUDE_PLATFORM_GUIDE_zh-TW.md"] = 1
         managed["docs/CODEX_PLATFORM_GUIDE.md"] = 1
         managed["docs/CODEX_PLATFORM_GUIDE_zh-TW.md"] = 1
         managed["docs/PROJECT_EXAMPLES.md"] = 1
