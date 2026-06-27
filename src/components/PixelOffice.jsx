@@ -1189,8 +1189,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           honesty-safe). The lower meeting room is never a pathfinding target (agents enter only for
           MEETING_CHAIRS up top), so no OBSTACLE_RECTS entry is needed (accepted-clipping policy). */}
       <Rug x={634} y={300} w={150} h={104} color="#8C8398" />
-      <Couch x={646} y={316} width={74} color="#A98C86" />
-      <RoundTable x={694} y={356} r={18} />
+      <Couch x={646} y={316} width={74} color="#B97A4E" />
+      <RoundTable x={683} y={382} r={17} />
       <Plant x={770} y={306} />
       <Plant x={644} y={390} />
 
