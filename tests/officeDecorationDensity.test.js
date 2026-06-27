@@ -20,9 +20,14 @@ function plantCoords() {
 describe('VR-1 office decoration density', () => {
   const plants = plantCoords()
 
-  it('keeps the plant count in the framing range [4,6] (was 12 before VR-1)', () => {
+  it('keeps the plant count in the framing range [4,9] (6 perimeter + 3 dead-zone)', () => {
     expect(plants.length).toBeGreaterThanOrEqual(4)
-    expect(plants.length).toBeLessThanOrEqual(6)
+    // VR-1 set a 6-plant perimeter frame. The office-layout-enrichment slices (owner-directed,
+    // 2026-06-27) added 3 plants into genuine DEAD ZONES — the meeting breakout nook (×2) and the
+    // hallway reception corner (×1) — all OUTSIDE the central desk legibility zone (pinned by the
+    // next test). Filling empty space is not the clutter VR-1 removed, so the cap rises 6→9 to lock
+    // the new intent; the legibility + no-cluster guards below are unchanged. Past 9 = unthinking noise.
+    expect(plants.length).toBeLessThanOrEqual(9)
   })
 
   it('places NO plant inside the central engineering desk zone (legibility)', () => {
