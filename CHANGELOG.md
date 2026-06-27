@@ -5,6 +5,22 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## Unreleased
+
+### Added
+
+- **The office got more furnished** — the previously-empty meeting-room right column now has a cozy
+  breakout corner (couch, coffee table, plants);
+  the entrance hallway gained framed wall art and a reception water-cooler corner; a third meeting-room
+  window and a meeting wall clock round it out. Every new piece is pure decoration — it carries no
+  agent status and never sits where a status ring, name label, or speech bubble needs the space.
+
+### Fixed
+
+- **Windows only on real exterior walls** — removed four "night-sky" windows that were mounted on an
+  interior partition wall (you'd have been looking into the hallway, not outside); that wall now holds
+  framed art and the clock instead.
+
 ## v1.6.2 — 2026-06-23 — Docs catch up to the cozy office
 
 A docs + internal-maintenance release — **no runtime changes**. The app behaves exactly as in

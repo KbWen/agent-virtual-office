@@ -653,42 +653,9 @@ const NightSky = React.memo(function NightSky({ hour }) {
 
   return (
     <g pointerEvents="none">
-      {/* Moon visible through rightmost window */}
-      <clipPath id="window-clip-moon">
-        <rect x={442} y={143} width={32} height={14} rx={1} />
-      </clipPath>
-      <g clipPath="url(#window-clip-moon)">
-        <circle cx={462} cy={147} r={7} fill="#FFFDE0" opacity="0.9" />
-        <circle cx={459} cy={145} r={1.5} fill="#E8E0C0" opacity="0.4" />
-        <circle cx={464} cy={149} r={1} fill="#E8E0C0" opacity="0.3" />
-      </g>
-
-      {/* Stars scattered across windows */}
-      <clipPath id="window-clip-stars">
-        <rect x={142} y={143} width={32} height={14} rx={1} />
-        <rect x={242} y={143} width={32} height={14} rx={1} />
-        <rect x={342} y={143} width={32} height={14} rx={1} />
-      </clipPath>
-      <g clipPath="url(#window-clip-stars)">
-        <circle cx={152} cy={148} r={0.8} fill="#FFF" opacity="0.7">
-          <animate attributeName="opacity" values="0.7;0.3;0.7" dur="2s" repeatCount="indefinite" />
-        </circle>
-        <circle cx={162} cy={145} r={0.5} fill="#FFF" opacity="0.5">
-          <animate attributeName="opacity" values="0.5;0.2;0.5" dur="2.5s" repeatCount="indefinite" />
-        </circle>
-        <circle cx={254} cy={146} r={0.8} fill="#FFF" opacity="0.6">
-          <animate attributeName="opacity" values="0.6;0.2;0.6" dur="1.8s" repeatCount="indefinite" />
-        </circle>
-        <circle cx={268} cy={149} r={0.5} fill="#FFF" opacity="0.4">
-          <animate attributeName="opacity" values="0.4;0.1;0.4" dur="3s" repeatCount="indefinite" />
-        </circle>
-        <circle cx={348} cy={147} r={0.6} fill="#FFF" opacity="0.5">
-          <animate attributeName="opacity" values="0.5;0.15;0.5" dur="2.2s" repeatCount="indefinite" />
-        </circle>
-        <circle cx={365} cy={145} r={0.7} fill="#FFF" opacity="0.6">
-          <animate attributeName="opacity" values="0.6;0.3;0.6" dur="1.5s" repeatCount="indefinite" />
-        </circle>
-      </g>
+      {/* (Removed: the moon + star fields that were clipped to the former NORTH-WALL windows at
+          y143 — those windows were on an interior partition and have been removed. The exterior
+          windows keep their own built-in WallWindow night stars.) */}
 
       {/* Entrance windows stars */}
       <clipPath id="window-clip-entrance">
@@ -770,6 +737,17 @@ function ScaledText({ x, y, scale, children, ...rest }) {
   return (
     <g transform={`translate(${x}, ${y}) scale(${scale}) translate(${-x}, ${-y})`} pointerEvents="none">
       <text x={x} y={y} {...rest}>{children}</text>
+    </g>
+  )
+}
+
+// Small wall-mounted framed picture — pure decor (Slice 2 hallway gallery). Zero status signal.
+function FramedArt({ x, y, w = 24, h = 16, hue = '#8888AA', o = 1 }) {
+  return (
+    <g pointerEvents="none" opacity={o}>
+      <rect x={x} y={y} width={w} height={h} rx={1} fill="#6B5335" />
+      <rect x={x + 2} y={y + 2} width={w - 4} height={h - 4} rx={0.5} fill={hue} opacity="0.75" />
+      <rect x={x + 2} y={y + 2} width={w - 4} height={3} fill="#fff" opacity="0.14" />
     </g>
   )
 }
@@ -1070,11 +1048,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {/* Lounge ↔ Research divider */}
       <rect x="456" y="419" width="8" height="131" fill="#5a4a3a" />
 
-      {/* ═══ WINDOWS IN NORTH WALL ═══ */}
-      <WallWindow x={140} y={141} w={36} h={18} hour={hour} weather={weather} reducedMotion={weatherReduced} />
-      <WallWindow x={240} y={141} w={36} h={18} hour={hour} weather={weather} reducedMotion={weatherReduced} />
-      <WallWindow x={340} y={141} w={36} h={18} hour={hour} weather={weather} reducedMotion={weatherReduced} />
-      <WallWindow x={440} y={141} w={36} h={18} hour={hour} weather={weather} reducedMotion={weatherReduced} />
+      {/* ═══ NORTH WALL (interior partition: hallway ↔ main office) ═══ */}
+      {/* No sky-windows here — this is an INTERIOR wall (the hallway is on the other side, NOT the
+          outside), so the previous "night sky through the window" was architecturally wrong
+          (owner, 2026-06-27). Interior-wall decor instead: framed pictures + the wall clock. */}
+      {/* Dimmed (o=0.7): these sit inside the agents' working-room visual field, so the decor
+          whispers and never competes with status legibility (UX review). */}
+      <FramedArt x={228} y={142} w={26} h={17} hue="#AD927A" o={0.7} />
+      <FramedArt x={430} y={142} w={26} h={17} hue="#C9B07F" o={0.7} />
       {/* Clock mounted on north wall — own subscription so the minute tick doesn't
           re-render the whole office */}
       <ClockWidget x={540} y={150} r={10} />
@@ -1118,6 +1099,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {/* ═══ ENTRANCE ═══ */}
       <WallWindow x={18} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={weatherReduced} />
       <WallWindow x={72} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={weatherReduced} />
+      {/* Slice 2: fill the long windowless gap above the gate (owner: 窗戶位置) */}
+      <WallWindow x={158} y={14} w={40} h={28} hour={hour} weather={weather} reducedMotion={weatherReduced} />
       <GateBooth x={100} y={90} />
       <Plant x={170} y={50} />
       <rect x={65} y={120} width={70} height={12} rx={2} fill="#9B8B6B" opacity="0.7" />
@@ -1139,6 +1122,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <line x1={400} y1={50} x2={400} y2={80} stroke="#6B5335" strokeWidth="2" />
       <circle cx={400} cy={47} r={3} fill="#6B5335" />
       <line x1={393} y1={55} x2={407} y2={55} stroke="#6B5335" strokeWidth="1.5" />
+      {/* Slice 2: hallway enrichment — a small framed-art gallery on the wall (high, above the
+          y50–80 overflow-agent band so it never sits behind a visiting agent), a balancing plant in
+          the top-right corner, and a reception water cooler tucked clear of OVERFLOW_POSITIONS
+          (max x≈540). All pure decor, zero status signal. */}
+      <FramedArt x={310} y={18} hue="#C08A6A" />
+      <FramedArt x={500} y={18} hue="#C98FA8" />
+      <Plant x={558} y={48} />
+      <WaterCooler x={582} y={50} />
 
       {/* Night sky visible through windows */}
       <NightSky hour={hour} />
@@ -1184,11 +1175,24 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* ═══ MEETING ROOM ═══ */}
       <ScaledText x={705} y={26} scale={labelTextScale} textAnchor="middle" fontSize="8" fill="#7070A0" fontFamily="monospace" opacity="0.7">MEETING</ScaledText>
-      <Rug x={633} y={70} w={148} h={120} color="#7070A0" />
+      <Rug x={634} y={70} w={150} h={120} color="#7070A0" />
       <MeetingTable x={705} y={162} w={100} h={60} />
       <Plant x={630} y={55} />
       <WallWindow x={632} y={14} w={44} h={26} hour={hour} weather={weather} reducedMotion={weatherReduced} />
       <WallWindow x={696} y={14} w={44} h={26} hour={hour} weather={weather} reducedMotion={weatherReduced} />
+      <WallWindow x={744} y={14} w={40} h={26} hour={hour} weather={weather} reducedMotion={weatherReduced} />
+      {/* Wall clock (a meeting room has one) — own minute subscription via ClockWidget, mounted IN
+          the solid east-divider wall below the door (like the north-wall clock), beside the nook. */}
+      <ClockWidget x={610} y={300} r={7} />
+      {/* Breakout nook — fills the previously-empty lower meeting room (owner: 更多物件) with an
+          informal corner: rug + couch + coffee table + plants. Pure decor (zero status signal →
+          honesty-safe). The lower meeting room is never a pathfinding target (agents enter only for
+          MEETING_CHAIRS up top), so no OBSTACLE_RECTS entry is needed (accepted-clipping policy). */}
+      <Rug x={634} y={300} w={150} h={104} color="#8C8398" />
+      <Couch x={646} y={316} width={74} color="#B97A4E" />
+      <RoundTable x={683} y={382} r={17} />
+      <Plant x={770} y={306} />
+      <Plant x={644} y={390} />
 
       {/* ═══ RESEARCH ═══ */}
       <ScaledText x={700} y={432} scale={labelTextScale} textAnchor="middle" fontSize="7" fill="#6060A0" fontFamily="monospace" opacity="0.7">RESEARCH</ScaledText>
@@ -1305,6 +1309,8 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           ))}
           {/* Meeting room ceiling light */}
           <ellipse cx={705} cy={162} rx={60} ry={45} fill="url(#mtg-light)" />
+          {/* Breakout-nook ceiling light — lights the lower meeting room at night too */}
+          <ellipse cx={705} cy={350} rx={55} ry={42} fill="url(#mtg-light)" />
           {/* Lounge ambient warm light */}
           <ellipse cx={120} cy={480} rx={80} ry={50} fill="url(#lounge-light)" />
           {/* Late-night OVERTIME indicator (office clock hour ≥ 22). Declutter/calm-tech: a persistent
