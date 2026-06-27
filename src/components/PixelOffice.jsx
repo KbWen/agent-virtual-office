@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore } from '../systems/store'
 import { getLightingOverlay } from '../systems/lighting'
-import { MEETING_CHAIRS } from '../systems/movementSystem'
 import { startAmbientSound } from '../systems/ambientSound'
 import { startOfficeLife, triggerInteractiveEvent } from '../systems/officeLife'
 import { startStatusIntegration } from '../inference/inferStatus'
@@ -1178,13 +1177,6 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <ScaledText x={705} y={26} scale={labelTextScale} textAnchor="middle" fontSize="8" fill="#7070A0" fontFamily="monospace" opacity="0.7">MEETING</ScaledText>
       <Rug x={634} y={70} w={150} h={120} color="#7070A0" />
       <MeetingTable x={705} y={162} w={100} h={60} />
-      {/* Empty conference chairs at the real MEETING_CHAIRS positions (review: the table read as
-          orphaned). Drawn so that when an agent attends standup it sits ON a visible chair. Pure
-          furniture — empty chairs imply no occupancy/status. */}
-      {MEETING_CHAIRS.map((c, i) => (
-        <rect key={`mchair-${i}`} x={c.x - 7} y={c.y - 6} width={14} height={12} rx={3}
-          fill="#5A5A78" opacity={0.85} pointerEvents="none" />
-      ))}
       <Plant x={630} y={55} />
       <WallWindow x={632} y={14} w={44} h={26} hour={hour} weather={weather} reducedMotion={weatherReduced} />
       <WallWindow x={696} y={14} w={44} h={26} hour={hour} weather={weather} reducedMotion={weatherReduced} />

@@ -10,7 +10,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 ### Added
 
 - **The office got more furnished** — the previously-empty meeting-room right column now has a cozy
-  breakout corner (couch, coffee table, plants) and the conference table has visible chairs around it;
+  breakout corner (couch, coffee table, plants);
   the entrance hallway gained framed wall art and a reception water-cooler corner; a third meeting-room
   window and a meeting wall clock round it out. Every new piece is pure decoration — it carries no
   agent status and never sits where a status ring, name label, or speech bubble needs the space.
