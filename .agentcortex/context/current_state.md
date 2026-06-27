@@ -165,6 +165,11 @@
 
 ## Ship History
 
+### Ship-chore-release-v1.6.3-2026-06-27 (office layout enrichment) · release v1.6.3
+
+- Release cutting the merged office-layout-enrichment work (PR #192, squash `fcf5ee1`) as **v1.6.3**: `package.json` 1.6.2→1.6.3 + CHANGELOG narrative (Unreleased → v1.6.3 "Fuller corners, honest windows"). No further app change. Lockfile root version left stale per convention. Tag + `npm publish` performed manually by owner.
+- Tests: Pass (full suite 2222, from #192)
+
 ### Ship-feat-office-layout-enrichment-2026-06-27 (meeting-room nook + hallway decor + interior-window fix)
 
 - Shipped office layout enrichment (quick-win, cosmetic, **decor-only — no movementSystem geometry touched**). Filled the two real dead zones found in a rendered-office audit: the meeting-room right column got a breakout nook (rug + couch + coffee table + plants); the entrance hallway got a gate-gap window + 2 framed pictures (new `<FramedArt>` component) + a reception water-cooler/plant corner; plus a 3rd meeting window, a meeting wall clock, and a night ceiling-light over the nook. **Owner-found correctness fix**: removed 4 "night-sky" windows wrongly mounted on the INTERIOR north wall (hallway is on the other side, not outdoors) + their `NightSky` moon/star clips → framed art + clock instead.

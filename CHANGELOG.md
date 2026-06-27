@@ -5,7 +5,7 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
-## Unreleased
+## v1.6.3 — 2026-06-27 — Fuller corners, honest windows
 
 ### Added
 
