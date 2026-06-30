@@ -29,6 +29,7 @@ import { evaluateSoak } from './soakInvariants.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
+const FETCH_ATTEMPT_TIMEOUT_MS = 1000
 const argIdx = process.argv.indexOf('--minutes')
 const MINUTES = argIdx > -1 ? Number(process.argv[argIdx + 1]) : 5
 
@@ -55,7 +56,14 @@ const PORT = (() => {
 })()
 
 async function urlUp(url) {
-  try { return (await fetch(url)).ok } catch { return false }
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), FETCH_ATTEMPT_TIMEOUT_MS)
+    const ok = (await fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer))).ok
+    return ok
+  } catch {
+    return false
+  }
 }
 
 // ── Server: reuse SOAK_URL / a running :5173 dev server, else spawn vite ──────────────
@@ -75,6 +83,8 @@ if (!baseUrl) {
     [viteBin, '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'],
     { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' }
   )
+  serverProc.stdout.on('error', () => {})
+  serverProc.stderr.on('error', () => {})
   serverProc.once('close', (code, signal) => { serverExit = { code, signal } })
   baseUrl = `http://localhost:${PORT}`
   const deadline = Date.now() + 30000
@@ -121,6 +131,8 @@ async function cleanup() {
   cleanupPromise = (async () => {
   try { await browser?.close() } catch {}
   await stopServerProcessTree()
+  try { serverProc?.stdout?.destroy() } catch {}
+  try { serverProc?.stderr?.destroy() } catch {}
   })()
   return cleanupPromise
 }

@@ -19,6 +19,7 @@ const OUT = process.env.PANEL_SHOT_DIR
   : path.join(ROOT, '.pet-shots')
 const READY_TIMEOUT_MS = 20_000
 const POLL_INTERVAL_MS = 250
+const FETCH_ATTEMPT_TIMEOUT_MS = 1000
 
 mkdirSync(OUT, { recursive: true })
 
@@ -60,7 +61,9 @@ async function waitForServer(url, deadlineMs, getServerExit) {
       )
     }
     try {
-      const res = await fetch(url)
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), FETCH_ATTEMPT_TIMEOUT_MS)
+      const res = await fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer))
       if (res.ok) return true
     } catch {}
     await new Promise(r => setTimeout(r, POLL_INTERVAL_MS))
@@ -99,6 +102,8 @@ let serverStderr = ''
 let serverExit = null
 serverProc.stdout.on('data', d => { serverStdout += d.toString() })
 serverProc.stderr.on('data', d => { serverStderr += d.toString() })
+serverProc.stdout.on('error', () => {})
+serverProc.stderr.on('error', () => {})
 serverProc.once('close', (code, signal) => { serverExit = { code, signal } })
 
 let browser = null
@@ -136,6 +141,8 @@ async function cleanup() {
   try { await page?.close() } catch {}
   try { await browser?.close() } catch {}
   await stopServerProcessTree()
+  try { serverProc.stdout?.destroy() } catch {}
+  try { serverProc.stderr?.destroy() } catch {}
   })()
   return cleanupPromise
 }
@@ -281,4 +288,4 @@ try {
 
 console.log(JSON.stringify(result, null, 2))
 console.log(pass ? 'PASS: 0 errors, scoped cyan ring+pill rendered, inspector durations show' : 'FAIL: panel visual assertions did not pass')
-process.exit(pass ? 0 : 1)
+process.exitCode = pass ? 0 : 1
