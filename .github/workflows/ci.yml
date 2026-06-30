@@ -42,6 +42,7 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run smoke
+      - run: npm run smoke:panel
 
   pack-smoke:
     runs-on: ubuntu-latest

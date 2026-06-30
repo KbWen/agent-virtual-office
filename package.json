@@ -14,6 +14,7 @@
     "build:single": "vite build --outDir dist-single",
     "serve": "node server.mjs",
     "smoke": "node scripts/render-smoke.mjs",
+    "smoke:panel": "node scripts/panel-features-verify.mjs",
     "smoke:pack": "node scripts/pack-smoke.mjs",
     "soak": "node scripts/sim-soak.mjs",
     "test": "vitest run",
