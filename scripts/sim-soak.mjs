@@ -23,11 +23,36 @@
 import { chromium } from 'playwright'
 import { spawn } from 'node:child_process'
 import { existsSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { evaluateSoak } from './soakInvariants.mjs'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const ROOT = path.resolve(__dirname, '..')
 const argIdx = process.argv.indexOf('--minutes')
 const MINUTES = argIdx > -1 ? Number(process.argv[argIdx + 1]) : 5
-const PORT = parseInt(process.env.SOAK_PORT || '5198', 10)
+
+function failEarly(message) {
+  console.error(`sim-soak ERROR: ${message}`)
+  process.exit(1)
+}
+
+function parsePortEnv(name, value) {
+  if (!/^\d+$/.test(value || '')) throw new Error(`${name} must be an integer port in 1..65535`)
+  const port = Number(value)
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${name} must be an integer port in 1..65535`)
+  }
+  return port
+}
+
+const PORT = (() => {
+  try {
+    return parsePortEnv('SOAK_PORT', process.env.SOAK_PORT || '5198')
+  } catch (err) {
+    failEarly(err.message)
+  }
+})()
 
 async function urlUp(url) {
   try { return (await fetch(url)).ok } catch { return false }
@@ -37,28 +62,74 @@ async function urlUp(url) {
 // SOAK_SPAWN=1 skips the reuse shortcuts — lets the CI spawn path be exercised locally.
 let baseUrl = process.env.SOAK_SPAWN === '1' ? null : (process.env.SOAK_URL || null)
 let serverProc = null
+let serverExit = null
 if (!baseUrl && process.env.SOAK_SPAWN !== '1' && await urlUp('http://localhost:5173/')) baseUrl = 'http://localhost:5173'
 if (!baseUrl) {
-  // shell:true is required for npx on Windows (.cmd shim); PORT is a parseInt-validated
-  // module-level int (worst case NaN → harmless flag), no external string reaches the line.
-  // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
-  serverProc = spawn(`npx vite --port ${PORT} --strictPort`, { shell: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  const viteBin = path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js')
+  if (!existsSync(viteBin)) {
+    console.error('sim-soak ERROR: Vite binary not found. Run `npm ci` first.')
+    process.exit(1)
+  }
+  serverProc = spawn(
+    process.execPath,
+    [viteBin, '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'],
+    { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' }
+  )
+  serverProc.once('close', (code, signal) => { serverExit = { code, signal } })
   baseUrl = `http://localhost:${PORT}`
   const deadline = Date.now() + 30000
-  while (Date.now() < deadline && !(await urlUp(baseUrl + '/'))) await new Promise(r => setTimeout(r, 300))
+  while (Date.now() < deadline && !(await urlUp(baseUrl + '/'))) {
+    if (serverExit) {
+      console.error(`sim-soak ERROR: vite exited before readiness (code=${serverExit.code}, signal=${serverExit.signal})`)
+      process.exit(1)
+    }
+    await new Promise(r => setTimeout(r, 300))
+  }
   if (!(await urlUp(baseUrl + '/'))) {
     console.error('sim-soak ERROR: vite dev server did not become ready')
-    serverProc?.kill('SIGKILL')
+    await cleanup()
     process.exit(1)
   }
 }
 
 let browser = null
-async function cleanup() {
-  try { await browser?.close() } catch {}
-  try { serverProc?.kill('SIGTERM') } catch {}
+let cleanupPromise = null
+async function stopServerProcessTree() {
+  if (!serverProc?.pid || serverExit) return
+  if (process.platform === 'win32') {
+    await new Promise(resolve => {
+      const killer = spawn('taskkill.exe', ['/pid', String(serverProc.pid), '/t', '/f'], { stdio: 'ignore' })
+      killer.on('error', resolve)
+      killer.on('exit', resolve)
+    })
+    return
+  }
+  try {
+    process.kill(-serverProc.pid, 'SIGTERM')
+    const exited = await new Promise(resolve => {
+      const timer = setTimeout(() => resolve(false), 1500)
+      serverProc.once('close', () => {
+        clearTimeout(timer)
+        resolve(true)
+      })
+    })
+    if (!exited) process.kill(-serverProc.pid, 'SIGKILL')
+  } catch {}
 }
-process.on('SIGINT', () => cleanup().then(() => process.exit(130)))
+async function cleanup() {
+  if (cleanupPromise) return cleanupPromise
+  cleanupPromise = (async () => {
+  try { await browser?.close() } catch {}
+  await stopServerProcessTree()
+  })()
+  return cleanupPromise
+}
+process.once('SIGINT', () => cleanup().then(() => process.exit(130)))
+process.once('SIGTERM', () => cleanup().then(() => process.exit(143)))
+process.once('exit', () => {
+  if (!serverProc?.pid || serverExit || process.platform === 'win32') return
+  try { process.kill(-serverProc.pid, 'SIGKILL') } catch {}
+})
 
 let exitCode = 0
 try {

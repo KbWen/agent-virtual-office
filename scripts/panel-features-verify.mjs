@@ -22,22 +22,43 @@ const POLL_INTERVAL_MS = 250
 
 mkdirSync(OUT, { recursive: true })
 
+function failEarly(message) {
+  console.log(JSON.stringify({ error: message }, null, 2))
+  console.log('FAIL: panel visual assertions did not pass')
+  process.exit(1)
+}
+
+function parsePortEnv(name, value) {
+  if (!/^\d+$/.test(value || '')) throw new Error(`${name} must be an integer port in 1..65535`)
+  const port = Number(value)
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${name} must be an integer port in 1..65535`)
+  }
+  return port
+}
+
 async function pickPort() {
-  if (process.env.PANEL_PORT) return parseInt(process.env.PANEL_PORT, 10)
+  if (process.env.PANEL_PORT) return parsePortEnv('PANEL_PORT', process.env.PANEL_PORT)
   return await new Promise((resolve, reject) => {
     const server = createServer()
     server.on('error', reject)
     server.listen(0, '127.0.0.1', () => {
       const address = server.address()
       const port = typeof address === 'object' && address ? address.port : 0
-      server.close(() => resolve(port))
+      server.close(() => port ? resolve(port) : reject(new Error('failed to reserve a local port')))
     })
   })
 }
 
-async function waitForServer(url, deadlineMs) {
+async function waitForServer(url, deadlineMs, getServerExit) {
   const deadline = Date.now() + deadlineMs
   while (Date.now() < deadline) {
+    const serverExit = getServerExit()
+    if (serverExit) {
+      throw new Error(
+        `vite exited before readiness (code=${serverExit.code}, signal=${serverExit.signal}); stderr=${serverStderr.slice(-500)}`
+      )
+    }
     try {
       const res = await fetch(url)
       if (res.ok) return true
@@ -59,9 +80,9 @@ async function launchBrowser() {
   }
 }
 
-const PORT = await pickPort()
+const PORT = await pickPort().catch(err => failEarly(err.message))
 const BASE_URL = `http://127.0.0.1:${PORT}`
-const URL = `${BASE_URL}/?lang=en&smoke=panel`
+const PAGE_URL = `${BASE_URL}/?lang=en&smoke=panel`
 const viteBin = path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js')
 if (!existsSync(viteBin)) {
   console.error('ERROR: Vite binary not found. Run `npm ci` first.')
@@ -75,16 +96,19 @@ const serverProc = spawn(
 
 let serverStdout = ''
 let serverStderr = ''
+let serverExit = null
 serverProc.stdout.on('data', d => { serverStdout += d.toString() })
 serverProc.stderr.on('data', d => { serverStderr += d.toString() })
+serverProc.once('close', (code, signal) => { serverExit = { code, signal } })
 
 let browser = null
 let page = null
 let result = null
 let pass = false
+let cleanupPromise = null
 
 async function stopServerProcessTree() {
-  if (!serverProc.pid) return
+  if (!serverProc.pid || serverExit) return
   if (process.platform === 'win32') {
     await new Promise(resolve => {
       const killer = spawn('taskkill.exe', ['/pid', String(serverProc.pid), '/t', '/f'], { stdio: 'ignore' })
@@ -107,13 +131,28 @@ async function stopServerProcessTree() {
 }
 
 async function cleanup() {
+  if (cleanupPromise) return cleanupPromise
+  cleanupPromise = (async () => {
   try { await page?.close() } catch {}
   try { await browser?.close() } catch {}
   await stopServerProcessTree()
+  })()
+  return cleanupPromise
 }
 
+async function shutdownFromSignal(code) {
+  await cleanup()
+  process.exit(code)
+}
+process.once('SIGINT', () => { shutdownFromSignal(130) })
+process.once('SIGTERM', () => { shutdownFromSignal(143) })
+process.once('exit', () => {
+  if (!serverProc.pid || serverExit || process.platform === 'win32') return
+  try { process.kill(-serverProc.pid, 'SIGKILL') } catch {}
+})
+
 try {
-  const ready = await waitForServer(BASE_URL, READY_TIMEOUT_MS)
+  const ready = await waitForServer(BASE_URL, READY_TIMEOUT_MS, () => serverExit)
   if (!ready) {
     throw new Error(
       `server did not become ready on ${BASE_URL}; stdout=${serverStdout.slice(-500)} stderr=${serverStderr.slice(-500)}`
@@ -127,15 +166,22 @@ try {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
   page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message))
 
-  await page.route('**/api/status**', route => route.fulfill({
-    status: route.request().url().includes('/api/status/stream') ? 204 : 200,
-    contentType: route.request().url().includes('/api/status/stream') ? 'text/plain' : 'application/json',
-    body: route.request().url().includes('/api/status/stream')
-      ? ''
-      : JSON.stringify({ ok: true, agents: [], sessions: [], workflow: null }),
-  }))
+  await page.route('**/*', route => {
+    const pathname = new globalThis.URL(route.request().url()).pathname
+    if (pathname === '/api/status/stream') {
+      return route.fulfill({ status: 204, contentType: 'text/plain', body: '' })
+    }
+    if (pathname === '/api/status') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, agents: [], sessions: [], workflow: null }),
+      })
+    }
+    return route.continue()
+  })
   await page.addInitScript(() => { try { localStorage.setItem('office-onboarded', '1') } catch {} })
-  await page.goto(URL, { waitUntil: 'domcontentloaded' })
+  await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('svg', { timeout: 20_000 })
   await page.waitForTimeout(500)
 
