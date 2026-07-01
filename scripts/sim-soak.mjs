@@ -32,6 +32,7 @@ const ROOT = path.resolve(__dirname, '..')
 const FETCH_ATTEMPT_TIMEOUT_MS = 1000
 const argIdx = process.argv.indexOf('--minutes')
 const MINUTES = argIdx > -1 ? Number(process.argv[argIdx + 1]) : 5
+const SAMPLE_INTERVAL_MS = 250
 
 function failEarly(message) {
   console.error(`sim-soak ERROR: ${message}`)
@@ -54,6 +55,10 @@ const PORT = (() => {
     failEarly(err.message)
   }
 })()
+
+if (!Number.isFinite(MINUTES) || MINUTES <= 0) {
+  failEarly('--minutes must be a finite number greater than 0')
+}
 
 async function urlUp(url) {
   try {
@@ -190,6 +195,11 @@ try {
     }
     return out
   }, { minutes: MINUTES })
+
+  const minSamples = Math.max(1, Math.floor((MINUTES * 60000) / SAMPLE_INTERVAL_MS) - 2)
+  if (samples.length < minSamples) {
+    throw new Error(`insufficient samples: got ${samples.length}, expected at least ${minSamples}`)
+  }
 
   const result = evaluateSoak(samples)
   if (process.env.SOAK_REPORT) {

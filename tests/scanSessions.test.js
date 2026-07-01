@@ -343,6 +343,16 @@ describe('multi-session merge', () => {
     expect(result.activeCount).toBe(2)
   })
 
+  it('drops idle representatives from multi-session output so cleanup can run', () => {
+    const base = Date.now()
+    writeSlugged('alpha', base + 100, [{ role: 'dev', status: 'idle', task: null, label: null }])
+    writeSlugged('beta', base + 200, [{ role: 'qa', status: 'working', task: null, label: null }])
+    const result = scanAndMerge(dir, dir)
+    expect(result.agents.some(a => a.session === 'alpha')).toBe(false)
+    expect(result.agents.some(a => a.session === 'beta' && a.status === 'working')).toBe(true)
+    expect(result.activeCount).toBe(1)
+  })
+
 })
 
 // ─── helpers concat / de-dupe / bound (multi-session) ────────────────────────

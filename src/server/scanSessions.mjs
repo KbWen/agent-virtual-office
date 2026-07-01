@@ -169,7 +169,7 @@ export function scanAndMerge(dir, projectRoot) {
     delete merged._cwd
   } else {
     const LIVE_STATUSES = new Set(['blocked', 'awaiting-approval', 'working', 'planning'])
-    const PRI = { blocked: 0, 'awaiting-approval': 1, working: 2, planning: 3, done: 4, idle: 5 }
+    const PRI = { blocked: 0, 'awaiting-approval': 1, working: 2, planning: 3, done: 4 }
     const allAgents = []
     let workflow = null
     for (const { slug, data } of sessions) {

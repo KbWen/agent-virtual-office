@@ -43,6 +43,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run smoke
       - run: npm run smoke:panel
+      - run: SOAK_SPAWN=1 node scripts/sim-soak.mjs --minutes 0.05
 
   pack-smoke:
     runs-on: ubuntu-latest

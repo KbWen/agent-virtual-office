@@ -122,7 +122,7 @@ export function normalizeStatusMessage(raw) {
     // throwaway intermediate array on every SSE message just to read its length.
     let activeCount = 0
     for (const a of agents) {
-      if (a.status === 'working' || a.status === 'blocked') activeCount++
+      if (a.status === 'working' || a.status === 'blocked' || a.status === 'planning' || a.status === 'awaiting-approval') activeCount++
     }
     const validated = {
       ...raw,
