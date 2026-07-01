@@ -30,7 +30,7 @@ import { normalizePost, nextSeq, VALID_ROLES, VALID_STATUSES } from './src/utils
 // Count working/blocked agents — used by the /api/event webhook handler.
 function countActive(agents) {
   let n = 0
-  for (const a of agents) if (a.status === 'working' || a.status === 'blocked') n++
+  for (const a of agents) if (a.status === 'working' || a.status === 'blocked' || a.status === 'planning' || a.status === 'awaiting-approval') n++
   return n
 }
 
@@ -247,8 +247,7 @@ function handleStatus(req, res) {
       let normalized
       try {
         normalized = normalizePost(JSON.parse(body))
-        // _cwd omitted intentionally: POST-pushed status is not project-scoped;
-        // scanSessions always includes the bare office-status.json regardless of CWD.
+        normalized._cwd = process.cwd()
         if (!atomicWrite(STATUS_PATH, JSON.stringify(normalized, null, 2))) {
           res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
         }
@@ -369,8 +368,9 @@ function handleEvent(req, res) {
         _seq: nextSeq(),
         type: 'office-status', agents,
         activeCount: countActive(agents),
-        workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : eventName,
+        workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : null,
         source: 'webhook',
+        _cwd: process.cwd(),
       }
       if (!atomicWrite(STATUS_PATH, JSON.stringify(output, null, 2))) {
         res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))

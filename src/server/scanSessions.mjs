@@ -168,7 +168,8 @@ export function scanAndMerge(dir, projectRoot) {
     merged = { ...sessions[0].data }
     delete merged._cwd
   } else {
-    const PRI = { blocked: 0, working: 1, done: 2, idle: 3 }
+    const LIVE_STATUSES = new Set(['blocked', 'awaiting-approval', 'working', 'planning'])
+    const PRI = { blocked: 0, 'awaiting-approval': 1, working: 2, planning: 3, done: 4, idle: 5 }
     const allAgents = []
     let workflow = null
     for (const { slug, data } of sessions) {
@@ -180,16 +181,15 @@ export function scanAndMerge(dir, projectRoot) {
       // a TypeError that crashed the server at the unguarded SSE-connect + watch-debounce
       // callers. Array.isArray is the precise guard — a non-array session contributes no agent.
       const pick = (Array.isArray(data.agents) ? data.agents : [])
-        .filter(a => a && typeof a === 'object' && (a.status === 'working' || a.status === 'blocked'))
+        .filter(a => a && typeof a === 'object' && typeof a.status === 'string' && Object.prototype.hasOwnProperty.call(PRI, a.status))
         .sort((a, b) => {
           const pd = (PRI[a.status] ?? 9) - (PRI[b.status] ?? 9)
           return pd !== 0 ? pd : (a.role < b.role ? -1 : a.role > b.role ? 1 : 0)
         })[0]
       if (pick && typeof pick.role === 'string') {
-        // Only adopt workflow from a session that is actively contributing an agent.
-        // A finished session (all agents done) can leave a stale workflow string that
-        // would otherwise appear as a phantom banner over an unrelated active session.
-        if (!workflow && data.workflow) workflow = data.workflow
+        // Only adopt workflow from a LIVE session. Done/idle terminal event sessions
+        // should still render briefly, but must not become a phantom active banner.
+        if (!workflow && LIVE_STATUSES.has(pick.status) && data.workflow) workflow = data.workflow
         allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
       }
     }
@@ -205,15 +205,13 @@ export function scanAndMerge(dir, projectRoot) {
       if (s > maxSeqNum) maxSeqNum = s
     }
     const maxSeq = String(maxSeqNum)
+    let activeCount = 0
+    for (const a of allAgents) if (LIVE_STATUSES.has(a.status)) activeCount++
     merged = {
       _seq: maxSeq,
       type: 'office-status',
       agents: allAgents,
-      // Every entry in allAgents is a `pick` already filtered to working/blocked
-      // (see the .filter above) before being pushed — so activeCount is exactly
-      // allAgents.length. The previous .filter(...).length re-scanned the array
-      // and allocated a throwaway filtered copy on every GET/SSE multi-session tick.
-      activeCount: allAgents.length,
+      activeCount,
       workflow,
       source: 'multi-session',
       sessionCount: sessions.length,
@@ -222,7 +220,8 @@ export function scanAndMerge(dir, projectRoot) {
     // Restrict to sessions that contributed an active agent — same rationale as workflow:
     // a finished session (all agents done) must not inject its mood over an unrelated active
     // session whose own agents carry no mood of their own.
-    const activeSlugs = new Set(allAgents.map(a => a.session))
+    const activeSlugs = new Set()
+    for (const a of allAgents) if (LIVE_STATUSES.has(a.status)) activeSlugs.add(a.session)
     const moodSession = [...sessions]
       .filter(s => activeSlugs.has(s.slug))
       .sort((a, b) => (parseInt(b.data._seq, 10) || 0) - (parseInt(a.data._seq, 10) || 0))

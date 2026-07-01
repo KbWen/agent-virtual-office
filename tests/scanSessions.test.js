@@ -285,9 +285,10 @@ describe('multi-session merge', () => {
     const result = scanAndMerge(dir, dir)
     // beta's agent is active → alpha's done-only session must not leak its mood
     expect(result.mood).toBeUndefined()
-    // beta's agent is still present
+    // beta's agent is still live; alpha may render as a terminal event but must not
+    // contribute mood.
     expect(result.agents.some(a => a.session === 'beta')).toBe(true)
-    expect(result.agents.some(a => a.session === 'alpha')).toBe(false)
+    expect(result.agents.some(a => a.session === 'alpha' && a.status === 'done')).toBe(true)
   })
 
   // Agent priority and role tiebreaker (multi-session path only — single session returns all agents)
@@ -323,14 +324,25 @@ describe('multi-session merge', () => {
     expect(alphaAgent1.role).toMatch(/dev/)
   })
 
-  it('only includes working/blocked agents in activeCount', () => {
+  it('includes terminal done representatives but not in activeCount', () => {
     const base = Date.now()
     writeSlugged('alpha', base + 100, [{ role: 'dev', status: 'done', task: null, label: null }])
     writeSlugged('beta', base + 200, [{ role: 'qa', status: 'working', task: null, label: null }])
     const result = scanAndMerge(dir, dir)
-    // alpha's agent is 'done' → not picked; beta's agent is 'working' → picked
+    expect(result.agents.some(a => a.session === 'alpha' && a.status === 'done')).toBe(true)
     expect(result.activeCount).toBe(1)
   })
+
+  it('keeps planning and awaiting-approval representatives in multi-session output', () => {
+    const base = Date.now()
+    writeSlugged('alpha', base + 100, [{ role: 'dev', status: 'planning', task: null, label: null }])
+    writeSlugged('beta', base + 200, [{ role: 'qa', status: 'awaiting-approval', task: null, label: null }])
+    const result = scanAndMerge(dir, dir)
+    expect(result.agents.some(a => a.session === 'alpha' && a.status === 'planning')).toBe(true)
+    expect(result.agents.some(a => a.session === 'beta' && a.status === 'awaiting-approval')).toBe(true)
+    expect(result.activeCount).toBe(2)
+  })
+
 })
 
 // ─── helpers concat / de-dupe / bound (multi-session) ────────────────────────

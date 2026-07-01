@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
+  collectArrivalNudgeClaims,
   hasRafHandle,
   isDocumentFocused,
+  RAF_STALL_RESTART_MS,
   shouldRecordRafWatchdogRestart,
   shouldRestartRafWatchdog,
   shouldStopStaleLocalWalk,
@@ -14,12 +16,13 @@ describe('shouldRestartRafWatchdog', () => {
   })
 
   it('does not restart for visible jank inside the smooth-resume window', () => {
-    expect(shouldRestartRafWatchdog(1000, 1000 + 4200, 'visible')).toBe(false)
+    expect(shouldRestartRafWatchdog(1000, 1000 + RAF_STALL_RESTART_MS, 'visible')).toBe(false)
   })
 
-  it('uses the same strict >GAP_SNAP_MS boundary as walk-frame snapping', () => {
-    expect(shouldRestartRafWatchdog(1000, 1000 + GAP_SNAP_MS, 'visible')).toBe(false)
-    expect(shouldRestartRafWatchdog(1000, 1000 + GAP_SNAP_MS + 1, 'visible')).toBe(true)
+  it('restarts the lost RAF chain before the long-freeze snap boundary', () => {
+    expect(RAF_STALL_RESTART_MS).toBeLessThan(GAP_SNAP_MS)
+    expect(shouldRestartRafWatchdog(1000, 1000 + RAF_STALL_RESTART_MS + 1, 'visible')).toBe(true)
+    expect(shouldRestartRafWatchdog(1000, 1000 + GAP_SNAP_MS, 'visible')).toBe(true)
   })
 
   it('does not restart before the first RAF timestamp is recorded', () => {
@@ -64,6 +67,25 @@ describe('hasRafHandle', () => {
     expect(hasRafHandle(null)).toBe(false)
     expect(hasRafHandle(undefined)).toBe(false)
     expect(hasRafHandle(42)).toBe(true)
+  })
+})
+
+describe('collectArrivalNudgeClaims', () => {
+  it('treats moving agents current-leg and journey-end targets as arrival blockers', () => {
+    const claims = collectArrivalNudgeClaims({
+      arch: { position: { x: 460, y: 364 }, isMoving: false },
+      ops: {
+        position: { x: 430, y: 360 },
+        targetPosition: { x: 470, y: 369 },
+        journeyTarget: { x: 460, y: 364 },
+        isMoving: true,
+      },
+    }, 'arch')
+
+    expect(claims.blockers).toContainEqual({ x: 470, y: 369 })
+    expect(claims.blockers).toContainEqual({ x: 460, y: 364 })
+    expect(claims.claims).toContainEqual({ x: 470, y: 369 })
+    expect(claims.claims).toContainEqual({ x: 460, y: 364 })
   })
 })
 

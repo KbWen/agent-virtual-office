@@ -25,6 +25,13 @@ describe('normalizePost', () => {
       expect(result.activeCount).toBe(2) // dev + qa, not ops (done)
     })
 
+    it('treats awaiting-approval as a real transport status', () => {
+      const result = normalizePost({ qa: 'awaiting-approval' })
+      expect(result.agents[0].status).toBe('awaiting-approval')
+      expect(result.agents[0].task).toBeNull()
+      expect(result.activeCount).toBe(1)
+    })
+
     it('does not count idle agents as active', () => {
       const result = normalizePost({ dev: 'idle', qa: 'working' })
       expect(result.activeCount).toBe(1) // only qa (working), not dev (idle)
@@ -309,9 +316,9 @@ describe('constants', () => {
     expect(VALID_ROLES).toHaveLength(8)
   })
 
-  it('VALID_STATUSES has 5 entries incl. planning (AVO-101)', () => {
-    expect(VALID_STATUSES).toHaveLength(5)
+  it('VALID_STATUSES includes plan mode and human-approval waits', () => {
     expect(VALID_STATUSES).toContain('planning')
+    expect(VALID_STATUSES).toContain('awaiting-approval')
   })
 
   it('VALID_MOODS has 7 entries', () => {

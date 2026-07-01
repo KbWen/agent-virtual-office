@@ -23,7 +23,7 @@
 // stay byte-identical to the pre-#122 definitions (constants.js exported plain arrays);
 // this refactor changes the definition SITE only, never runtime behavior.
 export const VALID_ROLES    = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
-export const VALID_STATUSES = ['idle', 'working', 'blocked', 'done', 'planning']
+export const VALID_STATUSES = ['idle', 'working', 'blocked', 'done', 'planning', 'awaiting-approval']
 export const VALID_MOODS    = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
 export const MAX_MOOD_DURATION = 3_600_000  // 1 hour in ms
 
@@ -78,7 +78,7 @@ function clampMoodDuration(raw) {
 
 function countActive(agents) {
   let n = 0
-  for (const a of agents) if (a.status === 'working' || a.status === 'blocked') n++
+  for (const a of agents) if (a.status === 'working' || a.status === 'blocked' || a.status === 'planning' || a.status === 'awaiting-approval') n++
   return n
 }
 
