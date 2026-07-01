@@ -26,6 +26,11 @@ const VALID_ROLES = new Set(['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'd
 // Shared TTL constants — keep in sync between scanAndMerge and getSessionStats
 const STALE_MS = 300_000   // sessions older than 5 min are stale
 const FUTURE_MS = 300_000  // sessions more than 5 min in the future are implausible (NTP jump)
+// A fully-finished session's only representative is 'done'. Render that terminal "wrapping up"
+// beat for this long, then drop it — instead of letting the sprite loiter until STALE_MS (5 min)
+// as a motionless green corpse. Multi-worktree finish-waves otherwise stack several dead sprites
+// on the floor, exactly the clutter the REDUCE bias exists to avoid (panel review 2026-07-01).
+const DONE_RENDER_MS = 45_000
 
 function pathsEqual(a, b) {
   return isWin ? a.toLowerCase() === b.toLowerCase() : a === b
@@ -195,8 +200,12 @@ export function scanAndMerge(dir, projectRoot) {
           return pd !== 0 ? pd : (a.role < b.role ? -1 : a.role > b.role ? 1 : 0)
         })[0]
       if (pick && typeof pick.role === 'string') {
-        // Only adopt workflow from a LIVE session. Done/idle terminal event sessions
-        // should still render briefly, but must not become a phantom active banner.
+        // Terminal 'done' representatives render only for DONE_RENDER_MS (a brief "just
+        // finished" beat), then drop — so a finished session's sprite doesn't loiter for
+        // the full STALE_MS. Live statuses are unaffected; idle is already filtered above.
+        if (pick.status === 'done' && (now - (parseInt(data._seq, 10) || 0)) > DONE_RENDER_MS) continue
+        // Only adopt workflow from a LIVE session. Done terminal sessions still render (for
+        // the window above) but must not become a phantom active banner.
         if (!workflow && LIVE_STATUSES.has(pick.status) && data.workflow) workflow = data.workflow
         allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
       }

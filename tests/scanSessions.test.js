@@ -337,12 +337,23 @@ describe('multi-session merge', () => {
     expect(alphaAgent1.role).toMatch(/dev/)
   })
 
-  it('includes terminal done representatives but not in activeCount', () => {
+  it('includes FRESH terminal done representatives but not in activeCount', () => {
     const base = Date.now()
     writeSlugged('alpha', base + 100, [{ role: 'dev', status: 'done', task: null, label: null }])
     writeSlugged('beta', base + 200, [{ role: 'qa', status: 'working', task: null, label: null }])
     const result = scanAndMerge(dir, dir)
     expect(result.agents.some(a => a.session === 'alpha' && a.status === 'done')).toBe(true)
+    expect(result.activeCount).toBe(1)
+  })
+
+  it('drops done representatives older than DONE_RENDER_MS so finished sessions do not loiter', () => {
+    const base = Date.now()
+    // alpha finished ~60s ago: past the ~45s done-render window but still inside the 5-min stale TTL.
+    writeSlugged('alpha', base - 60_000, [{ role: 'dev', status: 'done', task: null, label: null }])
+    writeSlugged('beta', base + 200, [{ role: 'qa', status: 'working', task: null, label: null }])
+    const result = scanAndMerge(dir, dir)
+    expect(result.agents.some(a => a.session === 'alpha')).toBe(false)
+    expect(result.agents.some(a => a.session === 'beta' && a.status === 'working')).toBe(true)
     expect(result.activeCount).toBe(1)
   })
 
