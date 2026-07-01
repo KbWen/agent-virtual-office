@@ -19,7 +19,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, mkdirSync, existsSync, statSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, existsSync, statSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:net'
@@ -290,6 +290,36 @@ describe('AC-3 behavioral spine checks', () => {
     const devAgent = (merged?.agents ?? []).find(a => a.role === 'dev')
     expect(devAgent).toBeTruthy()
     expect(devAgent.status).toBe('idle')
+  })
+
+  it('awaiting-approval survives the real server path', async () => {
+    const res = await postStatus({
+      type: 'office-status',
+      agents: [{ role: 'qa', status: 'awaiting-approval', label: 'Waiting on user' }],
+    })
+    expect(res.status).toBe(200)
+    const merged = await getStatus()
+    const qaAgent = (merged?.agents ?? []).find(a => a.role === 'qa')
+    expect(qaAgent).toBeTruthy()
+    expect(qaAgent.status).toBe('awaiting-approval')
+    expect(merged.activeCount).toBe(1)
+  })
+
+  it('production writes are project-scoped and default webhook events do not become workflow banners', async () => {
+    const statusRes = await postStatus({ dev: 'working' })
+    expect(statusRes.status).toBe(200)
+    let raw = JSON.parse(readFileSync(statusFilePath, 'utf-8'))
+    expect(raw._cwd).toBe(ROOT)
+    let merged = await getStatus()
+    expect(merged._cwd).toBeUndefined()
+
+    const eventRes = await postEvent({ event: 'test-passed' })
+    expect(eventRes.status).toBe(200)
+    raw = JSON.parse(readFileSync(statusFilePath, 'utf-8'))
+    expect(raw._cwd).toBe(ROOT)
+    expect(raw.workflow).toBeNull()
+    merged = await getStatus()
+    expect(merged.workflow).toBeNull()
   })
 
   it('_seq strictly increases across ≥4 alternating POST /api/status + POST /api/event calls', async () => {

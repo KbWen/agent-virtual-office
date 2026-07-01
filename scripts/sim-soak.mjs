@@ -14,7 +14,9 @@
  *
  * USAGE:
  *   npm run soak                       # 5-minute local soak (reuses :5173 if up)
+ *   npm run soak:spawn                 # 5-minute local soak with a fresh Vite server
  *   node scripts/sim-soak.mjs --minutes 12
+ *   node scripts/sim-soak.mjs --spawn --minutes 12
  *   SOAK_URL=http://localhost:5173 node scripts/sim-soak.mjs   # reuse a running server
  *   SOAK_REPORT=soak-report.json ...                            # also write a JSON report
  *
@@ -23,42 +25,131 @@
 import { chromium } from 'playwright'
 import { spawn } from 'node:child_process'
 import { existsSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { evaluateSoak } from './soakInvariants.mjs'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const ROOT = path.resolve(__dirname, '..')
+const FETCH_ATTEMPT_TIMEOUT_MS = 1000
 const argIdx = process.argv.indexOf('--minutes')
 const MINUTES = argIdx > -1 ? Number(process.argv[argIdx + 1]) : 5
-const PORT = parseInt(process.env.SOAK_PORT || '5198', 10)
+const SAMPLE_INTERVAL_MS = 250
+const FORCE_SPAWN = process.env.SOAK_SPAWN === '1' || process.argv.includes('--spawn')
+
+function failEarly(message) {
+  console.error(`sim-soak ERROR: ${message}`)
+  process.exit(1)
+}
+
+function parsePortEnv(name, value) {
+  if (!/^\d+$/.test(value || '')) throw new Error(`${name} must be an integer port in 1..65535`)
+  const port = Number(value)
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${name} must be an integer port in 1..65535`)
+  }
+  return port
+}
+
+const PORT = (() => {
+  try {
+    return parsePortEnv('SOAK_PORT', process.env.SOAK_PORT || '5198')
+  } catch (err) {
+    failEarly(err.message)
+  }
+})()
+
+if (!Number.isFinite(MINUTES) || MINUTES <= 0) {
+  failEarly('--minutes must be a finite number greater than 0')
+}
 
 async function urlUp(url) {
-  try { return (await fetch(url)).ok } catch { return false }
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), FETCH_ATTEMPT_TIMEOUT_MS)
+    const ok = (await fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer))).ok
+    return ok
+  } catch {
+    return false
+  }
 }
 
 // ── Server: reuse SOAK_URL / a running :5173 dev server, else spawn vite ──────────────
-// SOAK_SPAWN=1 skips the reuse shortcuts — lets the CI spawn path be exercised locally.
-let baseUrl = process.env.SOAK_SPAWN === '1' ? null : (process.env.SOAK_URL || null)
+// SOAK_SPAWN=1 / --spawn skips reuse shortcuts — lets the CI spawn path be exercised locally.
+let baseUrl = FORCE_SPAWN ? null : (process.env.SOAK_URL || null)
 let serverProc = null
-if (!baseUrl && process.env.SOAK_SPAWN !== '1' && await urlUp('http://localhost:5173/')) baseUrl = 'http://localhost:5173'
+let serverExit = null
+if (!baseUrl && !FORCE_SPAWN && await urlUp('http://localhost:5173/')) baseUrl = 'http://localhost:5173'
 if (!baseUrl) {
-  // shell:true is required for npx on Windows (.cmd shim); PORT is a parseInt-validated
-  // module-level int (worst case NaN → harmless flag), no external string reaches the line.
-  // nosemgrep: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true
-  serverProc = spawn(`npx vite --port ${PORT} --strictPort`, { shell: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  const viteBin = path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js')
+  if (!existsSync(viteBin)) {
+    console.error('sim-soak ERROR: Vite binary not found. Run `npm ci` first.')
+    process.exit(1)
+  }
+  serverProc = spawn(
+    process.execPath,
+    [viteBin, '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'],
+    { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' }
+  )
+  serverProc.stdout.on('error', () => {})
+  serverProc.stderr.on('error', () => {})
+  serverProc.once('close', (code, signal) => { serverExit = { code, signal } })
   baseUrl = `http://localhost:${PORT}`
   const deadline = Date.now() + 30000
-  while (Date.now() < deadline && !(await urlUp(baseUrl + '/'))) await new Promise(r => setTimeout(r, 300))
+  while (Date.now() < deadline && !(await urlUp(baseUrl + '/'))) {
+    if (serverExit) {
+      console.error(`sim-soak ERROR: vite exited before readiness (code=${serverExit.code}, signal=${serverExit.signal})`)
+      process.exit(1)
+    }
+    await new Promise(r => setTimeout(r, 300))
+  }
   if (!(await urlUp(baseUrl + '/'))) {
     console.error('sim-soak ERROR: vite dev server did not become ready')
-    serverProc?.kill('SIGKILL')
+    await cleanup()
     process.exit(1)
   }
 }
 
 let browser = null
-async function cleanup() {
-  try { await browser?.close() } catch {}
-  try { serverProc?.kill('SIGTERM') } catch {}
+let cleanupPromise = null
+async function stopServerProcessTree() {
+  if (!serverProc?.pid || serverExit) return
+  if (process.platform === 'win32') {
+    await new Promise(resolve => {
+      const killer = spawn('taskkill.exe', ['/pid', String(serverProc.pid), '/t', '/f'], { stdio: 'ignore' })
+      killer.on('error', resolve)
+      killer.on('exit', resolve)
+    })
+    return
+  }
+  try {
+    process.kill(-serverProc.pid, 'SIGTERM')
+    const exited = await new Promise(resolve => {
+      const timer = setTimeout(() => resolve(false), 1500)
+      serverProc.once('close', () => {
+        clearTimeout(timer)
+        resolve(true)
+      })
+    })
+    if (!exited) process.kill(-serverProc.pid, 'SIGKILL')
+  } catch {}
 }
-process.on('SIGINT', () => cleanup().then(() => process.exit(130)))
+async function cleanup() {
+  if (cleanupPromise) return cleanupPromise
+  cleanupPromise = (async () => {
+  try { await browser?.close() } catch {}
+  await stopServerProcessTree()
+  try { serverProc?.stdout?.destroy() } catch {}
+  try { serverProc?.stderr?.destroy() } catch {}
+  })()
+  return cleanupPromise
+}
+process.once('SIGINT', () => cleanup().then(() => process.exit(130)))
+process.once('SIGTERM', () => cleanup().then(() => process.exit(143)))
+process.once('exit', () => {
+  if (!serverProc?.pid || serverExit || process.platform === 'win32') return
+  try { process.kill(-serverProc.pid, 'SIGKILL') } catch {}
+})
 
 let exitCode = 0
 try {
@@ -107,6 +198,11 @@ try {
     }
     return out
   }, { minutes: MINUTES })
+
+  const minSamples = Math.max(1, Math.floor((MINUTES * 60000) / SAMPLE_INTERVAL_MS) - 2)
+  if (samples.length < minSamples) {
+    throw new Error(`insufficient samples: got ${samples.length}, expected at least ${minSamples}`)
+  }
 
   const result = evaluateSoak(samples)
   if (process.env.SOAK_REPORT) {

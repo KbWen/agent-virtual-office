@@ -91,17 +91,50 @@ describe('normalizeStatusMessage', () => {
       expect(invalid.mood).toBeUndefined()
     })
 
-    it('M-1: activeCount counts only working+blocked agents (not idle)', () => {
+    it('M-1: activeCount counts live transport statuses, not idle/done', () => {
       const msg = {
         type: 'office-status',
         agents: [
           { role: 'dev', status: 'working' },
+          { role: 'arch', status: 'planning' },
+          { role: 'gate', status: 'awaiting-approval' },
           { role: 'qa', status: 'idle' },
           { role: 'ops', status: 'done' },
         ],
       }
       const result = normalizeStatusMessage(msg)
-      expect(result.activeCount).toBe(1)
+      expect(result.activeCount).toBe(3)
+    })
+
+    it('bounds untrusted office-status agent scanning before counting active agents', () => {
+      const agents = []
+      for (let i = 0; i < 100; i++) {
+        agents.push({ role: `session-${i}~qa`, status: 'working', session: `session-${i}` })
+      }
+
+      const result = normalizeStatusMessage({ type: 'office-status', agents })
+
+      expect(result.agents).toHaveLength(50)
+      expect(result.activeCount).toBe(50)
+    })
+
+    it('de-duplicates untrusted office-status agents by sanitized role with first occurrence winning', () => {
+      const result = normalizeStatusMessage({
+        type: 'office-status',
+        agents: [
+          { role: 'dev', status: 'working' },
+          { role: 'dev', status: 'blocked' },
+          { role: 'feat-x~qa', status: 'planning', session: 'feat-x' },
+          { role: 'feat-x~qa', status: 'blocked', session: 'feat-x' },
+        ],
+      })
+
+      expect(result.agents).toHaveLength(2)
+      expect(result.agents.map(a => [a.role, a.status])).toEqual([
+        ['dev', 'working'],
+        ['feat-x~qa', 'planning'],
+      ])
+      expect(result.activeCount).toBe(2)
     })
 
     it('M-1: tolerates non-array agents without throwing', () => {

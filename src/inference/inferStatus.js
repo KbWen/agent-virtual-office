@@ -40,6 +40,7 @@ function withStatusEnvelope(raw, fallbackSource = 'external') {
 
 const CAP = 200  // max string length for untrusted fields from in-browser channels
 const SLUG_CAP = 64  // max length for a session slug prefix in a composite role id
+const AGENT_CAP = 50  // max office-status agents accepted from untrusted channels
 
 function capStr(v) { return typeof v === 'string' ? v.slice(0, CAP) : null }
 
@@ -115,14 +116,21 @@ export function normalizeStatusMessage(raw) {
   // New protocol — validate envelope so untrusted in-browser channels (postMessage,
   // BroadcastChannel, window.__office_status__) cannot inject unbounded strings into the store.
   if (raw.type === 'office-status') {
-    const agents = Array.isArray(raw.agents)
-      ? raw.agents.map(sanitizeAgent).filter(Boolean)
-      : []
+    const agents = []
+    const seenRoles = new Set()
+    if (Array.isArray(raw.agents)) {
+      for (const rawAgent of raw.agents.slice(0, AGENT_CAP)) {
+        const agent = sanitizeAgent(rawAgent)
+        if (!agent || seenRoles.has(agent.role)) continue
+        seenRoles.add(agent.role)
+        agents.push(agent)
+      }
+    }
     // Count active agents with a plain loop — `.filter(...).length` allocates a
     // throwaway intermediate array on every SSE message just to read its length.
     let activeCount = 0
     for (const a of agents) {
-      if (a.status === 'working' || a.status === 'blocked') activeCount++
+      if (a.status === 'working' || a.status === 'blocked' || a.status === 'planning' || a.status === 'awaiting-approval') activeCount++
     }
     const validated = {
       ...raw,

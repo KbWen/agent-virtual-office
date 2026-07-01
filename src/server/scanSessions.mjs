@@ -21,13 +21,26 @@ import path from 'node:path'
 
 const STATUS_FILE_RE = /^office-status(-[^.]+)?\.json$/
 const isWin = process.platform === 'win32'
+const VALID_ROLES = new Set(['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer'])
 
 // Shared TTL constants — keep in sync between scanAndMerge and getSessionStats
 const STALE_MS = 300_000   // sessions older than 5 min are stale
 const FUTURE_MS = 300_000  // sessions more than 5 min in the future are implausible (NTP jump)
+// A fully-finished session's only representative is 'done'. Render that terminal "wrapping up"
+// beat for this long, then drop it — instead of letting the sprite loiter until STALE_MS (5 min)
+// as a motionless green corpse. Multi-worktree finish-waves otherwise stack several dead sprites
+// on the floor, exactly the clutter the REDUCE bias exists to avoid (panel review 2026-07-01).
+const DONE_RENDER_MS = 45_000
 
 function pathsEqual(a, b) {
   return isWin ? a.toLowerCase() === b.toLowerCase() : a === b
+}
+
+function hasValidBaseRole(role) {
+  if (typeof role !== 'string' || role.length === 0) return false
+  const sep = role.lastIndexOf('~')
+  const base = sep === -1 ? role : role.slice(sep + 1)
+  return VALID_ROLES.has(base)
 }
 
 // ─── mtime-based parse cache ──────────────────────────────────────────────
@@ -168,7 +181,8 @@ export function scanAndMerge(dir, projectRoot) {
     merged = { ...sessions[0].data }
     delete merged._cwd
   } else {
-    const PRI = { blocked: 0, working: 1, done: 2, idle: 3 }
+    const LIVE_STATUSES = new Set(['blocked', 'awaiting-approval', 'working', 'planning'])
+    const PRI = { blocked: 0, 'awaiting-approval': 1, working: 2, planning: 3, done: 4 }
     const allAgents = []
     let workflow = null
     for (const { slug, data } of sessions) {
@@ -180,16 +194,19 @@ export function scanAndMerge(dir, projectRoot) {
       // a TypeError that crashed the server at the unguarded SSE-connect + watch-debounce
       // callers. Array.isArray is the precise guard — a non-array session contributes no agent.
       const pick = (Array.isArray(data.agents) ? data.agents : [])
-        .filter(a => a && typeof a === 'object' && (a.status === 'working' || a.status === 'blocked'))
+        .filter(a => a && typeof a === 'object' && hasValidBaseRole(a.role) && typeof a.status === 'string' && Object.prototype.hasOwnProperty.call(PRI, a.status))
         .sort((a, b) => {
           const pd = (PRI[a.status] ?? 9) - (PRI[b.status] ?? 9)
           return pd !== 0 ? pd : (a.role < b.role ? -1 : a.role > b.role ? 1 : 0)
         })[0]
       if (pick && typeof pick.role === 'string') {
-        // Only adopt workflow from a session that is actively contributing an agent.
-        // A finished session (all agents done) can leave a stale workflow string that
-        // would otherwise appear as a phantom banner over an unrelated active session.
-        if (!workflow && data.workflow) workflow = data.workflow
+        // Terminal 'done' representatives render only for DONE_RENDER_MS (a brief "just
+        // finished" beat), then drop — so a finished session's sprite doesn't loiter for
+        // the full STALE_MS. Live statuses are unaffected; idle is already filtered above.
+        if (pick.status === 'done' && (now - (parseInt(data._seq, 10) || 0)) > DONE_RENDER_MS) continue
+        // Only adopt workflow from a LIVE session. Done terminal sessions still render (for
+        // the window above) but must not become a phantom active banner.
+        if (!workflow && LIVE_STATUSES.has(pick.status) && data.workflow) workflow = data.workflow
         allAgents.push({ ...pick, role: `${slug}~${pick.role}`, session: slug })
       }
     }
@@ -205,15 +222,13 @@ export function scanAndMerge(dir, projectRoot) {
       if (s > maxSeqNum) maxSeqNum = s
     }
     const maxSeq = String(maxSeqNum)
+    let activeCount = 0
+    for (const a of allAgents) if (LIVE_STATUSES.has(a.status)) activeCount++
     merged = {
       _seq: maxSeq,
       type: 'office-status',
       agents: allAgents,
-      // Every entry in allAgents is a `pick` already filtered to working/blocked
-      // (see the .filter above) before being pushed — so activeCount is exactly
-      // allAgents.length. The previous .filter(...).length re-scanned the array
-      // and allocated a throwaway filtered copy on every GET/SSE multi-session tick.
-      activeCount: allAgents.length,
+      activeCount,
       workflow,
       source: 'multi-session',
       sessionCount: sessions.length,
@@ -222,7 +237,8 @@ export function scanAndMerge(dir, projectRoot) {
     // Restrict to sessions that contributed an active agent — same rationale as workflow:
     // a finished session (all agents done) must not inject its mood over an unrelated active
     // session whose own agents carry no mood of their own.
-    const activeSlugs = new Set(allAgents.map(a => a.session))
+    const activeSlugs = new Set()
+    for (const a of allAgents) if (LIVE_STATUSES.has(a.status)) activeSlugs.add(a.session)
     const moodSession = [...sessions]
       .filter(s => activeSlugs.has(s.slug))
       .sort((a, b) => (parseInt(b.data._seq, 10) || 0) - (parseInt(a.data._seq, 10) || 0))

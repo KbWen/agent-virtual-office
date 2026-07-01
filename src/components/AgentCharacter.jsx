@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
-import { getTargetForBehavior, pickSocialTarget, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveFocusFacing, SOCIAL_BEHAVIORS, visuallyOverlapping, avoidOverlap } from '../systems/movementSystem'
+import { getTargetForBehavior, pickSocialTarget, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveClaimAwareHomePosition, resolveFocusFacing, SOCIAL_BEHAVIORS, visuallyOverlapping, avoidOverlap } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale, t } from '../i18n'
 import { BlockedReasonBadge } from './blockedReasonBadge'
 import { recurringInfo } from '../systems/recurringFailure'
 import { selectVisibleBubbles, BUBBLE_VISIBLE_CAP } from '../systems/bubbleVisibility.js'
-import { stepWalkFrame, GAP_SNAP_MS } from '../systems/walkFrame.js'
+import { stepWalkFrame } from '../systems/walkFrame.js'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog } from '../systems/constants.js'
 import BehaviorBubble from './BehaviorBubble'
 import { shouldShakeDesk } from '../systems/eventJuice.js'
@@ -15,6 +15,7 @@ import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
 // Character sprite scale. The root <g> scales by this; the name-tag/bubble group undoes it with
 // 1/CHAR_SCALE. Keep both in sync via this one constant.
 const CHAR_SCALE = 1.35
+export const RAF_STALL_RESTART_MS = 2500
 
 // Pure guard: returns true if a social arriver's TARGET should face back.
 // R1: tracked agents (live externalStatus entry) are NEVER modulated.
@@ -27,9 +28,10 @@ export function shouldFaceBack(targetExtStatus, targetAgent) {
   return true
 }
 
-// RAF watchdog is only for a genuinely stale visible walk loop. Visible jank in the 1.5-5s range
-// should resume smoothly; stepWalkFrame uses the same >GAP_SNAP_MS boundary to snap real freezes.
-export function shouldRestartRafWatchdog(lastFrameWallTime, now, visibilityState, stallMs = GAP_SNAP_MS) {
+// RAF watchdog is only for a genuinely stale visible walk loop. Restarting the lost chain is
+// non-snapping, so it can happen before GAP_SNAP_MS; true long-freeze fast-forward still lives in
+// stepWalkFrame's >GAP_SNAP_MS branch.
+export function shouldRestartRafWatchdog(lastFrameWallTime, now, visibilityState, stallMs = RAF_STALL_RESTART_MS) {
   if (visibilityState !== 'visible') return false
   if (!Number.isFinite(lastFrameWallTime) || lastFrameWallTime <= 0) return false
   return now - lastFrameWallTime > stallMs
@@ -49,6 +51,23 @@ export function shouldRecordRafWatchdogRestart(hadPendingFrame, isFocused, conse
 
 export function hasRafHandle(value) {
   return value !== null && value !== undefined
+}
+
+export function collectArrivalNudgeClaims(agents, id) {
+  const blockers = []
+  const claims = []
+  for (const oid of Object.keys(agents || {})) {
+    if (oid === id) continue
+    const other = agents[oid]
+    if (!other) continue
+    if (other.groupTarget) { blockers.push(other.groupTarget); claims.push(other.groupTarget) }
+    if (other.position && !other.isMoving) { blockers.push(other.position); claims.push(other.position) }
+    if (other.isMoving) {
+      if (other.targetPosition) { blockers.push(other.targetPosition); claims.push(other.targetPosition) }
+      if (other.journeyTarget) { blockers.push(other.journeyTarget); claims.push(other.journeyTarget) }
+    }
+  }
+  return { blockers, claims }
 }
 
 // ═══ PIXEL ART SPRITE SYSTEM ═══
@@ -1017,20 +1036,8 @@ function AgentCharacter({ agent }) {
       const me = s2.agents[id]
       if (me && !me.inGroupEvent && nudgeCountRef.current === 0 && visualPosRef.current) {
         const myPos = visualPosRef.current
-        // I'm overlapped iff a STANDING agent's body intersects mine. The nudge DESTINATION,
-        // however, must clear every CLAIM — standers' positions AND in-flight walkers'
-        // journey ends — or two recovering agents can re-stack at the same resolved spot
-        // (fresh review 2026-06-10, MED: C nudges onto B's invisible nudge landing).
-        const standing = []
-        const claims = []
-        for (const oid of Object.keys(s2.agents)) {
-          if (oid === id) continue
-          const o = s2.agents[oid]
-          if (!o) continue
-          if (o.position && !o.isMoving) { standing.push(o.position); claims.push(o.position) }
-          else if (o.journeyTarget) claims.push(o.journeyTarget)
-        }
-        if (standing.some(p => visuallyOverlapping(myPos, p))) {
+        const { blockers, claims } = collectArrivalNudgeClaims(s2.agents, id)
+        if (blockers.some(p => visuallyOverlapping(myPos, p))) {
           const nudged = avoidOverlap({ x: myPos.x, y: myPos.y }, claims)
           const clear = claims.every(p => !visuallyOverlapping(nudged, p))
           // Only SPEND the single per-journey nudge on a spot verified clear of all claims;
@@ -1056,10 +1063,11 @@ function AgentCharacter({ agent }) {
 
   useEffect(() => {
     if (!agentState?.returnHomeOnIdle || agentState.status !== 'idle' || agentState.inGroupEvent || isWalking) return
-    const home = HOME_POSITIONS[id]
     const current = visualPosRef.current
-    if (!home || !current) return
+    if (!HOME_POSITIONS[id] || !current) return
     const store = useOfficeStore.getState()
+    const home = resolveClaimAwareHomePosition(id, store.agents)
+    if (!home) return
     store.clearReturnHomeIntent(id)
     if (Math.hypot(current.x - home.x, current.y - home.y) < 5) return
     const path = calculatePath(current, home)

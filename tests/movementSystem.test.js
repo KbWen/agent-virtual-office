@@ -9,6 +9,7 @@ import {
   OVERFLOW_POSITIONS,
   OVERFLOW_SLOT_BY_XY,
   HOME_POSITIONS,
+  visuallyOverlapping,
 } from '../src/systems/movementSystem.js'
 
 // ─── calcFacing ──────────────────────────────────────────────────────
@@ -177,10 +178,21 @@ describe('getTargetForBehavior', () => {
     }
   })
 
-  it('unknown behavior (not in BEHAVIOR_LOCATIONS) → HOME_POSITIONS for the agent', () => {
+  it('unknown behavior (not in BEHAVIOR_LOCATIONS) → HOME_POSITIONS for the agent when clear', () => {
     expect(getTargetForBehavior('dev',  'work', {})).toEqual(HOME_POSITIONS['dev'])
     expect(getTargetForBehavior('arch', 'code', {})).toEqual(HOME_POSITIONS['arch'])
     expect(getTargetForBehavior('pm',   'read', {})).toEqual(HOME_POSITIONS['pm'])
+  })
+
+  it('unknown behavior side-steps when another agent occupies this agent home', () => {
+    const occupiedHome = HOME_POSITIONS.ops
+    const pos = getTargetForBehavior('ops', 'work', {
+      pm: { position: occupiedHome, targetPosition: occupiedHome, isMoving: false },
+      ops: { position: { x: 500, y: 300 } },
+    })
+    expect(pos).toBeTruthy()
+    expect(pos).not.toEqual(occupiedHome)
+    expect(visuallyOverlapping(pos, occupiedHome)).toBe(false)
   })
 
   it('unknown agentId with unknown behavior → null', () => {

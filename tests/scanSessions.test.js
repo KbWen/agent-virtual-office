@@ -206,6 +206,19 @@ describe('multi-session merge', () => {
     }
   })
 
+  it('drops live representatives with invalid roles so they cannot create phantom workflows', () => {
+    const base = Date.now()
+    writeSlugged('bad', base + 100, [{ role: 'hacker', status: 'blocked', task: 'pwn', label: null }], { workflow: 'evil-flow' })
+    writeSlugged('good', base + 200, [{ role: 'dev', status: 'done', task: 'done', label: null }])
+
+    const result = scanAndMerge(dir, dir)
+
+    expect(result.source).toBe('multi-session')
+    expect(result.agents.map(a => a.role)).toEqual(['good~dev'])
+    expect(result.activeCount).toBe(0)
+    expect(result.workflow).toBeNull()
+  })
+
   it('carries token usage + effort from the most-recent active session (AVO-108/AVO-102)', () => {
     const base = Date.now()
     writeSlugged('older', base + 100, [{ role: 'qa', status: 'working', task: 'Read', label: null }],
@@ -285,9 +298,10 @@ describe('multi-session merge', () => {
     const result = scanAndMerge(dir, dir)
     // beta's agent is active → alpha's done-only session must not leak its mood
     expect(result.mood).toBeUndefined()
-    // beta's agent is still present
+    // beta's agent is still live; alpha may render as a terminal event but must not
+    // contribute mood.
     expect(result.agents.some(a => a.session === 'beta')).toBe(true)
-    expect(result.agents.some(a => a.session === 'alpha')).toBe(false)
+    expect(result.agents.some(a => a.session === 'alpha' && a.status === 'done')).toBe(true)
   })
 
   // Agent priority and role tiebreaker (multi-session path only — single session returns all agents)
@@ -323,14 +337,46 @@ describe('multi-session merge', () => {
     expect(alphaAgent1.role).toMatch(/dev/)
   })
 
-  it('only includes working/blocked agents in activeCount', () => {
+  it('includes FRESH terminal done representatives but not in activeCount', () => {
     const base = Date.now()
     writeSlugged('alpha', base + 100, [{ role: 'dev', status: 'done', task: null, label: null }])
     writeSlugged('beta', base + 200, [{ role: 'qa', status: 'working', task: null, label: null }])
     const result = scanAndMerge(dir, dir)
-    // alpha's agent is 'done' → not picked; beta's agent is 'working' → picked
+    expect(result.agents.some(a => a.session === 'alpha' && a.status === 'done')).toBe(true)
     expect(result.activeCount).toBe(1)
   })
+
+  it('drops done representatives older than DONE_RENDER_MS so finished sessions do not loiter', () => {
+    const base = Date.now()
+    // alpha finished ~60s ago: past the ~45s done-render window but still inside the 5-min stale TTL.
+    writeSlugged('alpha', base - 60_000, [{ role: 'dev', status: 'done', task: null, label: null }])
+    writeSlugged('beta', base + 200, [{ role: 'qa', status: 'working', task: null, label: null }])
+    const result = scanAndMerge(dir, dir)
+    expect(result.agents.some(a => a.session === 'alpha')).toBe(false)
+    expect(result.agents.some(a => a.session === 'beta' && a.status === 'working')).toBe(true)
+    expect(result.activeCount).toBe(1)
+  })
+
+  it('keeps planning and awaiting-approval representatives in multi-session output', () => {
+    const base = Date.now()
+    writeSlugged('alpha', base + 100, [{ role: 'dev', status: 'planning', task: null, label: null }])
+    writeSlugged('beta', base + 200, [{ role: 'qa', status: 'awaiting-approval', task: null, label: null }])
+    const result = scanAndMerge(dir, dir)
+    expect(result.agents.some(a => a.session === 'alpha' && a.status === 'planning')).toBe(true)
+    expect(result.agents.some(a => a.session === 'beta' && a.status === 'awaiting-approval')).toBe(true)
+    expect(result.activeCount).toBe(2)
+  })
+
+  it('drops idle representatives from multi-session output so cleanup can run', () => {
+    const base = Date.now()
+    writeSlugged('alpha', base + 100, [{ role: 'dev', status: 'idle', task: null, label: null }])
+    writeSlugged('beta', base + 200, [{ role: 'qa', status: 'working', task: null, label: null }])
+    const result = scanAndMerge(dir, dir)
+    expect(result.agents.some(a => a.session === 'alpha')).toBe(false)
+    expect(result.agents.some(a => a.session === 'beta' && a.status === 'working')).toBe(true)
+    expect(result.activeCount).toBe(1)
+  })
+
 })
 
 // ─── helpers concat / de-dupe / bound (multi-session) ────────────────────────
