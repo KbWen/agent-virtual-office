@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
-import { getTargetForBehavior, pickSocialTarget, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveFocusFacing, SOCIAL_BEHAVIORS, visuallyOverlapping, avoidOverlap } from '../systems/movementSystem'
+import { getTargetForBehavior, pickSocialTarget, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveClaimAwareHomePosition, resolveFocusFacing, SOCIAL_BEHAVIORS, visuallyOverlapping, avoidOverlap } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale, t } from '../i18n'
 import { BlockedReasonBadge } from './blockedReasonBadge'
 import { recurringInfo } from '../systems/recurringFailure'
@@ -1063,10 +1063,11 @@ function AgentCharacter({ agent }) {
 
   useEffect(() => {
     if (!agentState?.returnHomeOnIdle || agentState.status !== 'idle' || agentState.inGroupEvent || isWalking) return
-    const home = HOME_POSITIONS[id]
     const current = visualPosRef.current
-    if (!home || !current) return
+    if (!HOME_POSITIONS[id] || !current) return
     const store = useOfficeStore.getState()
+    const home = resolveClaimAwareHomePosition(id, store.agents)
+    if (!home) return
     store.clearReturnHomeIntent(id)
     if (Math.hypot(current.x - home.x, current.y - home.y) < 5) return
     const path = calculatePath(current, home)

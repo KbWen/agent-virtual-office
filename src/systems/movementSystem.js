@@ -783,6 +783,14 @@ export function avoidOverlap(pos, occupied, maxAttempts = 8) {
   return clampToFloor({ x, y })  // degraded fallback (matches the old code's last-resort behavior)
 }
 
+export function resolveClaimAwareHomePosition(agentId, allAgents) {
+  const home = HOME_POSITIONS[agentId] || null
+  if (!home) return null
+  const occupied = getOccupiedPositions(agentId, allAgents)
+  if (!occupied.some(o => visuallyOverlapping(home, o))) return home
+  return avoidOverlap(home, occupied)
+}
+
 // Add jitter then clamp to walkable floor
 function jitter(pos, amount = 16) {
   return clampToFloor({
@@ -860,9 +868,11 @@ export function getTargetForBehavior(agentId, behaviorId, allAgents, socialTarge
     }
   }
 
-  // Home position — always valid, skip overlap check (it's their seat)
+  // Home position — keep the exact seat when clear, but side-step if another
+  // agent currently claims it. Soak caught owners walking back into occupied
+  // desks and visibly stacking beside the stander for several seconds.
   const waypointKey = BEHAVIOR_LOCATIONS[behaviorId]
-  if (waypointKey === undefined) return HOME_POSITIONS[agentId] || null
+  if (waypointKey === undefined) return resolveClaimAwareHomePosition(agentId, allAgents)
 
   const base = WAYPOINTS[waypointKey] || HOME_POSITIONS[agentId]
   if (!base) return null
