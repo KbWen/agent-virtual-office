@@ -554,8 +554,8 @@ function officeStatusPlugin() {
               _cwd: process.cwd(),
               type: 'office-status',
               agents,
-              activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked').length,
-              workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : eventName,
+              activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked' || a.status === 'planning' || a.status === 'awaiting-approval').length,
+              workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : null,
               source: 'webhook',
             }
             const dir = path.dirname(statusPath)

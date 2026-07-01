@@ -14,7 +14,9 @@
  *
  * USAGE:
  *   npm run soak                       # 5-minute local soak (reuses :5173 if up)
+ *   npm run soak:spawn                 # 5-minute local soak with a fresh Vite server
  *   node scripts/sim-soak.mjs --minutes 12
+ *   node scripts/sim-soak.mjs --spawn --minutes 12
  *   SOAK_URL=http://localhost:5173 node scripts/sim-soak.mjs   # reuse a running server
  *   SOAK_REPORT=soak-report.json ...                            # also write a JSON report
  *
@@ -33,6 +35,7 @@ const FETCH_ATTEMPT_TIMEOUT_MS = 1000
 const argIdx = process.argv.indexOf('--minutes')
 const MINUTES = argIdx > -1 ? Number(process.argv[argIdx + 1]) : 5
 const SAMPLE_INTERVAL_MS = 250
+const FORCE_SPAWN = process.env.SOAK_SPAWN === '1' || process.argv.includes('--spawn')
 
 function failEarly(message) {
   console.error(`sim-soak ERROR: ${message}`)
@@ -72,11 +75,11 @@ async function urlUp(url) {
 }
 
 // ── Server: reuse SOAK_URL / a running :5173 dev server, else spawn vite ──────────────
-// SOAK_SPAWN=1 skips the reuse shortcuts — lets the CI spawn path be exercised locally.
-let baseUrl = process.env.SOAK_SPAWN === '1' ? null : (process.env.SOAK_URL || null)
+// SOAK_SPAWN=1 / --spawn skips reuse shortcuts — lets the CI spawn path be exercised locally.
+let baseUrl = FORCE_SPAWN ? null : (process.env.SOAK_URL || null)
 let serverProc = null
 let serverExit = null
-if (!baseUrl && process.env.SOAK_SPAWN !== '1' && await urlUp('http://localhost:5173/')) baseUrl = 'http://localhost:5173'
+if (!baseUrl && !FORCE_SPAWN && await urlUp('http://localhost:5173/')) baseUrl = 'http://localhost:5173'
 if (!baseUrl) {
   const viteBin = path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js')
   if (!existsSync(viteBin)) {

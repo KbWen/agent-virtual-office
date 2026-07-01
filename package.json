@@ -17,6 +17,7 @@
     "smoke:panel": "node scripts/panel-features-verify.mjs",
     "smoke:pack": "node scripts/pack-smoke.mjs",
     "soak": "node scripts/sim-soak.mjs",
+    "soak:spawn": "node scripts/sim-soak.mjs --spawn",
     "test": "vitest run",
     "prepublishOnly": "npm run build && npm test"
   },

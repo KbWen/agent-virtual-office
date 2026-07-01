@@ -206,6 +206,19 @@ describe('multi-session merge', () => {
     }
   })
 
+  it('drops live representatives with invalid roles so they cannot create phantom workflows', () => {
+    const base = Date.now()
+    writeSlugged('bad', base + 100, [{ role: 'hacker', status: 'blocked', task: 'pwn', label: null }], { workflow: 'evil-flow' })
+    writeSlugged('good', base + 200, [{ role: 'dev', status: 'done', task: 'done', label: null }])
+
+    const result = scanAndMerge(dir, dir)
+
+    expect(result.source).toBe('multi-session')
+    expect(result.agents.map(a => a.role)).toEqual(['good~dev'])
+    expect(result.activeCount).toBe(0)
+    expect(result.workflow).toBeNull()
+  })
+
   it('carries token usage + effort from the most-recent active session (AVO-108/AVO-102)', () => {
     const base = Date.now()
     writeSlugged('older', base + 100, [{ role: 'qa', status: 'working', task: 'Read', label: null }],

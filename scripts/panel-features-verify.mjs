@@ -230,18 +230,23 @@ try {
   await stageOffice()
 
   const cyanProbe = await page.evaluate(() => {
-    const group = document.querySelector('svg g[data-agent-id="dev"][data-agent-status="awaiting-approval"]')
-    let cyanStroke = 0
-    let cyanFill = 0
-    if (group) {
+    const countCyan = (selector) => {
+      const group = document.querySelector(selector)
+      let cyanStroke = 0
+      let cyanFill = 0
+      if (!group) return { scoped: false, cyanStroke, cyanFill }
       for (const el of group.querySelectorAll('*')) {
         const st = (el.getAttribute('stroke') || '').toLowerCase()
         const fl = (el.getAttribute('fill') || '').toLowerCase()
         if (st === '#1e9fd4') cyanStroke++
         if (fl === '#1e9fd4') cyanFill++
       }
+      return { scoped: true, cyanStroke, cyanFill }
     }
-    return { scopedToDev: !!group, cyanStroke, cyanFill }
+    return {
+      awaiting: countCyan('svg g[data-agent-id="dev"][data-agent-status="awaiting-approval"]'),
+      blocked: countCyan('svg g[data-agent-id="qa"][data-agent-status="blocked"]'),
+    }
   })
 
   await page.evaluate(() => { const svg = document.querySelector('svg'); if (svg) svg.setAttribute('viewBox', '0 0 800 560') })
@@ -277,8 +282,9 @@ try {
   await (await page.$('svg')).screenshot({ path: path.join(OUT, 'avo167-await-ring-closeup.png') })
 
   result = { baseUrl: BASE_URL, shotDir: OUT, errors, errorBoundary, cyanProbe, inspBlocked, inspAwait }
-  pass = errors.length === 0 && !errorBoundary && cyanProbe.scopedToDev
-    && cyanProbe.cyanStroke > 0 && cyanProbe.cyanFill > 0
+  pass = errors.length === 0 && !errorBoundary
+    && cyanProbe.awaiting.scoped && cyanProbe.awaiting.cyanStroke > 0 && cyanProbe.awaiting.cyanFill > 0
+    && cyanProbe.blocked.scoped && cyanProbe.blocked.cyanStroke === 0 && cyanProbe.blocked.cyanFill === 0
     && inspBlocked.some(t => /Blocked · \d/.test(t)) && inspAwait.some(t => /Awaiting approval · \d/.test(t))
 } catch (err) {
   result = { ...(result || {}), error: err.message, stack: err.stack?.split('\n').slice(0, 8) }

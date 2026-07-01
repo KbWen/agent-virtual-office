@@ -21,6 +21,7 @@ import path from 'node:path'
 
 const STATUS_FILE_RE = /^office-status(-[^.]+)?\.json$/
 const isWin = process.platform === 'win32'
+const VALID_ROLES = new Set(['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer'])
 
 // Shared TTL constants — keep in sync between scanAndMerge and getSessionStats
 const STALE_MS = 300_000   // sessions older than 5 min are stale
@@ -28,6 +29,13 @@ const FUTURE_MS = 300_000  // sessions more than 5 min in the future are implaus
 
 function pathsEqual(a, b) {
   return isWin ? a.toLowerCase() === b.toLowerCase() : a === b
+}
+
+function hasValidBaseRole(role) {
+  if (typeof role !== 'string' || role.length === 0) return false
+  const sep = role.lastIndexOf('~')
+  const base = sep === -1 ? role : role.slice(sep + 1)
+  return VALID_ROLES.has(base)
 }
 
 // ─── mtime-based parse cache ──────────────────────────────────────────────
@@ -181,7 +189,7 @@ export function scanAndMerge(dir, projectRoot) {
       // a TypeError that crashed the server at the unguarded SSE-connect + watch-debounce
       // callers. Array.isArray is the precise guard — a non-array session contributes no agent.
       const pick = (Array.isArray(data.agents) ? data.agents : [])
-        .filter(a => a && typeof a === 'object' && typeof a.status === 'string' && Object.prototype.hasOwnProperty.call(PRI, a.status))
+        .filter(a => a && typeof a === 'object' && hasValidBaseRole(a.role) && typeof a.status === 'string' && Object.prototype.hasOwnProperty.call(PRI, a.status))
         .sort((a, b) => {
           const pd = (PRI[a.status] ?? 9) - (PRI[b.status] ?? 9)
           return pd !== 0 ? pd : (a.role < b.role ? -1 : a.role > b.role ? 1 : 0)
