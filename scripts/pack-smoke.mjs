@@ -193,6 +193,7 @@ try {
   writeFileSync(libraryCheckPath, `
 import { VALID_STATUSES, normalizePost } from 'agent-virtual-office/status-contract'
 import { normalizePost as normalizePostAlias } from 'agent-virtual-office/normalize-post'
+import { buildExternalStatusEntry } from 'agent-virtual-office/status-runtime'
 import { agentStatus, presenceRows } from 'agent-virtual-office/agent-status-model'
 import { buildAgentStatusSnapshot } from 'agent-virtual-office/agent-status-snapshot'
 
@@ -200,6 +201,7 @@ const norm = normalizePost({ dev: 'working' })
 if (!VALID_STATUSES.includes('awaiting-approval')) throw new Error('status-contract export missing awaiting-approval')
 if (norm.agents[0]?.status !== 'working') throw new Error('status-contract normalizePost failed')
 if (normalizePostAlias({ qa: 'blocked' }).agents[0]?.status !== 'blocked') throw new Error('normalize-post export failed')
+if (buildExternalStatusEntry(null, { status: 'done' }, 1000).entry.expiresAt !== 11000) throw new Error('status-runtime export failed')
 if (agentStatus({ status: 'idle' }, { status: 'done' }) !== 'done') throw new Error('agent-status-model export failed')
 if (presenceRows({ agents: [{ id: 'dev', status: 'idle' }], externalStatus: { dev: { status: 'done' } } }).rows[0]?.status !== 'done') throw new Error('presenceRows export failed')
 
@@ -221,7 +223,7 @@ console.log('library imports OK')
   } catch (e) {
     fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
   }
-  console.log('[pack-smoke]   status-contract, normalize-post, agent-status-model, agent-status-snapshot imported.')
+  console.log('[pack-smoke]   status-contract, normalize-post, status-runtime, agent-status-model, agent-status-snapshot imported.')
   console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────

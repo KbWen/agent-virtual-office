@@ -12,7 +12,7 @@ import { PET_TYPES, nextPetType } from './petState.js'
 import { pruneRecentPicks } from './behaviorEngine.js'  // AVO-180: prune on eviction
 import { isValidTheme, DEFAULT_THEME } from './theme.js'
 import { recordEpisode, isNewBlockedEpisode } from './recurringFailure.js'
-import { AGENT_CARRY_FIELDS } from '../utils/statusFields.js'
+import { buildExternalStatusEntry } from './statusRuntime.mjs'
 
 export { STATUS_COLORS }
 
@@ -314,51 +314,8 @@ const ROLE_GROWTH_ITEMS = {
   gate: 'sticky', designer: 'sticky',
 }
 
-// AVO-184: build the externalStatus entry for ONE update. Pure given (prevExt, u, now); returns
-// the entry PLUS the `sigChanged` flag the per-update loop reuses to gate bubble/activity/no-op
-// writes. Byte-identical to the prior inline construction — extraction only.
-//
-// `changedAt` = when this agent's status/task last MEANINGFULLY changed. Stamped only on a real
-// signature change — NOT on every poll refresh (expiresAt moves each tick, so deriving "since" from
-// it always read ~now → the "0s everywhere" bug). Carry the prior stamp forward on a same-signature
-// refresh so the roster shows "since last change". label/hint excluded — cosmetic, they flap.
-//
-// AVO-106: activeFileAt stamps when the active FILE last changed, INDEPENDENT of sigChanged (task
-// carries the TOOL name, not the file — editing a.js then b.js is task='Edit' both times, so
-// sigChanged stays false while the file changes). Deliberately NOT folded into sigChanged so it
-// never re-pops a bubble.
-//
-// AVO-146: iterate AGENT_CARRY_FIELDS for the free-carry fields. activeFile is excluded here because
-// it carries a DERIVED companion (activeFileAt) and must be written as a pair. task/label/hint/
-// reasonCode all use `u.<field> || null` (same as the prior inline literals).
-//
-// expiresAt — working/blocked: 5 min (long-running tool calls can take >30s with no hook event
-// between PreToolUse and PostToolUse; a shorter expiry flickered the workflow banner). In practice
-// the 120s staleness sweep (inferStatus.js) clears a static external status first, so 5 min is a
-// rarely-reached backstop. done: 10s (brief celebration then back to idle).
-function buildExtEntry(prevExt, u, now) {
-  const sigChanged = !prevExt || prevExt.status !== u.status || (prevExt.task || '') !== (u.task || '')
-  const nextActiveFile = u.activeFile || null
-  const fileChanged = !prevExt || (prevExt.activeFile || null) !== nextActiveFile
-  const activeFileAt = nextActiveFile == null
-    ? null
-    : (fileChanged ? now : (Number.isFinite(prevExt.activeFileAt) ? prevExt.activeFileAt : now))
-  const carryFields = {}
-  for (const f of AGENT_CARRY_FIELDS) {
-    if (f === 'activeFile') continue  // handled separately with its activeFileAt stamp
-    carryFields[f] = u[f] || null
-  }
-  const entry = {
-    status: u.status,
-    ...carryFields,
-    activeFile: nextActiveFile,
-    activeFileAt,
-    expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
-    changedAt: sigChanged ? now : (Number.isFinite(prevExt.changedAt) ? prevExt.changedAt : now),
-  }
-  return { entry, sigChanged }
-}
-
+// AVO-184/portable-runtime: externalStatus entry construction lives in statusRuntime.mjs so non-pixel
+// consumers can reuse the exact changedAt / activeFileAt / expiry / sigChanged rules.
 // AVO-184: resolve an agent's visual (behavior + expression) for ONE update. Pure given the update,
 // the active workflow, the prior agent, and the inGroup flag. Byte-identical to the prior inline
 // resolution — extraction only.
@@ -1046,7 +1003,7 @@ export const useOfficeStore = create((set) => ({
         // prior inline build; full rationale in its module-scope doc). prevExt stays in scope below
         // for isNewBlockedEpisode.
         const prevExt = ext[u.agentId]
-        const { entry: extEntry, sigChanged } = buildExtEntry(prevExt, u, now)
+        const { entry: extEntry, sigChanged } = buildExternalStatusEntry(prevExt, u, now)
         ext[u.agentId] = extEntry
         // AVO-117: record a blocked EPISODE only on a real edge (pure isNewBlockedEpisode owns the
         // rule: transition INTO blocked from a non-blocked-family state, or a reason-change while
