@@ -3,6 +3,15 @@
   "version": "1.6.3",
   "description": "Pixel-art virtual office that visualizes your AI coding agents in real time — Claude Code, Codex, Gemini CLI, or any tool that can POST status. Pure SVG, zero backend, runs locally.",
   "main": "bin/cli.js",
+  "exports": {
+    ".": "./bin/cli.js",
+    "./status-contract": "./src/utils/statusContract.mjs",
+    "./normalize-post": "./src/utils/normalizePost.mjs",
+    "./agent-status-model": "./src/systems/agentStatusModel.mjs",
+    "./agent-status-snapshot": "./src/systems/agentStatusSnapshot.mjs",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
   "bin": {
     "agent-virtual-office": "./bin/cli.js"
   },

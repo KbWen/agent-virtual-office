@@ -5,6 +5,7 @@
  * Packs the repo into a tarball, installs it in a fresh temp project, then
  * asserts the four contract properties of the published artifact:
  *
+ *   Assertion 0: library subpath exports import from an installed tarball.
  *   Assertion 1: setup exits 0; ALL 8 hook events are registered; hook file exists.
  *   Assertion 2: setup is idempotent — a second run adds no duplicate entries.
  *   Assertion 3: the installed hook runs standalone — pipe a __noop__ event → exit 0,
@@ -185,6 +186,43 @@ try {
     fail('install-check', `Hook source not found at: ${hookSrcPath}`, 'Check package.json "files" whitelist includes public/')
   }
   console.log('[pack-smoke] Install OK — cli.js and hook source present.')
+
+  // ── Assertion 0: reusable library subpaths import from installed package ──────
+  console.log('[pack-smoke] Assertion 0: library subpath imports...')
+  const libraryCheckPath = path.join(tmpDir, 'library-import-check.mjs')
+  writeFileSync(libraryCheckPath, `
+import { VALID_STATUSES, normalizePost } from 'agent-virtual-office/status-contract'
+import { normalizePost as normalizePostAlias } from 'agent-virtual-office/normalize-post'
+import { agentStatus, presenceRows } from 'agent-virtual-office/agent-status-model'
+import { buildAgentStatusSnapshot } from 'agent-virtual-office/agent-status-snapshot'
+
+const norm = normalizePost({ dev: 'working' })
+if (!VALID_STATUSES.includes('awaiting-approval')) throw new Error('status-contract export missing awaiting-approval')
+if (norm.agents[0]?.status !== 'working') throw new Error('status-contract normalizePost failed')
+if (normalizePostAlias({ qa: 'blocked' }).agents[0]?.status !== 'blocked') throw new Error('normalize-post export failed')
+if (agentStatus({ status: 'idle' }, { status: 'done' }) !== 'done') throw new Error('agent-status-model export failed')
+if (presenceRows({ agents: [{ id: 'dev', status: 'idle' }], externalStatus: { dev: { status: 'done' } } }).rows[0]?.status !== 'done') throw new Error('presenceRows export failed')
+
+const snapshot = buildAgentStatusSnapshot({
+  agents: { dev: { id: 'dev', status: 'idle' } },
+  externalStatus: { dev: { status: 'done', task: 'Edit' } },
+})
+if (snapshot.agents[0]?.status !== 'done' || snapshot.presence.rows[0]?.task !== 'Edit') {
+  throw new Error('agent-status-snapshot export failed')
+}
+console.log('library imports OK')
+`)
+  try {
+    execSync(`node "${libraryCheckPath}"`, {
+      cwd: tmpDir,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    })
+  } catch (e) {
+    fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
+  }
+  console.log('[pack-smoke]   status-contract, normalize-post, agent-status-model, agent-status-snapshot imported.')
+  console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────
   console.log('[pack-smoke] Assertion 1: running setup...')
