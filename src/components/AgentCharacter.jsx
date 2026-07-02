@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
+import { useOfficeStore } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
 import { getTargetForBehavior, pickSocialTarget, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveClaimAwareHomePosition, resolveFocusFacing, SOCIAL_BEHAVIORS, visuallyOverlapping, avoidOverlap } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale, t } from '../i18n'
@@ -11,10 +11,19 @@ import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK
 import BehaviorBubble from './BehaviorBubble'
 import { shouldShakeDesk } from '../systems/eventJuice.js'
 import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
+import {
+  BASE_GLOW,
+  CHAR_SCALE,
+  characterBubbleLayout,
+  characterBubbleMessage,
+  characterIndicatorState,
+  characterStatusVisual,
+  computeLabelScale,
+  LABEL_SCALE_MAX,
+  nameTagMetrics,
+} from '../systems/agentCharacterModel.mjs'
 
-// Character sprite scale. The root <g> scales by this; the name-tag/bubble group undoes it with
-// 1/CHAR_SCALE. Keep both in sync via this one constant.
-const CHAR_SCALE = 1.35
+export { CHAR_SCALE, computeLabelScale, LABEL_SCALE_MAX } from '../systems/agentCharacterModel.mjs'
 export const RAF_STALL_RESTART_MS = 2500
 
 // Pure guard: returns true if a social arriver's TARGET should face back.
@@ -643,47 +652,9 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
   }
 })
 
-// ─── Unicode-aware text width for monospace SVG ──────────────────────
-// CJK chars ~10 units, ASCII ~7 units at fontSize 12 monospace
-function estimateTextWidth(str) {
-  let w = 0
-  for (const ch of str) {
-    w += ch.codePointAt(0) > 0x2E7F ? 10 : 7
-  }
-  return w
-}
-
-// ─── AVO-132: effort folded into the single working glow ring ───────────
-// The old AVO-102 ThinkingAura was a SECOND concentric violet ring stacked on the working
-// glow — ring-on-ring clutter on a 32px sprite. Instead, elevated effort (high/xhigh/max)
-// now intensifies the ONE working glow ring (stronger peak opacity + thicker stroke), so a
-// sprite never shows two rings. Normal/absent effort leaves the ring at its base intensity.
-const EFFORT_GLOW = { high: { op: 0.7, sw: 2.5 }, xhigh: { op: 0.85, sw: 3 }, max: { op: 1, sw: 3.5 } }
-const BASE_GLOW = { op: 0.5, sw: 2 }
 // AVO-131: the in-scene TaskLabel tool pill (AVO-103) was removed — the exact tool now
 // shows only in the AgentInspector (click-to-inspect). The classifier still backs the
 // inspector's `inspectorTaskLabel`; nothing in the office scene renders the raw tool string.
-
-// ─── POINT 2: counter-scale glance-text so it stays readable as the office shrinks ──────
-// The office renders with `meet`, so when its on-screen scale (sceneScale) drops below 1 every
-// label would shrink with it. The label group cancels the office shrink (×1/sceneScale) to hold
-// a ~constant on-screen text size. sceneScale ≥ 1 (office at/above native) → factor 1 (labels
-// ride the office up, already big enough; wide desktop is byte-identical).
-//
-// CAP = 1.5 is an overlap guard, NOT arbitrary. Desks are fixed coordinates (dev/ops are 120
-// units apart; pm/designer too). On-screen agent separation AND pill size both scale with
-// sceneScale, so in the capped region their ratio is constant: a name pill (~80 units for the
-// widest name) stays narrower than the 120-unit gap as long as cap < 120/80 ≈ 1.5 → adjacent
-// active agents' name tags never collide. At the threshold sceneScale = 1/1.5 ≈ 0.667 the net
-// on-screen text reaches full size (1.0) right where the office is already spread enough to clear;
-// below that the cap lets text shrink gently (still far larger than with no counter-scale at all).
-// Empirically verified overlap-free with all 8 agents active across a 320–1280px sweep.
-// Pure for unit testing.
-export const LABEL_SCALE_MAX = 1.5
-export function computeLabelScale(sceneScale, max = LABEL_SCALE_MAX) {
-  if (!(sceneScale > 0)) return 1
-  return Math.min(max, 1 / Math.min(sceneScale, 1))
-}
 
 // ═══ AGENT CHARACTER WITH RAF-BASED MOVEMENT ═══
 
@@ -1355,14 +1326,24 @@ function AgentCharacter({ agent }) {
   // loop; AgentCharacter re-renders ~30fps while walking (setRenderPos) and `name`
   // changes only on a locale switch, so without this memo the char-width loop ran on
   // every walk frame for a result that is constant for the whole walk.
-  const { tagW, tagHalfW } = useMemo(() => {
-    const w = estimateTextWidth(name) + 16
-    return { tagW: w, tagHalfW: w / 2 }
-  }, [name])
-  const tagFill = state.status !== 'idle' ? (STATUS_COLORS[state.status] || color) : color
-  const glowColor = STATUS_COLORS[state.status]
-  // AVO-128: show the name only when the agent is doing something or is being inspected.
-  const showName = hovered || (state.status && state.status !== 'idle')
+  const { tagW, tagHalfW } = useMemo(() => nameTagMetrics(name), [name])
+  const statusVisual = characterStatusVisual({
+    status: state.status,
+    color,
+    hovered,
+    hasActiveHelper,
+    effort,
+  })
+  const tagFill = statusVisual.tagFill
+  const glowColor = statusVisual.glowColor
+  const showName = statusVisual.showName
+  const ring = statusVisual.ring
+  const indicator = characterIndicatorState({
+    status: state.status,
+    behavior: state.behavior,
+    isWalking,
+    reasonCode,
+  })
 
   return (
     <g transform={`translate(${pos.x}, ${pos.y}) scale(${CHAR_SCALE})`}
@@ -1398,8 +1379,8 @@ function AgentCharacter({ agent }) {
       {/* AVO-132: single working/planning glow ring; effort (high/xhigh/max) intensifies it
           (peak opacity + stroke width) instead of stacking a second concentric aura.
           Planning uses a calm violet ring at BASE_GLOW intensity (effort does not apply). */}
-      {(state.status === 'working' || state.status === 'planning') && !hasActiveHelper && (() => {
-        const g = state.status === 'working' ? (EFFORT_GLOW[effort] || BASE_GLOW) : BASE_GLOW
+      {ring?.kind === 'active' && (() => {
+        const g = ring
         return (
           <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth={g.sw} opacity={g.op}>
             {!reducedMotion && <animate attributeName="opacity" values={`${(g.op * 0.4).toFixed(2)};${g.op};${(g.op * 0.4).toFixed(2)}`} dur="1.5s" repeatCount="indefinite" />}
@@ -1413,9 +1394,9 @@ function AgentCharacter({ agent }) {
           is preserved. reducedMotion → static ring (no animation). The fast pulse above is RESERVED
           for the lead's OWN direct work (no active helpers). Status visibility preserved by name tag
           + this halo + the 👀 chip. */}
-      {(state.status === 'working' || state.status === 'planning') && hasActiveHelper && (
+      {ring?.kind === 'supervising' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth={BASE_GLOW.sw}
-          opacity={(BASE_GLOW.op * 0.6).toFixed(2)} data-supervise-halo="1">
+          opacity={ring.op.toFixed(2)} data-supervise-halo="1">
           {!reducedMotion && (
             <animate attributeName="opacity"
               values={`${(BASE_GLOW.op * 0.3).toFixed(2)};${(BASE_GLOW.op * 0.6).toFixed(2)};${(BASE_GLOW.op * 0.3).toFixed(2)}`}
@@ -1423,7 +1404,7 @@ function AgentCharacter({ agent }) {
           )}
         </circle>
       )}
-      {state.status === 'blocked' && (
+      {ring?.kind === 'blocked' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.4">
           {!reducedMotion && <animate attributeName="opacity" values="0.2;0.5;0.2" dur="1s" repeatCount="indefinite" />}
         </circle>
@@ -1431,7 +1412,7 @@ function AgentCharacter({ agent }) {
       {/* AVO-167: 'awaiting-approval' (waiting on the human) — a CALM slow breathe (2.4s), deliberately
           NOT the alarm-fast 1s blocked pulse: present but unhurried "I'm waiting for you". Honest (tied
           to the real awaiting-approval signal); distinct cool-cyan ring + name-pill via STATUS_COLORS. */}
-      {state.status === 'awaiting-approval' && (
+      {ring?.kind === 'awaiting-approval' && (
         <circle cx={0} cy={-18} r={22} fill="none" stroke={glowColor} strokeWidth="2" opacity="0.45">
           {!reducedMotion && <animate attributeName="opacity" values="0.3;0.55;0.3" dur="2.4s" repeatCount="indefinite" />}
         </circle>
@@ -1439,7 +1420,7 @@ function AgentCharacter({ agent }) {
       {/* AVO-135: 'done' is a ONE-SHOT celebratory flash, not a standing ring — removes the
           last "status board" tell (a permanent done state). Expands + fades once, then gone;
           the ✓ status icon + green name carry the done state after. reducedMotion → no flash. */}
-      {state.status === 'done' && !reducedMotion && (
+      {ring?.kind === 'done' && !reducedMotion && (
         <circle cx={0} cy={-18} r={16} fill="none" stroke={glowColor} strokeWidth="2.5" opacity="0.6">
           <animate attributeName="r" values="16;30" dur="0.7s" repeatCount="1" fill="freeze" />
           <animate attributeName="opacity" values="0.6;0" dur="0.7s" repeatCount="1" fill="freeze" />
@@ -1461,9 +1442,9 @@ function AgentCharacter({ agent }) {
       {/* AVO-110: while blocked, the reason badge OVERRIDES the BehaviorIndicator glyph (a block is
           the dominant state). Keyed on reasonCode so a reason CHANGE replays the entry-pop, but a
           same-reason re-render reuses the element → no re-fire (ANTI-NAG). reducedMotion → static. */}
-      {!isWalking && (
-        state.status === 'blocked' ? (
-          <g key={`reason-${reasonCode || 'unknown'}`}>
+      {indicator.kind !== 'none' && (
+        indicator.kind === 'blocked-reason' ? (
+          <g key={indicator.key}>
             {!reducedMotion && (
               <animateTransform attributeName="transform" type="scale"
                 values="0.6 0.6;1.1 1.1;1 1" keyTimes="0;0.6;1" dur="0.35s" repeatCount="1" fill="freeze" />
@@ -1475,12 +1456,12 @@ function AgentCharacter({ agent }) {
             />
           </g>
         ) : (
-          <g key={state.behavior}>
+          <g key={indicator.key}>
             {!reducedMotion && (
               <animateTransform attributeName="transform" type="scale"
                 values="0 0;1.15 0.9;1 1" keyTimes="0;0.6;1" dur="0.3s" repeatCount="1" fill="freeze" />
             )}
-            <BehaviorIndicator behavior={state.behavior} />
+            <BehaviorIndicator behavior={indicator.behavior} />
           </g>
         )
       )}
@@ -1533,15 +1514,15 @@ function AgentCharacter({ agent }) {
             top is pos.y − 68 − 34·labelScale; when that crosses the top edge we anchor it just below
             the agent (+6) and flip the tail up so the whole bubble stays inside the scene. */}
         {(() => {
-          const bubbleTopAbove = pos.y - 68 - 34 * labelScale
-          const below = bubbleTopAbove < 6
+          const bubbleLayout = characterBubbleLayout({ position: pos, labelScale })
+          const below = bubbleLayout.below
           // AVO-158: a live poke quip momentarily PREEMPTS the ambient bubble (reuses the same
           // slot → no overlap, inherits edge-clamping). When a quip is showing, mark the group
           // as a polite live region so the acknowledge is announced once (reaction bob is
           // aria-hidden separately). aria-atomic so the whole short quip reads as one unit.
-          const bubbleMsg = pokeQuip || (bubbleVisible ? state.bubble : null)
+          const bubbleMsg = characterBubbleMessage({ pokeQuip, bubbleVisible, bubble: state.bubble })
           return (
-            <g transform={`translate(0, ${below ? 6 : -68}) scale(${labelScale})`}
+            <g transform={`translate(0, ${bubbleLayout.y}) scale(${labelScale})`}
               role={pokeQuip ? 'status' : undefined}
               aria-live={pokeQuip ? 'polite' : undefined}
               aria-atomic={pokeQuip ? 'true' : undefined}>

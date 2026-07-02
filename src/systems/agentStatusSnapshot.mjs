@@ -1,8 +1,13 @@
 import { agentSourceList, agentStatus, attentionItems, presenceRows } from './agentStatusModel.mjs'
+import { characterStatusVisual } from './agentCharacterModel.mjs'
 import { healthDotState } from './integrationStatusModel.mjs'
 import { statusVisualState } from './statusVisualModel.mjs'
 
-function agentSnapshot(agent, ext, nameForId) {
+function hasHelper(helpers, id) {
+  return Array.isArray(helpers) && helpers.some((helper) => helper?.parentRole === id)
+}
+
+function agentSnapshot(agent, ext, nameForId, context = {}) {
   const id = agent.id
   const status = agentStatus(agent, ext)
   return {
@@ -10,6 +15,12 @@ function agentSnapshot(agent, ext, nameForId) {
     name: nameForId(id) || id,
     status,
     visual: statusVisualState(status),
+    character: characterStatusVisual({
+      status,
+      color: agent.color || '#888',
+      hasActiveHelper: hasHelper(context.helpers, id),
+      effort: context.effort || null,
+    }),
     localStatus: agent.status || 'idle',
     hasExternalStatus: !!ext,
     task: ext?.task || null,
@@ -22,8 +33,8 @@ function agentSnapshot(agent, ext, nameForId) {
   }
 }
 
-function rowSnapshot(row, nameForId) {
-  return agentSnapshot(row.agent, row.ext, nameForId)
+function rowSnapshot(row, nameForId, context) {
+  return agentSnapshot(row.agent, row.ext, nameForId, context)
 }
 
 export function buildAgentStatusSnapshot(state = {}, { nameForId = (id) => id } = {}) {
@@ -32,8 +43,12 @@ export function buildAgentStatusSnapshot(state = {}, { nameForId = (id) => id } 
   const statusSource = state.statusSource || 'organic'
   const integrationSource = state.integrationSource || null
   const integrationHealth = state.integrationHealth || null
+  const context = {
+    effort: state.effort || null,
+    helpers: state.helpers || [],
+  }
   const externalCount = Object.keys(externalStatus).length
-  const allAgents = agents.map((agent) => agentSnapshot(agent, externalStatus[agent.id], nameForId))
+  const allAgents = agents.map((agent) => agentSnapshot(agent, externalStatus[agent.id], nameForId, context))
   const attention = attentionItems({ agents, externalStatus, nameForId })
   const presence = presenceRows({ agents, externalStatus })
 
@@ -44,7 +59,7 @@ export function buildAgentStatusSnapshot(state = {}, { nameForId = (id) => id } 
       items: attention,
     },
     presence: {
-      rows: presence.rows.map((row) => rowSnapshot(row, nameForId)),
+      rows: presence.rows.map((row) => rowSnapshot(row, nameForId, context)),
       quietCount: presence.quietCount,
     },
     statusSource,

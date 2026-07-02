@@ -64,6 +64,20 @@ export {
 } from './blockedReasonModel.mjs'
 
 export {
+  BASE_GLOW,
+  CHAR_SCALE,
+  characterBubbleLayout,
+  characterBubbleMessage,
+  characterIndicatorState,
+  characterStatusRing,
+  characterStatusVisual,
+  computeLabelScale,
+  estimateTextWidth,
+  LABEL_SCALE_MAX,
+  nameTagMetrics,
+} from './agentCharacterModel.mjs'
+
+export {
   inspectorAnchorPosition,
   inspectorPanelLayout,
   recentAgentActivities,

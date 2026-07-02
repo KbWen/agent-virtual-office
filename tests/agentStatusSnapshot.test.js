@@ -47,6 +47,12 @@ describe('buildAgentStatusSnapshot', () => {
         tone: 'done',
         known: true,
       },
+      character: {
+        tagFill: '#5CB88A',
+        glowColor: '#5CB88A',
+        showName: true,
+        ring: { kind: 'done', animate: 'flash' },
+      },
       task: 'Edit',
       label: 'changed src/App.jsx',
       activeFile: 'src/App.jsx',
@@ -111,6 +117,25 @@ describe('buildAgentStatusSnapshot', () => {
     expect(snapshot.presence.rows.map((agent) => agent.visual.color)).toEqual(['#5CB88A', '#EF9F27', '#1E9FD4'])
     expect(snapshot.presence.quietCount).toBe(0)
     expect(snapshot.activeCount).toBe(3)
+  })
+
+  it('includes compact character chrome tokens without embedding sprite grids', () => {
+    const snapshot = buildAgentStatusSnapshot({
+      agents: {
+        dev: { id: 'dev', status: 'working', color: '#123456' },
+      },
+      externalStatus: {},
+      helpers: [{ id: 'helper-1', parentRole: 'dev' }],
+      effort: 'max',
+    })
+
+    expect(snapshot.agents[0].character).toMatchObject({
+      tagFill: '#EF9F27',
+      glowColor: '#EF9F27',
+      showName: true,
+      ring: { kind: 'supervising', animate: 'slow-breathe' },
+    })
+    expect(snapshot.agents[0].character).not.toHaveProperty('grid')
   })
 
   it('keeps the node-safe mjs entry equivalent to the app entry', () => {

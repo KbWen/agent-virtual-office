@@ -7,6 +7,7 @@ import {
   buildAgentStatusSnapshot,
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
+  characterStatusVisual,
   comparePresence,
   feedEntries,
   healthDotState,
@@ -57,6 +58,10 @@ describe('statusCore public headless API', () => {
     expect(snapshot.presence.rows[0]?.task).toBe('Edit')
     expect(snapshot.integration.health.level).toBe('idle')
     expect(statusVisualState('blocked')).toMatchObject({ color: '#E24B4A', known: true })
+    expect(characterStatusVisual({ status: 'working', color: '#abc' })).toMatchObject({
+      tagFill: '#EF9F27',
+      ring: { kind: 'active' },
+    })
     expect(inspectorPanelLayout({ activityCount: 4, sceneScale: 0, position: { x: 400, y: 300 } })).toMatchObject({
       activityRows: 3,
       scale: 1.6,
