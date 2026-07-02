@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-06-23T13:00:00Z
-- **Update Sequence**: 100
+- **Last Updated**: 2026-07-02T10:22:00+08:00
+- **Update Sequence**: 101
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -164,6 +164,12 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-codex-product-action-strip-2026-07-02
+
+- Feature shipped: polished agent status surfaces and visual/copy clarity. Persistent blockers now surface in the control panel, activity-feed implementation artifacts are translated through an explicit reusable classifier, quiet agents collapse into a clean count, first-run setup hint readability improved, and local audit screenshots are ignored.
+- Commit: aeea422 feat(ui): polish agent status surfaces
+- Tests: Pass (focused Vitest 31, build, smoke, full suite 2246)
 
 ### Ship-chore-release-v1.6.3-2026-06-27 (office layout enrichment) · release v1.6.3
 
