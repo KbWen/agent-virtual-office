@@ -7,9 +7,11 @@ import {
   comparePresence,
   feedEntries,
   isDynamicStatusAgent,
+  normalizeAgentStatusUpdates,
   normalizePost,
   presenceRows,
   reconcileMultiSessionAgents,
+  sanitizeAgentId,
   teamStatus,
   VALID_STATUSES,
 } from '../src/systems/statusCore.mjs'
@@ -49,5 +51,64 @@ describe('statusCore public headless API', () => {
     expect([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id).toBe('a')
     expect(teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind).toBe('workflow')
     expect(feedEntries([{ origin: 'organic' }, { origin: 'hook' }])).toHaveLength(1)
+  })
+
+  it('normalizes generic agent ids into status-runtime update shape', () => {
+    const out = normalizeAgentStatusUpdates({
+      type: 'office-status',
+      agents: [
+        { agentId: 'frontend', status: 'working', task: 'Build UI', activeFile: 'src/App.jsx' },
+        { id: 'reviewer-2', status: 'blocked', reasonCode: 'permission-denied' },
+        { role: 'worker.alpha', status: 'done' },
+      ],
+      workflow: 'Review',
+      source: 'other-ui',
+    })
+
+    expect(out).toMatchObject({
+      type: 'agent-status-updates',
+      activeCount: 2,
+      workflow: 'Review',
+      source: 'other-ui',
+    })
+    expect(out.updates.map((u) => [u.agentId, u.status, u.task, u.reasonCode])).toEqual([
+      ['frontend', 'working', 'Build UI', null],
+      ['reviewer-2', 'blocked', null, 'permission-denied'],
+      ['worker.alpha', 'done', null, null],
+    ])
+    expect(out.updates[0].activeFile).toBe('src/App.jsx')
+  })
+
+  it('keeps legacy normalizePost role-strict while generic normalization keeps safe unknown ids', () => {
+    const body = { type: 'office-status', agents: [{ role: 'frontend', status: 'working' }] }
+
+    expect(normalizePost(body).agents).toEqual([])
+    expect(normalizeAgentStatusUpdates(body).updates).toMatchObject([
+      { agentId: 'frontend', status: 'working' },
+    ])
+  })
+
+  it('filters unsafe ids and supports an optional allowed-agent allowlist', () => {
+    expect(sanitizeAgentId(' reviewer-2 ')).toBe('reviewer-2')
+    expect(sanitizeAgentId('__proto__')).toBeNull()
+    expect(sanitizeAgentId('../bad')).toBeNull()
+
+    const out = normalizeAgentStatusUpdates({
+      frontend: 'working',
+      qa: 'blocked',
+      '__proto__': 'done',
+      activeFile: 'src/App.jsx',
+    }, { allowedAgentIds: ['frontend'] })
+
+    expect(out.updates).toEqual([{
+      agentId: 'frontend',
+      task: null,
+      status: 'working',
+      label: null,
+      hint: null,
+      reasonCode: null,
+      skill: null,
+      activeFile: 'src/App.jsx',
+    }])
   })
 })

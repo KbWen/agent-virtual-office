@@ -42,6 +42,7 @@ export const BLOCKED_REASONS = Object.freeze([
 // sanitization). Adding a field here + a FIELD_SANITIZERS entry registers it everywhere
 // that iterates this list.
 export const AGENT_CARRY_FIELDS = ['task', 'label', 'hint', 'reasonCode', 'activeFile', 'skill']
+export const MAX_AGENT_ID_LENGTH = 80
 
 // Per-field sanitizers. Semantics must match prior per-site behavior EXACTLY (AC-1
 // byte-equal): capStr(200) for free strings (string→sliced, non-string→null);
@@ -68,6 +69,14 @@ export function sanitizeCarryFields(src, target = {}) {
   return target
 }
 
+export function sanitizeAgentId(raw) {
+  if (typeof raw !== 'string') return null
+  const id = raw.trim().slice(0, MAX_AGENT_ID_LENGTH)
+  if (!id) return null
+  if (id === '__proto__' || id === 'prototype' || id === 'constructor') return null
+  return /^[A-Za-z0-9][A-Za-z0-9._~:-]*$/.test(id) ? id : null
+}
+
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
 function clampMoodDuration(raw) {
@@ -80,6 +89,87 @@ function countActive(agents) {
   let n = 0
   for (const a of agents) if (a.status === 'working' || a.status === 'blocked' || a.status === 'planning' || a.status === 'awaiting-approval') n++
   return n
+}
+
+function allowedIdSet(allowedAgentIds) {
+  if (allowedAgentIds == null) return null
+  const ids = Array.isArray(allowedAgentIds) || allowedAgentIds instanceof Set
+    ? allowedAgentIds
+    : []
+  return new Set([...ids].map(sanitizeAgentId).filter(Boolean))
+}
+
+function genericAgentFromFull(agent, seen, allowed) {
+  if (!agent || typeof agent !== 'object') return null
+  const agentId = sanitizeAgentId(agent.agentId ?? agent.id ?? agent.role)
+  if (!agentId || seen.has(agentId) || (allowed && !allowed.has(agentId))) return null
+  seen.add(agentId)
+  const carry = {}
+  for (const field of AGENT_CARRY_FIELDS) carry[field] = FIELD_SANITIZERS[field](agent[field])
+  return {
+    agentId,
+    status: VALID_STATUSES.includes(agent.status) ? agent.status : 'idle',
+    ...carry,
+  }
+}
+
+function genericAgentFromShorthand(agentId, value, body, multiAgent) {
+  const isStatus = VALID_STATUSES.includes(value)
+  if (!isStatus && typeof value !== 'string') return null
+  const carry = {}
+  for (const field of AGENT_CARRY_FIELDS) {
+    if (field === 'task' || field === 'activeFile') continue
+    carry[field] = FIELD_SANITIZERS[field](body[field])
+  }
+  const update = {
+    agentId,
+    task: isStatus ? null : value.slice(0, 200),
+    status: isStatus ? value : 'working',
+    ...carry,
+  }
+  update.activeFile = multiAgent ? null : FIELD_SANITIZERS.activeFile(body.activeFile)
+  return update
+}
+
+// Additive generic normalizer for package consumers. The legacy normalizePost() below remains
+// AVO-roster strict for server compatibility; this entry produces status-runtime-shaped updates
+// (`agentId`) and can accept arbitrary safe agent IDs such as "frontend" or "reviewer-2".
+export function normalizeAgentStatusUpdates(body, { allowedAgentIds = null } = {}) {
+  if (body == null || typeof body !== 'object') body = {}
+  const allowed = allowedIdSet(allowedAgentIds)
+  let updates
+  if (body.type === 'office-status') {
+    const seen = new Set()
+    updates = (Array.isArray(body.agents) ? body.agents : [])
+      .map((agent) => genericAgentFromFull(agent, seen, allowed))
+      .filter(Boolean)
+      .slice(0, 50)
+  } else {
+    const reserved = new Set(['type', 'agents', 'activeCount', 'workflow', 'mood', 'moodDuration', 'source', '_seq', ...AGENT_CARRY_FIELDS])
+    const ids = []
+    for (const key of Object.keys(body)) {
+      if (reserved.has(key)) continue
+      const id = sanitizeAgentId(key)
+      if (!id || (allowed && !allowed.has(id))) continue
+      ids.push(id)
+    }
+    const multiAgent = ids.length !== 1
+    updates = ids
+      .map((id) => genericAgentFromShorthand(id, body[id], body, multiAgent))
+      .filter(Boolean)
+      .slice(0, 50)
+  }
+  const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
+  return {
+    type: 'agent-status-updates',
+    updates,
+    activeCount: countActive(updates),
+    workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
+    mood,
+    moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
+    source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
+    _seq: nextSeq(),
+  }
 }
 
 // Single monotonic clock for the whole server process. server.mjs's /api/event writer

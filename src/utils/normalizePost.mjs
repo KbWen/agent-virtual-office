@@ -11,7 +11,7 @@
  * unloadable by bare Node).
  */
 export {
-  normalizePost, nextSeq,
+  normalizeAgentStatusUpdates, normalizePost, nextSeq, sanitizeAgentId,
   VALID_ROLES, VALID_STATUSES, VALID_MOODS, MAX_MOOD_DURATION,
-  BLOCKED_REASONS, AGENT_CARRY_FIELDS, FIELD_SANITIZERS, sanitizeCarryFields,
+  BLOCKED_REASONS, AGENT_CARRY_FIELDS, FIELD_SANITIZERS, MAX_AGENT_ID_LENGTH, sanitizeCarryFields,
 } from './statusContract.mjs'
