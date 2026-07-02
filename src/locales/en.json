@@ -239,7 +239,13 @@
     "expand": "Activity Feed",
     "collapse": "Collapse",
     "items": "items",
-    "empty": "No activity yet"
+    "empty": "No fresh signals yet",
+    "agentStatusUpdated": "Agent checked in",
+    "sessionLogUpdated": "Session log updated",
+    "temporaryFileUpdated": "Draft saved quietly",
+    "workNoteUpdated": "Work note updated",
+    "noteUpdated": "Note updated",
+    "statusSnapshotUpdated": "Status snapshot updated"
   },
   "inspector": {
     "doneToday": "Done today",
@@ -266,6 +272,8 @@
     "todayMetricsA11y": "{0} completed, {1} blocked today",
     "tokensTooltip": "Context: {0} tokens · last output {1}{2}",
     "tokensA11y": "{0} context tokens, {1} output tokens",
+    "quietAgents": "{0} quiet",
+    "quietAgentsTooltip": "{0} agents are quiet",
     "platforms": {
       "browser": "Browser",
       "claude-cli": "Claude CLI",
@@ -277,10 +285,11 @@
     }
   },
   "hint": {
-    "noConnection": "Waiting for agent activity... Run: npx agent-virtual-office setup"
+    "noConnection": "No agent signal yet",
+    "noConnectionCommand": "Run: npx agent-virtual-office setup"
   },
   "onboarding": {
-    "description": "This office visualizes your Claude Code session — each character reacts to your real coding activity.",
+    "description": "This office turns your Claude Code session into a readable room — each character moves with real work signals.",
     "shortcuts": "Keyboard shortcuts",
     "shortcutPause": "Space — Pause / Resume",
     "shortcutLang": "L — Switch language",
@@ -386,14 +395,14 @@
     "online": "active",
     "done": "done",
     "effort": "effort",
-    "quiet": "Quiet right now — the team is resting",
+    "quiet": "Quiet right now — no one needs your hand",
     "activity": "Activity",
-    "feedEmpty": "No activity yet — waiting for the team…",
+    "feedEmpty": "No fresh signals yet — waiting for the team",
     "feedEmptyFocused": "no recent activity",
     "enableNotify": "Notify me when blocked",
     "offline": "Disconnected",
     "teamNow": "Now",
-    "teamBlocked": "Waiting on you",
+    "teamBlocked": "Needs your attention",
     "justNow": "now"
   },
   "notify": {

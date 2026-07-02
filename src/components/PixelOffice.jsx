@@ -1250,9 +1250,14 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* ═══ CONNECTION HINT (shown until first external status is received) ═══ */}
       {!hasEverReceivedStatus && (
-        <g className={reducedMotion ? '' : 'animate-pulse'} opacity="0.85" pointerEvents="none">
-          <text x="400" y="28" textAnchor="middle" fontSize="11" fill="#d4c8a0" fontFamily="monospace">
+        <g className={reducedMotion ? '' : 'animate-pulse'} pointerEvents="none">
+          <rect x="240" y="14" width="320" height="40" rx="9" fill="#241d15" opacity="0.68" />
+          <rect x="241" y="15" width="318" height="38" rx="8" fill="none" stroke="#f3ead0" strokeOpacity="0.28" />
+          <text x="400" y="30" textAnchor="middle" fontSize="9.5" fill="#fff6dc" fontFamily="monospace" fontWeight="bold">
             {t('hint.noConnection')}
+          </text>
+          <text x="400" y="43" textAnchor="middle" fontSize="8" fill="#ead9a6" fontFamily="monospace">
+            {t('hint.noConnectionCommand', 'npx agent-virtual-office setup')}
           </text>
         </g>
       )}

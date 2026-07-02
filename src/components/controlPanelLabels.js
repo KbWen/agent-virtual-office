@@ -64,6 +64,46 @@ export function agentLineLabel(ext, t) {
     || t(`statusLabels.${ext.status}`, ext.status)
 }
 
+// Persistent action strip: surface only honest human-action states. This mirrors the roster's
+// team strip without importing UI code: blocked and awaiting-approval need attention; workflow
+// phases and decorative events are intentionally excluded.
+export function attentionStripState({ agents = [], externalStatus = {}, nameForId = (id) => id } = {}) {
+  const rows = Array.isArray(agents) ? agents : Object.values(agents || {})
+  const items = []
+  for (const agent of rows) {
+    const id = agent?.id
+    if (!id) continue
+    const status = externalStatus[id]?.status || agent.status
+    if (status !== 'blocked' && status !== 'awaiting-approval') continue
+    items.push({ id, status, name: nameForId(id) || id })
+  }
+  return {
+    count: items.length,
+    items,
+    names: items.map((item) => item.name),
+  }
+}
+
+// Bottom rail declutter: show agents that carry a real current signal, fold the rest into a quiet
+// count. The full office already renders every character; the rail should answer "what changed?"
+// rather than repeat every idle name at all times.
+export function controlPanelPresenceRows({ agents = [], externalStatus = {} } = {}) {
+  const source = Array.isArray(agents) ? agents : Object.values(agents || {})
+  const rows = []
+  for (const agent of source) {
+    const id = agent?.id
+    if (!id) continue
+    const ext = externalStatus[id]
+    const status = ext?.status || agent.status || 'idle'
+    const hasSignal = !!(ext?.task || ext?.label || ext?.reasonCode)
+    if (status !== 'idle' || hasSignal) rows.push({ agent, ext, status })
+  }
+  return {
+    rows,
+    quietCount: Math.max(0, source.filter((agent) => agent?.id).length - rows.length),
+  }
+}
+
 // AVO-130 — collapse the connection/integration indicator into ONE health dot. Pure derivation of
 // the single highest-severity state from the two independent signals the bar used to render as 2–4
 // separate pills: `statusSource` ('external' | 'fallback' | local/demo) and `integrationHealth.state`

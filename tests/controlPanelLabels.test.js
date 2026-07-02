@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatTokens, blockedReasonLabel, agentLineLabel, taskChipLabel, healthDotState } from '../src/components/controlPanelLabels.js'
+import { formatTokens, blockedReasonLabel, agentLineLabel, taskChipLabel, attentionStripState, controlPanelPresenceRows, healthDotState } from '../src/components/controlPanelLabels.js'
 
 // These pure helpers were extracted out of ControlPanel.jsx (god-component cleanup) so they can be
 // tested without importing the React module. `formatTokens`/`blockedReasonLabel`/`agentLineLabel`
@@ -58,6 +58,71 @@ describe('agentLineLabel — AVO-110 reason token › tool chip › status word'
   })
   it('null ext → null', () => {
     expect(agentLineLabel(null, t)).toBeNull()
+  })
+})
+
+describe('attentionStripState', () => {
+  it('surfaces only blocked and awaiting-approval agents as human-action items', () => {
+    const out = attentionStripState({
+      agents: [
+        { id: 'pm', status: 'planning' },
+        { id: 'qa', status: 'blocked' },
+        { id: 'gate', status: 'idle' },
+        { id: 'dev', status: 'working' },
+      ],
+      externalStatus: {
+        gate: { status: 'awaiting-approval' },
+        dev: { status: 'done' },
+      },
+      nameForId: (id) => ({ qa: 'QA', gate: 'Gate' }[id] || id),
+    })
+    expect(out.count).toBe(2)
+    expect(out.names).toEqual(['QA', 'Gate'])
+    expect(out.items.map((item) => [item.id, item.status])).toEqual([
+      ['qa', 'blocked'],
+      ['gate', 'awaiting-approval'],
+    ])
+  })
+
+  it('returns an empty state for non-actionable, missing, or malformed input', () => {
+    expect(attentionStripState().count).toBe(0)
+    expect(attentionStripState({ agents: [{ id: 'dev', status: 'working' }] })).toEqual({
+      count: 0,
+      items: [],
+      names: [],
+    })
+  })
+})
+
+describe('controlPanelPresenceRows', () => {
+  it('shows only agents with real current signals and folds idle agents into quietCount', () => {
+    const out = controlPanelPresenceRows({
+      agents: [
+        { id: 'pm', status: 'idle' },
+        { id: 'dev', status: 'working' },
+        { id: 'qa', status: 'idle' },
+        { id: 'ops', status: 'idle' },
+      ],
+      externalStatus: {
+        qa: { status: 'done', task: 'Edit' },
+      },
+    })
+    expect(out.rows.map((row) => row.agent.id)).toEqual(['dev', 'qa'])
+    expect(out.quietCount).toBe(2)
+  })
+
+  it('keeps an idle agent visible when an external label carries useful signal', () => {
+    const out = controlPanelPresenceRows({
+      agents: [{ id: 'gate', status: 'idle' }],
+      externalStatus: { gate: { status: 'idle', label: 'waiting for hook' } },
+    })
+    expect(out.rows.map((row) => row.agent.id)).toEqual(['gate'])
+    expect(out.quietCount).toBe(0)
+  })
+
+  it('handles missing and malformed input as an empty calm rail', () => {
+    expect(controlPanelPresenceRows()).toEqual({ rows: [], quietCount: 0 })
+    expect(controlPanelPresenceRows({ agents: [null, { status: 'idle' }] })).toEqual({ rows: [], quietCount: 0 })
   })
 })
 
