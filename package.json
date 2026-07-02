@@ -10,6 +10,7 @@
     "./normalize-post": "./src/utils/normalizePost.mjs",
     "./status-runtime": "./src/systems/statusRuntime.mjs",
     "./status-visual-model": "./src/systems/statusVisualModel.mjs",
+    "./agent-inspector-model": "./src/systems/agentInspectorModel.mjs",
     "./activity-feed-model": "./src/systems/activityFeedModel.mjs",
     "./agent-status-model": "./src/systems/agentStatusModel.mjs",
     "./agent-status-snapshot": "./src/systems/agentStatusSnapshot.mjs",

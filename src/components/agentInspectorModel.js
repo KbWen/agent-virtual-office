@@ -1,6 +1,12 @@
 import { classifyTask } from '../systems/classify.js'
 import { formatTimeAgo } from '../utils/formatTime'
 import { BLOCKED_FAMILY } from '../systems/constants.js'  // AVO-181: single source for the blocked family
+export {
+  inspectorAnchorPosition,
+  inspectorPanelLayout,
+  recentAgentActivities,
+  truncateText,
+} from '../systems/agentInspectorModel.mjs'
 
 // The single line of "what is this agent doing" the inspector shows. The hook's
 // human `label` ("✏️ 改 App.jsx", "❌ npm test failed") is richest, so it wins.

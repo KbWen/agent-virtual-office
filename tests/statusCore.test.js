@@ -10,6 +10,7 @@ import {
   comparePresence,
   feedEntries,
   healthDotState,
+  inspectorPanelLayout,
   isDynamicStatusAgent,
   normalizeAgentStatusUpdates,
   normalizePost,
@@ -18,6 +19,7 @@ import {
   sanitizeAgentId,
   statusVisualState,
   teamStatus,
+  truncateText,
   VALID_STATUSES,
 } from '../src/systems/statusCore.mjs'
 
@@ -55,6 +57,11 @@ describe('statusCore public headless API', () => {
     expect(snapshot.presence.rows[0]?.task).toBe('Edit')
     expect(snapshot.integration.health.level).toBe('idle')
     expect(statusVisualState('blocked')).toMatchObject({ color: '#E24B4A', known: true })
+    expect(inspectorPanelLayout({ activityCount: 4, sceneScale: 0, position: { x: 400, y: 300 } })).toMatchObject({
+      activityRows: 3,
+      scale: 1.6,
+    })
+    expect(truncateText('修好🧪流程', 3)).toBe('修好🧪…')
 
     expect([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id).toBe('a')
     expect(teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind).toBe('workflow')

@@ -64,6 +64,13 @@ export {
 } from './blockedReasonModel.mjs'
 
 export {
+  inspectorAnchorPosition,
+  inspectorPanelLayout,
+  recentAgentActivities,
+  truncateText,
+} from './agentInspectorModel.mjs'
+
+export {
   healthDotState,
 } from './integrationStatusModel.mjs'
 

@@ -195,6 +195,7 @@ import { VALID_STATUSES, normalizePost } from 'agent-virtual-office/status-contr
 import { normalizePost as normalizePostAlias } from 'agent-virtual-office/normalize-post'
 import { assembleIntegrationPatch, buildExternalStatusEntry } from 'agent-virtual-office/status-runtime'
 import { statusVisualState as statusVisualStateFromModel } from 'agent-virtual-office/status-visual-model'
+import { inspectorPanelLayout as inspectorPanelLayoutFromModel } from 'agent-virtual-office/agent-inspector-model'
 import { buildActivityFeedViewModel as buildActivityFeedViewModelFromModel } from 'agent-virtual-office/activity-feed-model'
 import { agentStatus, presenceRows } from 'agent-virtual-office/agent-status-model'
 import { buildAgentStatusSnapshot } from 'agent-virtual-office/agent-status-snapshot'
@@ -205,6 +206,7 @@ import {
   buildActivityFeedViewModel,
   buildAgentStatusSnapshot as buildAgentStatusSnapshotFromCore,
   buildDynamicStatusAgent,
+  inspectorPanelLayout,
   buildPresenceRailViewModel,
   comparePresence,
   feedEntries,
@@ -223,6 +225,7 @@ if (normalizePostAlias({ qa: 'blocked' }).agents[0]?.status !== 'blocked') throw
 if (buildExternalStatusEntry(null, { status: 'done' }, 1000).entry.expiresAt !== 11000) throw new Error('status-runtime export failed')
 if (assembleIntegrationPatch({ statusSource: 'organic', integrationSource: null }, { statusSource: 'external' }, {}).statusSource !== 'external') throw new Error('status-runtime integration patch export failed')
 if (statusVisualStateFromModel('awaiting-approval').color !== '#1E9FD4') throw new Error('status-visual-model export failed')
+if (inspectorPanelLayoutFromModel({ hasTask: true, detailCount: 3, activityCount: 5, sceneScale: 0.5, position: { x: 20, y: 20 } }).scale !== 3) throw new Error('agent-inspector-model export failed')
 if (buildActivityFeedViewModelFromModel([{ id: 1, type: 'status', status: 'done', timestamp: 1 }], { now: 2 }).unreadCount !== 1) throw new Error('activity-feed-model export failed')
 if (agentStatus({ status: 'idle' }, { status: 'done' }) !== 'done') throw new Error('agent-status-model export failed')
 if (presenceRows({ agents: [{ id: 'dev', status: 'idle' }], externalStatus: { dev: { status: 'done' } } }).rows[0]?.status !== 'done') throw new Error('presenceRows export failed')
@@ -231,6 +234,7 @@ if (healthDotStateFromIntegrationModel({ statusSource: 'fallback', externalCount
 if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresenceFromRoster)[0]?.id !== 'a') throw new Error('roster-model export failed')
 if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id !== 'a') throw new Error('status-core comparePresence export failed')
 if (statusVisualState('blocked').color !== '#E24B4A') throw new Error('status-core status visual export failed')
+if (inspectorPanelLayout({ activityCount: 4, sceneScale: 1, position: { x: 400, y: 300 } }).activityRows !== 3) throw new Error('status-core inspector model export failed')
 if (teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind !== 'workflow') throw new Error('status-core teamStatus export failed')
 if (feedEntries([{ origin: 'organic' }, { origin: 'hook' }]).length !== 1) throw new Error('status-core feedEntries export failed')
 if (buildActivityFeedViewModel([{ id: 1, type: 'status', status: 'blocked', timestamp: 1 }], { now: 2 }).entries[0]?.tone !== 'danger') throw new Error('status-core activity feed view-model export failed')
@@ -267,7 +271,7 @@ console.log('library imports OK')
   } catch (e) {
     fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
   }
-  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, status-visual-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, roster-model imported.')
+  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, status-visual-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, roster-model imported.')
   console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────

@@ -2,15 +2,15 @@ import React, { useEffect, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { charName, behaviorLabel, t, useLocale } from '../i18n'
 import { formatTimeAgo } from '../utils/formatTime'
-import { buildAgentInspectorMeta, inspectorTaskLabel, stateDurationLabel } from './agentInspectorModel'
-
-// POINT 2 follow-up: the inspector counter-scales so its small detail fonts (8–9px) stay readable
-// at ANY office scale. Only ONE inspector is ever open and it is clamped inside the viewBox, so it
-// has NO overlap constraint — instead of merely cancelling the shrink (net 1.0, which leaves the
-// 8px detail text at 8px) we aim for a CONSTANT readable on-screen size ≈ 1.6× native
-// (net = sceneScale × s = INSPECTOR_READ_TARGET), capped (×3) so the scaled panel still fits 800×560.
-const INSPECTOR_READ_TARGET = 1.6
-const INSPECTOR_SCALE_MAX = 3
+import {
+  buildAgentInspectorMeta,
+  inspectorAnchorPosition,
+  inspectorPanelLayout,
+  inspectorTaskLabel,
+  recentAgentActivities,
+  stateDurationLabel,
+  truncateText,
+} from './agentInspectorModel'
 
 const statusEmoji = {
   idle: '💤',
@@ -52,9 +52,7 @@ export default function AgentInspector() {
   // so this must appear before the early-return guard.
   const recentActivities = useMemo(() => {
     if (!selectedAgent) return []
-    return activityLog
-      .filter(a => a.agentId === selectedAgent)
-      .slice(0, 5)
+    return recentAgentActivities(activityLog, selectedAgent)
   }, [activityLog, selectedAgent])
 
   const inspectorMeta = useMemo(() => {
@@ -92,35 +90,26 @@ export default function AgentInspector() {
       : null,
   ].filter(Boolean)
 
-  // While moving, anchor to targetPosition so the panel follows where the agent is heading
-  // rather than staying frozen at the departure point.
-  const pos = (agent.isMoving ? agent.targetPosition : agent.position) || { x: 300, y: 250 }
-
-  const detailsStartY = task ? 94 : 78
-  const activityRows = Math.min(recentActivities.length, 3)
-  let contentBottomY = task ? 78 : 62
-  if (detailRows.length > 0) {
-    contentBottomY = detailsStartY + (detailRows.length - 1) * 14
-  }
-  const activityDividerY = contentBottomY + 8
-  const activityStartY = activityDividerY + 12
-  if (activityRows > 0) {
-    contentBottomY = activityStartY + (activityRows - 1) * 13
-  }
-
-  // Panel dimensions — expand for metadata and activity rows
-  const W = 200, H = contentBottomY + 16
-  // POINT 2: scale the whole popover by `s` so its text stays readable when the office is small.
-  // Clamp using the SCALED footprint (Ws×Hs) so the enlarged panel still fits the 800×560 viewBox.
-  const s = Math.min(INSPECTOR_SCALE_MAX, Math.max(1, INSPECTOR_READ_TARGET / (sceneScale > 0 ? sceneScale : 1)))
-  const Ws = W * s, Hs = H * s
-  // Position scaled panel above the agent, clamped to viewport (SVG 800x560)
-  let px = pos.x - Ws / 2
-  let py = pos.y - Hs - 56 * s
-  if (px < 10) px = 10
-  if (px + Ws > 790) px = 790 - Ws
-  if (py < 10) py = 10
-  if (py + Hs > 550) py = 550 - Hs
+  const pos = inspectorAnchorPosition(agent)
+  const layout = inspectorPanelLayout({
+    hasTask: Boolean(task),
+    detailCount: detailRows.length,
+    activityCount: recentActivities.length,
+    sceneScale,
+    position: pos,
+  })
+  const {
+    activityDividerY,
+    activityStartY,
+    detailsStartY,
+    height: H,
+    scale: s,
+    scaledHeight: Hs,
+    scaledWidth: Ws,
+    width: W,
+    x: px,
+    y: py,
+  } = layout
 
   return (
     <g
@@ -173,7 +162,7 @@ export default function AgentInspector() {
         {/* External task label (if any) */}
         {task && (
           <text x={10} y={78} fontSize="9" fontFamily="'Segoe UI', system-ui, sans-serif" fill="#378ADD">
-            {truncate(task, 30)}
+            {truncateText(task, 30)}
           </text>
         )}
 
@@ -189,7 +178,7 @@ export default function AgentInspector() {
                   </text>
                   <text x={W - 10} y={rowY} fontSize="8" fontFamily="'Segoe UI', system-ui, sans-serif" fill={row.valueFill}
                     textAnchor="end">
-                    {truncate(row.value, 18)}
+                    {truncateText(row.value, 18)}
                   </text>
                 </g>
               )
@@ -211,7 +200,7 @@ export default function AgentInspector() {
                     {ago}
                   </text>
                   <text x={50} y={baseY} fontSize="8" fontFamily="'Segoe UI', system-ui, sans-serif" fill="#555">
-                    {truncate(a.message, 22)}
+                    {truncateText(a.message, 22)}
                   </text>
                 </g>
               )
@@ -221,10 +210,4 @@ export default function AgentInspector() {
       </g>
     </g>
   )
-}
-
-function truncate(str, max) {
-  if (!str) return ''
-  const chars = Array.from(str)
-  return chars.length > max ? chars.slice(0, max).join('') + '…' : str
 }
