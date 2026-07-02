@@ -53,3 +53,96 @@ export function feedEntries(activityLog) {
   if (!Array.isArray(activityLog)) return []
   return activityLog.filter(isFeedWorthy)
 }
+
+function agentValues(agents = {}) {
+  return Array.isArray(agents) ? agents : Object.values(agents || {})
+}
+
+function activeStatus(agent, externalStatus = {}) {
+  const ext = agent?.id ? externalStatus[agent.id] : null
+  return ext?.status || agent?.status || 'idle'
+}
+
+// Signature for React subscribers: includes only fields that can change roster salience or labels.
+// It deliberately excludes position/movement so per-frame office animation cannot churn the rail.
+export function presenceRailSignature({ agents = {}, externalStatus = {} } = {}) {
+  return agentValues(agents)
+    .filter((agent) => agent && !agent.session)
+    .map((agent) => {
+      const ext = externalStatus[agent.id]
+      return `${agent.id}|${ext?.status || agent.status || 'idle'}|${agent.behavior || ''}|${agent.bubble || ''}|${ext?.task || ''}|${ext?.expiresAt || 0}|${ext?.changedAt || 0}`
+    })
+}
+
+export function presenceRailRows({ agents = {}, externalStatus = {} } = {}) {
+  return agentValues(agents)
+    .filter((agent) => agent && !agent.session)
+    .map((agent) => {
+      const ext = externalStatus[agent.id]
+      return { id: agent.id, agent, ext, status: activeStatus(agent, externalStatus) }
+    })
+}
+
+export function scopedRosterFeed(eventFeed = [], expandedId = null, max = 18) {
+  if (!Array.isArray(eventFeed)) return []
+  const scoped = expandedId
+    ? eventFeed.filter((entry) => entry?.agentId === expandedId || entry?.from === expandedId || entry?.to === expandedId)
+    : eventFeed
+  return scoped.slice(0, max)
+}
+
+export function helperCountByParent(helpers = []) {
+  const counts = {}
+  if (!Array.isArray(helpers)) return counts
+  for (const helper of helpers) {
+    if (!helper?.parentRole) continue
+    counts[helper.parentRole] = (counts[helper.parentRole] || 0) + 1
+  }
+  return counts
+}
+
+export function buildPresenceRailViewModel({
+  agents = {},
+  externalStatus = {},
+  eventFeed = [],
+  helpers = [],
+  doneCounts = {},
+  blockedCounts = {},
+  activeWorkflow = null,
+  expandedId = null,
+  nameForId = (id) => id,
+  maxFeed = 18,
+} = {}) {
+  const rows = presenceRailRows({ agents, externalStatus })
+  const sortedRows = [...rows].sort(comparePresence)
+  const subagentCountById = helperCountByParent(helpers)
+  const colorById = {}
+  for (const row of rows) colorById[row.id] = row.agent?.color
+
+  const activeCount = sortedRows.filter((row) => !isIdleStatus(row.status)).length
+  const blockedNames = sortedRows
+    .filter((row) => row.status === 'blocked' || row.status === 'awaiting-approval')
+    .map((row) => nameForId(row.id))
+  const team = teamStatus({ blockedNames, activeWorkflow, activeCount })
+  const totalDone = Object.values(doneCounts || {}).reduce((total, count) => total + (count || 0), 0)
+
+  return {
+    rows,
+    sortedRows,
+    renderRows: sortedRows.map((row) => ({
+      ...row,
+      dimmed: isIdleStatus(row.status),
+      doneCount: doneCounts?.[row.id] || 0,
+      blockedCount: blockedCounts?.[row.id] || 0,
+      subagents: subagentCountById[row.id] || 0,
+    })),
+    feed: scopedRosterFeed(eventFeed, expandedId, maxFeed),
+    colorById,
+    subagentCountById,
+    activeCount,
+    blockedNames,
+    team,
+    totalDone,
+    quiet: activeCount === 0,
+  }
+}

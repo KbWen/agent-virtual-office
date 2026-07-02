@@ -202,6 +202,7 @@ import {
   blockedReasonState,
   buildAgentStatusSnapshot as buildAgentStatusSnapshotFromCore,
   buildDynamicStatusAgent,
+  buildPresenceRailViewModel,
   comparePresence,
   feedEntries,
   healthDotState,
@@ -225,6 +226,7 @@ if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(compar
 if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id !== 'a') throw new Error('status-core comparePresence export failed')
 if (teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind !== 'workflow') throw new Error('status-core teamStatus export failed')
 if (feedEntries([{ origin: 'organic' }, { origin: 'hook' }]).length !== 1) throw new Error('status-core feedEntries export failed')
+if (buildPresenceRailViewModel({ agents: { dev: { id: 'dev', status: 'idle' } }, externalStatus: { dev: { status: 'blocked' } } }).team.kind !== 'blocked') throw new Error('status-core presence rail view-model export failed')
 if (buildDynamicStatusAgent({ id: 'dev' }, { agentId: 'wt~dev', position: { x: 1, y: 2 } }).deskItemCount.coffee !== 0) throw new Error('status-core dynamic agent export failed')
 if (reconcileMultiSessionAgents({ agents: { 'wt~dev': { session: 'wt' } }, externalStatus: { 'wt~dev': { status: 'working' } }, updates: [] }).evicted[0] !== 'wt~dev') throw new Error('status-core reconcile export failed')
 if (normalizeAgentStatusUpdates({ type: 'office-status', agents: [{ role: 'frontend', status: 'working' }] }).updates[0]?.agentId !== 'frontend') throw new Error('status-core generic normalize export failed')

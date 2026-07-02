@@ -6,7 +6,7 @@ import { CharacterPixelSprite } from './AgentCharacter'
 import { agentLineLabel, taskChipLabel, formatTokens } from './controlPanelLabels.js'
 import { formatTimeAgo } from '../utils/formatTime'
 import { activityFeedMessage } from '../utils/activityFeedLabel'
-import { comparePresence, isIdleStatus, teamStatus } from '../systems/rosterModel'
+import { buildPresenceRailViewModel, presenceRailSignature } from '../systems/rosterModel'
 
 // ─── Vertical office: presence rail (COMMS rebuild — Phase 1: the honest, lively spine) ─────────
 // The optional ☰ lens on the office. Instead of a flat declaration-ordered list, this is a PRESENCE
@@ -157,18 +157,13 @@ function FeedRow({ entry, color, ageMs, reducedMotion }) {
 const HEALTH_DOT = { online: '#1D9E75', degraded: '#E8A317', offline: '#E24B4A', idle: '#9aa' }
 
 export default function NarrowRoster() {
-  useLocale() // re-render on language switch
+  const lang = useLocale() // re-render on language switch
   // Salience-relevant SIGNATURE only — id|status|behavior|bubble|task|expiresAt per agent. It
   // deliberately EXCLUDES position, so the ~30fps movement ticks that replace agent objects do NOT
   // re-render or re-sort the rail (the systems-review thrash fix). useShallow compares the string
   // array element-wise, so it short-circuits unless a salience-relevant field actually changed.
   const presenceSig = useOfficeStore(useShallow((s) =>
-    Object.values(s.agents)
-      .filter((a) => !a.session)
-      .map((a) => {
-        const ext = s.externalStatus[a.id]
-        return `${a.id}|${ext?.status || a.status || 'idle'}|${a.behavior || ''}|${a.bubble || ''}|${ext?.task || ''}|${ext?.expiresAt || 0}|${ext?.changedAt || 0}`
-      })
+    presenceRailSignature({ agents: s.agents, externalStatus: s.externalStatus })
   ))
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
   const helpers = useOfficeStore(useShallow((s) => s.helpers))
@@ -195,58 +190,35 @@ export default function NarrowRoster() {
       .catch((err) => console.warn('[Office] Notification.requestPermission failed:', err))
   }
 
-  // Build rows from ground-truth via getState(), keyed on the signature → no per-movement-tick
-  // rebuild. (Reading getState() in a useMemo keyed on a subscribed signature is the same pattern
-  // PixelOffice uses for its agentList.)
-  const rows = useMemo(() => {
+  // Build rail view-model from ground-truth via getState(), keyed on salience/data signatures → no
+  // per-movement-tick rebuild. The pure model is shared with package consumers; React only renders it.
+  const rail = useMemo(() => {
     const s = useOfficeStore.getState()
-    return Object.values(s.agents)
-      .filter((a) => !a.session)
-      .map((a) => {
-        const ext = s.externalStatus[a.id]
-        const status = ext?.status || a.status || 'idle'
-        return { id: a.id, agent: a, ext, status }
-      })
+    return buildPresenceRailViewModel({
+      agents: s.agents,
+      externalStatus: s.externalStatus,
+      eventFeed,
+      helpers,
+      doneCounts,
+      blockedCounts,
+      activeWorkflow,
+      expandedId,
+      nameForId: charName,
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presenceSig])
+  }, [presenceSig, eventFeed, helpers, doneCounts, blockedCounts, activeWorkflow, expandedId, lang])
 
-  const sorted = useMemo(() => [...rows].sort(comparePresence), [rows])
-  // The sort is tier-stable: blocked pins to the top; everyone else holds a FIXED id order. So
-  // `sorted` only re-orders when an agent crosses the blocked boundary — a rare, meaningful event.
+  // The model sort is tier-stable: blocked pins to the top; everyone else holds a FIXED id order.
+  // It only re-orders when an agent crosses the blocked boundary — a rare, meaningful event.
   // We therefore render it DIRECTLY (no debounce/throttle): movement/position ticks never reach
   // here (excluded from presenceSig), and React's keyed reconcile (key=id) moves only the single
   // row that changed — so a newly-blocked agent surfaces to the top IMMEDIATELY, with no per-tick
   // churn for everyone else. (Smooth FLIP animation for that one move lands in Phase 3.)
-  const renderRows = sorted
-
-  // Activity feed (Phase 2): reads the write-time eventFeed buffer (real events only), newest
-  // first, capped. Per-agent colour for the left edge; time-decay handled in FeedRow.
-  const colorById = useMemo(() => {
-    const map = {}
-    for (const r of rows) map[r.id] = r.agent.color
-    return map
-  }, [rows])
-  // Phase 3: when a row is expanded, FOCUS the feed on that agent (their events only). Tapping
-  // the row again clears it (expandedId toggles). Otherwise the feed shows the whole team.
-  const feed = useMemo(() => {
-    const scoped = expandedId
-      ? eventFeed.filter((e) => e.agentId === expandedId || e.from === expandedId || e.to === expandedId)
-      : eventFeed
-    return scoped.slice(0, 18)
-  }, [eventFeed, expandedId])
+  const renderRows = rail.renderRows
+  const colorById = rail.colorById
+  const feed = rail.feed
   const now = Date.now()
-
-  // Memoized subagent counts (was an O(rows·helpers) reduce called per row in the render map).
-  const subagentCountById = useMemo(() => {
-    const map = {}
-    for (const h of helpers) map[h.parentRole] = (map[h.parentRole] || 0) + 1
-    return map
-  }, [helpers])
-  const activeCount = sorted.filter((r) => !isIdleStatus(r.status)).length
-  const blockedNames = sorted.filter((r) => r.status === 'blocked' || r.status === 'awaiting-approval').map((r) => charName(r.id))
-  const team = teamStatus({ blockedNames, activeWorkflow, activeCount })
-  const totalDone = Object.values(doneCounts).reduce((a, b) => a + (b || 0), 0)
-  const quiet = activeCount === 0
+  const { activeCount, team, totalDone, quiet } = rail
 
   return (
     // Single column that FILLS the pane width (no max-width gutters — those manufactured the
@@ -314,10 +286,10 @@ export default function NarrowRoster() {
           agent={r.agent}
           ext={r.ext}
           status={r.status}
-          dimmed={isIdleStatus(r.status)}
-          doneCount={doneCounts[r.id] || 0}
-          blockedCount={blockedCounts[r.id] || 0}
-          subagents={subagentCountById[r.id] || 0}
+          dimmed={r.dimmed}
+          doneCount={r.doneCount}
+          blockedCount={r.blockedCount}
+          subagents={r.subagents}
           expanded={expandedId === r.id}
           onToggle={() => setExpandedId((cur) => (cur === r.id ? null : r.id))}
           reducedMotion={reducedMotion}

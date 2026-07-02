@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   assembleIntegrationPatch,
   blockedReasonState,
+  buildPresenceRailViewModel,
   buildAgentStatusSnapshot,
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
@@ -54,6 +55,10 @@ describe('statusCore public headless API', () => {
     expect([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id).toBe('a')
     expect(teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind).toBe('workflow')
     expect(feedEntries([{ origin: 'organic' }, { origin: 'hook' }])).toHaveLength(1)
+    expect(buildPresenceRailViewModel({
+      agents: { dev: { id: 'dev', status: 'idle' } },
+      externalStatus: { dev: { status: 'blocked' } },
+    }).renderRows[0]?.dimmed).toBe(false)
     expect(blockedReasonState('api-auth-failed')).toMatchObject({
       reason: 'api-auth-failed',
       iconId: 'key-broken',

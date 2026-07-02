@@ -51,12 +51,17 @@ export {
 } from './integrationStatusModel.mjs'
 
 export {
+  buildPresenceRailViewModel,
   comparePresence,
   FEED_ORIGINS,
   feedEntries,
+  helperCountByParent,
   isFeedWorthy,
   isIdleStatus,
   PRESENCE_TIER,
+  presenceRailRows,
+  presenceRailSignature,
   salienceTier,
+  scopedRosterFeed,
   teamStatus,
 } from './rosterModel.mjs'

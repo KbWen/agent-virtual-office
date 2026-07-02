@@ -1,6 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import {
-  salienceTier, comparePresence, isIdleStatus, isFeedWorthy, feedEntries, teamStatus, PRESENCE_TIER, FEED_ORIGINS,
+  buildPresenceRailViewModel,
+  helperCountByParent,
+  presenceRailRows,
+  presenceRailSignature,
+  salienceTier,
+  comparePresence,
+  isIdleStatus,
+  isFeedWorthy,
+  feedEntries,
+  teamStatus,
+  PRESENCE_TIER,
+  FEED_ORIGINS,
+  scopedRosterFeed,
 } from '../src/systems/rosterModel.js'
 import * as nodeSafeRosterModel from '../src/systems/rosterModel.mjs'
 
@@ -128,6 +140,84 @@ describe('constants are sane', () => {
   })
 })
 
+describe('presence rail view-model — renderer-agnostic roster state', () => {
+  const agents = {
+    dev: { id: 'dev', status: 'idle', behavior: 'typing', bubble: 'ship it', color: '#123', position: { x: 1, y: 2 } },
+    qa: { id: 'qa', status: 'working', color: '#456' },
+    helper: { id: 'helper', status: 'working', session: 'wt' },
+  }
+  const externalStatus = {
+    dev: { status: 'blocked', task: 'Bash', changedAt: 1000, expiresAt: 2000 },
+    qa: { status: 'done', task: 'Edit', changedAt: 1500, expiresAt: 2500 },
+  }
+
+  it('builds rows from non-session agents and lets external status win', () => {
+    expect(presenceRailRows({ agents, externalStatus }).map((row) => [row.id, row.status])).toEqual([
+      ['dev', 'blocked'],
+      ['qa', 'done'],
+    ])
+  })
+
+  it('keeps movement/position ticks out of the salience signature', () => {
+    const moved = {
+      ...agents,
+      dev: { ...agents.dev, position: { x: 999, y: 999 } },
+    }
+    expect(presenceRailSignature({ agents, externalStatus })).toEqual(presenceRailSignature({ agents: moved, externalStatus }))
+  })
+
+  it('scopes feed to the expanded row and caps the result', () => {
+    const feed = [
+      { id: 1, agentId: 'dev' },
+      { id: 2, from: 'qa', to: 'dev' },
+      { id: 3, agentId: 'qa' },
+    ]
+    expect(scopedRosterFeed(feed, 'dev', 5).map((entry) => entry.id)).toEqual([1, 2])
+    expect(scopedRosterFeed(feed, null, 2).map((entry) => entry.id)).toEqual([1, 2])
+  })
+
+  it('counts helpers by parent role defensively', () => {
+    expect(helperCountByParent([{ parentRole: 'dev' }, { parentRole: 'dev' }, { parentRole: 'qa' }, {}])).toEqual({
+      dev: 2,
+      qa: 1,
+    })
+  })
+
+  it('returns the full rail view-model needed by non-React renderers', () => {
+    const view = buildPresenceRailViewModel({
+      agents,
+      externalStatus,
+      eventFeed: [
+        { id: 1, agentId: 'qa' },
+        { id: 2, from: 'dev', to: 'qa' },
+        { id: 3, agentId: 'dev' },
+      ],
+      helpers: [{ parentRole: 'dev' }],
+      doneCounts: { dev: 2, qa: 3 },
+      blockedCounts: { dev: 1 },
+      activeWorkflow: 'review',
+      expandedId: 'dev',
+      nameForId: (id) => id.toUpperCase(),
+    })
+
+    expect(view.renderRows.map((row) => row.id)).toEqual(['dev', 'qa'])
+    expect(view.renderRows[0]).toMatchObject({
+      id: 'dev',
+      status: 'blocked',
+      dimmed: false,
+      doneCount: 2,
+      blockedCount: 1,
+      subagents: 1,
+    })
+    expect(view.feed.map((entry) => entry.id)).toEqual([2, 3])
+    expect(view.colorById).toEqual({ dev: '#123', qa: '#456' })
+    expect(view.team).toEqual({ kind: 'blocked', names: ['DEV'] })
+    expect(view.activeCount).toBe(2)
+    expect(view.totalDone).toBe(5)
+    expect(view.quiet).toBe(false)
+  })
+})
+
 describe('node-safe roster model entry', () => {
   it('keeps the mjs view-model equivalent to the app entry', () => {
     const rows = [
@@ -137,5 +227,9 @@ describe('node-safe roster model entry', () => {
     expect([...rows].sort(nodeSafeRosterModel.comparePresence)).toEqual([...rows].sort(comparePresence))
     expect(nodeSafeRosterModel.teamStatus({ activeWorkflow: 'review', activeCount: 2 })).toEqual(teamStatus({ activeWorkflow: 'review', activeCount: 2 }))
     expect(nodeSafeRosterModel.feedEntries([{ origin: 'organic' }, { origin: 'hook', id: 1 }])).toEqual(feedEntries([{ origin: 'organic' }, { origin: 'hook', id: 1 }]))
+    expect(nodeSafeRosterModel.buildPresenceRailViewModel({
+      agents: { dev: { id: 'dev', status: 'idle' } },
+      externalStatus: { dev: { status: 'blocked' } },
+    }).team.kind).toBe('blocked')
   })
 })
