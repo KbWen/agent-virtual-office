@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   assembleIntegrationPatch,
+  blockedReasonState,
   buildAgentStatusSnapshot,
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
@@ -53,6 +54,10 @@ describe('statusCore public headless API', () => {
     expect([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id).toBe('a')
     expect(teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind).toBe('workflow')
     expect(feedEntries([{ origin: 'organic' }, { origin: 'hook' }])).toHaveLength(1)
+    expect(blockedReasonState('api-auth-failed')).toMatchObject({
+      reason: 'api-auth-failed',
+      iconId: 'key-broken',
+    })
     expect(healthDotState({ statusSource: 'fallback', externalCount: 2 })).toMatchObject({
       level: 'fallback',
       labelVal: 2,

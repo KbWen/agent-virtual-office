@@ -1,7 +1,9 @@
 import { recordUnknown } from './unknownLog.js'
-// AVO-146 (#122): the ordered blocked-reason CODES are owned by the node-safe transport
-// contract (statusContract.mjs). The rich presentation TABLE (iconId/hue/a11y) stays here.
-import { BLOCKED_REASONS } from '../utils/statusContract.mjs'
+import {
+  BLOCKED_REASONS,
+  BLOCKED_REASON_TABLE_CODES,
+  classifyBlockedReason,
+} from './blockedReasonModel.mjs'
 
 /**
  * #A1 — Pure classifier for AI agent signals (task / status / mood).
@@ -274,44 +276,9 @@ export function classifyStatus(status) {
 }
 
 // ─── classifyBlockedReason (AVO-110 / #29) ──────────────────────────────────
-// Pure render-side lookup: a language-neutral reasonCode (derived + stamped at the
-// hook — the single source of truth) → its badge metadata. This function inspects
-// ONLY its argument; it NEVER sees command/error text (no second classifier → no
-// drift). `blocked-unknown` is the load-bearing default (mirrors the office pet's
-// hide-on-blocker honesty guarantee): any absent/unrecognized code resolves here,
-// so a specific glyph renders ONLY when the hook proved the reason.
-//
-// Honesty in the labels: a11yKey points at "…test RUN" / "卡在測試執行" strings, NEVER
-// "test failed" — exit-nonzero on a test-bucket command is not an assertion failure.
-// COLOR-NEVER-ONLY: every reason has a UNIQUE iconId + a non-empty a11yKey; `hue` is
-// the 3rd redundant channel only. `blocked-unknown` is the lowest-chroma, neutral
-// glyph (uncertainty), deliberately NOT a red failure mark.
-const BLOCKED_REASON_TABLE = Object.freeze({
-  'test-run-failed':  { iconId: 'beaker-crack',  hue: '#d98a2b', a11yKey: 'blockedReason.test-run-failed.a11y' },
-  'build-failed':     { iconId: 'hammer-crack',  hue: '#c96f3a', a11yKey: 'blockedReason.build-failed.a11y' },
-  'deps-failed':      { iconId: 'box-open-x',    hue: '#d98a2b', a11yKey: 'blockedReason.deps-failed.a11y' },
-  'blocked-unknown':  { iconId: 'q-neutral',     hue: '#8a8f99', a11yKey: 'blockedReason.blocked-unknown.a11y' },
-  // AVO-148: structured-event reasons (event-driven = honest by construction)
-  'permission-denied': { iconId: 'slash-circle', hue: '#a0522d', a11yKey: 'blockedReason.permission-denied.a11y' },
-  'api-rate-limit':    { iconId: 'hourglass',    hue: '#5b7fa6', a11yKey: 'blockedReason.api-rate-limit.a11y' },
-  'api-auth-failed':   { iconId: 'key-broken',   hue: '#7a5c99', a11yKey: 'blockedReason.api-auth-failed.a11y' },
-})
-
-// Re-export the contract's ordered codes so existing `import { BLOCKED_REASONS } from
-// './classify.js'` sites are unchanged. The presentation TABLE's key set MUST equal this list
-// (same codes, same order) — pinned mechanically by tests/statusFieldsDriftGuard.test.js via
-// the exported table codes below. A code present here but missing from the table would make
-// classifyBlockedReason fall back to 'blocked-unknown' metadata (wrong icon), so the guard
-// is the real enforcement, not this comment.
-export { BLOCKED_REASONS }
-export const BLOCKED_REASON_TABLE_CODES = Object.keys(BLOCKED_REASON_TABLE)
-
-export function classifyBlockedReason(reasonCode) {
-  const code = (typeof reasonCode === 'string' && BLOCKED_REASON_TABLE[reasonCode])
-    ? reasonCode
-    : 'blocked-unknown'
-  return { family: FAMILIES.BLOCKED, reason: code, ...BLOCKED_REASON_TABLE[code] }
-}
+// Re-export the node-safe blocked reason presentation model so legacy classifier
+// imports stay stable while package consumers can import the smaller model directly.
+export { BLOCKED_REASONS, BLOCKED_REASON_TABLE_CODES, classifyBlockedReason }
 
 // ═══ #A2.1: Role + Workflow context-aware behavior selection ═══════════════
 //

@@ -196,8 +196,10 @@ import { normalizePost as normalizePostAlias } from 'agent-virtual-office/normal
 import { assembleIntegrationPatch, buildExternalStatusEntry } from 'agent-virtual-office/status-runtime'
 import { agentStatus, presenceRows } from 'agent-virtual-office/agent-status-model'
 import { buildAgentStatusSnapshot } from 'agent-virtual-office/agent-status-snapshot'
+import { blockedReasonState as blockedReasonStateFromModel } from 'agent-virtual-office/blocked-reason-model'
 import { healthDotState as healthDotStateFromIntegrationModel } from 'agent-virtual-office/integration-status-model'
 import {
+  blockedReasonState,
   buildAgentStatusSnapshot as buildAgentStatusSnapshotFromCore,
   buildDynamicStatusAgent,
   comparePresence,
@@ -217,6 +219,7 @@ if (buildExternalStatusEntry(null, { status: 'done' }, 1000).entry.expiresAt !==
 if (assembleIntegrationPatch({ statusSource: 'organic', integrationSource: null }, { statusSource: 'external' }, {}).statusSource !== 'external') throw new Error('status-runtime integration patch export failed')
 if (agentStatus({ status: 'idle' }, { status: 'done' }) !== 'done') throw new Error('agent-status-model export failed')
 if (presenceRows({ agents: [{ id: 'dev', status: 'idle' }], externalStatus: { dev: { status: 'done' } } }).rows[0]?.status !== 'done') throw new Error('presenceRows export failed')
+if (blockedReasonStateFromModel('api-rate-limit').iconId !== 'hourglass') throw new Error('blocked-reason-model export failed')
 if (healthDotStateFromIntegrationModel({ statusSource: 'fallback', externalCount: 2 }).labelVal !== 2) throw new Error('integration-status-model export failed')
 if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresenceFromRoster)[0]?.id !== 'a') throw new Error('roster-model export failed')
 if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id !== 'a') throw new Error('status-core comparePresence export failed')
@@ -225,6 +228,7 @@ if (feedEntries([{ origin: 'organic' }, { origin: 'hook' }]).length !== 1) throw
 if (buildDynamicStatusAgent({ id: 'dev' }, { agentId: 'wt~dev', position: { x: 1, y: 2 } }).deskItemCount.coffee !== 0) throw new Error('status-core dynamic agent export failed')
 if (reconcileMultiSessionAgents({ agents: { 'wt~dev': { session: 'wt' } }, externalStatus: { 'wt~dev': { status: 'working' } }, updates: [] }).evicted[0] !== 'wt~dev') throw new Error('status-core reconcile export failed')
 if (normalizeAgentStatusUpdates({ type: 'office-status', agents: [{ role: 'frontend', status: 'working' }] }).updates[0]?.agentId !== 'frontend') throw new Error('status-core generic normalize export failed')
+if (blockedReasonState('permission-denied').iconId !== 'slash-circle') throw new Error('status-core blocked reason export failed')
 if (healthDotState({ integrationHealth: { state: 'offline' } }).level !== 'offline') throw new Error('status-core health export failed')
 
 const snapshot = buildAgentStatusSnapshot({
@@ -252,7 +256,7 @@ console.log('library imports OK')
   } catch (e) {
     fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
   }
-  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, agent-status-model, agent-status-snapshot, roster-model imported.')
+  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, agent-status-model, agent-status-snapshot, blocked-reason-model, roster-model imported.')
   console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────

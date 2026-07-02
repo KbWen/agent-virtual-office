@@ -41,6 +41,12 @@ export {
 } from './agentStatusSnapshot.mjs'
 
 export {
+  blockedReasonState,
+  classifyBlockedReason,
+  BLOCKED_REASON_TABLE_CODES,
+} from './blockedReasonModel.mjs'
+
+export {
   healthDotState,
 } from './integrationStatusModel.mjs'
 
