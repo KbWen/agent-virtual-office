@@ -31,3 +31,29 @@ export function buildExternalStatusEntry(prevExt, update, now) {
     sigChanged,
   }
 }
+
+// Build the integration-channel patch for one incoming status message.
+//
+// This is the renderer/runtime-facing state that says where the status stream came from and which
+// workflow is currently active. Omit unchanged fields so subscribers do not invalidate on every poll.
+// clearSourceIfEmpty is the authoritative multi-session eviction path: when the merged external
+// snapshot is empty, it reverts the source back to organic even if stale meta still says external.
+export function assembleIntegrationPatch(state = {}, meta = {}, externalStatus = {}) {
+  const patch = {}
+  const revertToOrganic = meta.clearSourceIfEmpty && Object.keys(externalStatus || {}).length === 0
+  if (revertToOrganic) {
+    if (state.statusSource !== 'organic') patch.statusSource = 'organic'
+    if (state.integrationSource !== null) patch.integrationSource = null
+  } else {
+    if (meta.statusSource !== undefined && meta.statusSource !== state.statusSource) {
+      patch.statusSource = meta.statusSource
+    }
+    if (meta.integrationSource !== undefined && (meta.integrationSource || null) !== state.integrationSource) {
+      patch.integrationSource = meta.integrationSource || null
+    }
+  }
+  if (meta.hasWorkflow && (meta.workflow ?? null) !== state.activeWorkflow) {
+    patch.activeWorkflow = meta.workflow ?? null
+  }
+  return patch
+}

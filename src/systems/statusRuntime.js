@@ -1,1 +1,1 @@
-export { buildExternalStatusEntry } from './statusRuntime.mjs'
+export { assembleIntegrationPatch, buildExternalStatusEntry } from './statusRuntime.mjs'

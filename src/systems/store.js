@@ -12,7 +12,7 @@ import { PET_TYPES, nextPetType } from './petState.js'
 import { pruneRecentPicks } from './behaviorEngine.js'  // AVO-180: prune on eviction
 import { isValidTheme, DEFAULT_THEME } from './theme.js'
 import { recordEpisode, isNewBlockedEpisode } from './recurringFailure.js'
-import { buildExternalStatusEntry } from './statusRuntime.mjs'
+import { assembleIntegrationPatch, buildExternalStatusEntry } from './statusRuntime.mjs'
 
 export { STATUS_COLORS }
 
@@ -333,31 +333,8 @@ function resolveAgentVisual(u, activeWorkflow, prevAgent, inGroup) {
   return { nextBehavior, nextExpression }
 }
 
-// AVO-184: assemble the integration-channel patch (statusSource / integrationSource / activeWorkflow)
-// folded into applyExternalStatus's single set(). Pure given (s, meta, ext). Each field is applied
-// ONLY when meta carries it AND the value actually differs, so an unchanged field is omitted (no
-// spurious subscriber invalidation). clearSourceIfEmpty (a multi-session eviction that left zero
-// external agents) reverts to 'organic' and takes precedence over meta.statusSource. Byte-identical
-// to the prior inline construction — extraction only.
-function assembleIntegrationPatch(s, meta, ext) {
-  const patch = {}
-  const revertToOrganic = meta.clearSourceIfEmpty && Object.keys(ext).length === 0
-  if (revertToOrganic) {
-    if (s.statusSource !== 'organic') patch.statusSource = 'organic'
-    if (s.integrationSource !== null) patch.integrationSource = null
-  } else {
-    if (meta.statusSource !== undefined && meta.statusSource !== s.statusSource) {
-      patch.statusSource = meta.statusSource
-    }
-    if (meta.integrationSource !== undefined && (meta.integrationSource || null) !== s.integrationSource) {
-      patch.integrationSource = meta.integrationSource || null
-    }
-  }
-  if (meta.hasWorkflow && (meta.workflow ?? null) !== s.activeWorkflow) {
-    patch.activeWorkflow = meta.workflow ?? null
-  }
-  return patch
-}
+// AVO-184/portable-runtime: integration-channel patching lives in statusRuntime.mjs so alternate
+// status renderers can share the same source/workflow transition rules.
 
 // Every OTHER agent's claimed standing spot, for group-target deconfliction (AVO-156/157
 // follow-up). Resolution mirrors movementSystem.getOccupiedPositions: a walker's journey

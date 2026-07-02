@@ -193,7 +193,7 @@ try {
   writeFileSync(libraryCheckPath, `
 import { VALID_STATUSES, normalizePost } from 'agent-virtual-office/status-contract'
 import { normalizePost as normalizePostAlias } from 'agent-virtual-office/normalize-post'
-import { buildExternalStatusEntry } from 'agent-virtual-office/status-runtime'
+import { assembleIntegrationPatch, buildExternalStatusEntry } from 'agent-virtual-office/status-runtime'
 import { agentStatus, presenceRows } from 'agent-virtual-office/agent-status-model'
 import { buildAgentStatusSnapshot } from 'agent-virtual-office/agent-status-snapshot'
 
@@ -202,6 +202,7 @@ if (!VALID_STATUSES.includes('awaiting-approval')) throw new Error('status-contr
 if (norm.agents[0]?.status !== 'working') throw new Error('status-contract normalizePost failed')
 if (normalizePostAlias({ qa: 'blocked' }).agents[0]?.status !== 'blocked') throw new Error('normalize-post export failed')
 if (buildExternalStatusEntry(null, { status: 'done' }, 1000).entry.expiresAt !== 11000) throw new Error('status-runtime export failed')
+if (assembleIntegrationPatch({ statusSource: 'organic', integrationSource: null }, { statusSource: 'external' }, {}).statusSource !== 'external') throw new Error('status-runtime integration patch export failed')
 if (agentStatus({ status: 'idle' }, { status: 'done' }) !== 'done') throw new Error('agent-status-model export failed')
 if (presenceRows({ agents: [{ id: 'dev', status: 'idle' }], externalStatus: { dev: { status: 'done' } } }).rows[0]?.status !== 'done') throw new Error('presenceRows export failed')
 

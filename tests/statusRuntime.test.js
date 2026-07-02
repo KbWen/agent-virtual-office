@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildExternalStatusEntry } from '../src/systems/statusRuntime.js'
+import { assembleIntegrationPatch, buildExternalStatusEntry } from '../src/systems/statusRuntime.js'
 import * as nodeSafeRuntime from '../src/systems/statusRuntime.mjs'
 
 describe('buildExternalStatusEntry', () => {
@@ -79,5 +79,55 @@ describe('buildExternalStatusEntry', () => {
   it('keeps the node-safe mjs entry equivalent to the app entry', () => {
     const input = [{ status: 'working', task: 'Bash' }, { status: 'blocked', task: 'Bash' }, 3000]
     expect(nodeSafeRuntime.buildExternalStatusEntry(...input)).toEqual(buildExternalStatusEntry(...input))
+  })
+})
+
+describe('assembleIntegrationPatch', () => {
+  it('lands changed status source, integration source, and workflow fields', () => {
+    expect(assembleIntegrationPatch(
+      { statusSource: 'organic', integrationSource: null, activeWorkflow: null },
+      { statusSource: 'external', integrationSource: 'claude-cli', hasWorkflow: true, workflow: 'Review' },
+      { dev: { status: 'working' } },
+    )).toEqual({
+      statusSource: 'external',
+      integrationSource: 'claude-cli',
+      activeWorkflow: 'Review',
+    })
+  })
+
+  it('omits unchanged fields to avoid subscriber churn', () => {
+    expect(assembleIntegrationPatch(
+      { statusSource: 'external', integrationSource: 'claude-cli', activeWorkflow: 'Review' },
+      { statusSource: 'external', integrationSource: 'claude-cli', hasWorkflow: true, workflow: 'Review' },
+      { dev: { status: 'working' } },
+    )).toEqual({})
+  })
+
+  it('normalizes empty integrationSource meta to null', () => {
+    expect(assembleIntegrationPatch(
+      { statusSource: 'external', integrationSource: 'claude-cli', activeWorkflow: null },
+      { integrationSource: '' },
+      { dev: { status: 'working' } },
+    )).toEqual({ integrationSource: null })
+  })
+
+  it('clearSourceIfEmpty reverts to organic and takes precedence over stale source meta', () => {
+    expect(assembleIntegrationPatch(
+      { statusSource: 'external', integrationSource: 'multi-session', activeWorkflow: null },
+      { clearSourceIfEmpty: true, statusSource: 'external', integrationSource: 'multi-session' },
+      {},
+    )).toEqual({
+      statusSource: 'organic',
+      integrationSource: null,
+    })
+  })
+
+  it('keeps the node-safe mjs integration patch equivalent to the app entry', () => {
+    const input = [
+      { statusSource: 'organic', integrationSource: null, activeWorkflow: null },
+      { statusSource: 'external', hasWorkflow: true, workflow: 'Implement' },
+      { dev: { status: 'working' } },
+    ]
+    expect(nodeSafeRuntime.assembleIntegrationPatch(...input)).toEqual(assembleIntegrationPatch(...input))
   })
 })
