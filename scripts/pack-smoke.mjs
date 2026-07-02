@@ -194,6 +194,7 @@ try {
 import { VALID_STATUSES, normalizePost } from 'agent-virtual-office/status-contract'
 import { normalizePost as normalizePostAlias } from 'agent-virtual-office/normalize-post'
 import { assembleIntegrationPatch, buildExternalStatusEntry } from 'agent-virtual-office/status-runtime'
+import { statusVisualState as statusVisualStateFromModel } from 'agent-virtual-office/status-visual-model'
 import { buildActivityFeedViewModel as buildActivityFeedViewModelFromModel } from 'agent-virtual-office/activity-feed-model'
 import { agentStatus, presenceRows } from 'agent-virtual-office/agent-status-model'
 import { buildAgentStatusSnapshot } from 'agent-virtual-office/agent-status-snapshot'
@@ -210,6 +211,7 @@ import {
   healthDotState,
   normalizeAgentStatusUpdates,
   reconcileMultiSessionAgents,
+  statusVisualState,
   teamStatus,
 } from 'agent-virtual-office/status-core'
 import { comparePresence as comparePresenceFromRoster } from 'agent-virtual-office/roster-model'
@@ -220,6 +222,7 @@ if (norm.agents[0]?.status !== 'working') throw new Error('status-contract norma
 if (normalizePostAlias({ qa: 'blocked' }).agents[0]?.status !== 'blocked') throw new Error('normalize-post export failed')
 if (buildExternalStatusEntry(null, { status: 'done' }, 1000).entry.expiresAt !== 11000) throw new Error('status-runtime export failed')
 if (assembleIntegrationPatch({ statusSource: 'organic', integrationSource: null }, { statusSource: 'external' }, {}).statusSource !== 'external') throw new Error('status-runtime integration patch export failed')
+if (statusVisualStateFromModel('awaiting-approval').color !== '#1E9FD4') throw new Error('status-visual-model export failed')
 if (buildActivityFeedViewModelFromModel([{ id: 1, type: 'status', status: 'done', timestamp: 1 }], { now: 2 }).unreadCount !== 1) throw new Error('activity-feed-model export failed')
 if (agentStatus({ status: 'idle' }, { status: 'done' }) !== 'done') throw new Error('agent-status-model export failed')
 if (presenceRows({ agents: [{ id: 'dev', status: 'idle' }], externalStatus: { dev: { status: 'done' } } }).rows[0]?.status !== 'done') throw new Error('presenceRows export failed')
@@ -227,6 +230,7 @@ if (blockedReasonStateFromModel('api-rate-limit').iconId !== 'hourglass') throw 
 if (healthDotStateFromIntegrationModel({ statusSource: 'fallback', externalCount: 2 }).labelVal !== 2) throw new Error('integration-status-model export failed')
 if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresenceFromRoster)[0]?.id !== 'a') throw new Error('roster-model export failed')
 if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id !== 'a') throw new Error('status-core comparePresence export failed')
+if (statusVisualState('blocked').color !== '#E24B4A') throw new Error('status-core status visual export failed')
 if (teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind !== 'workflow') throw new Error('status-core teamStatus export failed')
 if (feedEntries([{ origin: 'organic' }, { origin: 'hook' }]).length !== 1) throw new Error('status-core feedEntries export failed')
 if (buildActivityFeedViewModel([{ id: 1, type: 'status', status: 'blocked', timestamp: 1 }], { now: 2 }).entries[0]?.tone !== 'danger') throw new Error('status-core activity feed view-model export failed')
@@ -244,6 +248,7 @@ const snapshot = buildAgentStatusSnapshot({
 if (snapshot.agents[0]?.status !== 'done' || snapshot.presence.rows[0]?.task !== 'Edit') {
   throw new Error('agent-status-snapshot export failed')
 }
+if (snapshot.agents[0]?.visual?.color !== '#5CB88A') throw new Error('agent-status-snapshot visual token failed')
 if (snapshot.integration?.health?.level !== 'idle') throw new Error('agent-status-snapshot integration health failed')
 if (buildAgentStatusSnapshotFromCore({
   agents: { dev: { id: 'dev', status: 'idle' } },
@@ -262,7 +267,7 @@ console.log('library imports OK')
   } catch (e) {
     fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
   }
-  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, roster-model imported.')
+  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, status-visual-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, roster-model imported.')
   console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────

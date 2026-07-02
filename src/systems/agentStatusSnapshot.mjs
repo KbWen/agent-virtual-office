@@ -1,12 +1,15 @@
 import { agentSourceList, agentStatus, attentionItems, presenceRows } from './agentStatusModel.mjs'
 import { healthDotState } from './integrationStatusModel.mjs'
+import { statusVisualState } from './statusVisualModel.mjs'
 
 function agentSnapshot(agent, ext, nameForId) {
   const id = agent.id
+  const status = agentStatus(agent, ext)
   return {
     id,
     name: nameForId(id) || id,
-    status: agentStatus(agent, ext),
+    status,
+    visual: statusVisualState(status),
     localStatus: agent.status || 'idle',
     hasExternalStatus: !!ext,
     task: ext?.task || null,

@@ -32,6 +32,12 @@ export {
 } from './activityFeedModel.mjs'
 
 export {
+  STATUS_COLORS,
+  statusColor,
+  statusVisualState,
+} from './statusVisualModel.mjs'
+
+export {
   assembleIntegrationPatch,
   buildDynamicStatusAgent,
   buildExternalStatusEntry,

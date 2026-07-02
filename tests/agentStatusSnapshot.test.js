@@ -41,6 +41,12 @@ describe('buildAgentStatusSnapshot', () => {
     ])
     expect(snapshot.agents[0]).toMatchObject({
       hasExternalStatus: true,
+      visual: {
+        status: 'done',
+        color: '#5CB88A',
+        tone: 'done',
+        known: true,
+      },
       task: 'Edit',
       label: 'changed src/App.jsx',
       activeFile: 'src/App.jsx',
@@ -102,6 +108,7 @@ describe('buildAgentStatusSnapshot', () => {
       ['qa', 'working'],
       ['ops', 'awaiting-approval'],
     ])
+    expect(snapshot.presence.rows.map((agent) => agent.visual.color)).toEqual(['#5CB88A', '#EF9F27', '#1E9FD4'])
     expect(snapshot.presence.quietCount).toBe(0)
     expect(snapshot.activeCount).toBe(3)
   })

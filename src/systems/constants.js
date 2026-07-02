@@ -87,14 +87,7 @@ export { VALID_ROLES, VALID_STATUSES, VALID_MOODS, MAX_MOOD_DURATION } from '../
 // AVO-102: Claude Code effort levels (ordinal). The thinking aura intensity scales with this.
 export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max']
 
-export const STATUS_COLORS = {
-  idle: '#888',
-  working: '#EF9F27',
-  done: '#5CB88A',
-  blocked: '#E24B4A',
-  planning: '#8B7FD6',
-  // AVO-167: 'awaiting-approval' ("waiting on YOU", idle-gap-inferred from blocked+90s) gets its own
-  // cool cyan so it is visually distinct from a normal idle agent in the scene — and distinct from
-  // working amber + blocked red. Contrast-guarded (theme.test.js iterates STATUS_COLORS).
-  'awaiting-approval': '#1E9FD4',
-}
+// AVO-167: 'awaiting-approval' ("waiting on YOU", idle-gap-inferred from blocked+90s) gets its own
+// cool cyan so it is visually distinct from a normal idle agent in the scene — and distinct from
+// working amber + blocked red. Contrast-guarded (theme.test.js iterates STATUS_COLORS).
+export { STATUS_COLORS } from './statusVisualModel.mjs'

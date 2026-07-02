@@ -16,6 +16,7 @@ import {
   presenceRows,
   reconcileMultiSessionAgents,
   sanitizeAgentId,
+  statusVisualState,
   teamStatus,
   VALID_STATUSES,
 } from '../src/systems/statusCore.mjs'
@@ -50,8 +51,10 @@ describe('statusCore public headless API', () => {
       externalStatus: { dev: { status: 'done', task: 'Edit' } },
     })
     expect(snapshot.agents[0]?.status).toBe('done')
+    expect(snapshot.agents[0]?.visual.color).toBe('#5CB88A')
     expect(snapshot.presence.rows[0]?.task).toBe('Edit')
     expect(snapshot.integration.health.level).toBe('idle')
+    expect(statusVisualState('blocked')).toMatchObject({ color: '#E24B4A', known: true })
 
     expect([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id).toBe('a')
     expect(teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind).toBe('workflow')
