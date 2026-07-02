@@ -6,6 +6,7 @@ import { CharacterPixelSprite } from './AgentCharacter'
 import { agentLineLabel, taskChipLabel, formatTokens } from './controlPanelLabels.js'
 import { formatTimeAgo } from '../utils/formatTime'
 import { activityFeedMessage } from '../utils/activityFeedLabel'
+import { buildActivityFeedEntryView } from '../systems/activityFeedModel.mjs'
 import { buildPresenceRailViewModel, presenceRailSignature } from '../systems/rosterModel'
 
 // ─── Vertical office: presence rail (COMMS rebuild — Phase 1: the honest, lively spine) ─────────
@@ -117,38 +118,33 @@ function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expa
 // ─── Activity feed row (Phase 2) — one real event: status change, handoff, or team event ───────
 // Sourced from the store's activityLog, already filtered to non-organic origins. Time-decayed
 // opacity (older = quieter) gives the "journal that's been written in" resting feel (calm-tech).
-function FeedRow({ entry, color, ageMs, reducedMotion }) {
+function FeedRow({ entryView }) {
   // "剛剛/now" for fresh events instead of a bare "0s".
-  const ago = ageMs != null && ageMs < 10000 ? t('chat.justNow', 'now') : formatTimeAgo(entry.timestamp, { compact: true })
-  // decay: full opacity when fresh, easing toward 0.45 over ~20 min — never invisible.
-  const opacity = Math.max(0.45, 1 - (ageMs || 0) / (20 * 60 * 1000))
-  // Phase 3: a single gentle fade+rise on MOUNT only (new key → React remounts → runs once).
-  // reducedMotion → no entrance. CSS reverts to the inline `opacity` (decay) after the 250ms run.
-  const anim = reducedMotion ? null : 'chat-feed-in 0.25s ease-out'
-  const message = activityFeedMessage(entry, { t, eventName })
-  if (entry.type === 'event') {
+  const ago = entryView.isFresh ? t('chat.justNow', 'now') : formatTimeAgo(entryView.entry.timestamp, { compact: true })
+  const anim = entryView.animateIn ? 'chat-feed-in 0.25s ease-out' : null
+  if (entryView.kind === 'event') {
     return (
-      <div className="text-[12px] text-center text-amber-700 dark:text-amber-300/90 py-1" style={{ opacity, animation: anim }}>
-        🎉 {message.text}
+      <div className="text-[12px] text-center text-amber-700 dark:text-amber-300/90 py-1" style={{ opacity: entryView.opacity, animation: anim }}>
+        🎉 {entryView.message.text}
       </div>
     )
   }
-  if (entry.type === 'handoff') {
+  if (entryView.kind === 'handoff') {
     return (
-      <div className="flex items-baseline gap-2 text-[13px] py-1 pl-2 border-l-2" style={{ borderColor: color, opacity, animation: anim }}>
-        <span className="text-gray-600 dark:text-gray-300 truncate">{charName(entry.from)} <span className="text-gray-400">→</span> {charName(entry.to)}</span>
+      <div className="flex items-baseline gap-2 text-[13px] py-1 pl-2 border-l-2" style={{ borderColor: entryView.accentColor || '#888', opacity: entryView.opacity, animation: anim }}>
+        <span className="text-gray-600 dark:text-gray-300 truncate">{entryView.fromName} <span className="text-gray-400">→</span> {entryView.toName}</span>
         <span className="ml-auto text-[10px] text-gray-400 shrink-0 tabular-nums">{ago}</span>
       </div>
     )
   }
   // status
-  const tone = entry.status === 'blocked' ? 'text-red-600 dark:text-red-400'
-    : entry.status === 'done' ? 'text-green-700 dark:text-green-400'
+  const tone = entryView.tone === 'danger' ? 'text-red-600 dark:text-red-400'
+    : entryView.tone === 'success' ? 'text-green-700 dark:text-green-400'
     : 'text-gray-600 dark:text-gray-300'
   return (
-    <div className="flex items-baseline gap-2 text-[13px] py-1.5 pl-2.5 border-l-2" style={{ borderColor: color, opacity, animation: anim }}>
-      <span className="font-medium text-gray-700 dark:text-gray-200 shrink-0">{charName(entry.agentId)}</span>
-      <span className={`truncate ${tone}`} title={message.title || undefined}>{message.text}</span>
+    <div className="flex items-baseline gap-2 text-[13px] py-1.5 pl-2.5 border-l-2" style={{ borderColor: entryView.accentColor || '#888', opacity: entryView.opacity, animation: anim }}>
+      <span className="font-medium text-gray-700 dark:text-gray-200 shrink-0">{entryView.agentName}</span>
+      <span className={`truncate ${tone}`} title={entryView.message.title || undefined}>{entryView.message.text}</span>
       <span className="ml-auto text-[9px] text-gray-400 shrink-0 tabular-nums">{ago}</span>
     </div>
   )
@@ -307,7 +303,13 @@ export default function NarrowRoster() {
           </div>
           <div className="flex flex-col gap-1 overflow-y-auto">
             {feed.map((e) => (
-              <FeedRow key={e.id} entry={e} color={colorById[e.agentId] || colorById[e.from] || '#888'} ageMs={now - e.timestamp} reducedMotion={reducedMotion} />
+              <FeedRow key={e.id} entryView={buildActivityFeedEntryView(e, {
+                now,
+                messageForEntry: (entry) => activityFeedMessage(entry, { t, eventName }),
+                nameForId: charName,
+                colorForId: (id) => colorById[id],
+                reducedMotion,
+              })} />
             ))}
           </div>
         </div>

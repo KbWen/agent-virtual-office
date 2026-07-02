@@ -4,6 +4,7 @@ import { useOfficeStore } from '../systems/store'
 import { charName, eventName, useLocale, t } from '../i18n'
 import { formatTimeAgo } from '../utils/formatTime'
 import { activityFeedMessage } from '../utils/activityFeedLabel'
+import { buildActivityFeedViewModel } from '../systems/activityFeedModel.mjs'
 
 const typeIcons = {
   event: '🎪',
@@ -12,7 +13,7 @@ const typeIcons = {
 }
 
 export default function ActivityFeed({ mode = 'full' }) {
-  useLocale()
+  const lang = useLocale()
   const [collapsed, setCollapsed] = useState(true)
   // AVO-141: source the REAL-events eventFeed (FEED_ORIGINS = hook/event/inferred), NOT the all-origins
   // activityLog. The old source surfaced organic officeLife theater (the 8-50/min behavior ticks) PLUS an
@@ -26,7 +27,15 @@ export default function ActivityFeed({ mode = 'full' }) {
   const eventFeedSig = useOfficeStore(useShallow((s) => s.eventFeed))
   const rosterMode = useOfficeStore((s) => s.rosterMode)
 
-  const entries = useMemo(() => useOfficeStore.getState().eventFeed.slice(0, 20), [eventFeedSig])
+  const feed = useMemo(() => {
+    const state = useOfficeStore.getState()
+    return buildActivityFeedViewModel(state.eventFeed, {
+      max: 20,
+      messageForEntry: (entry) => activityFeedMessage(entry, { t, eventName }),
+      nameForId: charName,
+      colorForId: (id) => state.agents[id]?.color,
+    })
+  }, [eventFeedSig, lang])
 
   if (mode === 'panel') return null  // too compact for panel mode
   // AVO-141 dedup: in roster mode the inline presence-rail feed already shows these real events, so the
@@ -34,8 +43,8 @@ export default function ActivityFeed({ mode = 'full' }) {
   // `rosterMode` (reactive) re-renders on toggle; getState() is the authoritative current value (SSR-safe).
   if (rosterMode || useOfficeStore.getState().rosterMode) return null
 
-  const hasEntries = entries.length > 0
-  const unreadCount = entries.filter(e => Date.now() - e.timestamp < 30000).length
+  const hasEntries = feed.hasEntries
+  const unreadCount = feed.unreadCount
 
   return (
     <div className={`fixed top-3 right-3 z-50 select-none transition-all duration-200 ${collapsed ? 'w-10' : 'w-72 max-w-[calc(100vw-1.5rem)]'}`}>
@@ -63,7 +72,7 @@ export default function ActivityFeed({ mode = 'full' }) {
             </span>
             {hasEntries && (
               <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                {entries.length} {t('activityFeed.items', 'items')}
+                {feed.count} {t('activityFeed.items', 'items')}
               </span>
             )}
           </div>
@@ -73,8 +82,8 @@ export default function ActivityFeed({ mode = 'full' }) {
                 {t('activityFeed.empty', 'No activity yet')}
               </div>
             ) : (
-              entries.map((entry) => (
-                <ActivityEntry key={entry.id} entry={entry} />
+              feed.entries.map((entryView) => (
+                <ActivityEntry key={entryView.id} entryView={entryView} />
               ))
             )}
           </div>
@@ -84,30 +93,25 @@ export default function ActivityFeed({ mode = 'full' }) {
   )
 }
 
-function ActivityEntry({ entry }) {
-  // Use hook selectors instead of getState() to stay reactive
-  const agentColor = useOfficeStore((s) => entry.agentId ? s.agents[entry.agentId]?.color : null)
-  const isRecent = Date.now() - entry.timestamp < 30000
-  const icon = typeIcons[entry.type] || '📝'
-  const name = entry.agentId ? charName(entry.agentId) : null
-  const ago = formatTimeAgo(entry.timestamp)
-  const message = activityFeedMessage(entry, { t, eventName })
+function ActivityEntry({ entryView }) {
+  const icon = typeIcons[entryView.iconKey] || '📝'
+  const ago = formatTimeAgo(entryView.entry.timestamp)
 
   return (
-    <div className={`px-3 py-2 border-b border-gray-50 dark:border-gray-800 last:border-0 flex items-start gap-2.5 ${isRecent ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}>
+    <div className={`px-3 py-2 border-b border-gray-50 dark:border-gray-800 last:border-0 flex items-start gap-2.5 ${entryView.isRecent ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}>
       <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gray-100 text-[10px] dark:bg-gray-800">{icon}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
-          {name && (
+          {entryView.agentName && (
             <>
-              <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: agentColor }} />
-              <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 shrink-0">{name}</span>
+              <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: entryView.agentColor }} />
+              <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 shrink-0">{entryView.agentName}</span>
             </>
           )}
           <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto shrink-0">{ago}</span>
         </div>
-        <div className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 truncate" title={message.title || undefined}>
-          {message.text}
+        <div className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 truncate" title={entryView.message.title || undefined}>
+          {entryView.message.text}
         </div>
       </div>
     </div>

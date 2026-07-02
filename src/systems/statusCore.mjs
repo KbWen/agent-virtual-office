@@ -21,6 +21,17 @@ export {
 } from '../utils/statusContract.mjs'
 
 export {
+  activityAgeMs,
+  activityFeedEntries,
+  activityIconKey,
+  activityOpacity,
+  activityTone,
+  buildActivityFeedEntryView,
+  buildActivityFeedViewModel,
+  isActivityForAgent,
+} from './activityFeedModel.mjs'
+
+export {
   assembleIntegrationPatch,
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
