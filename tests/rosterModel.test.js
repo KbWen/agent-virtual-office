@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   salienceTier, comparePresence, isIdleStatus, isFeedWorthy, feedEntries, teamStatus, PRESENCE_TIER, FEED_ORIGINS,
 } from '../src/systems/rosterModel.js'
+import * as nodeSafeRosterModel from '../src/systems/rosterModel.mjs'
 
 // The vertical roster's "liveliness" is its ordering (urgent rises, idle sinks) + an honest feed
 // (real events only, not organic theater). These pure fns carry that contract — assert behaviour.
@@ -124,5 +125,17 @@ describe('constants are sane', () => {
     for (const s of ['blocked', 'working', 'planning', 'done', 'idle']) {
       expect(typeof PRESENCE_TIER[s]).toBe('number')
     }
+  })
+})
+
+describe('node-safe roster model entry', () => {
+  it('keeps the mjs view-model equivalent to the app entry', () => {
+    const rows = [
+      { id: 'b', status: 'working' },
+      { id: 'a', status: 'blocked' },
+    ]
+    expect([...rows].sort(nodeSafeRosterModel.comparePresence)).toEqual([...rows].sort(comparePresence))
+    expect(nodeSafeRosterModel.teamStatus({ activeWorkflow: 'review', activeCount: 2 })).toEqual(teamStatus({ activeWorkflow: 'review', activeCount: 2 }))
+    expect(nodeSafeRosterModel.feedEntries([{ origin: 'organic' }, { origin: 'hook', id: 1 }])).toEqual(feedEntries([{ origin: 'organic' }, { origin: 'hook', id: 1 }]))
   })
 })

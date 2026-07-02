@@ -6,10 +6,12 @@
   "exports": {
     ".": "./bin/cli.js",
     "./status-contract": "./src/utils/statusContract.mjs",
+    "./status-core": "./src/systems/statusCore.mjs",
     "./normalize-post": "./src/utils/normalizePost.mjs",
     "./status-runtime": "./src/systems/statusRuntime.mjs",
     "./agent-status-model": "./src/systems/agentStatusModel.mjs",
     "./agent-status-snapshot": "./src/systems/agentStatusSnapshot.mjs",
+    "./roster-model": "./src/systems/rosterModel.mjs",
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
