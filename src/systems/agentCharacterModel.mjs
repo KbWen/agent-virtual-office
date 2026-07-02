@@ -1,4 +1,5 @@
 import { STATUS_COLORS } from './statusVisualModel.mjs'
+import { behaviorIndicatorState } from './behaviorIndicatorModel.mjs'
 
 export const CHAR_SCALE = 1.35
 export const LABEL_SCALE_MAX = 1.5
@@ -79,18 +80,32 @@ export function characterStatusRing({ status = 'idle', hasActiveHelper = false, 
 }
 
 export function characterIndicatorState({ status = 'idle', behavior = 'idle', isWalking = false, reasonCode = null } = {}) {
-  if (isWalking) return { kind: 'none' }
+  if (isWalking) {
+    return {
+      kind: 'none',
+      key: 'none',
+      behavior: behavior || 'idle',
+      iconKey: null,
+      variant: null,
+      known: true,
+    }
+  }
   if ((status || 'idle') === 'blocked') {
     return {
       kind: 'blocked-reason',
       key: `reason-${reasonCode || 'unknown'}`,
       reasonCode: reasonCode || null,
+      behavior: behavior || 'idle',
+      iconKey: 'blocked-reason',
+      variant: reasonCode || 'unknown',
+      known: true,
     }
   }
+  const indicator = behaviorIndicatorState(behavior)
   return {
     kind: 'behavior',
-    key: behavior || 'idle',
-    behavior: behavior || 'idle',
+    key: indicator.behavior,
+    ...indicator,
   }
 }
 

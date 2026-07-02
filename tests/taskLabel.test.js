@@ -28,6 +28,8 @@ describe('TaskLabel — classifier-driven label routing', () => {
     ['WebSearch',     'WebSearch'],
     ['NotebookEdit',  'Notebook'],
     ['ExitPlanMode',  'Plan'],
+    ['TodoWrite',     'Todos'],
+    ['TodoRead',      'Todos'],
   ])('built-in %s → label "%s"', (task, expected) => {
     expect(labelOf(task)).toBe(expected)
   })

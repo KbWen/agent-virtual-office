@@ -64,6 +64,14 @@ export {
 } from './blockedReasonModel.mjs'
 
 export {
+  BEHAVIOR_INDICATOR_TABLE,
+  behaviorIndicatorState,
+  hasBehaviorIndicator,
+  KNOWN_CHARACTER_BEHAVIORS,
+  NO_INDICATOR_CHARACTER_BEHAVIORS,
+} from './behaviorIndicatorModel.mjs'
+
+export {
   BASE_GLOW,
   CHAR_SCALE,
   characterBubbleLayout,

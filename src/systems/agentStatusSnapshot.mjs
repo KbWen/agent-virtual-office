@@ -1,5 +1,5 @@
 import { agentSourceList, agentStatus, attentionItems, presenceRows } from './agentStatusModel.mjs'
-import { characterStatusVisual } from './agentCharacterModel.mjs'
+import { characterIndicatorState, characterStatusVisual } from './agentCharacterModel.mjs'
 import { healthDotState } from './integrationStatusModel.mjs'
 import { statusVisualState } from './statusVisualModel.mjs'
 
@@ -15,12 +15,19 @@ function agentSnapshot(agent, ext, nameForId, context = {}) {
     name: nameForId(id) || id,
     status,
     visual: statusVisualState(status),
-    character: characterStatusVisual({
-      status,
-      color: agent.color || '#888',
-      hasActiveHelper: hasHelper(context.helpers, id),
-      effort: context.effort || null,
-    }),
+    character: {
+      ...characterStatusVisual({
+        status,
+        color: agent.color || '#888',
+        hasActiveHelper: hasHelper(context.helpers, id),
+        effort: context.effort || null,
+      }),
+      indicator: characterIndicatorState({
+        status,
+        behavior: agent.behavior || 'idle',
+        reasonCode: ext?.reasonCode || null,
+      }),
+    },
     localStatus: agent.status || 'idle',
     hasExternalStatus: !!ext,
     task: ext?.task || null,

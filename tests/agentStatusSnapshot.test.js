@@ -52,6 +52,12 @@ describe('buildAgentStatusSnapshot', () => {
         glowColor: '#5CB88A',
         showName: true,
         ring: { kind: 'done', animate: 'flash' },
+        indicator: {
+          behavior: 'idle',
+          kind: 'behavior',
+          iconKey: null,
+          known: true,
+        },
       },
       task: 'Edit',
       label: 'changed src/App.jsx',
@@ -122,7 +128,7 @@ describe('buildAgentStatusSnapshot', () => {
   it('includes compact character chrome tokens without embedding sprite grids', () => {
     const snapshot = buildAgentStatusSnapshot({
       agents: {
-        dev: { id: 'dev', status: 'working', color: '#123456' },
+        dev: { id: 'dev', status: 'working', color: '#123456', behavior: 'gantt-chart' },
       },
       externalStatus: {},
       helpers: [{ id: 'helper-1', parentRole: 'dev' }],
@@ -134,8 +140,27 @@ describe('buildAgentStatusSnapshot', () => {
       glowColor: '#EF9F27',
       showName: true,
       ring: { kind: 'supervising', animate: 'slow-breathe' },
+      indicator: { kind: 'behavior', iconKey: 'chart', variant: 'timeline' },
     })
     expect(snapshot.agents[0].character).not.toHaveProperty('grid')
+  })
+
+  it('uses blocked reason indicator dominance in snapshots', () => {
+    const snapshot = buildAgentStatusSnapshot({
+      agents: {
+        dev: { id: 'dev', status: 'working', behavior: 'typing', color: '#123456' },
+      },
+      externalStatus: {
+        dev: { status: 'blocked', reasonCode: 'permission-denied' },
+      },
+    })
+
+    expect(snapshot.agents[0].character.indicator).toMatchObject({
+      kind: 'blocked-reason',
+      key: 'reason-permission-denied',
+      iconKey: 'blocked-reason',
+      variant: 'permission-denied',
+    })
   })
 
   it('keeps the node-safe mjs entry equivalent to the app entry', () => {

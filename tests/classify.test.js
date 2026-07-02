@@ -16,6 +16,7 @@ import {
   BLOCKED_REASONS,
   FAMILIES,
 } from '../src/systems/classify.js'
+import { KNOWN_CHARACTER_BEHAVIORS } from '../src/systems/behaviorIndicatorModel.mjs'
 
 // Output shape contract (panel decision): every classify* function returns
 // the same fields, no exceptions, no nulls.
@@ -357,15 +358,7 @@ describe('FAMILIES — vocabulary export', () => {
 })
 
 describe('familyToBehavior — #A2 wiring helper', () => {
-  // Build a reference of every existing AgentCharacter.jsx animation `case`
-  // so we can prove every family→behavior maps to a real animation.
-  const KNOWN_ANIMATIONS = new Set([
-    'typing', 'reading-screen', 'writing-notes', 'research', 'gantt-chart',
-    'magnifier', 'shield-verify', 'deploy-button', 'drink-coffee',
-    'goto-coffee-machine', 'whiteboard', 'meeting', 'chat', 'check-phone',
-    'stretch', 'nap', 'thumbs-up', 'print', 'scratch-head', 'idle',
-    'pass-document', 'desk-slam', 'happy', 'focused', 'confused',
-  ])
+  const KNOWN_ANIMATIONS = new Set(KNOWN_CHARACTER_BEHAVIORS)
 
   it('every action family maps to a known animation', () => {
     const actionFamilies = [

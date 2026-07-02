@@ -11,6 +11,7 @@ import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK
 import BehaviorBubble from './BehaviorBubble'
 import { shouldShakeDesk } from '../systems/eventJuice.js'
 import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
+import { behaviorIndicatorState as behaviorIndicatorView } from '../systems/behaviorIndicatorModel.mjs'
 import {
   BASE_GLOW,
   CHAR_SCALE,
@@ -443,11 +444,14 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
     return () => { if (iv) clearInterval(iv) }
   }, [reducedMotion])
 
-  // Position: to the right of character
-  const ox = 14, oy = -8
+  const indicator = behaviorIndicatorView(behavior, frame)
+  if (!indicator.iconKey) return null
 
-  switch (behavior) {
-    case 'typing': {
+  // Position: to the right of character
+  const ox = indicator.offset.x, oy = indicator.offset.y
+
+  switch (indicator.iconKey) {
+    case 'keyboard': {
       // Tiny keyboard with blinking cursor
       const cursorOn = frame % 2 === 0
       return (
@@ -460,7 +464,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'reading-screen': {
+    case 'document': {
       // Small document with scanning line
       const scanY = frame
       return (
@@ -474,7 +478,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'writing-notes': {
+    case 'pencil': {
       // Pencil with writing motion
       const dx = frame % 2
       return (
@@ -485,7 +489,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'research': {
+    case 'magnifier': {
       // Magnifier glass
       const bob = frame % 2
       return (
@@ -496,7 +500,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'gantt-chart': {
+    case 'chart': {
       // Mini chart bars
       return (
         <g transform={`translate(${ox}, ${oy})`}>
@@ -506,7 +510,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'magnifier': {
+    case 'qa-magnifier': {
       // QA magnifier with checkmark
       return (
         <g transform={`translate(${ox}, ${oy})`}>
@@ -518,7 +522,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'shield-verify': {
+    case 'shield': {
       // Shield icon
       const glow = frame % 2 === 0 ? 0.8 : 0.4
       return (
@@ -528,7 +532,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'deploy-button': {
+    case 'deploy': {
       // Deploy/rocket
       return (
         <g transform={`translate(${ox}, ${oy})`}>
@@ -537,8 +541,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'drink-coffee':
-    case 'goto-coffee-machine': {
+    case 'coffee': {
       // Coffee cup with steam
       const steamH = frame % 2 === 0 ? -2 : -3
       return (
@@ -561,7 +564,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'meeting': {
+    case 'meeting-bubbles': {
       // Speech bubbles (meeting)
       return (
         <g transform={`translate(${ox}, ${oy})`}>
@@ -570,7 +573,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'chat': {
+    case 'chat-bubble': {
       // Chat bubbles
       return (
         <g transform={`translate(${ox}, ${oy})`}>
@@ -579,7 +582,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'check-phone': {
+    case 'phone': {
       // Phone screen
       return (
         <g transform={`translate(${ox}, ${oy + 1})`}>
@@ -599,7 +602,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'nap': {
+    case 'sleep': {
       // Zzz
       const zy = frame % 2 === 0 ? 0 : -1
       return (
@@ -618,7 +621,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'print': {
+    case 'printer': {
       // Printer icon
       return (
         <g transform={`translate(${ox}, ${oy})`}>
@@ -628,9 +631,7 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
-    case 'scratch-head':
-    case 'sigh':
-    case 'desk-slam': {
+    case 'frustration': {
       // Frustration marks
       return (
         <g transform={`translate(${ox}, ${oy})`}>

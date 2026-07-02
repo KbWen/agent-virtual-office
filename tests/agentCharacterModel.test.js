@@ -95,19 +95,27 @@ describe('agentCharacterModel — portable character view tokens', () => {
       status: 'blocked',
       behavior: 'typing',
       reasonCode: 'api-rate-limit',
-    })).toEqual({
+    })).toMatchObject({
       kind: 'blocked-reason',
       key: 'reason-api-rate-limit',
       reasonCode: 'api-rate-limit',
+      behavior: 'typing',
+      iconKey: 'blocked-reason',
+      variant: 'api-rate-limit',
     })
 
-    expect(characterIndicatorState({ status: 'working', behavior: 'typing' })).toEqual({
+    expect(characterIndicatorState({ status: 'working', behavior: 'typing' })).toMatchObject({
       kind: 'behavior',
       key: 'typing',
       behavior: 'typing',
+      iconKey: 'keyboard',
+      variant: 'typing',
     })
 
-    expect(characterIndicatorState({ status: 'blocked', isWalking: true })).toEqual({ kind: 'none' })
+    expect(characterIndicatorState({ status: 'blocked', isWalking: true })).toMatchObject({
+      kind: 'none',
+      iconKey: null,
+    })
   })
 
   it('flips bubbles below agents that are too close to the top edge', () => {

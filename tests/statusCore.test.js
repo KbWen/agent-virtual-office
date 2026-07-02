@@ -7,6 +7,7 @@ import {
   buildAgentStatusSnapshot,
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
+  behaviorIndicatorState,
   characterStatusVisual,
   comparePresence,
   feedEntries,
@@ -61,6 +62,11 @@ describe('statusCore public headless API', () => {
     expect(characterStatusVisual({ status: 'working', color: '#abc' })).toMatchObject({
       tagFill: '#EF9F27',
       ring: { kind: 'active' },
+    })
+    expect(behaviorIndicatorState('goto-coffee-machine')).toMatchObject({
+      iconKey: 'coffee',
+      variant: 'steam',
+      known: true,
     })
     expect(inspectorPanelLayout({ activityCount: 4, sceneScale: 0, position: { x: 400, y: 300 } })).toMatchObject({
       activityRows: 3,
