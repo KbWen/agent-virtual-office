@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   BEHAVIOR_INDICATOR_TABLE,
+  behaviorIndicatorIconKey,
   behaviorIndicatorState,
   hasBehaviorIndicator,
   KNOWN_CHARACTER_BEHAVIORS,
@@ -14,6 +15,7 @@ import {
 
 describe('behaviorIndicatorModel — portable behavior icon semantics', () => {
   it('exposes every rendered overhead icon as a stable semantic token', () => {
+    expect(behaviorIndicatorIconKey('typing')).toBe('keyboard')
     expect(behaviorIndicatorState('typing', 2)).toMatchObject({
       behavior: 'typing',
       iconKey: 'keyboard',

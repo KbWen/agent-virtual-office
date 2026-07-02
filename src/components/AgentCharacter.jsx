@@ -11,20 +11,19 @@ import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK
 import BehaviorBubble from './BehaviorBubble'
 import { shouldShakeDesk } from '../systems/eventJuice.js'
 import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
-import { behaviorIndicatorState as behaviorIndicatorView } from '../systems/behaviorIndicatorModel.mjs'
+import { behaviorIndicatorIconKey } from '../systems/behaviorIndicatorIconKey.mjs'
 import {
   BASE_GLOW,
   CHAR_SCALE,
   characterBubbleLayout,
   characterBubbleMessage,
-  characterIndicatorState,
   characterStatusVisual,
   computeLabelScale,
   LABEL_SCALE_MAX,
   nameTagMetrics,
-} from '../systems/agentCharacterModel.mjs'
+} from '../systems/agentCharacterVisualModel.mjs'
 
-export { CHAR_SCALE, computeLabelScale, LABEL_SCALE_MAX } from '../systems/agentCharacterModel.mjs'
+export { CHAR_SCALE, computeLabelScale, LABEL_SCALE_MAX } from '../systems/agentCharacterVisualModel.mjs'
 export const RAF_STALL_RESTART_MS = 2500
 
 // Pure guard: returns true if a social arriver's TARGET should face back.
@@ -444,13 +443,13 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
     return () => { if (iv) clearInterval(iv) }
   }, [reducedMotion])
 
-  const indicator = behaviorIndicatorView(behavior, frame)
-  if (!indicator.iconKey) return null
+  const iconKey = behaviorIndicatorIconKey(behavior)
+  if (!iconKey) return null
 
   // Position: to the right of character
-  const ox = indicator.offset.x, oy = indicator.offset.y
+  const ox = 14, oy = -8
 
-  switch (indicator.iconKey) {
+  switch (iconKey) {
     case 'keyboard': {
       // Tiny keyboard with blinking cursor
       const cursorOn = frame % 2 === 0
@@ -1339,12 +1338,7 @@ function AgentCharacter({ agent }) {
   const glowColor = statusVisual.glowColor
   const showName = statusVisual.showName
   const ring = statusVisual.ring
-  const indicator = characterIndicatorState({
-    status: state.status,
-    behavior: state.behavior,
-    isWalking,
-    reasonCode,
-  })
+  const behaviorIconKey = behaviorIndicatorIconKey(state.behavior)
 
   return (
     <g transform={`translate(${pos.x}, ${pos.y}) scale(${CHAR_SCALE})`}
@@ -1443,9 +1437,9 @@ function AgentCharacter({ agent }) {
       {/* AVO-110: while blocked, the reason badge OVERRIDES the BehaviorIndicator glyph (a block is
           the dominant state). Keyed on reasonCode so a reason CHANGE replays the entry-pop, but a
           same-reason re-render reuses the element → no re-fire (ANTI-NAG). reducedMotion → static. */}
-      {indicator.kind !== 'none' && (
-        indicator.kind === 'blocked-reason' ? (
-          <g key={indicator.key}>
+      {!isWalking && (
+        state.status === 'blocked' ? (
+          <g key={`reason-${reasonCode || 'unknown'}`}>
             {!reducedMotion && (
               <animateTransform attributeName="transform" type="scale"
                 values="0.6 0.6;1.1 1.1;1 1" keyTimes="0;0.6;1" dur="0.35s" repeatCount="1" fill="freeze" />
@@ -1457,12 +1451,12 @@ function AgentCharacter({ agent }) {
             />
           </g>
         ) : (
-          <g key={indicator.key}>
+          behaviorIconKey && <g key={state.behavior || 'idle'}>
             {!reducedMotion && (
               <animateTransform attributeName="transform" type="scale"
                 values="0 0;1.15 0.9;1 1" keyTimes="0;0.6;1" dur="0.3s" repeatCount="1" fill="freeze" />
             )}
-            <BehaviorIndicator behavior={indicator.behavior} />
+            <BehaviorIndicator behavior={state.behavior} />
           </g>
         )
       )}

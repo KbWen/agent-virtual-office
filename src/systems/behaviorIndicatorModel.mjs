@@ -1,5 +1,8 @@
 const DEFAULT_OFFSET = Object.freeze({ x: 14, y: -8 })
 
+export { behaviorIndicatorIconKey } from './behaviorIndicatorIconKey.mjs'
+import { behaviorIndicatorIconKey } from './behaviorIndicatorIconKey.mjs'
+
 export const BEHAVIOR_INDICATOR_TABLE = Object.freeze({
   typing: Object.freeze({ iconKey: 'keyboard', variant: 'typing', animated: true }),
   'reading-screen': Object.freeze({ iconKey: 'document', variant: 'scan', animated: true }),
@@ -69,7 +72,7 @@ export function behaviorIndicatorState(behavior, frame = 0) {
 }
 
 export function hasBehaviorIndicator(behavior) {
-  return Boolean(BEHAVIOR_INDICATOR_TABLE[behavior || 'idle'])
+  return Boolean(behaviorIndicatorIconKey(behavior))
 }
 
 function normalizedFrame(frame) {

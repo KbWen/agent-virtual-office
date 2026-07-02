@@ -65,6 +65,7 @@ export {
 
 export {
   BEHAVIOR_INDICATOR_TABLE,
+  behaviorIndicatorIconKey,
   behaviorIndicatorState,
   hasBehaviorIndicator,
   KNOWN_CHARACTER_BEHAVIORS,
