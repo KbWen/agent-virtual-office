@@ -198,8 +198,10 @@ import { agentStatus, presenceRows } from 'agent-virtual-office/agent-status-mod
 import { buildAgentStatusSnapshot } from 'agent-virtual-office/agent-status-snapshot'
 import {
   buildAgentStatusSnapshot as buildAgentStatusSnapshotFromCore,
+  buildDynamicStatusAgent,
   comparePresence,
   feedEntries,
+  reconcileMultiSessionAgents,
   teamStatus,
 } from 'agent-virtual-office/status-core'
 import { comparePresence as comparePresenceFromRoster } from 'agent-virtual-office/roster-model'
@@ -216,6 +218,8 @@ if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(compar
 if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id !== 'a') throw new Error('status-core comparePresence export failed')
 if (teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind !== 'workflow') throw new Error('status-core teamStatus export failed')
 if (feedEntries([{ origin: 'organic' }, { origin: 'hook' }]).length !== 1) throw new Error('status-core feedEntries export failed')
+if (buildDynamicStatusAgent({ id: 'dev' }, { agentId: 'wt~dev', position: { x: 1, y: 2 } }).deskItemCount.coffee !== 0) throw new Error('status-core dynamic agent export failed')
+if (reconcileMultiSessionAgents({ agents: { 'wt~dev': { session: 'wt' } }, externalStatus: { 'wt~dev': { status: 'working' } }, updates: [] }).evicted[0] !== 'wt~dev') throw new Error('status-core reconcile export failed')
 
 const snapshot = buildAgentStatusSnapshot({
   agents: { dev: { id: 'dev', status: 'idle' } },

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { assembleIntegrationPatch, buildExternalStatusEntry } from '../src/systems/statusRuntime.js'
+import {
+  assembleIntegrationPatch,
+  buildDynamicStatusAgent,
+  buildExternalStatusEntry,
+  isDynamicStatusAgent,
+  reconcileMultiSessionAgents,
+} from '../src/systems/statusRuntime.js'
 import * as nodeSafeRuntime from '../src/systems/statusRuntime.mjs'
 
 describe('buildExternalStatusEntry', () => {
@@ -129,5 +135,107 @@ describe('assembleIntegrationPatch', () => {
       { dev: { status: 'working' } },
     ]
     expect(nodeSafeRuntime.assembleIntegrationPatch(...input)).toEqual(assembleIntegrationPatch(...input))
+  })
+})
+
+describe('dynamic status lifecycle helpers', () => {
+  it('classifies session agents and non-roster null-session agents as dynamic', () => {
+    const staticRosterIds = new Set(['dev', 'qa'])
+    expect(isDynamicStatusAgent('dev', { id: 'dev', session: null }, staticRosterIds)).toBe(false)
+    expect(isDynamicStatusAgent('feat~dev', { id: 'feat~dev', session: 'feat' }, staticRosterIds)).toBe(true)
+    expect(isDynamicStatusAgent('worker', { id: 'worker', session: null }, staticRosterIds)).toBe(true)
+  })
+
+  it('builds dynamic agents from an injected base agent and injected position policy result', () => {
+    const deskItemCount = { coffee: 7, sticky: 2, books: 1 }
+    const baseAgent = {
+      id: 'dev',
+      color: '#123',
+      status: 'done',
+      behavior: 'thumbs-up',
+      expression: 'happy',
+      deskItemCount,
+      position: { x: 1, y: 2 },
+      targetPosition: { x: 1, y: 2 },
+    }
+    const agent = buildDynamicStatusAgent(baseAgent, {
+      agentId: 'feat~dev',
+      session: 'feat',
+      position: { x: 42, y: 84 },
+    })
+
+    expect(agent).toMatchObject({
+      id: 'feat~dev',
+      session: 'feat',
+      status: 'idle',
+      behavior: 'thumbs-up',
+      expression: 'happy',
+      position: { x: 42, y: 84 },
+      targetPosition: { x: 42, y: 84 },
+      isMoving: false,
+      returnHomeOnIdle: false,
+      bubble: null,
+      inGroupEvent: false,
+      groupTarget: null,
+      deskItemCount: { coffee: 0, sticky: 0, books: 0 },
+    })
+    expect(agent.deskItemCount).not.toBe(deskItemCount)
+  })
+
+  it('reconciles missing session agents from a complete multi-session snapshot', () => {
+    const agents = {
+      dev: { id: 'dev' },
+      'feat-a~dev': { id: 'feat-a~dev', session: 'feat-a' },
+      'feat-b~qa': { id: 'feat-b~qa', session: 'feat-b' },
+      worker: { id: 'worker', session: null },
+    }
+    const externalStatus = {
+      dev: { status: 'working' },
+      'feat-a~dev': { status: 'working' },
+      'feat-b~qa': { status: 'blocked' },
+      worker: { status: 'working' },
+    }
+    const out = reconcileMultiSessionAgents({
+      agents,
+      externalStatus,
+      updates: [{ agentId: 'feat-a~dev', status: 'working' }],
+      selectedAgent: 'feat-b~qa',
+    })
+
+    expect(out.changed).toBe(true)
+    expect(out.evicted).toEqual(['feat-b~qa'])
+    expect(out.evictedSelected).toBe(true)
+    expect(out.agents['feat-b~qa']).toBeUndefined()
+    expect(out.externalStatus['feat-b~qa']).toBeUndefined()
+    expect(out.agents.dev).toBe(agents.dev)
+    expect(out.agents.worker).toBe(agents.worker)
+    expect(agents['feat-b~qa']).toBeTruthy()
+    expect(externalStatus['feat-b~qa']).toBeTruthy()
+  })
+
+  it('keeps object identity when multi-session reconciliation evicts nothing', () => {
+    const agents = { 'feat-a~dev': { id: 'feat-a~dev', session: 'feat-a' } }
+    const externalStatus = { 'feat-a~dev': { status: 'working' } }
+    const out = reconcileMultiSessionAgents({
+      agents,
+      externalStatus,
+      updates: [{ agentId: 'feat-a~dev', status: 'working' }],
+    })
+
+    expect(out.changed).toBe(false)
+    expect(out.evicted).toEqual([])
+    expect(out.agents).toBe(agents)
+    expect(out.externalStatus).toBe(externalStatus)
+  })
+
+  it('keeps the node-safe mjs dynamic helpers equivalent to the app entry', () => {
+    const input = {
+      agents: { 'feat~dev': { id: 'feat~dev', session: 'feat' } },
+      externalStatus: { 'feat~dev': { status: 'working' } },
+      updates: [],
+      selectedAgent: 'feat~dev',
+    }
+    expect(nodeSafeRuntime.reconcileMultiSessionAgents(input)).toEqual(reconcileMultiSessionAgents(input))
+    expect(nodeSafeRuntime.isDynamicStatusAgent('x', { id: 'x' }, ['dev'])).toBe(isDynamicStatusAgent('x', { id: 'x' }, ['dev']))
   })
 })

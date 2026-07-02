@@ -32,6 +32,73 @@ export function buildExternalStatusEntry(prevExt, update, now) {
   }
 }
 
+// A dynamic status agent is any live agent that is not part of the active static roster. Session
+// agents are always dynamic; null-session fallback/hash agents are dynamic only when absent from the
+// injected static roster. Keep the roster injected so this runtime rule does not depend on the pixel
+// office's character config.
+export function isDynamicStatusAgent(id, agent, staticRosterIds = []) {
+  if (!agent) return false
+  const roster = staticRosterIds instanceof Set ? staticRosterIds : new Set(staticRosterIds || [])
+  return Boolean(agent.session) || !roster.has(id)
+}
+
+// Build a dynamic agent from an injected visual/base agent and injected position. This owns only the
+// status-lifecycle defaults; the renderer supplies the positioning policy.
+export function buildDynamicStatusAgent(baseAgent, { agentId, session = null, position } = {}) {
+  if (!baseAgent || !agentId || !position) return null
+  const pos = { ...position }
+  return {
+    ...baseAgent,
+    id: agentId,
+    session: session || null,
+    position: { ...pos },
+    targetPosition: { ...pos },
+    isMoving: false,
+    status: 'idle',
+    returnHomeOnIdle: false,
+    bubble: null,
+    inGroupEvent: false,
+    deskItemCount: { coffee: 0, sticky: 0, books: 0 },
+    groupTarget: null,
+  }
+}
+
+// Multi-session payloads are complete snapshots of currently-active session agents. Remove prior
+// session-carrying dynamics that disappeared from the new payload; null-session dynamics are left
+// alone because single hash/postMessage fallbacks are not part of this snapshot contract.
+export function reconcileMultiSessionAgents({ agents = {}, externalStatus = {}, updates = [], selectedAgent = null } = {}) {
+  const present = new Set((updates || []).map((u) => u?.agentId).filter(Boolean))
+  const evicted = []
+  for (const id of Object.keys(agents || {})) {
+    const agent = agents[id]
+    if (agent && agent.session && !present.has(id)) evicted.push(id)
+  }
+  if (evicted.length === 0) {
+    return {
+      agents,
+      externalStatus,
+      evicted,
+      evictedSelected: false,
+      changed: false,
+    }
+  }
+  const nextAgents = { ...agents }
+  const nextExternalStatus = { ...externalStatus }
+  let evictedSelected = false
+  for (const id of evicted) {
+    delete nextAgents[id]
+    delete nextExternalStatus[id]
+    if (selectedAgent === id) evictedSelected = true
+  }
+  return {
+    agents: nextAgents,
+    externalStatus: nextExternalStatus,
+    evicted,
+    evictedSelected,
+    changed: true,
+  }
+}
+
 // Build the integration-channel patch for one incoming status message.
 //
 // This is the renderer/runtime-facing state that says where the status stream came from and which

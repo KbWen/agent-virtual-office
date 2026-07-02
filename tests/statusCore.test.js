@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   assembleIntegrationPatch,
   buildAgentStatusSnapshot,
+  buildDynamicStatusAgent,
   buildExternalStatusEntry,
   comparePresence,
   feedEntries,
+  isDynamicStatusAgent,
   normalizePost,
   presenceRows,
+  reconcileMultiSessionAgents,
   teamStatus,
   VALID_STATUSES,
 } from '../src/systems/statusCore.mjs'
@@ -16,6 +19,13 @@ describe('statusCore public headless API', () => {
     expect(VALID_STATUSES).toContain('awaiting-approval')
     expect(normalizePost({ dev: 'working' }).agents[0]?.status).toBe('working')
     expect(buildExternalStatusEntry(null, { status: 'done' }, 1000).entry.expiresAt).toBe(11000)
+    expect(buildDynamicStatusAgent({ id: 'dev' }, { agentId: 'wt~dev', position: { x: 1, y: 2 } }).session).toBeNull()
+    expect(isDynamicStatusAgent('wt~dev', { session: 'wt' }, ['dev'])).toBe(true)
+    expect(reconcileMultiSessionAgents({
+      agents: { 'wt~dev': { session: 'wt' } },
+      externalStatus: { 'wt~dev': { status: 'working' } },
+      updates: [],
+    }).evicted).toEqual(['wt~dev'])
     expect(assembleIntegrationPatch(
       { statusSource: 'organic', integrationSource: null },
       { statusSource: 'external' },

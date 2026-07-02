@@ -12,7 +12,13 @@ import { PET_TYPES, nextPetType } from './petState.js'
 import { pruneRecentPicks } from './behaviorEngine.js'  // AVO-180: prune on eviction
 import { isValidTheme, DEFAULT_THEME } from './theme.js'
 import { recordEpisode, isNewBlockedEpisode } from './recurringFailure.js'
-import { assembleIntegrationPatch, buildExternalStatusEntry } from './statusRuntime.mjs'
+import {
+  assembleIntegrationPatch,
+  buildDynamicStatusAgent,
+  buildExternalStatusEntry,
+  isDynamicStatusAgent,
+  reconcileMultiSessionAgents,
+} from './statusRuntime.mjs'
 
 export { STATUS_COLORS }
 
@@ -850,8 +856,8 @@ export const useOfficeStore = create((set) => ({
   applyExternalStatus: (updates, meta = {}) =>
     set((s) => {
       const now = meta.now || Date.now()
-      const ext = { ...s.externalStatus }
-      const agents = { ...s.agents }
+      let ext = { ...s.externalStatus }
+      let agents = { ...s.agents }
       // Authoritative static roster for the active mode — the SAME source initAgents
       // uses to seed s.agents. This is the only stable way to tell a dynamic worktree
       // agent apart from a static one: dynamic agents may carry session:null (postMessage/
@@ -954,25 +960,11 @@ export const useOfficeStore = create((set) => ({
           // agent in this same payload sees the slot as taken.
           if (overflowIdx < OVERFLOW_POSITIONS.length) occupiedSlots.add(overflowIdx)
           dynamicAgentCount++
-          agents[u.agentId] = {
-            ...baseAgent,
-            id: u.agentId,
-            session: u.session || null,
-            position: { ...pos },
-            targetPosition: { ...pos },
-            isMoving: false,
-            status: 'idle',
-            returnHomeOnIdle: false,
-            bubble: null,
-            inGroupEvent: false,
-            // Fresh, OWN deskItemCount — `...baseAgent` would otherwise (a) seed the
-            // dynamic agent with the base role's accumulated growth (e.g. inherit dev's
-            // 5 coffee cups at spawn) and (b) ALIAS the same object reference, so a
-            // pre-first-growth mutation of one would silently affect the other. Each
-            // worktree agent is a distinct worker and must start its desk empty.
-            deskItemCount: { coffee: 0, sticky: 0, books: 0 },
-            groupTarget: null,
-          }
+          agents[u.agentId] = buildDynamicStatusAgent(baseAgent, {
+            agentId: u.agentId,
+            session: u.session,
+            position: pos,
+          })
           createdThisUpdate = true
           agentsMutated = true
         }
@@ -1101,34 +1093,25 @@ export const useOfficeStore = create((set) => ({
       // legitimately deliver one agent at a time and must NOT evict the others.
       let evictedSelected = false
       if (meta.source === 'multi-session') {
-        const present = new Set(updates.map(u => u.agentId))
-        const evicted = []
-        for (const id of Object.keys(agents)) {
-          const a = agents[id]
-          // A dynamic agent is identified solely by a non-null `session` slug — only
-          // applyExternalStatus's dynamic-creation branch ever sets that field; static
-          // roster agents (initAgents) never have it. The agent may have been created in
-          // a PRIOR applyExternalStatus call (so it now lives in s.agents too) — that is
-          // exactly the case we must reconcile, so do not gate on s.agents membership.
-          if (a && a.session && !present.has(id)) {
-            delete agents[id]
-            delete ext[id]
-            agentsMutated = true
-            evicted.push(id)
-            // If the inspector had this now-deleted dynamic agent selected, the id would
-            // dangle forever: AgentInspector renders nothing (its `agent` lookup is null)
-            // but selectedAgent stays set, so a future click on the SAME id toggles the
-            // panel off instead of open. Drop the selection when its target is evicted.
-            if (s.selectedAgent === id) evictedSelected = true
-          }
+        const reconciled = reconcileMultiSessionAgents({
+          agents,
+          externalStatus: ext,
+          updates,
+          selectedAgent: s.selectedAgent,
+        })
+        if (reconciled.changed) {
+          agents = reconciled.agents
+          ext = reconciled.externalStatus
+          agentsMutated = true
+          evictedSelected = reconciled.evictedSelected
         }
         // AVO-180: prune transient per-agent MODULE state for evicted dynamic agents so these Maps
         // don't grow unbounded across many short-lived worktree sessions (mirrors idleGapInfer's
         // eviction prune). rfLog is cloned before deleting so we never mutate an already-published
         // recurringFailureLog object held by a prior subscriber.
-        if (evicted.length > 0) {
+        if (reconciled.evicted.length > 0) {
           let rfCloned = false
-          for (const id of evicted) {
+          for (const id of reconciled.evicted) {
             pruneRecentPicks(id)
             _storeRecentPicks.delete(id)
             if (rfLog[id]) {
@@ -1188,7 +1171,7 @@ export const useOfficeStore = create((set) => ({
       // leaving a phantom overflow character lingering forever. Anything outside the static
       // roster is dynamic and must be DELETED on clear, regardless of `.session`.
       const staticRosterIds = new Set((characters[s.mode] || characters.agentcortex).map(c => c.id))
-      const isDynamic = (id, a) => Boolean(a && a.session) || !staticRosterIds.has(id)
+      const isDynamic = (id, a) => isDynamicStatusAgent(id, a, staticRosterIds)
       // Drop a dangling inspector selection when its target dynamic agent is deleted —
       // a deleted id left in selectedAgent makes a future same-id click toggle the
       // panel off instead of open (see applyExternalStatus reconciliation for the

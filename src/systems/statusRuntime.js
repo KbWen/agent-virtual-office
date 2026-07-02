@@ -1,1 +1,7 @@
-export { assembleIntegrationPatch, buildExternalStatusEntry } from './statusRuntime.mjs'
+export {
+  assembleIntegrationPatch,
+  buildDynamicStatusAgent,
+  buildExternalStatusEntry,
+  isDynamicStatusAgent,
+  reconcileMultiSessionAgents,
+} from './statusRuntime.mjs'
