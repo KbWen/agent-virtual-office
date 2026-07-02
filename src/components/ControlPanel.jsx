@@ -6,6 +6,7 @@ import { requestNotificationPermission, getNotificationState } from '../inferenc
 import { PET_TYPES } from '../systems/petState.js'
 import { THEMES } from '../systems/theme.js'
 import { classifyMood } from '../systems/classify.js'
+import { agentStatus } from '../systems/agentStatusModel.js'
 import { renderDailyCard, shareOrDownloadCard, todayKey } from '../systems/dailyCard.js'
 
 const statusOptions = ['idle', 'working', 'blocked', 'done']
@@ -229,10 +230,12 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
           <div className="flex items-center gap-1.5 flex-1 overflow-x-auto">
             {agentList.map((agent) => {
               const ext = externalStatus[agent.id]
+              const status = agentStatus(agent, ext)
               return (
                 <div key={agent.id} className="flex items-center gap-0.5 shrink-0" title={`${charName(agent.id)}: ${ext ? (blockedReasonLabel(ext) || taskChipLabel(ext.task) || ext.status) : agent.behavior}`}>
                   <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: agent.color }} />
-                  <span className="inline-block w-1 h-1 rounded-full" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} aria-hidden="true" />
+                  <span className="inline-block w-1 h-1 rounded-full" style={{ backgroundColor: STATUS_COLORS[status] || '#888' }} aria-hidden="true" />
+                  <span className="sr-only">{status}</span>
                 </div>
               )
             })}

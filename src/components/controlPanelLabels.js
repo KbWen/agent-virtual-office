@@ -2,6 +2,7 @@
 // ControlPanel.jsx god-component so they're unit-testable WITHOUT importing the React/JSX module
 // (engineering-retro debt cleanup). No React here — plain functions of plain data.
 import { classifyTask, classifyBlockedReason } from '../systems/classify'
+import { attentionItems, presenceRows } from '../systems/agentStatusModel.js'
 
 // Collapse a raw tool/task name into the same short chip the character's TaskLabel (AVO-103) shows,
 // so the panel never displays the ugly `mcp__Server__tool` wire form. Built-ins stay short (`Bash`),
@@ -68,15 +69,7 @@ export function agentLineLabel(ext, t) {
 // team strip without importing UI code: blocked and awaiting-approval need attention; workflow
 // phases and decorative events are intentionally excluded.
 export function attentionStripState({ agents = [], externalStatus = {}, nameForId = (id) => id } = {}) {
-  const rows = Array.isArray(agents) ? agents : Object.values(agents || {})
-  const items = []
-  for (const agent of rows) {
-    const id = agent?.id
-    if (!id) continue
-    const status = externalStatus[id]?.status || agent.status
-    if (status !== 'blocked' && status !== 'awaiting-approval') continue
-    items.push({ id, status, name: nameForId(id) || id })
-  }
+  const items = attentionItems({ agents, externalStatus, nameForId })
   return {
     count: items.length,
     items,
@@ -88,20 +81,7 @@ export function attentionStripState({ agents = [], externalStatus = {}, nameForI
 // count. The full office already renders every character; the rail should answer "what changed?"
 // rather than repeat every idle name at all times.
 export function controlPanelPresenceRows({ agents = [], externalStatus = {} } = {}) {
-  const source = Array.isArray(agents) ? agents : Object.values(agents || {})
-  const rows = []
-  for (const agent of source) {
-    const id = agent?.id
-    if (!id) continue
-    const ext = externalStatus[id]
-    const status = ext?.status || agent.status || 'idle'
-    const hasSignal = !!(ext?.task || ext?.label || ext?.reasonCode)
-    if (status !== 'idle' || hasSignal) rows.push({ agent, ext, status })
-  }
-  return {
-    rows,
-    quietCount: Math.max(0, source.filter((agent) => agent?.id).length - rows.length),
-  }
+  return presenceRows({ agents, externalStatus })
 }
 
 // AVO-130 — collapse the connection/integration indicator into ONE health dot. Pure derivation of

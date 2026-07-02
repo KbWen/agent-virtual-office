@@ -1,7 +1,7 @@
 import React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
-async function renderControlPanelWithMockStore(overrides = {}) {
+async function renderControlPanelWithMockStore(overrides = {}, mode = 'full') {
   vi.resetModules()
 
   const statusColors = {
@@ -89,7 +89,7 @@ async function renderControlPanelWithMockStore(overrides = {}) {
 
   const { renderToStaticMarkup } = await import('react-dom/server')
   const { default: ControlPanel } = await import('../src/components/ControlPanel.jsx')
-  return { html: renderToStaticMarkup(<ControlPanel mode="full" />), statusColors }
+  return { html: renderToStaticMarkup(<ControlPanel mode={mode} />), statusColors }
 }
 
 describe('ControlPanel — presence rail render contract', () => {
@@ -98,6 +98,18 @@ describe('ControlPanel — presence rail render contract', () => {
 
     expect(html).toContain(`background-color:${statusColors.done}`)
     expect(html).toContain('<span class="sr-only">done</span>')
+    expect(html).not.toContain('<span class="sr-only">idle</span>')
+  })
+
+  it('uses the same normalized status in compact panel mode', async () => {
+    const { html, statusColors } = await renderControlPanelWithMockStore({
+      externalStatus: {
+        dev: { status: 'blocked', reasonCode: 'test-run-failed' },
+      },
+    }, 'panel')
+
+    expect(html).toContain(`background-color:${statusColors.blocked}`)
+    expect(html).toContain('<span class="sr-only">blocked</span>')
     expect(html).not.toContain('<span class="sr-only">idle</span>')
   })
 })
