@@ -1,0 +1,91 @@
+import { describe, expect, it } from 'vitest'
+import { buildAgentStatusSnapshot } from '../src/systems/agentStatusSnapshot.js'
+import * as nodeSafeSnapshot from '../src/systems/agentStatusSnapshot.mjs'
+
+const state = {
+  agents: {
+    dev: { id: 'dev', status: 'idle', session: null },
+    qa: { id: 'qa', status: 'working' },
+    ops: { id: 'ops', status: 'idle' },
+  },
+  externalStatus: {
+    dev: {
+      status: 'done',
+      task: 'Edit',
+      label: 'changed src/App.jsx',
+      activeFile: 'src/App.jsx',
+      changedAt: 100,
+      expiresAt: 200,
+    },
+    ops: { status: 'awaiting-approval', reasonCode: 'permission-denied' },
+  },
+  statusSource: 'external',
+  integrationSource: 'multi-session',
+  integrationHealth: { state: 'online' },
+  activeWorkflow: 'Review',
+  tokens: { ctx: 1000, out: 50, model: 'test' },
+  effort: 'medium',
+  mood: 'smooth',
+}
+
+describe('buildAgentStatusSnapshot', () => {
+  it('builds renderer-agnostic agent status data from plain store state', () => {
+    const snapshot = buildAgentStatusSnapshot(state, {
+      nameForId: (id) => ({ dev: 'Developer', qa: 'QA', ops: 'Ops' }[id]),
+    })
+
+    expect(snapshot.agents.map((agent) => [agent.id, agent.name, agent.status, agent.localStatus])).toEqual([
+      ['dev', 'Developer', 'done', 'idle'],
+      ['qa', 'QA', 'working', 'working'],
+      ['ops', 'Ops', 'awaiting-approval', 'idle'],
+    ])
+    expect(snapshot.agents[0]).toMatchObject({
+      hasExternalStatus: true,
+      task: 'Edit',
+      label: 'changed src/App.jsx',
+      activeFile: 'src/App.jsx',
+      changedAt: 100,
+      expiresAt: 200,
+    })
+    expect(snapshot.statusSource).toBe('external')
+    expect(snapshot.integrationSource).toBe('multi-session')
+    expect(snapshot.activeWorkflow).toBe('Review')
+    expect(snapshot.tokens).toEqual({ ctx: 1000, out: 50, model: 'test' })
+  })
+
+  it('separates all agents, attention items, and current presence rows', () => {
+    const snapshot = buildAgentStatusSnapshot(state)
+
+    expect(snapshot.attention).toEqual({
+      count: 1,
+      items: [{ id: 'ops', status: 'awaiting-approval', name: 'ops' }],
+    })
+    expect(snapshot.presence.rows.map((agent) => [agent.id, agent.status])).toEqual([
+      ['dev', 'done'],
+      ['qa', 'working'],
+      ['ops', 'awaiting-approval'],
+    ])
+    expect(snapshot.presence.quietCount).toBe(0)
+    expect(snapshot.activeCount).toBe(3)
+  })
+
+  it('keeps the node-safe mjs entry equivalent to the app entry', () => {
+    expect(nodeSafeSnapshot.buildAgentStatusSnapshot(state)).toEqual(buildAgentStatusSnapshot(state))
+  })
+
+  it('handles missing state as an empty organic snapshot', () => {
+    expect(buildAgentStatusSnapshot()).toEqual({
+      agents: [],
+      attention: { count: 0, items: [] },
+      presence: { rows: [], quietCount: 0 },
+      statusSource: 'organic',
+      integrationSource: null,
+      integrationHealth: null,
+      activeWorkflow: null,
+      activeCount: 0,
+      tokens: null,
+      effort: null,
+      mood: null,
+    })
+  })
+})
