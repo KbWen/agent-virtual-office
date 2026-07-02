@@ -48,6 +48,7 @@ describe('statusCore public headless API', () => {
     })
     expect(snapshot.agents[0]?.status).toBe('done')
     expect(snapshot.presence.rows[0]?.task).toBe('Edit')
+    expect(snapshot.integration.health.level).toBe('idle')
 
     expect([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id).toBe('a')
     expect(teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind).toBe('workflow')

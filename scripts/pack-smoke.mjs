@@ -234,6 +234,7 @@ const snapshot = buildAgentStatusSnapshot({
 if (snapshot.agents[0]?.status !== 'done' || snapshot.presence.rows[0]?.task !== 'Edit') {
   throw new Error('agent-status-snapshot export failed')
 }
+if (snapshot.integration?.health?.level !== 'idle') throw new Error('agent-status-snapshot integration health failed')
 if (buildAgentStatusSnapshotFromCore({
   agents: { dev: { id: 'dev', status: 'idle' } },
   externalStatus: { dev: { status: 'done' } },

@@ -49,8 +49,45 @@ describe('buildAgentStatusSnapshot', () => {
     })
     expect(snapshot.statusSource).toBe('external')
     expect(snapshot.integrationSource).toBe('multi-session')
+    expect(snapshot.integration).toEqual({
+      source: 'external',
+      integrationSource: 'multi-session',
+      externalCount: 2,
+      health: {
+        level: 'live',
+        trouble: false,
+        tone: 'emerald',
+        pulse: true,
+        labelKey: 'ui.live',
+        labelVal: null,
+      },
+    })
     expect(snapshot.activeWorkflow).toBe('Review')
     expect(snapshot.tokens).toEqual({ ctx: 1000, out: 50, model: 'test' })
+  })
+
+  it('derives fallback/offline integration health inside the reusable snapshot', () => {
+    const snapshot = buildAgentStatusSnapshot({
+      agents: [{ id: 'dev', status: 'idle' }],
+      externalStatus: { dev: { status: 'working' } },
+      statusSource: 'fallback',
+      integrationSource: 'poll',
+      integrationHealth: { state: 'offline' },
+    })
+
+    expect(snapshot.integration).toMatchObject({
+      source: 'fallback',
+      integrationSource: 'poll',
+      externalCount: 1,
+      health: {
+        level: 'offline',
+        trouble: true,
+        tone: 'red',
+        pulse: false,
+        labelKey: 'status.apiOffline',
+        labelVal: null,
+      },
+    })
   })
 
   it('separates all agents, attention items, and current presence rows', () => {
@@ -81,6 +118,19 @@ describe('buildAgentStatusSnapshot', () => {
       statusSource: 'organic',
       integrationSource: null,
       integrationHealth: null,
+      integration: {
+        source: 'organic',
+        integrationSource: null,
+        externalCount: 0,
+        health: {
+          level: 'idle',
+          trouble: false,
+          tone: 'gray',
+          pulse: false,
+          labelKey: 'status.local',
+          labelVal: null,
+        },
+      },
       activeWorkflow: null,
       activeCount: 0,
       tokens: null,

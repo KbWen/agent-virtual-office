@@ -1,4 +1,5 @@
 import { agentSourceList, agentStatus, attentionItems, presenceRows } from './agentStatusModel.mjs'
+import { healthDotState } from './integrationStatusModel.mjs'
 
 function agentSnapshot(agent, ext, nameForId) {
   const id = agent.id
@@ -25,6 +26,10 @@ function rowSnapshot(row, nameForId) {
 export function buildAgentStatusSnapshot(state = {}, { nameForId = (id) => id } = {}) {
   const agents = agentSourceList(state.agents).filter((agent) => agent?.id)
   const externalStatus = state.externalStatus || {}
+  const statusSource = state.statusSource || 'organic'
+  const integrationSource = state.integrationSource || null
+  const integrationHealth = state.integrationHealth || null
+  const externalCount = Object.keys(externalStatus).length
   const allAgents = agents.map((agent) => agentSnapshot(agent, externalStatus[agent.id], nameForId))
   const attention = attentionItems({ agents, externalStatus, nameForId })
   const presence = presenceRows({ agents, externalStatus })
@@ -39,9 +44,15 @@ export function buildAgentStatusSnapshot(state = {}, { nameForId = (id) => id } 
       rows: presence.rows.map((row) => rowSnapshot(row, nameForId)),
       quietCount: presence.quietCount,
     },
-    statusSource: state.statusSource || 'organic',
-    integrationSource: state.integrationSource || null,
-    integrationHealth: state.integrationHealth || null,
+    statusSource,
+    integrationSource,
+    integrationHealth,
+    integration: {
+      source: statusSource,
+      integrationSource,
+      externalCount,
+      health: healthDotState({ statusSource, integrationHealth, externalCount }),
+    },
     activeWorkflow: state.activeWorkflow || null,
     activeCount: allAgents.filter((agent) => agent.status !== 'idle').length,
     tokens: state.tokens || null,
