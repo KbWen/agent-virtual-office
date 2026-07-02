@@ -196,11 +196,13 @@ import { normalizePost as normalizePostAlias } from 'agent-virtual-office/normal
 import { assembleIntegrationPatch, buildExternalStatusEntry } from 'agent-virtual-office/status-runtime'
 import { agentStatus, presenceRows } from 'agent-virtual-office/agent-status-model'
 import { buildAgentStatusSnapshot } from 'agent-virtual-office/agent-status-snapshot'
+import { healthDotState as healthDotStateFromIntegrationModel } from 'agent-virtual-office/integration-status-model'
 import {
   buildAgentStatusSnapshot as buildAgentStatusSnapshotFromCore,
   buildDynamicStatusAgent,
   comparePresence,
   feedEntries,
+  healthDotState,
   normalizeAgentStatusUpdates,
   reconcileMultiSessionAgents,
   teamStatus,
@@ -215,6 +217,7 @@ if (buildExternalStatusEntry(null, { status: 'done' }, 1000).entry.expiresAt !==
 if (assembleIntegrationPatch({ statusSource: 'organic', integrationSource: null }, { statusSource: 'external' }, {}).statusSource !== 'external') throw new Error('status-runtime integration patch export failed')
 if (agentStatus({ status: 'idle' }, { status: 'done' }) !== 'done') throw new Error('agent-status-model export failed')
 if (presenceRows({ agents: [{ id: 'dev', status: 'idle' }], externalStatus: { dev: { status: 'done' } } }).rows[0]?.status !== 'done') throw new Error('presenceRows export failed')
+if (healthDotStateFromIntegrationModel({ statusSource: 'fallback', externalCount: 2 }).labelVal !== 2) throw new Error('integration-status-model export failed')
 if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresenceFromRoster)[0]?.id !== 'a') throw new Error('roster-model export failed')
 if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id !== 'a') throw new Error('status-core comparePresence export failed')
 if (teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind !== 'workflow') throw new Error('status-core teamStatus export failed')
@@ -222,6 +225,7 @@ if (feedEntries([{ origin: 'organic' }, { origin: 'hook' }]).length !== 1) throw
 if (buildDynamicStatusAgent({ id: 'dev' }, { agentId: 'wt~dev', position: { x: 1, y: 2 } }).deskItemCount.coffee !== 0) throw new Error('status-core dynamic agent export failed')
 if (reconcileMultiSessionAgents({ agents: { 'wt~dev': { session: 'wt' } }, externalStatus: { 'wt~dev': { status: 'working' } }, updates: [] }).evicted[0] !== 'wt~dev') throw new Error('status-core reconcile export failed')
 if (normalizeAgentStatusUpdates({ type: 'office-status', agents: [{ role: 'frontend', status: 'working' }] }).updates[0]?.agentId !== 'frontend') throw new Error('status-core generic normalize export failed')
+if (healthDotState({ integrationHealth: { state: 'offline' } }).level !== 'offline') throw new Error('status-core health export failed')
 
 const snapshot = buildAgentStatusSnapshot({
   agents: { dev: { id: 'dev', status: 'idle' } },

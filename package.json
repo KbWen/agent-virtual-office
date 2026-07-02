@@ -11,6 +11,7 @@
     "./status-runtime": "./src/systems/statusRuntime.mjs",
     "./agent-status-model": "./src/systems/agentStatusModel.mjs",
     "./agent-status-snapshot": "./src/systems/agentStatusSnapshot.mjs",
+    "./integration-status-model": "./src/systems/integrationStatusModel.mjs",
     "./roster-model": "./src/systems/rosterModel.mjs",
     "./src/*": "./src/*",
     "./package.json": "./package.json"

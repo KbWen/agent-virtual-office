@@ -41,6 +41,10 @@ export {
 } from './agentStatusSnapshot.mjs'
 
 export {
+  healthDotState,
+} from './integrationStatusModel.mjs'
+
+export {
   comparePresence,
   FEED_ORIGINS,
   feedEntries,

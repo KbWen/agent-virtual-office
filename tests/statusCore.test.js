@@ -6,6 +6,7 @@ import {
   buildExternalStatusEntry,
   comparePresence,
   feedEntries,
+  healthDotState,
   isDynamicStatusAgent,
   normalizeAgentStatusUpdates,
   normalizePost,
@@ -51,6 +52,10 @@ describe('statusCore public headless API', () => {
     expect([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id).toBe('a')
     expect(teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind).toBe('workflow')
     expect(feedEntries([{ origin: 'organic' }, { origin: 'hook' }])).toHaveLength(1)
+    expect(healthDotState({ statusSource: 'fallback', externalCount: 2 })).toMatchObject({
+      level: 'fallback',
+      labelVal: 2,
+    })
   })
 
   it('normalizes generic agent ids into status-runtime update shape', () => {
