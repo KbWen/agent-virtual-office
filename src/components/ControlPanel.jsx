@@ -430,7 +430,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         </div>
 
         <div className="flex items-center gap-3 flex-1 overflow-x-auto">
-          {presence.rows.map(({ agent, ext }) => {
+          {presence.rows.map(({ agent, ext, status }) => {
             const name = charName(agent.id)
             const label = ext ? agentLineLabel(ext, t) : behaviorLabel(agent.behavior)
             return (
@@ -442,8 +442,8 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
                   <span aria-hidden="true" title={blockedReasonLabel(ext) || ''}>{blockedReasonGlyph(ext)}</span>
                 )}
                 <span className={ext ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-gray-500 dark:text-gray-400'}>{label}</span>
-                <span className="inline-block w-1.5 h-1.5 rounded-full ml-0.5" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} aria-hidden="true" />
-                <span className="sr-only">{agent.status}</span>
+                <span className="inline-block w-1.5 h-1.5 rounded-full ml-0.5" style={{ backgroundColor: STATUS_COLORS[status] || '#888' }} aria-hidden="true" />
+                <span className="sr-only">{status}</span>
               </div>
             )
           })}

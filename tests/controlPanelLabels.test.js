@@ -108,6 +108,10 @@ describe('controlPanelPresenceRows', () => {
       },
     })
     expect(out.rows.map((row) => row.agent.id)).toEqual(['dev', 'qa'])
+    expect(out.rows.map((row) => [row.agent.id, row.status])).toEqual([
+      ['dev', 'working'],
+      ['qa', 'done'],
+    ])
     expect(out.quietCount).toBe(2)
   })
 

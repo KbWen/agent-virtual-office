@@ -13,7 +13,7 @@ function isPlainNote(base) {
 }
 
 function isAgentStatusLog(base) {
-  return /^agent-[a-z0-9]+\.jsonl$/i.test(base)
+  return /^agent[-_][a-z0-9_-]+\.jsonl$/i.test(base)
 }
 
 function isStatusSnapshotArtifact(base) {
@@ -24,7 +24,12 @@ function isTemporaryFile(base) {
   return /\.tmp(?:\.|$)/i.test(base)
 }
 
-export function activityFeedMessage(entry, { t = (_key, fallback) => fallback, eventName = (id) => id } = {}) {
+function isWorkNote(base) {
+  return isPlainNote(base) && /(?:^|[-_.])(?:worklog|product-audit)(?:[-_.]|$)/i.test(base)
+}
+
+export function activityFeedMessage(entry, options = {}) {
+  const { t = (_key, fallback) => fallback, eventName = (id) => id } = options || {}
   if (!entry) return { text: '', title: null }
   if (entry.type === 'event') {
     const text = eventName(entry.message) || String(entry.message ?? '')
@@ -45,7 +50,7 @@ export function activityFeedMessage(entry, { t = (_key, fallback) => fallback, e
   if (/\.jsonl$/i.test(base)) {
     return { text: t('activityFeed.sessionLogUpdated', 'Session log updated'), title: raw }
   }
-  if (/worklog|codex-|product-audit/i.test(base)) {
+  if (isWorkNote(base)) {
     return { text: t('activityFeed.workNoteUpdated', 'Work note updated'), title: raw }
   }
   if (isPlainNote(base)) {
