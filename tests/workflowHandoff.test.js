@@ -40,7 +40,7 @@ describe('workflowHandoff — table-driven trigger', () => {
   it.each(Object.entries(WORKFLOW_HANDOFFS))(
     'fires addHandoff for %s',
     (key, { from, to }) => {
-      const [fromPhase, toPhase] = key.split('→')
+      const [fromPhase, toPhase] = key.split('->')
       const store = makeStore({ activeWorkflow: `/${fromPhase}` })
       const stop = startWorkflowHandoffs(store)
       store.setWorkflow(`/${toPhase}`)

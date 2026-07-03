@@ -11,6 +11,7 @@ import {
   buildPairLinkViewModel,
   buildAgentStatusSnapshot,
   buildAmbientAppearanceViewModel,
+  buildWorkflowHandoffViewModel,
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
   buildDoneEventKey,
@@ -53,6 +54,7 @@ import {
   validatePersistedDailyDoneLedger,
   VALID_STATUSES,
   WEATHER_KIND,
+  WORKFLOW_HANDOFF_VERSION,
   zoneForPoint,
 } from '../src/systems/statusCore.mjs'
 
@@ -182,6 +184,15 @@ describe('statusCore public headless API', () => {
       weather: { kind: WEATHER_KIND.RAIN, visible: true },
       lighting: { visible: true },
       theme: { id: 'winter', overlay: { opacity: 0.07 } },
+    })
+    expect(buildWorkflowHandoffViewModel({
+      previousWorkflow: '/review',
+      nextWorkflow: '/ship',
+      agents: { gate: {}, ops: {} },
+    })).toMatchObject({
+      version: WORKFLOW_HANDOFF_VERSION,
+      key: 'review->ship',
+      action: { from: 'gate', to: 'ops', options: { subtle: true } },
     })
   })
 

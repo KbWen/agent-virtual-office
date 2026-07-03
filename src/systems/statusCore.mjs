@@ -248,6 +248,11 @@ export {
 } from './petStateModel.mjs'
 
 export {
+  WORKFLOW_HANDOFF_VERSION,
+  buildWorkflowHandoffViewModel,
+} from './workflowHandoffModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,

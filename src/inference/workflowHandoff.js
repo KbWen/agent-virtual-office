@@ -15,24 +15,20 @@
  * transition (its first observation) and does not fire. Same for any side
  * of the pair being null.
  */
-// Workflow string normaliser — mirrors the same logic in classify.js so
-// `/Ship`, `ship`, `/SHIP` all hash to the same key. Inlined to avoid coupling
-// AVO-105 to a non-exported internal of classify.js.
 function normalizeWorkflow(workflow) {
   if (typeof workflow !== 'string' || workflow.length === 0) return null
-  return workflow.replace(/^\/+/, '').toLowerCase()
+  const normalized = workflow.trim().replace(/^\/+/, '').toLowerCase()
+  return normalized || null
 }
 
-// `from` and `to` keys are the canonical lowercase workflow names (no leading
-// slash) so `classifyWorkflow`s normalization matches.
 const HANDOFFS = Object.freeze({
-  'spec-intake→spec': { from: 'pm',   to: 'arch' },  // requirements → design
-  'spec→plan':         { from: 'arch', to: 'pm'   },  // spec → planning
-  'plan→implement':    { from: 'arch', to: 'dev'  },  // plan → coding
-  'implement→test':    { from: 'dev',  to: 'qa'   },  // code → testing
-  'implement→review':  { from: 'dev',  to: 'gate' },  // code → review
-  'test→review':       { from: 'qa',   to: 'gate' },  // tests → review
-  'review→ship':       { from: 'gate', to: 'ops'  },  // approved → deploy
+  'spec-intake->spec': { from: 'pm', to: 'arch' },
+  'spec->plan': { from: 'arch', to: 'pm' },
+  'plan->implement': { from: 'arch', to: 'dev' },
+  'implement->test': { from: 'dev', to: 'qa' },
+  'implement->review': { from: 'dev', to: 'gate' },
+  'test->review': { from: 'qa', to: 'gate' },
+  'review->ship': { from: 'gate', to: 'ops' },
 })
 
 /**
@@ -58,7 +54,7 @@ export function startWorkflowHandoffs(store) {
     if (prev != null && next != null) {
       const fromKey = normalizeWorkflow(prev)
       const toKey = normalizeWorkflow(next)
-      const handoff = fromKey && toKey ? HANDOFFS[`${fromKey}→${toKey}`] : null
+      const handoff = fromKey && toKey ? HANDOFFS[`${fromKey}->${toKey}`] : null
       if (handoff) {
         const { agents, addHandoff } = state
         // Both endpoint agents must exist in the current roster; in lightweight

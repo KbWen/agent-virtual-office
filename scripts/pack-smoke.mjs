@@ -210,6 +210,7 @@ import { buildMovementLayoutViewModel as buildMovementLayoutViewModelFromModel, 
 import { WEATHER_KIND as WEATHER_KIND_FROM_AMBIENT_MODEL, buildAmbientAppearanceViewModel as buildAmbientAppearanceViewModelFromModel, moodToWeather as moodToWeatherFromAmbientModel } from 'agent-virtual-office/ambient-appearance-model'
 import { buildAmbientSoundViewModel as buildAmbientSoundViewModelFromModel, meanIntervalForPulse as meanIntervalForPulseFromSoundModel, rainTargetGain as rainTargetGainFromSoundModel } from 'agent-virtual-office/ambient-sound-model'
 import { PET_MODES as PET_MODES_FROM_MODEL, buildPetStateViewModel as buildPetStateViewModelFromModel, countAttentionBlockers as countAttentionBlockersFromPetModel } from 'agent-virtual-office/pet-state-model'
+import { buildWorkflowHandoffViewModel as buildWorkflowHandoffViewModelFromModel } from 'agent-virtual-office/workflow-handoff-model'
 import { statusVisualState as statusVisualStateFromModel } from 'agent-virtual-office/status-visual-model'
 import { buildActionStripViewModel as buildActionStripViewModelFromModel } from 'agent-virtual-office/action-strip-model'
 import { behaviorIndicatorState as behaviorIndicatorStateFromModel } from 'agent-virtual-office/behavior-indicator-model'
@@ -244,11 +245,13 @@ import {
   buildAmbientAppearanceViewModel,
   buildAmbientSoundViewModel,
   buildPetStateViewModel,
+  buildWorkflowHandoffViewModel,
   EVENT_CATEGORY,
   TIME_EVENT_REASON,
   WEATHER_KIND,
   AMBIENT_SOUND_MASTER_CAP,
   PET_MODES,
+  WORKFLOW_HANDOFF_VERSION,
   pokePoolKeyForStatus,
   eventEligible,
   floorTickAllowed,
@@ -302,6 +305,7 @@ const ambientSoundModel = buildAmbientSoundViewModelFromModel({ mood: 'stuck', s
 if (ambientSoundModel.weather.gain !== 0.08 || ambientSoundModel.keyboard.meanIntervalMs !== meanIntervalForPulseFromSoundModel(0.5) || rainTargetGainFromSoundModel('frustrated', true, false) !== 0.05) throw new Error('ambient-sound-model export failed')
 const petStateModel = buildPetStateViewModelFromModel({ mood: 'smooth', externalStatus: { qa: { status: 'awaiting-approval' } }, celebrate: true, petType: 'dog', targetPosition: { x: 300, y: 200 } })
 if (petStateModel.mode !== PET_MODES_FROM_MODEL.HIDE || petStateModel.blocked.firstId !== 'qa' || petStateModel.type.next !== 'rabbit' || countAttentionBlockersFromPetModel({ qa: { status: 'blocked' } }) !== 1) throw new Error('pet-state-model export failed')
+if (buildWorkflowHandoffViewModelFromModel({ previousWorkflow: '/review', nextWorkflow: '/ship', agents: { gate: {}, ops: {} } }).action?.to !== 'ops') throw new Error('workflow-handoff-model export failed')
 if (statusVisualStateFromModel('awaiting-approval').color !== '#1E9FD4') throw new Error('status-visual-model export failed')
 if (buildActionStripViewModelFromModel({ agents: [{ id: 'qa', status: 'blocked' }] }).attention.count !== 1) throw new Error('action-strip-model export failed')
 if (behaviorIndicatorStateFromModel('goto-coffee-machine').iconKey !== 'coffee') throw new Error('behavior-indicator-model export failed')
@@ -348,6 +352,7 @@ if (buildMovementLayoutViewModel().homePositions.dev.y !== 364 || zoneForPoint(9
 if (buildAmbientAppearanceViewModel({ hour: 0, mood: 'frustrated', themeId: 'winter' }).weather.kind !== WEATHER_KIND.RAIN || moodToWeather('stuck') !== WEATHER_KIND.THUNDERSTORM) throw new Error('status-core ambient appearance export failed')
 if (buildAmbientSoundViewModel({ mood: 'stuck', soundscapeEnabled: true, teamPulse: 1 }).master.cap !== AMBIENT_SOUND_MASTER_CAP || buildAmbientSoundViewModel({ mood: 'stuck', soundscapeEnabled: true, teamPulse: 1 }).weather.gain !== 0.08) throw new Error('status-core ambient sound export failed')
 if (buildPetStateViewModel({ mood: 'smooth', externalStatus: { qa: { status: 'awaiting-approval' } }, blockedCount: 0, celebrate: true }).mode !== PET_MODES.HIDE) throw new Error('status-core pet state export failed')
+if (WORKFLOW_HANDOFF_VERSION !== 'workflow-handoff-v1' || buildWorkflowHandoffViewModel({ previousWorkflow: '/review', nextWorkflow: '/ship', agents: { gate: {}, ops: {} } }).action?.from !== 'gate') throw new Error('status-core workflow handoff export failed')
 if (reconcileMultiSessionAgents({ agents: { 'wt~dev': { session: 'wt' } }, externalStatus: { 'wt~dev': { status: 'working' } }, updates: [] }).evicted[0] !== 'wt~dev') throw new Error('status-core reconcile export failed')
 if (normalizeAgentStatusUpdates({ type: 'office-status', agents: [{ role: 'frontend', status: 'working' }] }).updates[0]?.agentId !== 'frontend') throw new Error('status-core generic normalize export failed')
 if (blockedReasonState('permission-denied').iconId !== 'slash-circle') throw new Error('status-core blocked reason export failed')
@@ -392,6 +397,7 @@ const checkedSubpaths = [
   './status-runtime',
   './status-visual-model',
   './time-event-model',
+  './workflow-handoff-model',
 ].sort()
 if (JSON.stringify(exportedSubpaths) !== JSON.stringify(checkedSubpaths)) {
   throw new Error('package export smoke coverage drift: exports=' + exportedSubpaths.join(',') + ' checked=' + checkedSubpaths.join(','))
@@ -425,7 +431,7 @@ console.log('library imports OK')
   } catch (e) {
     fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
   }
-  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, daily-ledger-model, speech-bubble-model, helper-huddle-model, pair-huddle-model, context-bubble-model, bubble-visibility-model, poke-reaction-model, event-juice-model, event-gate-model, event-seed-model, event-catalog-model, time-event-model, movement-layout-model, ambient-appearance-model, ambient-sound-model, pet-state-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
+  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, daily-ledger-model, speech-bubble-model, helper-huddle-model, pair-huddle-model, context-bubble-model, bubble-visibility-model, poke-reaction-model, event-juice-model, event-gate-model, event-seed-model, event-catalog-model, time-event-model, movement-layout-model, ambient-appearance-model, ambient-sound-model, pet-state-model, workflow-handoff-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
   console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────

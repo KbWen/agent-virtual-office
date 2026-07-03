@@ -25,6 +25,7 @@
     "./ambient-appearance-model": "./src/systems/ambientAppearanceModel.mjs",
     "./ambient-sound-model": "./src/systems/ambientSoundModel.mjs",
     "./pet-state-model": "./src/systems/petStateModel.mjs",
+    "./workflow-handoff-model": "./src/systems/workflowHandoffModel.mjs",
     "./status-visual-model": "./src/systems/statusVisualModel.mjs",
     "./action-strip-model": "./src/systems/actionStripModel.mjs",
     "./behavior-indicator-model": "./src/systems/behaviorIndicatorModel.mjs",
