@@ -9,6 +9,7 @@
     "./status-core": "./src/systems/statusCore.mjs",
     "./normalize-post": "./src/utils/normalizePost.mjs",
     "./status-runtime": "./src/systems/statusRuntime.mjs",
+    "./daily-ledger-model": "./src/systems/dailyLedgerModel.mjs",
     "./status-visual-model": "./src/systems/statusVisualModel.mjs",
     "./action-strip-model": "./src/systems/actionStripModel.mjs",
     "./behavior-indicator-model": "./src/systems/behaviorIndicatorModel.mjs",

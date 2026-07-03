@@ -55,6 +55,17 @@ export {
 } from './statusRuntime.mjs'
 
 export {
+  buildDoneEventKey,
+  createDailyBlockedLedger,
+  createDailyDoneLedger,
+  ensureCurrentDailyBlockedLedger,
+  ensureCurrentDailyDoneLedger,
+  localDayKey,
+  validatePersistedDailyBlockedLedger,
+  validatePersistedDailyDoneLedger,
+} from './dailyLedgerModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,

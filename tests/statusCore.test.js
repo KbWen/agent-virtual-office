@@ -9,9 +9,11 @@ import {
   buildAgentStatusSnapshot,
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
+  buildDoneEventKey,
   behaviorIndicatorState,
   characterStatusVisual,
   comparePresence,
+  createDailyDoneLedger,
   feedEntries,
   gateWaiting,
   healthDotState,
@@ -25,6 +27,7 @@ import {
   statusVisualState,
   teamStatus,
   truncateText,
+  validatePersistedDailyDoneLedger,
   VALID_STATUSES,
 } from '../src/systems/statusCore.mjs'
 
@@ -45,6 +48,9 @@ describe('statusCore public headless API', () => {
       { statusSource: 'external' },
       {},
     )).toEqual({ statusSource: 'external' })
+    expect(buildDoneEventKey({ agentId: 'dev' }, { source: 'codex', seq: '7' })).toBe('codex:7:dev')
+    expect(createDailyDoneLedger(1000).seenEventKeys).toEqual([])
+    expect(validatePersistedDailyDoneLedger({ dayKey: createDailyDoneLedger(1000).dayKey, counts: { dev: 2 } }, 1000).counts.dev).toBe(2)
   })
 
   it('exports renderer-agnostic status and roster view-models from one path', () => {

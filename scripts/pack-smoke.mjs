@@ -194,6 +194,7 @@ try {
 import { VALID_STATUSES, normalizePost } from 'agent-virtual-office/status-contract'
 import { normalizePost as normalizePostAlias } from 'agent-virtual-office/normalize-post'
 import { assembleIntegrationPatch, buildExternalStatusEntry } from 'agent-virtual-office/status-runtime'
+import { buildDoneEventKey as buildDoneEventKeyFromLedgerModel } from 'agent-virtual-office/daily-ledger-model'
 import { statusVisualState as statusVisualStateFromModel } from 'agent-virtual-office/status-visual-model'
 import { buildActionStripViewModel as buildActionStripViewModelFromModel } from 'agent-virtual-office/action-strip-model'
 import { behaviorIndicatorState as behaviorIndicatorStateFromModel } from 'agent-virtual-office/behavior-indicator-model'
@@ -212,6 +213,7 @@ import {
   buildActivityFeedViewModel,
   buildAgentStatusSnapshot as buildAgentStatusSnapshotFromCore,
   buildDynamicStatusAgent,
+  buildDoneEventKey,
   behaviorIndicatorState,
   characterStatusVisual,
   inspectorPanelLayout,
@@ -234,6 +236,7 @@ if (norm.agents[0]?.status !== 'working') throw new Error('status-contract norma
 if (normalizePostAlias({ qa: 'blocked' }).agents[0]?.status !== 'blocked') throw new Error('normalize-post export failed')
 if (buildExternalStatusEntry(null, { status: 'done' }, 1000).entry.expiresAt !== 11000) throw new Error('status-runtime export failed')
 if (assembleIntegrationPatch({ statusSource: 'organic', integrationSource: null }, { statusSource: 'external' }, {}).statusSource !== 'external') throw new Error('status-runtime integration patch export failed')
+if (buildDoneEventKeyFromLedgerModel({ agentId: 'dev' }, { source: 'codex', seq: '7' }) !== 'codex:7:dev') throw new Error('daily-ledger-model export failed')
 if (statusVisualStateFromModel('awaiting-approval').color !== '#1E9FD4') throw new Error('status-visual-model export failed')
 if (buildActionStripViewModelFromModel({ agents: [{ id: 'qa', status: 'blocked' }] }).attention.count !== 1) throw new Error('action-strip-model export failed')
 if (behaviorIndicatorStateFromModel('goto-coffee-machine').iconKey !== 'coffee') throw new Error('behavior-indicator-model export failed')
@@ -259,6 +262,7 @@ if (feedEntries([{ origin: 'organic' }, { origin: 'hook' }]).length !== 1) throw
 if (buildActivityFeedViewModel([{ id: 1, type: 'status', status: 'blocked', timestamp: 1 }], { now: 2 }).entries[0]?.tone !== 'danger') throw new Error('status-core activity feed view-model export failed')
 if (buildPresenceRailViewModel({ agents: { dev: { id: 'dev', status: 'idle' } }, externalStatus: { dev: { status: 'blocked' } } }).team.kind !== 'blocked') throw new Error('status-core presence rail view-model export failed')
 if (buildDynamicStatusAgent({ id: 'dev' }, { agentId: 'wt~dev', position: { x: 1, y: 2 } }).deskItemCount.coffee !== 0) throw new Error('status-core dynamic agent export failed')
+if (buildDoneEventKey({ agentId: 'dev' }, { eventKey: 'done-1' }) !== 'done-1:dev') throw new Error('status-core daily ledger export failed')
 if (reconcileMultiSessionAgents({ agents: { 'wt~dev': { session: 'wt' } }, externalStatus: { 'wt~dev': { status: 'working' } }, updates: [] }).evicted[0] !== 'wt~dev') throw new Error('status-core reconcile export failed')
 if (normalizeAgentStatusUpdates({ type: 'office-status', agents: [{ role: 'frontend', status: 'working' }] }).updates[0]?.agentId !== 'frontend') throw new Error('status-core generic normalize export failed')
 if (blockedReasonState('permission-denied').iconId !== 'slash-circle') throw new Error('status-core blocked reason export failed')
@@ -279,6 +283,7 @@ const checkedSubpaths = [
   './agent-status-snapshot',
   './behavior-indicator-model',
   './blocked-reason-model',
+  './daily-ledger-model',
   './integration-status-model',
   './normalize-post',
   './review-gate-model',
@@ -320,7 +325,7 @@ console.log('library imports OK')
   } catch (e) {
     fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
   }
-  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
+  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, daily-ledger-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
   console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────

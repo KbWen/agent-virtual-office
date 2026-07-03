@@ -19,6 +19,16 @@ import {
   isDynamicStatusAgent,
   reconcileMultiSessionAgents,
 } from './statusRuntime.mjs'
+import {
+  buildDoneEventKey,
+  createDailyBlockedLedger,
+  createDailyDoneLedger,
+  ensureCurrentDailyBlockedLedger,
+  ensureCurrentDailyDoneLedger,
+  localDayKey,
+  validatePersistedDailyBlockedLedger,
+  validatePersistedDailyDoneLedger,
+} from './dailyLedgerModel.mjs'
 
 export { STATUS_COLORS }
 
@@ -64,48 +74,6 @@ export { _storeFallbackBubble as __storeFallbackBubble }
 // ─── Persistence helpers ───
 const PERSIST_KEY = 'office-state'
 let _lastPersistedSnapshot = null
-
-function getLocalDayKey(now = Date.now()) {
-  const date = new Date(now)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function createDailyDoneLedger(now = Date.now(), seed = {}) {
-  return {
-    dayKey: getLocalDayKey(now),
-    counts: seed.counts && typeof seed.counts === 'object' ? { ...seed.counts } : {},
-    seenEventKeys: Array.isArray(seed.seenEventKeys) ? [...seed.seenEventKeys] : [],
-  }
-}
-
-function ensureCurrentDailyDoneLedger(ledger, now = Date.now()) {
-  const dayKey = getLocalDayKey(now)
-  if (!ledger || ledger.dayKey !== dayKey) return createDailyDoneLedger(now)
-  return createDailyDoneLedger(now, ledger)
-}
-
-function createDailyBlockedLedger(now = Date.now(), seed = {}) {
-  return {
-    dayKey: getLocalDayKey(now),
-    counts: seed.counts && typeof seed.counts === 'object' ? { ...seed.counts } : {},
-  }
-}
-
-function ensureCurrentDailyBlockedLedger(ledger, now = Date.now()) {
-  const dayKey = getLocalDayKey(now)
-  if (!ledger || ledger.dayKey !== dayKey) return createDailyBlockedLedger(now)
-  return createDailyBlockedLedger(now, ledger)
-}
-
-function buildDoneEventKey(update, meta) {
-  if (!update?.agentId) return null
-  if (meta?.eventKey) return `${meta.eventKey}:${update.agentId}`
-  if (meta?.source && meta?.seq) return `${meta.source}:${meta.seq}:${update.agentId}`
-  return null
-}
 
 export function createPersistedState(state) {
   const data = {
@@ -194,52 +162,7 @@ export function validatePersistedAgent(saved) {
   }
 }
 
-export function validatePersistedDailyDoneLedger(saved, now = Date.now()) {
-  if (!saved || typeof saved !== 'object') return null
-  const dayKey = typeof saved.dayKey === 'string' ? saved.dayKey : null
-  if (!dayKey) return null
-
-  // Reconcile the day AT VALIDATION TIME, not via a later tick. loadPersistedState's
-  // staleness window is 4 hours, so a ledger saved late yesterday is loaded early today
-  // with yesterday's dayKey. Returning it verbatim seeds the store with a stale-day
-  // ledger; until updateTime's next 60s rollover runs, PixelOffice's Sprint Kanban
-  // (totalDoneToday) and the inspector's "done today" display YESTERDAY's counts.
-  // If the persisted day is not today, the counts/event keys belong to a finished day —
-  // return a fresh empty ledger for today rather than carrying the stale tally.
-  if (dayKey !== getLocalDayKey(now)) return createDailyDoneLedger(now)
-
-  const counts = {}
-  for (const [agentId, value] of Object.entries(saved.counts || {})) {
-    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
-      counts[agentId] = value
-    }
-  }
-
-  const seenEventKeys = Array.isArray(saved.seenEventKeys)
-    ? saved.seenEventKeys.filter((value) => typeof value === 'string').slice(-500)
-    : []
-
-  return {
-    dayKey,
-    counts,
-    seenEventKeys,
-  }
-}
-
-export function validatePersistedDailyBlockedLedger(saved, now = Date.now()) {
-  if (!saved || typeof saved !== 'object') return null
-  const dayKey = typeof saved.dayKey === 'string' ? saved.dayKey : null
-  if (!dayKey) return null
-  if (dayKey !== getLocalDayKey(now)) return createDailyBlockedLedger(now)
-
-  const counts = {}
-  for (const [agentId, value] of Object.entries(saved.counts || {})) {
-    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
-      counts[agentId] = value
-    }
-  }
-  return { dayKey, counts }
-}
+export { validatePersistedDailyBlockedLedger, validatePersistedDailyDoneLedger }
 
 // ─── Cached init-time computations (avoid redundant calls) ───
 const _persisted = loadPersistedState()
@@ -740,7 +663,7 @@ export const useOfficeStore = create((set) => ({
       // so the old `rolled.dayKey !== s.dailyDoneLedger.dayKey` test built and then DISCARDED
       // a full ledger clone every single minute just to read one string off it. getLocalDayKey
       // is a pure string compute — the clone is now built only on the actual day boundary.
-      const todayKey = getLocalDayKey(now.getTime())
+      const todayKey = localDayKey(now.getTime())
       if (todayKey !== s.dailyDoneLedger?.dayKey) {
         const agents = {}
         for (const [id, a] of Object.entries(s.agents)) {
