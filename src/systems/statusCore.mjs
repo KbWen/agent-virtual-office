@@ -100,6 +100,28 @@ export {
 } from './pairHuddleModel.mjs'
 
 export {
+  CONTEXT_BUBBLE_KIND,
+  SKILL_BUBBLE_FAMILIES,
+  baseRoleForAgent,
+  buildContextBubblePlan,
+  contextBubbleCandidateKeys,
+  extractContext as extractBubbleContext,
+  renderContextTemplate,
+  skillBubbleFamily,
+  skillBubbleKey,
+  toolToAction as contextBubbleToolToAction,
+} from './contextBubbleModel.mjs'
+
+export {
+  BUBBLE_PRIORITY,
+  BUBBLE_ROTATE_MS,
+  BUBBLE_VISIBLE_CAP,
+  buildBubbleVisibilityViewModel,
+  bubblePriority,
+  selectVisibleBubbles,
+} from './bubbleVisibilityModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,

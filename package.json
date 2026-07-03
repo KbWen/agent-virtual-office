@@ -13,6 +13,8 @@
     "./speech-bubble-model": "./src/systems/speechBubbleModel.mjs",
     "./helper-huddle-model": "./src/systems/helperHuddleModel.mjs",
     "./pair-huddle-model": "./src/systems/pairHuddleModel.mjs",
+    "./context-bubble-model": "./src/systems/contextBubbleModel.mjs",
+    "./bubble-visibility-model": "./src/systems/bubbleVisibilityModel.mjs",
     "./status-visual-model": "./src/systems/statusVisualModel.mjs",
     "./action-strip-model": "./src/systems/actionStripModel.mjs",
     "./behavior-indicator-model": "./src/systems/behaviorIndicatorModel.mjs",

@@ -3,6 +3,7 @@ import {
   assembleIntegrationPatch,
   agentLineToken,
   blockedReasonState,
+  buildBubbleVisibilityViewModel,
   buildActionStripViewModel,
   buildActivityFeedViewModel,
   buildPresenceRailViewModel,
@@ -16,7 +17,9 @@ import {
   characterStatusVisual,
   computeBubbleLayout,
   comparePresence,
+  buildContextBubblePlan,
   createDailyDoneLedger,
+  contextBubbleCandidateKeys,
   feedEntries,
   gateWaiting,
   healthDotState,
@@ -80,6 +83,23 @@ describe('statusCore public headless API', () => {
         qa: { status: 'working', task: 'Read', activeFile: '/r/src/app.js', activeFileAt: 900 },
       },
     }).visible).toBe(false)
+    expect(buildContextBubblePlan('feat-x~dev', {
+      status: 'blocked',
+      label: 'Edit App.jsx',
+    })).toMatchObject({
+      kind: 'error',
+      baseRole: 'dev',
+      keys: ['contextBubbles.dev-error', 'contextBubbles.any-error'],
+    })
+    expect(contextBubbleCandidateKeys('dev', { status: 'working', task: 'Edit' })).toEqual([
+      'contextBubbles.dev-edit',
+      'contextBubbles.dev-working',
+    ])
+    expect(buildBubbleVisibilityViewModel({
+      agents: { qa: { status: 'blocked', bubble: 'stuck' }, dev: { status: 'working', bubble: 'typing' } },
+      externalStatus: { qa: { status: 'blocked', changedAt: 1 }, dev: { status: 'working', changedAt: 99 } },
+      cap: 1,
+    }).visibleIds).toEqual(['qa'])
   })
 
   it('exports renderer-agnostic status and roster view-models from one path', () => {
