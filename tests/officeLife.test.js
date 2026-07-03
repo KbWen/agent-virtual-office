@@ -56,6 +56,8 @@ function makeFakeStore(externalStatus = {}) {
     getState: () => api,
     _updateTimeCalls: () => updateTimeCalls,
     _setHour: (h) => { state.hour = h },
+    _setPaused: (v) => { state.isPaused = v },
+    _setActiveEvent: (e) => { state.activeEvent = e },
   }
 }
 
@@ -555,6 +557,52 @@ describe('officeLife — Fix 1: lunch-nap sets activeEvent (mutex participation)
     // After 45 s the nap releases and clears activeEvent.
     vi.advanceTimersByTime(45000)
     expect(store.getState().activeEvent).toBeNull()
+
+    cleanup()
+  })
+
+  it('paused hour does not consume lastTriggeredHour; unpausing in the same hour still fires lunch-nap', () => {
+    const store = makeFakeStore({ gate: { changedAt: Date.now() } })
+    store._setHour(12)
+    store._setPaused(true)
+    const cleanup = startOfficeLife(store)
+
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100)
+    expect(store.getState().activeEvent).toBeNull()
+
+    store._setPaused(false)
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL)
+    expect(store.getState().activeEvent?.id).toBe('lunch-nap')
+
+    cleanup()
+  })
+
+  it('activeEvent hour does not consume lastTriggeredHour; clearing in the same hour still fires lunch-nap', () => {
+    const store = makeFakeStore({ gate: { changedAt: Date.now() } })
+    store._setHour(12)
+    store._setActiveEvent({ id: 'tea-break' })
+    const cleanup = startOfficeLife(store)
+
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100)
+    expect(store.getState().activeEvent?.id).toBe('tea-break')
+
+    store._setActiveEvent(null)
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL)
+    expect(store.getState().activeEvent?.id).toBe('lunch-nap')
+
+    cleanup()
+  })
+
+  it('hour-12 lunch-nap still sets activeEvent even when zero agents are selected to nap', () => {
+    Math.random.mockReturnValue(0.999)
+    const store = makeFakeStore({ gate: { changedAt: Date.now() } })
+    store._setHour(12)
+    const cleanup = startOfficeLife(store)
+
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100)
+
+    expect(store.getState().activeEvent?.id).toBe('lunch-nap')
+    expect(Object.values(store.getState().agents).every((agent) => agent.inGroupEvent === false)).toBe(true)
 
     cleanup()
   })

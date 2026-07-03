@@ -205,6 +205,7 @@ import { buildEventJuiceViewModel as buildEventJuiceViewModelFromModel } from 'a
 import { buildEventGateViewModel as buildEventGateViewModelFromModel, floorTickAllowed as floorTickAllowedFromModel } from 'agent-virtual-office/event-gate-model'
 import { buildSeedEventViewModel as buildSeedEventViewModelFromModel, seedEventCandidates as seedEventCandidatesFromModel } from 'agent-virtual-office/event-seed-model'
 import { buildEventCatalogViewModel as buildEventCatalogViewModelFromModel, EVENT_CATEGORY as EVENT_CATEGORY_FROM_MODEL } from 'agent-virtual-office/event-catalog-model'
+import { buildTimeEventViewModel as buildTimeEventViewModelFromModel, TIME_EVENT_REASON as TIME_EVENT_REASON_FROM_MODEL } from 'agent-virtual-office/time-event-model'
 import { statusVisualState as statusVisualStateFromModel } from 'agent-virtual-office/status-visual-model'
 import { buildActionStripViewModel as buildActionStripViewModelFromModel } from 'agent-virtual-office/action-strip-model'
 import { behaviorIndicatorState as behaviorIndicatorStateFromModel } from 'agent-virtual-office/behavior-indicator-model'
@@ -234,7 +235,9 @@ import {
   buildEventGateViewModel,
   buildEventCatalogViewModel,
   buildSeedEventViewModel,
+  buildTimeEventViewModel,
   EVENT_CATEGORY,
+  TIME_EVENT_REASON,
   pokePoolKeyForStatus,
   eventEligible,
   floorTickAllowed,
@@ -276,6 +279,8 @@ if (floorTickAllowedFromModel({ statusSource: 'external', teamPulse: 0.9 }, { ra
 if (seedEventCandidatesFromModel({ mood: 'smooth' }, { mood: 'normal' })[0]?.eventId !== 'eureka') throw new Error('event-seed-model candidates export failed')
 if (buildSeedEventViewModelFromModel({ state: { mood: 'smooth' }, prev: { mood: 'normal' }, eventById: { eureka: { id: 'eureka' } }, seedState: { lastSeedAt: 0 }, now: 200000 }).selectedEventId !== 'eureka') throw new Error('event-seed-model view export failed')
 if (buildEventCatalogViewModelFromModel({ daily: [{ id: 'eureka', participants: ['arch'], duration: 8000 }], rare: [] }).byCategory[EVENT_CATEGORY_FROM_MODEL.WORK_CLAIM][0] !== 'eureka') throw new Error('event-catalog-model export failed')
+const timeEventModel = buildTimeEventViewModelFromModel({ hour: 15 }, { day: 5, lastTriggeredHour: -1 })
+if (timeEventModel.reason !== TIME_EVENT_REASON_FROM_MODEL.DUE || timeEventModel.eventIds.join(',') !== 'tea-break,group-meeting') throw new Error('time-event-model export failed')
 if (statusVisualStateFromModel('awaiting-approval').color !== '#1E9FD4') throw new Error('status-visual-model export failed')
 if (buildActionStripViewModelFromModel({ agents: [{ id: 'qa', status: 'blocked' }] }).attention.count !== 1) throw new Error('action-strip-model export failed')
 if (behaviorIndicatorStateFromModel('goto-coffee-machine').iconKey !== 'coffee') throw new Error('behavior-indicator-model export failed')
@@ -316,6 +321,8 @@ if (floorTickAllowed({ statusSource: 'external', teamPulse: 0.9 }, { random: () 
 if (seedEventCandidates({ mood: 'smooth' }, { mood: 'normal' })[0]?.eventId !== 'eureka') throw new Error('status-core seed candidates export failed')
 if (buildSeedEventViewModel({ state: { mood: 'smooth' }, prev: { mood: 'normal' }, eventById: { eureka: { id: 'eureka' } }, seedState: { lastSeedAt: 0 }, now: 200000 }).selectedEventId !== 'eureka') throw new Error('status-core seed view export failed')
 if (buildEventCatalogViewModel({ daily: [{ id: 'eureka', participants: ['arch'], duration: 8000 }], rare: [] }).byCategory[EVENT_CATEGORY.WORK_CLAIM][0] !== 'eureka') throw new Error('status-core event catalog export failed')
+const timeEventCore = buildTimeEventViewModel({ hour: 15 }, { day: 5, lastTriggeredHour: -1 })
+if (timeEventCore.reason !== TIME_EVENT_REASON.DUE || timeEventCore.eventIds.join(',') !== 'tea-break,group-meeting') throw new Error('status-core time event export failed')
 if (reconcileMultiSessionAgents({ agents: { 'wt~dev': { session: 'wt' } }, externalStatus: { 'wt~dev': { status: 'working' } }, updates: [] }).evicted[0] !== 'wt~dev') throw new Error('status-core reconcile export failed')
 if (normalizeAgentStatusUpdates({ type: 'office-status', agents: [{ role: 'frontend', status: 'working' }] }).updates[0]?.agentId !== 'frontend') throw new Error('status-core generic normalize export failed')
 if (blockedReasonState('permission-denied').iconId !== 'slash-circle') throw new Error('status-core blocked reason export failed')
@@ -355,6 +362,7 @@ const checkedSubpaths = [
   './status-core',
   './status-runtime',
   './status-visual-model',
+  './time-event-model',
 ].sort()
 if (JSON.stringify(exportedSubpaths) !== JSON.stringify(checkedSubpaths)) {
   throw new Error('package export smoke coverage drift: exports=' + exportedSubpaths.join(',') + ' checked=' + checkedSubpaths.join(','))
@@ -388,7 +396,7 @@ console.log('library imports OK')
   } catch (e) {
     fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
   }
-  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, daily-ledger-model, speech-bubble-model, helper-huddle-model, pair-huddle-model, context-bubble-model, bubble-visibility-model, poke-reaction-model, event-juice-model, event-gate-model, event-seed-model, event-catalog-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
+  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, daily-ledger-model, speech-bubble-model, helper-huddle-model, pair-huddle-model, context-bubble-model, bubble-visibility-model, poke-reaction-model, event-juice-model, event-gate-model, event-seed-model, event-catalog-model, time-event-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
   console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────

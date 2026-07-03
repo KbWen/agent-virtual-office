@@ -20,6 +20,7 @@
     "./event-gate-model": "./src/systems/eventGateModel.mjs",
     "./event-seed-model": "./src/systems/eventSeedModel.mjs",
     "./event-catalog-model": "./src/systems/eventCatalogModel.mjs",
+    "./time-event-model": "./src/systems/timeEventModel.mjs",
     "./status-visual-model": "./src/systems/statusVisualModel.mjs",
     "./action-strip-model": "./src/systems/actionStripModel.mjs",
     "./behavior-indicator-model": "./src/systems/behaviorIndicatorModel.mjs",

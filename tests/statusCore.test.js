@@ -17,6 +17,7 @@ import {
   buildEventJuiceViewModel,
   buildEventCatalogViewModel,
   buildSeedEventViewModel,
+  buildTimeEventViewModel,
   buildPokeReactionViewModel,
   behaviorIndicatorState,
   characterStatusVisual,
@@ -45,6 +46,7 @@ import {
   seedEventCandidates,
   statusVisualState,
   teamStatus,
+  TIME_EVENT_REASON,
   truncateText,
   validatePersistedDailyDoneLedger,
   VALID_STATUSES,
@@ -157,6 +159,10 @@ describe('statusCore public headless API', () => {
       seedState: { lastSeedAt: 0 },
       now: 200000,
     })).toMatchObject({ fire: true, selectedEventId: 'eureka' })
+    expect(buildTimeEventViewModel({ hour: 15 }, { day: 5, lastTriggeredHour: -1 })).toMatchObject({
+      reason: TIME_EVENT_REASON.DUE,
+      eventIds: ['tea-break', 'group-meeting'],
+    })
   })
 
   it('exports renderer-agnostic status and roster view-models from one path', () => {

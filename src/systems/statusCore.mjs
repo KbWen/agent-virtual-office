@@ -193,6 +193,18 @@ export {
 } from './eventCatalogModel.mjs'
 
 export {
+  TIME_EVENT_KIND,
+  TIME_EVENT_REASON,
+  TIME_EVENT_RULES,
+  buildTimeEventViewModel,
+  drowsyReleaseAction,
+  selectableDrowsyAgents,
+  selectableLunchNapAgents,
+  timeEventDecision,
+  timeEventRulesFor,
+} from './timeEventModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,
