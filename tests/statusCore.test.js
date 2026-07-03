@@ -6,6 +6,7 @@ import {
   buildActionStripViewModel,
   buildActivityFeedViewModel,
   buildPresenceRailViewModel,
+  buildHelperHuddleViewModel,
   buildAgentStatusSnapshot,
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
@@ -53,6 +54,10 @@ describe('statusCore public headless API', () => {
     expect(createDailyDoneLedger(1000).seenEventKeys).toEqual([])
     expect(validatePersistedDailyDoneLedger({ dayKey: createDailyDoneLedger(1000).dayKey, counts: { dev: 2 } }, 1000).counts.dev).toBe(2)
     expect(computeBubbleLayout('abcdefghijklmnopq').displayMsg).toBe('abcdefghijklmnop…')
+    expect(buildHelperHuddleViewModel({
+      helpers: [{ parentRole: 'dev' }],
+      agents: { dev: { position: { x: 10, y: 20 } } },
+    }).rows[0]?.role).toBe('dev')
   })
 
   it('exports renderer-agnostic status and roster view-models from one path', () => {

@@ -75,6 +75,19 @@ export {
 } from './speechBubbleModel.mjs'
 
 export {
+  buildHelperHuddleViewModel,
+  HELPER_BADGE_OFFSET,
+  HELPER_COLORS,
+  HELPER_HEAVY_THRESHOLD,
+  HELPER_MAX_VISIBLE,
+  HELPER_OFFSETS,
+  helperCountByParent as helperHuddleCountByParent,
+  helperHuddleSignature,
+  parseHelperHuddleSignatureEntry,
+  resolveAnchoredHelperLayout,
+} from './helperHuddleModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,
