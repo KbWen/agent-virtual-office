@@ -139,6 +139,14 @@ export {
 } from './pokeReactionModel.mjs'
 
 export {
+  EVENT_JUICE,
+  JUICED_EVENT_IDS,
+  buildEventJuiceViewModel,
+  juiceForEvent,
+  shouldShakeDesk,
+} from './eventJuiceModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,

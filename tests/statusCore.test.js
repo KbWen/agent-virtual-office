@@ -13,6 +13,7 @@ import {
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
   buildDoneEventKey,
+  buildEventJuiceViewModel,
   buildPokeReactionViewModel,
   behaviorIndicatorState,
   characterStatusVisual,
@@ -34,6 +35,7 @@ import {
   presenceRows,
   reconcileMultiSessionAgents,
   sanitizeAgentId,
+  shouldShakeDesk,
   statusVisualState,
   teamStatus,
   truncateText,
@@ -118,6 +120,13 @@ describe('statusCore public headless API', () => {
         motion: { dur: '0.5s' },
       },
     })
+    expect(buildEventJuiceViewModel('eureka')).toMatchObject({
+      visible: true,
+      juice: { kind: 'sparkle', animationName: 'office-sparkle', semanticState: false },
+      semanticState: false,
+    })
+    expect(buildEventJuiceViewModel('eureka', { reducedMotion: true }).visible).toBe(false)
+    expect(shouldShakeDesk('desk-slam', false)).toBe(true)
   })
 
   it('exports renderer-agnostic status and roster view-models from one path', () => {
