@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { gateWaiting, gatePhaseGlyph, GATE_SHEET_CAP } from '../src/systems/reviewGate.js'
+import { gateWaiting as gateWaitingFromModel } from '../src/systems/reviewGate.mjs'
+import {
+  GATE_SHEET_CAP as GATE_SHEET_CAP_FROM_CORE,
+  gateWaiting as gateWaitingFromCore,
+} from '../src/systems/statusCore.mjs'
 
 describe('gateWaiting (AVO-107)', () => {
   it('counts ONLY awaiting-approval agents (never blocked/working/done)', () => {
@@ -42,5 +47,22 @@ describe('gatePhaseGlyph (AVO-107)', () => {
 describe('GATE_SHEET_CAP', () => {
   it('caps visual sheets so N waiters never become N markers', () => {
     expect(GATE_SHEET_CAP).toBe(3)
+  })
+})
+
+describe('reviewGate portable exports', () => {
+  it('keeps the legacy js path, model path, and status-core aggregate in sync', () => {
+    const agents = {
+      qa: { status: 'awaiting-approval' },
+      dev: { status: 'working' },
+    }
+
+    expect(gateWaiting(agents, '/review')).toEqual(gateWaitingFromModel(agents, '/review'))
+    expect(gateWaitingFromCore(agents, '/review')).toEqual({
+      count: 1,
+      names: ['qa'],
+      phaseGlyph: 'review',
+    })
+    expect(GATE_SHEET_CAP_FROM_CORE).toBe(GATE_SHEET_CAP)
   })
 })

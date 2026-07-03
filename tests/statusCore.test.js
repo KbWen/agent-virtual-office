@@ -11,6 +11,7 @@ import {
   characterStatusVisual,
   comparePresence,
   feedEntries,
+  gateWaiting,
   healthDotState,
   inspectorPanelLayout,
   isDynamicStatusAgent,
@@ -89,6 +90,10 @@ describe('statusCore public headless API', () => {
     expect(healthDotState({ statusSource: 'fallback', externalCount: 2 })).toMatchObject({
       level: 'fallback',
       labelVal: 2,
+    })
+    expect(gateWaiting({ qa: { status: 'awaiting-approval' } }, '/review')).toMatchObject({
+      count: 1,
+      phaseGlyph: 'review',
     })
   })
 

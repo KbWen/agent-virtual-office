@@ -18,6 +18,7 @@
     "./agent-status-snapshot": "./src/systems/agentStatusSnapshot.mjs",
     "./blocked-reason-model": "./src/systems/blockedReasonModel.mjs",
     "./integration-status-model": "./src/systems/integrationStatusModel.mjs",
+    "./review-gate-model": "./src/systems/reviewGate.mjs",
     "./roster-model": "./src/systems/rosterModel.mjs",
     "./src/*": "./src/*",
     "./package.json": "./package.json"

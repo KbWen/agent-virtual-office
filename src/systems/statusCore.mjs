@@ -98,6 +98,12 @@ export {
 } from './integrationStatusModel.mjs'
 
 export {
+  GATE_SHEET_CAP,
+  gatePhaseGlyph,
+  gateWaiting,
+} from './reviewGate.mjs'
+
+export {
   buildPresenceRailViewModel,
   comparePresence,
   FEED_ORIGINS,

@@ -203,6 +203,8 @@ import { agentStatus, presenceRows } from 'agent-virtual-office/agent-status-mod
 import { buildAgentStatusSnapshot } from 'agent-virtual-office/agent-status-snapshot'
 import { blockedReasonState as blockedReasonStateFromModel } from 'agent-virtual-office/blocked-reason-model'
 import { healthDotState as healthDotStateFromIntegrationModel } from 'agent-virtual-office/integration-status-model'
+import { gateWaiting as gateWaitingFromReviewGateModel } from 'agent-virtual-office/review-gate-model'
+import { createRequire } from 'node:module'
 import {
   blockedReasonState,
   buildActivityFeedViewModel,
@@ -214,6 +216,7 @@ import {
   buildPresenceRailViewModel,
   comparePresence,
   feedEntries,
+  gateWaiting,
   healthDotState,
   normalizeAgentStatusUpdates,
   reconcileMultiSessionAgents,
@@ -237,6 +240,7 @@ if (agentStatus({ status: 'idle' }, { status: 'done' }) !== 'done') throw new Er
 if (presenceRows({ agents: [{ id: 'dev', status: 'idle' }], externalStatus: { dev: { status: 'done' } } }).rows[0]?.status !== 'done') throw new Error('presenceRows export failed')
 if (blockedReasonStateFromModel('api-rate-limit').iconId !== 'hourglass') throw new Error('blocked-reason-model export failed')
 if (healthDotStateFromIntegrationModel({ statusSource: 'fallback', externalCount: 2 }).labelVal !== 2) throw new Error('integration-status-model export failed')
+if (gateWaitingFromReviewGateModel({ qa: { status: 'awaiting-approval' } }, '/review').phaseGlyph !== 'review') throw new Error('review-gate-model export failed')
 if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresenceFromRoster)[0]?.id !== 'a') throw new Error('roster-model export failed')
 if ([{ id: 'b', status: 'working' }, { id: 'a', status: 'blocked' }].sort(comparePresence)[0]?.id !== 'a') throw new Error('status-core comparePresence export failed')
 if (statusVisualState('blocked').color !== '#E24B4A') throw new Error('status-core status visual export failed')
@@ -252,6 +256,33 @@ if (reconcileMultiSessionAgents({ agents: { 'wt~dev': { session: 'wt' } }, exter
 if (normalizeAgentStatusUpdates({ type: 'office-status', agents: [{ role: 'frontend', status: 'working' }] }).updates[0]?.agentId !== 'frontend') throw new Error('status-core generic normalize export failed')
 if (blockedReasonState('permission-denied').iconId !== 'slash-circle') throw new Error('status-core blocked reason export failed')
 if (healthDotState({ integrationHealth: { state: 'offline' } }).level !== 'offline') throw new Error('status-core health export failed')
+if (gateWaiting({ gate: { status: 'awaiting-approval' } }, '/ship').phaseGlyph !== 'ship') throw new Error('status-core review gate export failed')
+
+const require = createRequire(import.meta.url)
+const pkg = require('agent-virtual-office/package.json')
+const exportedSubpaths = Object.keys(pkg.exports)
+  .filter((subpath) => subpath !== '.' && subpath !== './package.json' && subpath !== './src/*')
+  .sort()
+const checkedSubpaths = [
+  './activity-feed-model',
+  './agent-character-model',
+  './agent-inspector-model',
+  './agent-status-model',
+  './agent-status-snapshot',
+  './behavior-indicator-model',
+  './blocked-reason-model',
+  './integration-status-model',
+  './normalize-post',
+  './review-gate-model',
+  './roster-model',
+  './status-contract',
+  './status-core',
+  './status-runtime',
+  './status-visual-model',
+].sort()
+if (JSON.stringify(exportedSubpaths) !== JSON.stringify(checkedSubpaths)) {
+  throw new Error('package export smoke coverage drift: exports=' + exportedSubpaths.join(',') + ' checked=' + checkedSubpaths.join(','))
+}
 
 const snapshot = buildAgentStatusSnapshot({
   agents: { dev: { id: 'dev', status: 'idle' } },
@@ -281,7 +312,7 @@ console.log('library imports OK')
   } catch (e) {
     fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
   }
-  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, status-visual-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, roster-model imported.')
+  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, status-visual-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
   console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────
