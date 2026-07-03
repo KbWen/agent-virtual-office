@@ -198,7 +198,7 @@ import { statusVisualState as statusVisualStateFromModel } from 'agent-virtual-o
 import { buildActionStripViewModel as buildActionStripViewModelFromModel } from 'agent-virtual-office/action-strip-model'
 import { behaviorIndicatorState as behaviorIndicatorStateFromModel } from 'agent-virtual-office/behavior-indicator-model'
 import { characterStatusVisual as characterStatusVisualFromModel } from 'agent-virtual-office/agent-character-model'
-import { inspectorPanelLayout as inspectorPanelLayoutFromModel } from 'agent-virtual-office/agent-inspector-model'
+import { inspectorPanelLayout as inspectorPanelLayoutFromModel, inspectorTaskToken as inspectorTaskTokenFromModel } from 'agent-virtual-office/agent-inspector-model'
 import { buildActivityFeedViewModel as buildActivityFeedViewModelFromModel } from 'agent-virtual-office/activity-feed-model'
 import { agentStatus, presenceRows } from 'agent-virtual-office/agent-status-model'
 import { buildAgentStatusSnapshot } from 'agent-virtual-office/agent-status-snapshot'
@@ -215,6 +215,7 @@ import {
   behaviorIndicatorState,
   characterStatusVisual,
   inspectorPanelLayout,
+  inspectorTaskToken,
   buildPresenceRailViewModel,
   comparePresence,
   feedEntries,
@@ -238,6 +239,7 @@ if (buildActionStripViewModelFromModel({ agents: [{ id: 'qa', status: 'blocked' 
 if (behaviorIndicatorStateFromModel('goto-coffee-machine').iconKey !== 'coffee') throw new Error('behavior-indicator-model export failed')
 if (characterStatusVisualFromModel({ status: 'blocked', color: '#abc' }).ring.kind !== 'blocked') throw new Error('agent-character-model export failed')
 if (inspectorPanelLayoutFromModel({ hasTask: true, detailCount: 3, activityCount: 5, sceneScale: 0.5, position: { x: 20, y: 20 } }).scale !== 3) throw new Error('agent-inspector-model export failed')
+if (inspectorTaskTokenFromModel({ task: 'mcp__notion__create_page' }).kind !== 'task') throw new Error('agent-inspector-model semantic export failed')
 if (buildActivityFeedViewModelFromModel([{ id: 1, type: 'status', status: 'done', timestamp: 1 }], { now: 2 }).unreadCount !== 1) throw new Error('activity-feed-model export failed')
 if (agentStatus({ status: 'idle' }, { status: 'done' }) !== 'done') throw new Error('agent-status-model export failed')
 if (presenceRows({ agents: [{ id: 'dev', status: 'idle' }], externalStatus: { dev: { status: 'done' } } }).rows[0]?.status !== 'done') throw new Error('presenceRows export failed')
@@ -251,6 +253,7 @@ if (buildActionStripViewModel({ agents: [{ id: 'qa', status: 'blocked' }] }).att
 if (behaviorIndicatorState('desk-slam').iconKey !== 'frustration') throw new Error('status-core behavior indicator export failed')
 if (characterStatusVisual({ status: 'done', color: '#abc' }).tagFill !== '#5CB88A') throw new Error('status-core character model export failed')
 if (inspectorPanelLayout({ activityCount: 4, sceneScale: 1, position: { x: 400, y: 300 } }).activityRows !== 3) throw new Error('status-core inspector model export failed')
+if (inspectorTaskToken({ label: 'Review PR', task: 'Edit' }).kind !== 'label') throw new Error('status-core inspector semantic export failed')
 if (teamStatus({ activeWorkflow: 'review', activeCount: 2 }).kind !== 'workflow') throw new Error('status-core teamStatus export failed')
 if (feedEntries([{ origin: 'organic' }, { origin: 'hook' }]).length !== 1) throw new Error('status-core feedEntries export failed')
 if (buildActivityFeedViewModel([{ id: 1, type: 'status', status: 'blocked', timestamp: 1 }], { now: 2 }).entries[0]?.tone !== 'danger') throw new Error('status-core activity feed view-model export failed')

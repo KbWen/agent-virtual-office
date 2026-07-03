@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildAgentInspectorMeta,
+  countAgentDoneToday,
   inspectorAnchorPosition,
   inspectorPanelLayout,
+  inspectorTaskToken,
   recentAgentActivities,
   truncateText,
+  waitingStateDuration,
 } from '../src/systems/agentInspectorModel.mjs'
-import { inspectorPanelLayout as inspectorPanelLayoutFromCore } from '../src/systems/statusCore.mjs'
+import {
+  inspectorPanelLayout as inspectorPanelLayoutFromCore,
+  inspectorTaskToken as inspectorTaskTokenFromCore,
+  waitingStateDuration as waitingStateDurationFromCore,
+} from '../src/systems/statusCore.mjs'
 
 describe('agentInspectorModel — portable inspector view helpers', () => {
   it('keeps Unicode truncation stable for multi-codepoint text', () => {
@@ -24,6 +32,58 @@ describe('agentInspectorModel — portable inspector view helpers', () => {
     ], 'dev', 2)
 
     expect(rows.map((row) => row.id)).toEqual([1, 3])
+  })
+
+  it('describes inspector task copy as portable semantic tokens', () => {
+    expect(inspectorTaskToken({ label: 'Fix tests', task: 'Bash' })).toEqual({
+      kind: 'label',
+      label: 'Fix tests',
+    })
+    expect(inspectorTaskToken({ task: 'mcp__notion__create_page' })).toEqual({
+      kind: 'task',
+      task: 'mcp__notion__create_page',
+    })
+    expect(inspectorTaskToken(null)).toBeNull()
+    expect(inspectorTaskToken({ status: 'working' })).toBeNull()
+  })
+
+  it('returns elapsed waiting duration only for actionable waiting states past the floor', () => {
+    const now = 1_000_000
+
+    expect(waitingStateDuration('blocked', now - 45_000, now)).toEqual({ elapsedMs: 45_000 })
+    expect(waitingStateDuration('awaiting-approval', now - 30_000, now)).toEqual({ elapsedMs: 30_000 })
+    expect(waitingStateDuration('blocked', now - 29_999, now)).toBeNull()
+    expect(waitingStateDuration('working', now - 90_000, now)).toBeNull()
+    expect(waitingStateDuration('blocked', Number.NaN, now)).toBeNull()
+  })
+
+  it('counts same-day done events from either the durable ledger or legacy activity rows', () => {
+    const now = new Date(2026, 3, 8, 18, 0, 0).getTime()
+    const startOfDay = new Date(2026, 3, 8, 0, 0, 0).getTime()
+
+    expect(countAgentDoneToday({
+      dayKey: '2026-04-08',
+      counts: { dev: 3 },
+    }, 'dev', now)).toBe(3)
+
+    expect(countAgentDoneToday([
+      { agentId: 'dev', type: 'status', status: 'done', timestamp: startOfDay },
+      { agentId: 'dev', type: 'status', status: 'done', timestamp: now + 1 },
+      { agentId: 'qa', type: 'status', status: 'done', timestamp: now },
+    ], 'dev', now)).toBe(1)
+  })
+
+  it('builds portable inspector metadata with conservative fallbacks', () => {
+    const now = new Date(2026, 3, 8, 18, 0, 0).getTime()
+
+    expect(buildAgentInspectorMeta({
+      dayKey: '2026-04-08',
+      counts: { dev: 2 },
+    }, 'dev', '', '', now)).toEqual({
+      doneToday: 2,
+      mood: 'normal',
+      activeWorkflow: null,
+    })
   })
 
   it('anchors moving inspectors to targetPosition and falls back safely', () => {
@@ -85,5 +145,7 @@ describe('agentInspectorModel — portable inspector view helpers', () => {
 
   it('is exported through the aggregate status-core path', () => {
     expect(inspectorPanelLayoutFromCore({ activityCount: 4 }).activityRows).toBe(3)
+    expect(inspectorTaskTokenFromCore({ task: 'Edit' })).toEqual({ kind: 'task', task: 'Edit' })
+    expect(waitingStateDurationFromCore('blocked', 0, 31_000)).toEqual({ elapsedMs: 31_000 })
   })
 })

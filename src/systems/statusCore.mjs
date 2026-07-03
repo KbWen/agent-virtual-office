@@ -96,10 +96,14 @@ export {
 } from './agentCharacterModel.mjs'
 
 export {
+  buildAgentInspectorMeta,
+  countAgentDoneToday,
   inspectorAnchorPosition,
   inspectorPanelLayout,
+  inspectorTaskToken,
   recentAgentActivities,
   truncateText,
+  waitingStateDuration,
 } from './agentInspectorModel.mjs'
 
 export {

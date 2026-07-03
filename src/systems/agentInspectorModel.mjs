@@ -22,6 +22,65 @@ export function recentAgentActivities(activityLog, agentId, max = 5) {
     .slice(0, limit)
 }
 
+export function inspectorTaskToken(ext) {
+  if (!ext) return null
+  if (ext.label) return { kind: 'label', label: ext.label }
+  if (ext.task) return { kind: 'task', task: ext.task }
+  return null
+}
+
+export function waitingStateDuration(status, changedAt, now = Date.now(), floorMs = 30000) {
+  if (status !== 'blocked' && status !== 'awaiting-approval') return null
+  if (!Number.isFinite(changedAt) || !Number.isFinite(now)) return null
+
+  const floor = Number.isFinite(floorMs) ? Math.max(0, floorMs) : 30000
+  const elapsedMs = now - changedAt
+  if (!Number.isFinite(elapsedMs) || elapsedMs < floor) return null
+
+  return { elapsedMs }
+}
+
+export function countAgentDoneToday(activityLog, agentId, now = Date.now()) {
+  if (!agentId) return 0
+
+  const today = new Date(now)
+  const dayKey = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-')
+
+  if (activityLog && !Array.isArray(activityLog) && typeof activityLog === 'object') {
+    if (activityLog.dayKey !== dayKey || !activityLog.counts) return 0
+    return Number(activityLog.counts[agentId] || 0)
+  }
+
+  if (!Array.isArray(activityLog) || activityLog.length === 0) return 0
+
+  const startOfDay = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  ).getTime()
+
+  return activityLog.filter((entry) =>
+    entry?.agentId === agentId
+    && entry?.type === 'status'
+    && entry?.status === 'done'
+    && typeof entry?.timestamp === 'number'
+    && entry.timestamp >= startOfDay
+    && entry.timestamp <= now
+  ).length
+}
+
+export function buildAgentInspectorMeta(activityLog, agentId, mood, activeWorkflow, now = Date.now()) {
+  return {
+    doneToday: countAgentDoneToday(activityLog, agentId, now),
+    mood: mood || 'normal',
+    activeWorkflow: activeWorkflow || null,
+  }
+}
+
 export function inspectorAnchorPosition(agent, fallback = DEFAULT_POSITION) {
   if (!agent) return fallback
   return (agent.isMoving ? agent.targetPosition : agent.position) || fallback
