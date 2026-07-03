@@ -38,6 +38,15 @@ export {
 } from './statusVisualModel.mjs'
 
 export {
+  agentLineToken,
+  attentionStripState,
+  blockedReasonPreview,
+  buildActionStripViewModel,
+  controlPanelPresenceRows,
+  formatTokens,
+} from './actionStripModel.mjs'
+
+export {
   assembleIntegrationPatch,
   buildDynamicStatusAgent,
   buildExternalStatusEntry,

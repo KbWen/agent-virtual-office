@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   assembleIntegrationPatch,
+  agentLineToken,
   blockedReasonState,
+  buildActionStripViewModel,
   buildActivityFeedViewModel,
   buildPresenceRailViewModel,
   buildAgentStatusSnapshot,
@@ -60,6 +62,14 @@ describe('statusCore public headless API', () => {
     expect(snapshot.presence.rows[0]?.task).toBe('Edit')
     expect(snapshot.integration.health.level).toBe('idle')
     expect(statusVisualState('blocked')).toMatchObject({ color: '#E24B4A', known: true })
+    expect(agentLineToken({ status: 'blocked', reasonCode: 'api-rate-limit' })).toMatchObject({
+      kind: 'blocked-reason',
+      reason: 'api-rate-limit',
+    })
+    expect(buildActionStripViewModel({
+      agents: [{ id: 'qa', status: 'blocked' }],
+      statusSource: 'external',
+    }).health.level).toBe('live')
     expect(characterStatusVisual({ status: 'working', color: '#abc' })).toMatchObject({
       tagFill: '#EF9F27',
       ring: { kind: 'active' },
