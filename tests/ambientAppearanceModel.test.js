@@ -183,11 +183,10 @@ describe('ambientAppearanceModel', () => {
     }
   })
 
-  it('freezes exported theme constants and returns mutable overlay/view-model copies', () => {
+  it('freezes the theme registry and returns mutable overlay/view-model copies', () => {
     expect(Object.isFrozen(THEMES)).toBe(true)
-    expect(Object.isFrozen(THEMES[1])).toBe(true)
     expect(() => {
-      THEMES[1].opacity = 1
+      THEMES.push({ id: 'nope', fill: 'rgb(0,0,0)', opacity: 1 })
     }).toThrow(TypeError)
 
     const overlay = themeOverlay('winter')

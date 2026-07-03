@@ -1,5 +1,5 @@
 import React from 'react'
-import { moodToWeather as moodToWeatherModel } from '../systems/ambientAppearanceModel.mjs'
+import { classifyMood } from '../systems/classify.js'
 
 // All furniture below is wrapped in React.memo. PixelOffice re-renders on every minute/
 // hour clock tick, every activeEvent/activeWorkflow change, and every agentOrderSignature
@@ -239,7 +239,7 @@ export const GateBooth = React.memo(function GateBooth({ x, y }) {
 // 7 documented moods. Unknown moods conservatively default to 'clear' (no
 // false-positive scary weather), matching the pre-delegation behavior.
 export function moodToWeather(mood) {
-  return moodToWeatherModel(mood)
+  return classifyMood(mood).family
 }
 
 // ─── Weather Overlay (drawn inside WallWindow before the cross) ──────────

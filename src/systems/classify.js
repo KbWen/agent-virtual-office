@@ -478,9 +478,9 @@ export function decideBehavior({ task, role, status, workflow } = {}) {
 }
 
 // ─── classifyMood ───────────────────────────────────────────────────────────
-// Mirrors moodToWeather (kept in TopDownFurniture.jsx for #14), wrapped in the
-// classifier shape. Downstream #A2 will replace direct moodToWeather imports
-// with `classifyMood(mood).family` reads.
+// Mirrors the node-safe weather model, wrapped in the classifier shape.
+// Parity tests guard this table so the UI can keep its compact hot path while
+// package consumers get the smaller `weatherModel.mjs` contract directly.
 const MOOD_TABLE = Object.freeze({
   // ↓ mirror of moodToWeather (#14)
   normal:     { family: FAMILIES.CLEAR,        severity: 'low',    visualLabel: 'Clear',        a11yLabel: 'Normal atmosphere' },
