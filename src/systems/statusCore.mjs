@@ -122,6 +122,23 @@ export {
 } from './bubbleVisibilityModel.mjs'
 
 export {
+  LONG_AT,
+  POKE_INTENSITY_TIMING,
+  POKE_MOTION_PROFILE,
+  POKE_QUIP_MS,
+  POKE_RESET_MS,
+  POKE_STATUS_POOL,
+  POKE_WINDOW_MS,
+  TURNAWAY_AT,
+  buildPokeReactionViewModel,
+  pickPokeReaction,
+  pickQuipIndex,
+  poolKeyForStatus as pokePoolKeyForStatus,
+  pushPoke,
+  streakInWindow,
+} from './pokeReactionModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,

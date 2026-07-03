@@ -13,6 +13,7 @@ import {
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
   buildDoneEventKey,
+  buildPokeReactionViewModel,
   behaviorIndicatorState,
   characterStatusVisual,
   computeBubbleLayout,
@@ -27,6 +28,7 @@ import {
   isDynamicStatusAgent,
   isPairHuddleWriteTask,
   findSharedFilePair,
+  pokePoolKeyForStatus,
   normalizeAgentStatusUpdates,
   normalizePost,
   presenceRows,
@@ -100,6 +102,22 @@ describe('statusCore public headless API', () => {
       externalStatus: { qa: { status: 'blocked', changedAt: 1 }, dev: { status: 'working', changedAt: 99 } },
       cap: 1,
     }).visibleIds).toEqual(['qa'])
+    expect(pokePoolKeyForStatus('awaiting-approval')).toBe('blocked')
+    expect(buildPokeReactionViewModel({
+      status: 'done',
+      history: [100, 200, 300, 400],
+      now: 500,
+      poolLength: 3,
+    })).toMatchObject({
+      poolKey: 'done',
+      intensity: 'turnaway',
+      quipIndex: 1,
+      timing: {
+        quipMs: 1200,
+        bobClearMs: 720,
+        motion: { dur: '0.5s' },
+      },
+    })
   })
 
   it('exports renderer-agnostic status and roster view-models from one path', () => {

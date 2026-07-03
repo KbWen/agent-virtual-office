@@ -15,6 +15,7 @@
     "./pair-huddle-model": "./src/systems/pairHuddleModel.mjs",
     "./context-bubble-model": "./src/systems/contextBubbleModel.mjs",
     "./bubble-visibility-model": "./src/systems/bubbleVisibilityModel.mjs",
+    "./poke-reaction-model": "./src/systems/pokeReactionModel.mjs",
     "./status-visual-model": "./src/systems/statusVisualModel.mjs",
     "./action-strip-model": "./src/systems/actionStripModel.mjs",
     "./behavior-indicator-model": "./src/systems/behaviorIndicatorModel.mjs",
