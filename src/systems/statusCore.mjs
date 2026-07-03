@@ -175,6 +175,24 @@ export {
 } from './eventSeedModel.mjs'
 
 export {
+  EVENT_CADENCE,
+  EVENT_CATEGORY,
+  EVENT_CATEGORY_BY_ID,
+  INTERACTIVE_REACTION,
+  PARTICIPANT_SELECTOR,
+  buildEventCatalogEntry,
+  buildEventCatalogViewModel,
+  eventById,
+  eventCategory,
+  eventHasExplicitCategory,
+  flattenEventCatalog,
+  interactiveReactionForEvent,
+  participantSelectorKind,
+  seedSourcesForEvent,
+  validateEventCatalogPortability,
+} from './eventCatalogModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,

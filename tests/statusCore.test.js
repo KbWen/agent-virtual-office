@@ -15,6 +15,7 @@ import {
   buildDoneEventKey,
   buildEventGateViewModel,
   buildEventJuiceViewModel,
+  buildEventCatalogViewModel,
   buildSeedEventViewModel,
   buildPokeReactionViewModel,
   behaviorIndicatorState,
@@ -25,6 +26,7 @@ import {
   createDailyDoneLedger,
   contextBubbleCandidateKeys,
   eventEligible,
+  EVENT_CATEGORY,
   feedEntries,
   floorTickAllowed,
   gateWaiting,
@@ -141,6 +143,10 @@ describe('statusCore public headless API', () => {
       mood: 'normal',
     }, { now: 2000 })).toMatchObject({ workClaim: true, eligible: false })
     expect(floorTickAllowed({ statusSource: 'external', teamPulse: 0.9 }, { random: () => 0.99 })).toBe(false)
+    expect(buildEventCatalogViewModel({
+      daily: [{ id: 'eureka', participants: ['arch'], duration: 8000 }],
+      rare: [],
+    }).byCategory[EVENT_CATEGORY.WORK_CLAIM]).toEqual(['eureka'])
     expect(seedEventCandidates({ mood: 'smooth' }, { mood: 'normal' })).toEqual([
       { eventId: 'eureka', source: 'mood-edge', value: 'smooth' },
     ])
