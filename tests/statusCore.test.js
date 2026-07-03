@@ -12,6 +12,7 @@ import {
   buildDoneEventKey,
   behaviorIndicatorState,
   characterStatusVisual,
+  computeBubbleLayout,
   comparePresence,
   createDailyDoneLedger,
   feedEntries,
@@ -51,6 +52,7 @@ describe('statusCore public headless API', () => {
     expect(buildDoneEventKey({ agentId: 'dev' }, { source: 'codex', seq: '7' })).toBe('codex:7:dev')
     expect(createDailyDoneLedger(1000).seenEventKeys).toEqual([])
     expect(validatePersistedDailyDoneLedger({ dayKey: createDailyDoneLedger(1000).dayKey, counts: { dev: 2 } }, 1000).counts.dev).toBe(2)
+    expect(computeBubbleLayout('abcdefghijklmnopq').displayMsg).toBe('abcdefghijklmnop…')
   })
 
   it('exports renderer-agnostic status and roster view-models from one path', () => {

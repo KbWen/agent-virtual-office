@@ -66,6 +66,15 @@ export {
 } from './dailyLedgerModel.mjs'
 
 export {
+  bubbleDisplayText,
+  computeBubbleLayout,
+  computeEdgeShift,
+  estimateBubbleTextWidth,
+  sanitizeBubbleText,
+  speechBubbleGeometry,
+} from './speechBubbleModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,

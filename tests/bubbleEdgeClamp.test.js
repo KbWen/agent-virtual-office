@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeEdgeShift } from '../src/components/BehaviorBubble.jsx'
+import { computeEdgeShift } from '../src/systems/speechBubbleModel.mjs'
 
 // #47 — speech bubbles for far-left/right desk agents clipped at the office svg edge (the viewBox is
 // clipped). computeEdgeShift returns the local-unit horizontal shift that keeps the box inside

@@ -1,4 +1,10 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react'
+import {
+  computeBubbleLayout,
+  computeEdgeShift,
+} from '../systems/speechBubbleModel.mjs'
+
+export { computeEdgeShift } from '../systems/speechBubbleModel.mjs'
 
 function BehaviorBubble({ x, y, message, below = false, absX = null, scale = 1, sceneMinX = 0, sceneW = 800, edgePad = 4 }) {
   const [visible, setVisible] = useState(false)
@@ -50,8 +56,8 @@ function BehaviorBubble({ x, y, message, below = false, absX = null, scale = 1, 
   // past the SVG's top edge and gets clipped. The parent flips it BELOW the agent and the tail
   // points up instead of down.
   const by = below ? y + 8 : y - boxH - 8
-  const tailBaseY = below ? by : by + boxH         // edge of the box the tail grows from
-  const tailTipY = below ? by - 6 : by + boxH + 6  // the pointed tip (toward the agent)
+  const tailBaseY = below ? by : by + boxH
+  const tailTipY = below ? by - 6 : by + boxH + 6
 
   return (
     <g
@@ -106,47 +112,3 @@ function BehaviorBubble({ x, y, message, below = false, absX = null, scale = 1, 
 // reconciliation of its ~5 SVG elements. The inner useMemo only guards the layout math;
 // React.memo additionally elides the component invocation itself.
 export default React.memo(BehaviorBubble)
-
-// Pure layout derivation — extracted so the memo body stays small and the regex /
-// char-width work is unambiguously a function of the message string alone.
-function computeBubbleLayout(currentMsg) {
-  // Clean garbled characters: U+FFFD and unpaired surrogates only.
-  // Full surrogate range strip destroyed non-BMP emoji (\uD83D\uDE80 etc.) \u2014 keep paired surrogates.
-  const cleanMsg = currentMsg
-    .replace(/\uFFFD/g, '')
-    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')   // lone high surrogate
-    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')  // lone low surrogate
-
-  // Unicode-safe truncation using Array.from (handles surrogate pairs)
-  const chars = Array.from(cleanMsg)
-  const maxLen = 16
-  const displayMsg = chars.length > maxLen ? chars.slice(0, maxLen).join('') + '…' : cleanMsg
-
-  // Width: CJK chars (~11 units) vs ASCII (~6.5 units) at fontSize 11
-  let estWidth = 0
-  for (const ch of displayMsg) {
-    estWidth += ch.codePointAt(0) > 0x2E7F ? 11 : 6.5
-  }
-  return { displayMsg, boxW: Math.max(Math.ceil(estWidth) + 18, 48) }
-}
-
-// #47 — pure horizontal-edge shift (local units) so a bubble centered on an agent at absolute scene
-// x `absX` stays inside the VISIBLE viewBox x-range [sceneMinX+edgePad, sceneMinX+sceneW−edgePad].
-// `sceneMinX` is 0 in the default office (viewBox 0..800) and non-zero in panel mode (cropped
-// viewBox). `scale` is the net local→scene factor (so a local shift of `s` moves the box `s·scale`
-// in scene units). Returns 0 when no scene context is given (absX null / non-finite scale) — the
-// bubble then renders centered as before.
-//   box scene span = absX + (localX ± boxW/2 + shift)·scale, with localX = 0 (bubble is centered on
-//   the agent). Solve each edge for shift, then pick the value closest to 0 (no shift) that satisfies
-//   both — pushing right when it would clip the left edge, left when it would clip the right.
-export function computeEdgeShift({ boxW, absX, scale = 1, sceneMinX = 0, sceneW = 800, edgePad = 4 }) {
-  if (absX == null || !Number.isFinite(absX) || !Number.isFinite(scale) || scale <= 0) return 0
-  const half = boxW / 2
-  const minEdge = sceneMinX + edgePad           // left visible edge (+pad); 0-based in default mode
-  const maxEdge = sceneMinX + sceneW - edgePad  // right visible edge (−pad)
-  const leftBound = (minEdge - absX) / scale + half   // minimum shift to clear the left edge
-  const rightBound = (maxEdge - absX) / scale - half  // maximum shift before clipping right
-  // closest-to-zero shift within [leftBound, rightBound]. If the box is wider than the available
-  // span (leftBound > rightBound) this yields rightBound — best effort that keeps the right edge in.
-  return Math.min(Math.max(0, leftBound), rightBound)
-}
