@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { THEMES, THEME_IDS, themeOverlay, cappedThemeOpacity, isValidTheme, THEME_OPACITY_CAP, THEME_LIGHTING_SUM_CAP } from '../src/systems/theme.js'
-import { STATUS_COLORS } from '../src/systems/store.js'
+import { STATUS_COLORS } from '../src/systems/statusVisualModel.mjs'
 
 // ── tiny WCAG contrast helpers (test-only) ──────────────────────────────────
 function parseColor(c) {

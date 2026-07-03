@@ -227,6 +227,15 @@ export {
 } from './movementLayoutModel.mjs'
 
 export {
+  AMBIENT_APPEARANCE_VERSION,
+  DEFAULT_THEME,
+  THEME_IDS,
+  WEATHER_KIND,
+  buildAmbientAppearanceViewModel,
+  moodToWeather,
+} from './ambientAppearanceModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,

@@ -10,6 +10,7 @@ import {
   buildHelperHuddleViewModel,
   buildPairLinkViewModel,
   buildAgentStatusSnapshot,
+  buildAmbientAppearanceViewModel,
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
   buildDoneEventKey,
@@ -51,6 +52,7 @@ import {
   truncateText,
   validatePersistedDailyDoneLedger,
   VALID_STATUSES,
+  WEATHER_KIND,
   zoneForPoint,
 } from '../src/systems/statusCore.mjs'
 
@@ -171,6 +173,16 @@ describe('statusCore public headless API', () => {
       overflowPositions: expect.arrayContaining([{ x: 370, y: 80, slot: 1 }]),
     })
     expect(zoneForPoint(900, 900)).toBeNull()
+    expect(buildAmbientAppearanceViewModel({
+      hour: 0,
+      mood: 'frustrated',
+      themeId: 'winter',
+    })).toMatchObject({
+      version: 'ambient-appearance-v1',
+      weather: { kind: WEATHER_KIND.RAIN, visible: true },
+      lighting: { visible: true },
+      theme: { id: 'winter', overlay: { opacity: 0.07 } },
+    })
   })
 
   it('exports renderer-agnostic status and roster view-models from one path', () => {
