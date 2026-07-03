@@ -18,6 +18,7 @@
     "./poke-reaction-model": "./src/systems/pokeReactionModel.mjs",
     "./event-juice-model": "./src/systems/eventJuiceModel.mjs",
     "./event-gate-model": "./src/systems/eventGateModel.mjs",
+    "./event-seed-model": "./src/systems/eventSeedModel.mjs",
     "./status-visual-model": "./src/systems/statusVisualModel.mjs",
     "./action-strip-model": "./src/systems/actionStripModel.mjs",
     "./behavior-indicator-model": "./src/systems/behaviorIndicatorModel.mjs",

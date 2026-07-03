@@ -162,6 +162,19 @@ export {
 } from './eventGateModel.mjs'
 
 export {
+  DEFAULT_SEED_COOLDOWN_MS,
+  MOOD_SEED_EVENT,
+  OPS_DONE_SEED_EVENT,
+  PER_EVENT_SEED_COOLDOWN_MULTIPLIER,
+  SEED_DECISION,
+  buildSeedEventViewModel,
+  normalizeSeedCooldownState,
+  seedEventCandidates,
+  seedEventDecision,
+  selectSeedEvent,
+} from './eventSeedModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,

@@ -15,6 +15,7 @@ import {
   buildDoneEventKey,
   buildEventGateViewModel,
   buildEventJuiceViewModel,
+  buildSeedEventViewModel,
   buildPokeReactionViewModel,
   behaviorIndicatorState,
   characterStatusVisual,
@@ -39,6 +40,7 @@ import {
   reconcileMultiSessionAgents,
   sanitizeAgentId,
   shouldShakeDesk,
+  seedEventCandidates,
   statusVisualState,
   teamStatus,
   truncateText,
@@ -139,6 +141,16 @@ describe('statusCore public headless API', () => {
       mood: 'normal',
     }, { now: 2000 })).toMatchObject({ workClaim: true, eligible: false })
     expect(floorTickAllowed({ statusSource: 'external', teamPulse: 0.9 }, { random: () => 0.99 })).toBe(false)
+    expect(seedEventCandidates({ mood: 'smooth' }, { mood: 'normal' })).toEqual([
+      { eventId: 'eureka', source: 'mood-edge', value: 'smooth' },
+    ])
+    expect(buildSeedEventViewModel({
+      state: { mood: 'smooth' },
+      prev: { mood: 'normal' },
+      eventById: { eureka: { id: 'eureka' } },
+      seedState: { lastSeedAt: 0 },
+      now: 200000,
+    })).toMatchObject({ fire: true, selectedEventId: 'eureka' })
   })
 
   it('exports renderer-agnostic status and roster view-models from one path', () => {
