@@ -236,6 +236,12 @@ export {
 } from './ambientAppearanceModel.mjs'
 
 export {
+  AMBIENT_SOUND_VERSION,
+  MASTER_CAP as AMBIENT_SOUND_MASTER_CAP,
+  buildAmbientSoundViewModel,
+} from './ambientSoundModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,

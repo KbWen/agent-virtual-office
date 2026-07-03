@@ -23,6 +23,7 @@
     "./time-event-model": "./src/systems/timeEventModel.mjs",
     "./movement-layout-model": "./src/systems/movementLayoutModel.mjs",
     "./ambient-appearance-model": "./src/systems/ambientAppearanceModel.mjs",
+    "./ambient-sound-model": "./src/systems/ambientSoundModel.mjs",
     "./status-visual-model": "./src/systems/statusVisualModel.mjs",
     "./action-strip-model": "./src/systems/actionStripModel.mjs",
     "./behavior-indicator-model": "./src/systems/behaviorIndicatorModel.mjs",

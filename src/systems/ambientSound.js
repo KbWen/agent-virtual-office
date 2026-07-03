@@ -21,9 +21,11 @@
  * (the toggle-ON click runs the store subscription synchronously; on a persisted-on reload the
  * engine stays dormant until a one-time pointerdown). No audio node is created before that.
  */
-import { moodToWeather } from '../components/TopDownFurniture.jsx'
+import { classifyMood } from './classify.js'
 
 // ── Tunables (master is HARD-capped; every layer is a fraction of it) ──────────
+// Kept app-local so the Web Audio engine does not pull the package-only .mjs
+// contract into the visual bundle. tests/ambientSoundModel.test.js guards parity.
 export const MASTER_CAP = 0.10           // linear, ~-20 dBFS — never exceed
 const MASTER_CENTER = 0.05               // breathe LFO oscillates around this
 const BREATHE_DEPTH = 0.015
@@ -42,7 +44,7 @@ const RAIN_RAMP = 2.2
 /** Rain bed target gain for the current signals. The honesty/double-gate predicate. */
 export function rainTargetGain(mood, weatherEffects, reducedMotion) {
   if (reducedMotion || !weatherEffects) return 0
-  const w = moodToWeather(mood)
+  const w = classifyMood(mood).family
   if (w === 'thunderstorm') return STORM_GAIN
   if (w === 'rain') return RAIN_GAIN
   return 0

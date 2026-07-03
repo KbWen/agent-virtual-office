@@ -208,6 +208,7 @@ import { buildEventCatalogViewModel as buildEventCatalogViewModelFromModel, EVEN
 import { buildTimeEventViewModel as buildTimeEventViewModelFromModel, TIME_EVENT_REASON as TIME_EVENT_REASON_FROM_MODEL } from 'agent-virtual-office/time-event-model'
 import { buildMovementLayoutViewModel as buildMovementLayoutViewModelFromModel, zoneForPoint as zoneForPointFromModel } from 'agent-virtual-office/movement-layout-model'
 import { WEATHER_KIND as WEATHER_KIND_FROM_AMBIENT_MODEL, buildAmbientAppearanceViewModel as buildAmbientAppearanceViewModelFromModel, moodToWeather as moodToWeatherFromAmbientModel } from 'agent-virtual-office/ambient-appearance-model'
+import { buildAmbientSoundViewModel as buildAmbientSoundViewModelFromModel, meanIntervalForPulse as meanIntervalForPulseFromSoundModel, rainTargetGain as rainTargetGainFromSoundModel } from 'agent-virtual-office/ambient-sound-model'
 import { statusVisualState as statusVisualStateFromModel } from 'agent-virtual-office/status-visual-model'
 import { buildActionStripViewModel as buildActionStripViewModelFromModel } from 'agent-virtual-office/action-strip-model'
 import { behaviorIndicatorState as behaviorIndicatorStateFromModel } from 'agent-virtual-office/behavior-indicator-model'
@@ -240,9 +241,11 @@ import {
   buildTimeEventViewModel,
   buildMovementLayoutViewModel,
   buildAmbientAppearanceViewModel,
+  buildAmbientSoundViewModel,
   EVENT_CATEGORY,
   TIME_EVENT_REASON,
   WEATHER_KIND,
+  AMBIENT_SOUND_MASTER_CAP,
   pokePoolKeyForStatus,
   eventEligible,
   floorTickAllowed,
@@ -292,6 +295,8 @@ const movementLayoutModel = buildMovementLayoutViewModelFromModel()
 if (movementLayoutModel.homePositions.dev.x !== 340 || movementLayoutModel.overflowPositions[1].slot !== 1 || zoneForPointFromModel(900, 900) !== null) throw new Error('movement-layout-model export failed')
 const ambientAppearanceModel = buildAmbientAppearanceViewModelFromModel({ hour: 0, mood: 'frustrated', themeId: 'winter' })
 if (ambientAppearanceModel.weather.kind !== WEATHER_KIND_FROM_AMBIENT_MODEL.RAIN || ambientAppearanceModel.theme.overlay.opacity !== 0.07 || moodToWeatherFromAmbientModel('stuck') !== WEATHER_KIND_FROM_AMBIENT_MODEL.THUNDERSTORM) throw new Error('ambient-appearance-model export failed')
+const ambientSoundModel = buildAmbientSoundViewModelFromModel({ mood: 'stuck', soundscapeEnabled: true, teamPulse: 0.5 })
+if (ambientSoundModel.weather.gain !== 0.08 || ambientSoundModel.keyboard.meanIntervalMs !== meanIntervalForPulseFromSoundModel(0.5) || rainTargetGainFromSoundModel('frustrated', true, false) !== 0.05) throw new Error('ambient-sound-model export failed')
 if (statusVisualStateFromModel('awaiting-approval').color !== '#1E9FD4') throw new Error('status-visual-model export failed')
 if (buildActionStripViewModelFromModel({ agents: [{ id: 'qa', status: 'blocked' }] }).attention.count !== 1) throw new Error('action-strip-model export failed')
 if (behaviorIndicatorStateFromModel('goto-coffee-machine').iconKey !== 'coffee') throw new Error('behavior-indicator-model export failed')
@@ -336,6 +341,7 @@ const timeEventCore = buildTimeEventViewModel({ hour: 15 }, { day: 5, lastTrigge
 if (timeEventCore.reason !== TIME_EVENT_REASON.DUE || timeEventCore.eventIds.join(',') !== 'tea-break,group-meeting') throw new Error('status-core time event export failed')
 if (buildMovementLayoutViewModel().homePositions.dev.y !== 364 || zoneForPoint(900, 900) !== null) throw new Error('status-core movement layout export failed')
 if (buildAmbientAppearanceViewModel({ hour: 0, mood: 'frustrated', themeId: 'winter' }).weather.kind !== WEATHER_KIND.RAIN || moodToWeather('stuck') !== WEATHER_KIND.THUNDERSTORM) throw new Error('status-core ambient appearance export failed')
+if (buildAmbientSoundViewModel({ mood: 'stuck', soundscapeEnabled: true, teamPulse: 1 }).master.cap !== AMBIENT_SOUND_MASTER_CAP || buildAmbientSoundViewModel({ mood: 'stuck', soundscapeEnabled: true, teamPulse: 1 }).weather.gain !== 0.08) throw new Error('status-core ambient sound export failed')
 if (reconcileMultiSessionAgents({ agents: { 'wt~dev': { session: 'wt' } }, externalStatus: { 'wt~dev': { status: 'working' } }, updates: [] }).evicted[0] !== 'wt~dev') throw new Error('status-core reconcile export failed')
 if (normalizeAgentStatusUpdates({ type: 'office-status', agents: [{ role: 'frontend', status: 'working' }] }).updates[0]?.agentId !== 'frontend') throw new Error('status-core generic normalize export failed')
 if (blockedReasonState('permission-denied').iconId !== 'slash-circle') throw new Error('status-core blocked reason export failed')
@@ -350,6 +356,7 @@ const exportedSubpaths = Object.keys(pkg.exports)
 const checkedSubpaths = [
   './action-strip-model',
   './ambient-appearance-model',
+  './ambient-sound-model',
   './activity-feed-model',
   './agent-character-model',
   './agent-inspector-model',
@@ -411,7 +418,7 @@ console.log('library imports OK')
   } catch (e) {
     fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
   }
-  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, daily-ledger-model, speech-bubble-model, helper-huddle-model, pair-huddle-model, context-bubble-model, bubble-visibility-model, poke-reaction-model, event-juice-model, event-gate-model, event-seed-model, event-catalog-model, time-event-model, movement-layout-model, ambient-appearance-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
+  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, daily-ledger-model, speech-bubble-model, helper-huddle-model, pair-huddle-model, context-bubble-model, bubble-visibility-model, poke-reaction-model, event-juice-model, event-gate-model, event-seed-model, event-catalog-model, time-event-model, movement-layout-model, ambient-appearance-model, ambient-sound-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
   console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────
