@@ -205,6 +205,28 @@ export {
 } from './timeEventModel.mjs'
 
 export {
+  BEHAVIOR_LOCATIONS,
+  FLOOR_ZONES,
+  HOME_POSITIONS,
+  MEETING_CHAIRS,
+  OBSTACLE_RECTS,
+  OFFICE_CANVAS,
+  OFFICE_LAYOUT_VERSION,
+  OVERFLOW_POSITIONS,
+  SOCIAL_BEHAVIOR_IDS,
+  WAYPOINTS,
+  buildMovementLayoutViewModel,
+  calcFacing,
+  clampToFloor,
+  isOnFloor,
+  isOnObstacle,
+  needsLocationChange,
+  obstacleAt,
+  visuallyOverlapping,
+  zoneForPoint,
+} from './movementLayoutModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,

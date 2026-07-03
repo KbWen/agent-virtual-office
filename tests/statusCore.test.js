@@ -18,6 +18,7 @@ import {
   buildEventCatalogViewModel,
   buildSeedEventViewModel,
   buildTimeEventViewModel,
+  buildMovementLayoutViewModel,
   buildPokeReactionViewModel,
   behaviorIndicatorState,
   characterStatusVisual,
@@ -50,6 +51,7 @@ import {
   truncateText,
   validatePersistedDailyDoneLedger,
   VALID_STATUSES,
+  zoneForPoint,
 } from '../src/systems/statusCore.mjs'
 
 describe('statusCore public headless API', () => {
@@ -163,6 +165,12 @@ describe('statusCore public headless API', () => {
       reason: TIME_EVENT_REASON.DUE,
       eventIds: ['tea-break', 'group-meeting'],
     })
+    expect(buildMovementLayoutViewModel()).toMatchObject({
+      version: 'office-layout-v1',
+      homePositions: { dev: { x: 340, y: 364 } },
+      overflowPositions: expect.arrayContaining([{ x: 370, y: 80, slot: 1 }]),
+    })
+    expect(zoneForPoint(900, 900)).toBeNull()
   })
 
   it('exports renderer-agnostic status and roster view-models from one path', () => {

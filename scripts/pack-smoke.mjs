@@ -206,6 +206,7 @@ import { buildEventGateViewModel as buildEventGateViewModelFromModel, floorTickA
 import { buildSeedEventViewModel as buildSeedEventViewModelFromModel, seedEventCandidates as seedEventCandidatesFromModel } from 'agent-virtual-office/event-seed-model'
 import { buildEventCatalogViewModel as buildEventCatalogViewModelFromModel, EVENT_CATEGORY as EVENT_CATEGORY_FROM_MODEL } from 'agent-virtual-office/event-catalog-model'
 import { buildTimeEventViewModel as buildTimeEventViewModelFromModel, TIME_EVENT_REASON as TIME_EVENT_REASON_FROM_MODEL } from 'agent-virtual-office/time-event-model'
+import { buildMovementLayoutViewModel as buildMovementLayoutViewModelFromModel, zoneForPoint as zoneForPointFromModel } from 'agent-virtual-office/movement-layout-model'
 import { statusVisualState as statusVisualStateFromModel } from 'agent-virtual-office/status-visual-model'
 import { buildActionStripViewModel as buildActionStripViewModelFromModel } from 'agent-virtual-office/action-strip-model'
 import { behaviorIndicatorState as behaviorIndicatorStateFromModel } from 'agent-virtual-office/behavior-indicator-model'
@@ -236,6 +237,7 @@ import {
   buildEventCatalogViewModel,
   buildSeedEventViewModel,
   buildTimeEventViewModel,
+  buildMovementLayoutViewModel,
   EVENT_CATEGORY,
   TIME_EVENT_REASON,
   pokePoolKeyForStatus,
@@ -255,6 +257,7 @@ import {
   reconcileMultiSessionAgents,
   statusVisualState,
   teamStatus,
+  zoneForPoint,
 } from 'agent-virtual-office/status-core'
 import { comparePresence as comparePresenceFromRoster } from 'agent-virtual-office/roster-model'
 
@@ -281,6 +284,8 @@ if (buildSeedEventViewModelFromModel({ state: { mood: 'smooth' }, prev: { mood: 
 if (buildEventCatalogViewModelFromModel({ daily: [{ id: 'eureka', participants: ['arch'], duration: 8000 }], rare: [] }).byCategory[EVENT_CATEGORY_FROM_MODEL.WORK_CLAIM][0] !== 'eureka') throw new Error('event-catalog-model export failed')
 const timeEventModel = buildTimeEventViewModelFromModel({ hour: 15 }, { day: 5, lastTriggeredHour: -1 })
 if (timeEventModel.reason !== TIME_EVENT_REASON_FROM_MODEL.DUE || timeEventModel.eventIds.join(',') !== 'tea-break,group-meeting') throw new Error('time-event-model export failed')
+const movementLayoutModel = buildMovementLayoutViewModelFromModel()
+if (movementLayoutModel.homePositions.dev.x !== 340 || movementLayoutModel.overflowPositions[1].slot !== 1 || zoneForPointFromModel(900, 900) !== null) throw new Error('movement-layout-model export failed')
 if (statusVisualStateFromModel('awaiting-approval').color !== '#1E9FD4') throw new Error('status-visual-model export failed')
 if (buildActionStripViewModelFromModel({ agents: [{ id: 'qa', status: 'blocked' }] }).attention.count !== 1) throw new Error('action-strip-model export failed')
 if (behaviorIndicatorStateFromModel('goto-coffee-machine').iconKey !== 'coffee') throw new Error('behavior-indicator-model export failed')
@@ -323,6 +328,7 @@ if (buildSeedEventViewModel({ state: { mood: 'smooth' }, prev: { mood: 'normal' 
 if (buildEventCatalogViewModel({ daily: [{ id: 'eureka', participants: ['arch'], duration: 8000 }], rare: [] }).byCategory[EVENT_CATEGORY.WORK_CLAIM][0] !== 'eureka') throw new Error('status-core event catalog export failed')
 const timeEventCore = buildTimeEventViewModel({ hour: 15 }, { day: 5, lastTriggeredHour: -1 })
 if (timeEventCore.reason !== TIME_EVENT_REASON.DUE || timeEventCore.eventIds.join(',') !== 'tea-break,group-meeting') throw new Error('status-core time event export failed')
+if (buildMovementLayoutViewModel().homePositions.dev.y !== 364 || zoneForPoint(900, 900) !== null) throw new Error('status-core movement layout export failed')
 if (reconcileMultiSessionAgents({ agents: { 'wt~dev': { session: 'wt' } }, externalStatus: { 'wt~dev': { status: 'working' } }, updates: [] }).evicted[0] !== 'wt~dev') throw new Error('status-core reconcile export failed')
 if (normalizeAgentStatusUpdates({ type: 'office-status', agents: [{ role: 'frontend', status: 'working' }] }).updates[0]?.agentId !== 'frontend') throw new Error('status-core generic normalize export failed')
 if (blockedReasonState('permission-denied').iconId !== 'slash-circle') throw new Error('status-core blocked reason export failed')
@@ -352,6 +358,7 @@ const checkedSubpaths = [
   './event-seed-model',
   './helper-huddle-model',
   './integration-status-model',
+  './movement-layout-model',
   './normalize-post',
   './pair-huddle-model',
   './poke-reaction-model',
@@ -396,7 +403,7 @@ console.log('library imports OK')
   } catch (e) {
     fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
   }
-  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, daily-ledger-model, speech-bubble-model, helper-huddle-model, pair-huddle-model, context-bubble-model, bubble-visibility-model, poke-reaction-model, event-juice-model, event-gate-model, event-seed-model, event-catalog-model, time-event-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
+  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, daily-ledger-model, speech-bubble-model, helper-huddle-model, pair-huddle-model, context-bubble-model, bubble-visibility-model, poke-reaction-model, event-juice-model, event-gate-model, event-seed-model, event-catalog-model, time-event-model, movement-layout-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
   console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────
