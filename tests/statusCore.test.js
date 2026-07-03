@@ -7,6 +7,7 @@ import {
   buildActivityFeedViewModel,
   buildPresenceRailViewModel,
   buildHelperHuddleViewModel,
+  buildPairLinkViewModel,
   buildAgentStatusSnapshot,
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
@@ -21,6 +22,8 @@ import {
   healthDotState,
   inspectorPanelLayout,
   isDynamicStatusAgent,
+  isPairHuddleWriteTask,
+  findSharedFilePair,
   normalizeAgentStatusUpdates,
   normalizePost,
   presenceRows,
@@ -58,6 +61,25 @@ describe('statusCore public headless API', () => {
       helpers: [{ parentRole: 'dev' }],
       agents: { dev: { position: { x: 10, y: 20 } } },
     }).rows[0]?.role).toBe('dev')
+    expect(findSharedFilePair({
+      dev: { status: 'working', activeFile: '/r/src/app.js', activeFileAt: 1000 },
+      qa: { status: 'working', activeFile: '/r/src/app.js', activeFileAt: 900 },
+    }, 1000, 90_000)).toEqual(['dev', 'qa'])
+    expect(buildPairLinkViewModel({
+      now: 1000,
+      externalStatus: {
+        dev: { status: 'working', activeFile: '/r/src/app.js', activeFileAt: 1000 },
+        qa: { status: 'working', activeFile: '/r/src/app.js', activeFileAt: 900 },
+      },
+    }).link.file).toBe('app.js')
+    expect(isPairHuddleWriteTask('Read')).toBe(false)
+    expect(buildPairLinkViewModel({
+      now: 1000,
+      externalStatus: {
+        dev: { status: 'working', task: 'Edit', activeFile: '/r/src/app.js', activeFileAt: 1000 },
+        qa: { status: 'working', task: 'Read', activeFile: '/r/src/app.js', activeFileAt: 900 },
+      },
+    }).visible).toBe(false)
   })
 
   it('exports renderer-agnostic status and roster view-models from one path', () => {

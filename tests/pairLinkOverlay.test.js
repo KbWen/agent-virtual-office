@@ -68,6 +68,14 @@ describe('co-editing pair overlay (integration)', () => {
     expect(useOfficeStore.getState().pairLink).toBeNull()
   })
 
+  it('explicit Read activeFile does not over-claim a co-editing pair', () => {
+    useOfficeStore.getState().applyExternalStatus([
+      { agentId: 'dev', status: 'working', task: 'Edit', activeFile: '/r/src/store.js' },
+      { agentId: 'qa',  status: 'working', task: 'Read', activeFile: '/r/src/store.js' },
+    ], { source: 'external', statusSource: 'external' })
+    expect(useOfficeStore.getState().pairLink).toBeNull()
+  })
+
   it('clears pairLink when the shared file goes away (one agent moves off it)', () => {
     coEdit('/r/src/store.js')
     expect(useOfficeStore.getState().pairLink).toBeTruthy()

@@ -102,6 +102,14 @@ describe('findSharedFilePair — fires only on a real shared file', () => {
     expect(findSharedFilePair(ext, NOW, WIN)).toEqual(['dev', 'qa'])
   })
 
+  it('an explicit Read task with activeFile is not treated as co-editing', () => {
+    const ext = {
+      dev: { ...E('working', '/r/src/store.js', NOW - 1000), task: 'Edit' },
+      qa:  { ...E('working', '/r/src/store.js', NOW - 1000), task: 'Read' },
+    }
+    expect(findSharedFilePair(ext, NOW, WIN)).toBeNull()
+  })
+
   it('>2 on the same file → the two MOST-RECENT are chosen', () => {
     const ext = {
       dev:  E('working', '/r/x.js', NOW - 9000),

@@ -197,6 +197,7 @@ import { assembleIntegrationPatch, buildExternalStatusEntry } from 'agent-virtua
 import { buildDoneEventKey as buildDoneEventKeyFromLedgerModel } from 'agent-virtual-office/daily-ledger-model'
 import { computeBubbleLayout as computeBubbleLayoutFromSpeechModel } from 'agent-virtual-office/speech-bubble-model'
 import { buildHelperHuddleViewModel as buildHelperHuddleViewModelFromModel } from 'agent-virtual-office/helper-huddle-model'
+import { buildPairLinkViewModel as buildPairLinkViewModelFromModel } from 'agent-virtual-office/pair-huddle-model'
 import { statusVisualState as statusVisualStateFromModel } from 'agent-virtual-office/status-visual-model'
 import { buildActionStripViewModel as buildActionStripViewModelFromModel } from 'agent-virtual-office/action-strip-model'
 import { behaviorIndicatorState as behaviorIndicatorStateFromModel } from 'agent-virtual-office/behavior-indicator-model'
@@ -218,6 +219,7 @@ import {
   buildDoneEventKey,
   computeBubbleLayout,
   buildHelperHuddleViewModel,
+  buildPairLinkViewModel,
   behaviorIndicatorState,
   characterStatusVisual,
   inspectorPanelLayout,
@@ -243,6 +245,8 @@ if (assembleIntegrationPatch({ statusSource: 'organic', integrationSource: null 
 if (buildDoneEventKeyFromLedgerModel({ agentId: 'dev' }, { source: 'codex', seq: '7' }) !== 'codex:7:dev') throw new Error('daily-ledger-model export failed')
 if (computeBubbleLayoutFromSpeechModel('修好🧪流程').displayMsg !== '修好🧪流程') throw new Error('speech-bubble-model export failed')
 if (buildHelperHuddleViewModelFromModel({ helpers: [{ parentRole: 'dev' }], agents: { dev: { position: { x: 10, y: 20 } } } }).rows[0]?.sprites.length !== 1) throw new Error('helper-huddle-model export failed')
+if (buildPairLinkViewModelFromModel({ now: 1000, externalStatus: { dev: { status: 'working', task: 'Edit', activeFile: '/r/a.js', activeFileAt: 1000 }, qa: { status: 'working', task: 'Write', activeFile: '/r/a.js', activeFileAt: 900 } } }).link?.file !== 'a.js') throw new Error('pair-huddle-model export failed')
+if (buildPairLinkViewModelFromModel({ now: 1000, externalStatus: { dev: { status: 'working', task: 'Edit', activeFile: '/r/a.js', activeFileAt: 1000 }, qa: { status: 'working', task: 'Read', activeFile: '/r/a.js', activeFileAt: 900 } } }).visible !== false) throw new Error('pair-huddle-model Read gate failed')
 if (statusVisualStateFromModel('awaiting-approval').color !== '#1E9FD4') throw new Error('status-visual-model export failed')
 if (buildActionStripViewModelFromModel({ agents: [{ id: 'qa', status: 'blocked' }] }).attention.count !== 1) throw new Error('action-strip-model export failed')
 if (behaviorIndicatorStateFromModel('goto-coffee-machine').iconKey !== 'coffee') throw new Error('behavior-indicator-model export failed')
@@ -271,6 +275,7 @@ if (buildDynamicStatusAgent({ id: 'dev' }, { agentId: 'wt~dev', position: { x: 1
 if (buildDoneEventKey({ agentId: 'dev' }, { eventKey: 'done-1' }) !== 'done-1:dev') throw new Error('status-core daily ledger export failed')
 if (computeBubbleLayout('abcdefghijklmnopq').displayMsg !== 'abcdefghijklmnop…') throw new Error('status-core speech bubble export failed')
 if (buildHelperHuddleViewModel({ helpers: [{ parentRole: 'dev' }], agents: { dev: { position: { x: 10, y: 20 } } } }).rows[0]?.role !== 'dev') throw new Error('status-core helper huddle export failed')
+if (buildPairLinkViewModel({ now: 1000, externalStatus: { dev: { status: 'working', task: 'Edit', activeFile: '/r/a.js', activeFileAt: 1000 }, qa: { status: 'working', task: 'Write', activeFile: '/r/a.js', activeFileAt: 900 } } }).pair?.[1] !== 'qa') throw new Error('status-core pair huddle export failed')
 if (reconcileMultiSessionAgents({ agents: { 'wt~dev': { session: 'wt' } }, externalStatus: { 'wt~dev': { status: 'working' } }, updates: [] }).evicted[0] !== 'wt~dev') throw new Error('status-core reconcile export failed')
 if (normalizeAgentStatusUpdates({ type: 'office-status', agents: [{ role: 'frontend', status: 'working' }] }).updates[0]?.agentId !== 'frontend') throw new Error('status-core generic normalize export failed')
 if (blockedReasonState('permission-denied').iconId !== 'slash-circle') throw new Error('status-core blocked reason export failed')
@@ -295,6 +300,7 @@ const checkedSubpaths = [
   './helper-huddle-model',
   './integration-status-model',
   './normalize-post',
+  './pair-huddle-model',
   './review-gate-model',
   './roster-model',
   './speech-bubble-model',
@@ -335,7 +341,7 @@ console.log('library imports OK')
   } catch (e) {
     fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
   }
-  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, daily-ledger-model, speech-bubble-model, helper-huddle-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
+  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, daily-ledger-model, speech-bubble-model, helper-huddle-model, pair-huddle-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
   console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────

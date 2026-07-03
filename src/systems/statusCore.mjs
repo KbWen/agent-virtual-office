@@ -88,6 +88,18 @@ export {
 } from './helperHuddleModel.mjs'
 
 export {
+  DEFAULT_PAIR_HUDDLE_WINDOW,
+  PAIR_HUDDLE_WRITE_TASKS,
+  buildPairLinkViewModel,
+  fileBasename,
+  findSharedFilePair,
+  isPairHuddleWriteTask,
+  normalizeFilePath,
+  pairEndpointPosition,
+  pairLinkFile,
+} from './pairHuddleModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,
