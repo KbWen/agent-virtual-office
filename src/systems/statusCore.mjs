@@ -242,6 +242,12 @@ export {
 } from './ambientSoundModel.mjs'
 
 export {
+  PET_MODES,
+  PET_STATE_VERSION,
+  buildPetStateViewModel,
+} from './petStateModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,
