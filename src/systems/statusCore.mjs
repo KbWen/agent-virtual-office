@@ -147,6 +147,21 @@ export {
 } from './eventJuiceModel.mjs'
 
 export {
+  LIVE_FLOOR_FIRE_CHANCE,
+  LIVE_FLOOR_PULSE_THRESHOLD,
+  WORK_CLAIM_GATE_IDS,
+  WORK_CLAIM_SIGNAL_WINDOW,
+  buildEventGateViewModel,
+  eligibleEvents,
+  eventEligible,
+  eventWorkClaimGate,
+  floorTickAllowed,
+  floorTickState,
+  pickEligibleEvent,
+  recentWorkSignal,
+} from './eventGateModel.mjs'
+
+export {
   agentSourceList,
   agentStatus,
   attentionItems,

@@ -17,6 +17,7 @@
     "./bubble-visibility-model": "./src/systems/bubbleVisibilityModel.mjs",
     "./poke-reaction-model": "./src/systems/pokeReactionModel.mjs",
     "./event-juice-model": "./src/systems/eventJuiceModel.mjs",
+    "./event-gate-model": "./src/systems/eventGateModel.mjs",
     "./status-visual-model": "./src/systems/statusVisualModel.mjs",
     "./action-strip-model": "./src/systems/actionStripModel.mjs",
     "./behavior-indicator-model": "./src/systems/behaviorIndicatorModel.mjs",

@@ -13,6 +13,7 @@ import {
   buildDynamicStatusAgent,
   buildExternalStatusEntry,
   buildDoneEventKey,
+  buildEventGateViewModel,
   buildEventJuiceViewModel,
   buildPokeReactionViewModel,
   behaviorIndicatorState,
@@ -22,7 +23,9 @@ import {
   buildContextBubblePlan,
   createDailyDoneLedger,
   contextBubbleCandidateKeys,
+  eventEligible,
   feedEntries,
+  floorTickAllowed,
   gateWaiting,
   healthDotState,
   inspectorPanelLayout,
@@ -127,6 +130,15 @@ describe('statusCore public headless API', () => {
     })
     expect(buildEventJuiceViewModel('eureka', { reducedMotion: true }).visible).toBe(false)
     expect(shouldShakeDesk('desk-slam', false)).toBe(true)
+    expect(eventEligible({ id: 'review-debate' }, {
+      externalStatus: { qa: { changedAt: 1000 } },
+      mood: 'normal',
+    }, 2000)).toBe(true)
+    expect(buildEventGateViewModel({ id: 'deploy-success' }, {
+      externalStatus: {},
+      mood: 'normal',
+    }, { now: 2000 })).toMatchObject({ workClaim: true, eligible: false })
+    expect(floorTickAllowed({ statusSource: 'external', teamPulse: 0.9 }, { random: () => 0.99 })).toBe(false)
   })
 
   it('exports renderer-agnostic status and roster view-models from one path', () => {
