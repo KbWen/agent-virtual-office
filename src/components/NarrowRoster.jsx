@@ -5,6 +5,7 @@ import { charName, behaviorLabel, t, useLocale, eventName } from '../i18n'
 import { CharacterPixelSprite } from './AgentCharacter'
 import { agentLineLabel, taskChipLabel, formatTokens } from './ControlPanel'
 import { formatTimeAgo } from '../utils/formatTime'
+import { activityFeedMessage } from '../utils/activityFeedLabel'
 import { comparePresence, isIdleStatus, teamStatus } from '../systems/rosterModel'
 
 // ─── Vertical office: presence rail (COMMS rebuild — Phase 1: the honest, lively spine) ─────────
@@ -124,10 +125,11 @@ function FeedRow({ entry, color, ageMs, reducedMotion }) {
   // Phase 3: a single gentle fade+rise on MOUNT only (new key → React remounts → runs once).
   // reducedMotion → no entrance. CSS reverts to the inline `opacity` (decay) after the 250ms run.
   const anim = reducedMotion ? null : 'chat-feed-in 0.25s ease-out'
+  const message = activityFeedMessage(entry, { t, eventName })
   if (entry.type === 'event') {
     return (
       <div className="text-[12px] text-center text-amber-700 dark:text-amber-300/90 py-1" style={{ opacity, animation: anim }}>
-        🎉 {eventName(entry.message) || entry.message}
+        🎉 {message.text}
       </div>
     )
   }
@@ -144,9 +146,9 @@ function FeedRow({ entry, color, ageMs, reducedMotion }) {
     : entry.status === 'done' ? 'text-green-700 dark:text-green-400'
     : 'text-gray-600 dark:text-gray-300'
   return (
-    <div className="flex items-baseline gap-2 text-[13px] py-1 pl-2 border-l-2" style={{ borderColor: color, opacity, animation: anim }}>
+    <div className="flex items-baseline gap-2 text-[13px] py-1.5 pl-2.5 border-l-2" style={{ borderColor: color, opacity, animation: anim }}>
       <span className="font-medium text-gray-700 dark:text-gray-200 shrink-0">{charName(entry.agentId)}</span>
-      <span className={`truncate ${tone}`}>{entry.message}</span>
+      <span className={`truncate ${tone}`} title={message.title || undefined}>{message.text}</span>
       <span className="ml-auto text-[9px] text-gray-400 shrink-0 tabular-nums">{ago}</span>
     </div>
   )
@@ -327,7 +329,7 @@ export default function NarrowRoster() {
           entrance animation is Phase 3. Honest empty states (no nagging void). */}
       {feed.length > 0 ? (
         <div className="flex-1 min-h-0 flex flex-col mt-1 pt-2 border-t border-gray-200 dark:border-gray-700" data-roster-feed="1">
-          <div className="text-[11px] uppercase tracking-wider text-gray-400 px-1 pb-1">
+          <div className="text-[11px] uppercase text-gray-400 px-1 pb-1">
             {t('chat.activity', 'Activity')}
             {expandedId && <span className="normal-case text-gray-500"> · {charName(expandedId)}</span>}
           </div>

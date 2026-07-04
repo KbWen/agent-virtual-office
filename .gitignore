@@ -75,6 +75,7 @@ __pycache__/
 
 # Local verification / test artifacts (not part of the published package)
 /agent-virtual-office-*.png
+/output/product-audit-*/
 .tmp-vite-codex.*
 .playwright-mcp/
 test-results/
@@ -122,4 +123,3 @@ office-hook-capture.jsonl
 .antigravity/scratch/
 
 # End Agentic OS Template - Downstream Ignore Defaults
-

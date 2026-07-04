@@ -15,8 +15,8 @@ const statusOptions = ['idle', 'working', 'blocked', 'done']
 // existing importers (NarrowRoster, tests). NOTE: `export { x } from './m'` alone re-exports without
 // binding x into THIS module's scope — the component's internal calls would then crash with
 // "x is not defined" (regression caught only by actually loading the page).
-import { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState } from './controlPanelLabels.js'
-export { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState }
+import { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, attentionStripState, controlPanelPresenceRows, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState } from './controlPanelLabels.js'
+export { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, attentionStripState, controlPanelPresenceRows, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState }
 
 // #39 types: emoji shown on the "change pet" button per current skin.
 const PET_TYPE_EMOJI = { cat: '🐈', vacuum: '🤖', dog: '🐕', rabbit: '🐇', bird: '🐦', hamster: '🐹' }
@@ -134,6 +134,14 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
     setNotifyState(r)
   }
   const lang = useLocale()
+  const attention = React.useMemo(
+    () => attentionStripState({ agents: agentList, externalStatus, nameForId: charName }),
+    [agentList, externalStatus, lang]
+  )
+  const presence = React.useMemo(
+    () => controlPanelPresenceRows({ agents: agentList, externalStatus }),
+    [agentList, externalStatus]
+  )
   // AVO-115: opt-in cozy postcard. Gathers ONLY honest signals (done/blocked from the
   // existing ledgers + live mood), renders client-side, then shares-or-downloads. The
   // button is disabled while busy (no double-render).
@@ -208,6 +216,15 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         <span className="sr-only">
           {t('ui.todayMetricsA11y', '{0} completed, {1} blocked today').replace('{0}', String(totalDoneToday)).replace('{1}', String(totalBlockedToday))}
         </span>
+        {attention.count > 0 && (
+          <div
+            className="mb-1 -mx-1 rounded border border-red-200/70 bg-red-50/90 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:border-red-800/70 dark:bg-red-900/25 dark:text-red-300 truncate"
+            aria-live="polite"
+            title={`${t('chat.teamBlocked', 'Waiting on you')}: ${attention.names.join(', ')}`}
+          >
+            ⚠ {t('chat.teamBlocked', 'Waiting on you')}: {attention.names.join(', ')}
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 flex-1 overflow-x-auto">
             {agentList.map((agent) => {
@@ -292,7 +309,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300">{nextLangLabel}</span>
           </button>
           {/* View mode — Office / List (was the ☰ bar button). */}
-          <button onClick={toggleRosterMode} aria-pressed={rosterMode}
+          <button onClick={() => { toggleRosterMode(); setShowSettings(false) }} aria-pressed={rosterMode}
             className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-200"
             aria-label={rosterMode ? t('aria.showOffice', 'Show office') : t('aria.showList', 'Show list view')}>
             <span>{t('settings.view', 'View')}</span>
@@ -395,14 +412,25 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         </div>
       )}
 
+      {attention.count > 0 && !rosterMode && (
+        <div
+          className="mb-1 mx-auto flex max-w-[min(720px,100%)] items-center justify-center gap-1.5 rounded border border-red-200/70 bg-red-50/90 px-2 py-1 text-[11px] font-medium text-red-700 shadow-sm dark:border-red-800/70 dark:bg-red-900/25 dark:text-red-300"
+          data-attention-strip="1"
+          aria-live="polite"
+          title={`${t('chat.teamBlocked', 'Waiting on you')}: ${attention.names.join(', ')}`}
+        >
+          <span aria-hidden="true">⚠</span>
+          <span className="truncate">{t('chat.teamBlocked', 'Waiting on you')}: {attention.names.join(', ')}</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-3">
         <div className="text-gray-500 dark:text-gray-400 font-mono min-w-[42px]">
           {String(hour).padStart(2, '0')}:{String(minute).padStart(2, '0')}
         </div>
 
         <div className="flex items-center gap-3 flex-1 overflow-x-auto">
-          {agentList.map((agent) => {
-            const ext = externalStatus[agent.id]
+          {presence.rows.map(({ agent, ext, status }) => {
             const name = charName(agent.id)
             const label = ext ? agentLineLabel(ext, t) : behaviorLabel(agent.behavior)
             return (
@@ -414,11 +442,17 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
                   <span aria-hidden="true" title={blockedReasonLabel(ext) || ''}>{blockedReasonGlyph(ext)}</span>
                 )}
                 <span className={ext ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-gray-500 dark:text-gray-400'}>{label}</span>
-                <span className="inline-block w-1.5 h-1.5 rounded-full ml-0.5" style={{ backgroundColor: STATUS_COLORS[agent.status] || '#888' }} aria-hidden="true" />
-                <span className="sr-only">{agent.status}</span>
+                <span className="inline-block w-1.5 h-1.5 rounded-full ml-0.5" style={{ backgroundColor: STATUS_COLORS[status] || '#888' }} aria-hidden="true" />
+                <span className="sr-only">{status}</span>
               </div>
             )
           })}
+          {presence.quietCount > 0 && (
+            <div className="flex items-center gap-1 shrink-0 text-gray-400 dark:text-gray-500" title={t('ui.quietAgentsTooltip', '{0} agents are quiet').replace('{0}', String(presence.quietCount))}>
+              <span className="inline-block w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600" aria-hidden="true" />
+              <span>{t('ui.quietAgents', '{0} quiet').replace('{0}', String(presence.quietCount))}</span>
+            </div>
+          )}
         </div>
 
         {activeEvent && (

@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore } from '../systems/store'
 import { charName, eventName, useLocale, t } from '../i18n'
 import { formatTimeAgo } from '../utils/formatTime'
+import { activityFeedMessage } from '../utils/activityFeedLabel'
 
 const typeIcons = {
   event: '🎪',
@@ -37,7 +38,7 @@ export default function ActivityFeed({ mode = 'full' }) {
   const unreadCount = entries.filter(e => Date.now() - e.timestamp < 30000).length
 
   return (
-    <div className={`fixed top-3 right-3 z-50 select-none transition-all duration-200 ${collapsed ? 'w-10' : 'w-64'}`}>
+    <div className={`fixed top-3 right-3 z-50 select-none transition-all duration-200 ${collapsed ? 'w-10' : 'w-72 max-w-[calc(100vw-1.5rem)]'}`}>
       {/* Toggle button */}
       <button
         onClick={() => setCollapsed(!collapsed)}
@@ -56,8 +57,8 @@ export default function ActivityFeed({ mode = 'full' }) {
       {/* Feed panel */}
       {!collapsed && (
         <div className="mt-2 bg-white/95 dark:bg-gray-900/95 backdrop-blur rounded-lg border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden">
-          <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-700 dark:text-gray-200">
+          <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">
               {t('activityFeed.title', 'Activity')}
             </span>
             {hasEntries && (
@@ -68,7 +69,7 @@ export default function ActivityFeed({ mode = 'full' }) {
           </div>
           <div className="max-h-64 overflow-y-auto">
             {!hasEntries ? (
-              <div className="px-3 py-4 text-center text-xs text-gray-400 dark:text-gray-500">
+              <div className="px-3 py-5 text-center text-xs text-gray-400 dark:text-gray-500">
                 {t('activityFeed.empty', 'No activity yet')}
               </div>
             ) : (
@@ -90,10 +91,11 @@ function ActivityEntry({ entry }) {
   const icon = typeIcons[entry.type] || '📝'
   const name = entry.agentId ? charName(entry.agentId) : null
   const ago = formatTimeAgo(entry.timestamp)
+  const message = activityFeedMessage(entry, { t, eventName })
 
   return (
-    <div className={`px-3 py-1.5 border-b border-gray-50 dark:border-gray-800 last:border-0 flex items-start gap-2 ${isRecent ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}>
-      <span className="text-[10px] mt-0.5 shrink-0">{icon}</span>
+    <div className={`px-3 py-2 border-b border-gray-50 dark:border-gray-800 last:border-0 flex items-start gap-2.5 ${isRecent ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}>
+      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gray-100 text-[10px] dark:bg-gray-800">{icon}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
           {name && (
@@ -104,8 +106,8 @@ function ActivityEntry({ entry }) {
           )}
           <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto shrink-0">{ago}</span>
         </div>
-        <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
-          {entry.type === 'event' ? (eventName(entry.message) || entry.message) : entry.message}
+        <div className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 truncate" title={message.title || undefined}>
+          {message.text}
         </div>
       </div>
     </div>
