@@ -5,6 +5,33 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.4 — 2026-07-04 — Clearer signals, plainer words
+
+### Added
+
+- **Action strip** — the control panel now surfaces actionable blockers up front, so a stuck agent is
+  visible at a glance without opening anything.
+
+### Changed
+
+- **The activity feed speaks plainer** — implementation-shaped entries (raw filenames, hook artifacts)
+  are translated into product-readable copy, with the raw text kept in the tooltip. The bottom rail now
+  shows agents that have a live signal and folds the quiet ones into a tidy count.
+- **Fewer interruptions** — the settings popover closes itself after you switch major views, and the
+  most meme-like high-frequency Chinese speech bubbles were removed. The first-run setup hint is easier
+  to read.
+
+### Fixed
+
+- **Honest rail status** — the rail status dot and its accessibility label now read from the normalized
+  external status, so they can't drift from what the agent is actually doing.
+
+### Documentation
+
+- **ADR-009** — recorded the decision to keep the speculative "portable status-core" package layer out
+  of AVO; it is deferred to a clean-room copy-out into a new repo if a real second consumer ever firms
+  up. No user-facing effect.
+
 ## v1.6.3 — 2026-06-27 — Fuller corners, honest windows
 
 ### Added
