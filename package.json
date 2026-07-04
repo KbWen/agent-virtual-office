@@ -7,6 +7,7 @@
     ".": "./bin/cli.js",
     "./status-contract": "./src/utils/statusContract.mjs",
     "./status-core": "./src/systems/statusCore.mjs",
+    "./portable-core-manifest": "./src/systems/portableCoreManifest.mjs",
     "./normalize-post": "./src/utils/normalizePost.mjs",
     "./status-runtime": "./src/systems/statusRuntime.mjs",
     "./daily-ledger-model": "./src/systems/dailyLedgerModel.mjs",

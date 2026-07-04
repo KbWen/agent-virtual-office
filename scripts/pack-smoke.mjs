@@ -194,6 +194,7 @@ try {
 import { VALID_STATUSES, normalizePost } from 'agent-virtual-office/status-contract'
 import { normalizePost as normalizePostAlias } from 'agent-virtual-office/normalize-post'
 import { assembleIntegrationPatch, buildExternalStatusEntry } from 'agent-virtual-office/status-runtime'
+import { PORTABLE_CORE_VERSION as PORTABLE_CORE_VERSION_FROM_MANIFEST, portableCoreCapabilityBySubpath as portableCoreCapabilityBySubpathFromManifest, portableCoreSubpaths as portableCoreSubpathsFromManifest } from 'agent-virtual-office/portable-core-manifest'
 import { buildDoneEventKey as buildDoneEventKeyFromLedgerModel } from 'agent-virtual-office/daily-ledger-model'
 import { computeBubbleLayout as computeBubbleLayoutFromSpeechModel } from 'agent-virtual-office/speech-bubble-model'
 import { buildHelperHuddleViewModel as buildHelperHuddleViewModelFromModel } from 'agent-virtual-office/helper-huddle-model'
@@ -247,6 +248,7 @@ import {
   buildPetStateViewModel,
   buildWorkflowHandoffViewModel,
   EVENT_CATEGORY,
+  PORTABLE_CORE_VERSION,
   TIME_EVENT_REASON,
   WEATHER_KIND,
   AMBIENT_SOUND_MASTER_CAP,
@@ -266,6 +268,8 @@ import {
   gateWaiting,
   healthDotState,
   normalizeAgentStatusUpdates,
+  portableCoreCapabilityBySubpath,
+  portableCoreSubpaths,
   reconcileMultiSessionAgents,
   statusVisualState,
   teamStatus,
@@ -280,6 +284,7 @@ if (norm.agents[0]?.status !== 'working') throw new Error('status-contract norma
 if (normalizePostAlias({ qa: 'blocked' }).agents[0]?.status !== 'blocked') throw new Error('normalize-post export failed')
 if (buildExternalStatusEntry(null, { status: 'done' }, 1000).entry.expiresAt !== 11000) throw new Error('status-runtime export failed')
 if (assembleIntegrationPatch({ statusSource: 'organic', integrationSource: null }, { statusSource: 'external' }, {}).statusSource !== 'external') throw new Error('status-runtime integration patch export failed')
+if (PORTABLE_CORE_VERSION_FROM_MANIFEST !== 'portable-core-v1' || portableCoreCapabilityBySubpathFromManifest('./workflow-handoff-model')?.category !== 'workflow-flow' || !portableCoreSubpathsFromManifest().includes('./portable-core-manifest')) throw new Error('portable-core-manifest export failed')
 if (buildDoneEventKeyFromLedgerModel({ agentId: 'dev' }, { source: 'codex', seq: '7' }) !== 'codex:7:dev') throw new Error('daily-ledger-model export failed')
 if (computeBubbleLayoutFromSpeechModel('修好🧪流程').displayMsg !== '修好🧪流程') throw new Error('speech-bubble-model export failed')
 if (buildHelperHuddleViewModelFromModel({ helpers: [{ parentRole: 'dev' }], agents: { dev: { position: { x: 10, y: 20 } } } }).rows[0]?.sprites.length !== 1) throw new Error('helper-huddle-model export failed')
@@ -358,6 +363,7 @@ if (normalizeAgentStatusUpdates({ type: 'office-status', agents: [{ role: 'front
 if (blockedReasonState('permission-denied').iconId !== 'slash-circle') throw new Error('status-core blocked reason export failed')
 if (healthDotState({ integrationHealth: { state: 'offline' } }).level !== 'offline') throw new Error('status-core health export failed')
 if (gateWaiting({ gate: { status: 'awaiting-approval' } }, '/ship').phaseGlyph !== 'ship') throw new Error('status-core review gate export failed')
+if (PORTABLE_CORE_VERSION !== 'portable-core-v1' || !portableCoreSubpaths().includes('./status-core') || portableCoreCapabilityBySubpath('./pet-state-model')?.category !== 'companion') throw new Error('status-core portable core manifest export failed')
 
 const require = createRequire(import.meta.url)
 const pkg = require('agent-virtual-office/package.json')
@@ -388,6 +394,7 @@ const checkedSubpaths = [
   './normalize-post',
   './pair-huddle-model',
   './pet-state-model',
+  './portable-core-manifest',
   './poke-reaction-model',
   './review-gate-model',
   './roster-model',
@@ -431,7 +438,7 @@ console.log('library imports OK')
   } catch (e) {
     fail('assertion-0-library-imports', `Library subpath import check failed: ${e.message}`, `stdout: ${e.stdout}`, `stderr: ${e.stderr}`)
   }
-  console.log('[pack-smoke]   status-contract, status-core, normalize-post, status-runtime, daily-ledger-model, speech-bubble-model, helper-huddle-model, pair-huddle-model, context-bubble-model, bubble-visibility-model, poke-reaction-model, event-juice-model, event-gate-model, event-seed-model, event-catalog-model, time-event-model, movement-layout-model, ambient-appearance-model, ambient-sound-model, pet-state-model, workflow-handoff-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
+  console.log('[pack-smoke]   status-contract, status-core, portable-core-manifest, normalize-post, status-runtime, daily-ledger-model, speech-bubble-model, helper-huddle-model, pair-huddle-model, context-bubble-model, bubble-visibility-model, poke-reaction-model, event-juice-model, event-gate-model, event-seed-model, event-catalog-model, time-event-model, movement-layout-model, ambient-appearance-model, ambient-sound-model, pet-state-model, workflow-handoff-model, status-visual-model, action-strip-model, behavior-indicator-model, agent-character-model, agent-inspector-model, activity-feed-model, agent-status-model, agent-status-snapshot, blocked-reason-model, integration-status-model, review-gate-model, roster-model imported.')
   console.log('[pack-smoke] Assertion 0: PASS')
 
   // ── Assertion 1: setup exits 0; all events registered; hook path exists ──────

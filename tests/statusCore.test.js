@@ -42,6 +42,8 @@ import {
   pokePoolKeyForStatus,
   normalizeAgentStatusUpdates,
   normalizePost,
+  portableCoreCapabilityBySubpath,
+  portableCoreSubpaths,
   presenceRows,
   reconcileMultiSessionAgents,
   sanitizeAgentId,
@@ -63,6 +65,10 @@ describe('statusCore public headless API', () => {
     expect(VALID_STATUSES).toContain('awaiting-approval')
     expect(normalizePost({ dev: 'working' }).agents[0]?.status).toBe('working')
     expect(buildExternalStatusEntry(null, { status: 'done' }, 1000).entry.expiresAt).toBe(11000)
+    expect(portableCoreSubpaths()).toContain('./status-runtime')
+    expect(portableCoreCapabilityBySubpath('./workflow-handoff-model')).toMatchObject({
+      category: 'workflow-flow',
+    })
     expect(buildDynamicStatusAgent({ id: 'dev' }, { agentId: 'wt~dev', position: { x: 1, y: 2 } }).session).toBeNull()
     expect(isDynamicStatusAgent('wt~dev', { session: 'wt' }, ['dev'])).toBe(true)
     expect(reconcileMultiSessionAgents({

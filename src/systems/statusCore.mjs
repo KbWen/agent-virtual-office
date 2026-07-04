@@ -21,6 +21,14 @@ export {
 } from '../utils/statusContract.mjs'
 
 export {
+  PORTABLE_CORE_CAPABILITIES,
+  PORTABLE_CORE_VERSION,
+  portableCoreCapabilitiesByLayer,
+  portableCoreCapabilityBySubpath,
+  portableCoreSubpaths,
+} from './portableCoreManifest.mjs'
+
+export {
   activityAgeMs,
   activityFeedEntries,
   activityIconKey,
