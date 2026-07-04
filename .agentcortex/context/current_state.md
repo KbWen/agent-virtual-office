@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-07-04T13:20:00+08:00
-- **Update Sequence**: 102
+- **Last Updated**: 2026-07-04T14:05:00+08:00
+- **Update Sequence**: 103
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -165,6 +165,12 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-release-v1.6.4-2026-07-04 (product action strip Phase-1) · release v1.6.4
+
+- Release cutting the merged Phase-1 product-action-strip polish (PR #196, squash `dacb682`) as **v1.6.4**: `package.json` 1.6.3→1.6.4 + CHANGELOG narrative ("Clearer signals, plainer words"). No further app change. Lockfile root version left stale per convention. Git tag performed manually by owner.
+- Scope note: this branch's Phase-2 in-repo portable-core layer (34-subpath package API + `.mjs` mirrors) was PARKED not merged per **ADR-009** (owner Option A — AVO stays a local, unpublished app; the reusable core is deferred to a clean-room copy-out into a NEW repo if a second consumer firms up). PR #195 closed as the parked reference; self-review findings F1–F9 preserved in ADR-009 (F1/F4 honesty-critical).
+- Tests: Pass (full suite 2251, from #196; CI 7/7 green — Semgrep / render-smoke / test 22+24 / pack-smoke / npm audit / TruffleHog)
 
 ### Ship-codex-product-action-strip-2026-07-02
 
