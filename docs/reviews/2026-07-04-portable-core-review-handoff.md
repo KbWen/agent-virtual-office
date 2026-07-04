@@ -3,7 +3,8 @@
 Date: 2026-07-04
 Branch: `codex/product-action-strip`
 PR: `#195`
-Last reviewed commit: `b920e1b9d53131e583cb01675b775181b8a2785b`
+Last reviewed code commit before this handoff artifact: `b920e1b9d53131e583cb01675b775181b8a2785b`
+Current PR head: use `gh pr checks 195` / GitHub PR #195 as the authoritative current commit after this handoff file.
 Work log: `.agentcortex/context/work/codex-product-action-strip.md`
 
 ## Context
