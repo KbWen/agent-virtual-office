@@ -16,7 +16,8 @@ usage: Used by /bootstrap workflow when creating a new Work Log at .agentcortex/
 - Owner: `<session-id or username>`
 - Guardrails Mode: `<Full | Quick | Lite>`
 - Current Phase: `<bootstrap | plan | implement | review | test | handoff | ship>`
-- Checkpoint SHA: `<git-sha or none>`
+- Diff Base SHA: `<git-sha or none>` <!-- immutable: set once on first /implement -->
+- Checkpoint SHA: `<git-sha or none>` <!-- mutable: refresh each commit -->
 - Recommended Skills: `<comma-separated skill IDs or none>`
 - Primary Domain Snapshot: `<domain | none>`
 - SSoT Sequence: `<N>`
@@ -61,6 +62,7 @@ none
 ## Phase Summary
 
 > One paragraph per completed phase. Delta-oriented: what changed, what was decided.
+> End this section with the `⚡ ACX` sentinel at least once — `validate.sh` checks for it here so the runtime marker has a persistent audit trail (chat output is ephemeral).
 
 none
 
@@ -120,6 +122,22 @@ none
 
 ---
 
+## Review Feedback
+
+> Written by /review (fix suggestions + NOT READY findings). Read by /implement on resume-after-review — scope is ONLY the UNPROVEN/blocking rows.
+
+none
+
+---
+
+## Red Team Findings
+
+> Written by /review and /test when adversarial testing runs. HIGH findings do not block but MUST record a risk decision here.
+
+none
+
+---
+
 ## Design Reference
 
 > Populated by /plan for UI tasks. If not a UI task, write `none`.
@@ -141,6 +159,14 @@ none
 ## Resume
 
 > Populated by /handoff for feature/architecture-change tasks. Required: `State`, `Completed`, `Next`, `Context` fields; then `### Read Map`, `### Skip List`, `### Context Snapshot`; optionally `### Backlog Status`. validate.sh enforces the three `###` headings. Leave as `none` until /handoff runs.
+
+none
+
+---
+
+## Test Gate Results
+
+> Test-phase gate outcome for `feature`/`architecture-change` logs (required at handoff/ship once an implement receipt exists; ref: `engineering_guardrails.md §12.2`). Record pass/fail counts + the test command. Leave `none` until `/test` runs.
 
 none
 

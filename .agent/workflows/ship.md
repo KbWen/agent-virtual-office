@@ -58,11 +58,12 @@ Record the warning in `## Known Risk` if the section is otherwise empty.
 
 Scan Work Log `## Gate Evidence` for receipts from required prior phases:
 - `feature` / `architecture-change`: bootstrap, plan, implement, review, test, handoff receipts required
-- `quick-win`: bootstrap, plan, implement receipts required (implement receipt always present — no plan→ship edge exists)
-- `hotfix`: bootstrap, plan, implement, review, test receipts required (hotfix MUST reach TESTED; plan is mandatory per §10.2 — no implement-only shortcuts)
+- `quick-win`: bootstrap, plan, implement receipts required
+- `hotfix`: bootstrap, plan, implement, review, test receipts required (plan is mandatory per §10.2)
 
-For each missing receipt output: `"⚠️ Missing gate receipt for: [phase]. Run that phase or provide evidence before shipping."`
-User may acknowledge and proceed. Missing receipts do NOT auto-fail the gate.
+**Direct-file-access platforms** (Work Log readable): a missing required receipt for `feature`/`architecture-change` is a hard **`verdict: fail`** (also enforced by `validate.sh`). Output: `"FAIL: Missing required gate receipt for: [phase]."`
+**No-file-access platforms** (Codex Web, API-only): **reduced-assurance mode** — paste the `## Gate Evidence` section into chat for manual verification. Output: `"[reduced assurance] Gate receipt for [phase] not verified from file."`
+`quick-win`/`hotfix`: missing receipts are a WARN (fast-paths may omit handoff).
 
 ### Confidence Trace Audit (/ship only)
 
@@ -70,7 +71,7 @@ Scan Work Log `## Phase Summary` and the plan's compact block for a `Confidence:
 
 ## Ship Checklist (mandatory — skip = ship fail)
 
-- [ ] Evidence recorded in Work Log `## Evidence` section (non-empty; bootstrap placeholder `"Pending: bootstrap only"` is NOT sufficient — Ref: `engineering_guardrails.md §5.2b`)
+- [ ] Evidence recorded in Work Log `## Evidence` section (non-empty; bootstrap placeholder `"Pending: bootstrap only"` is NOT sufficient — Ref: `engineering_guardrails.md §5.2b`). Changes touching deploy/validator output/README: add a `Demonstration:` line with recipe command + captured output (CI anchor: `test_deploy_manifest_snapshot`).
 - [ ] `current_state.md` updated
 - [ ] Active Work Log archived to `.agentcortex/context/archive/`
 - [ ] Spec-Test trace verified (feature / architecture-change only — see §Spec-Test Traceability below)
@@ -192,6 +193,7 @@ Before proceeding with ship, check `docs/reviews/` for any review snapshots that
 2. **SSoT Update & Ship History**:
 - Update `.agentcortex/context/current_state.md` Spec Index statuses (mutable snapshot) via `.agentcortex/tools/guard_context_write.py`.
 - Use the helper as documented in `.agentcortex/docs/guides/guarded-context-writes.md`. In Stage 1, missing guard receipts are a validation warning, not a hard runtime block.
+- **No-Python fallback** (all SSoT writes here incl. §8 heartbeat): direct write + Drift Log entry (AGENTS.md §Write Isolation).
    - **Spec Index Cap**: Before updating Spec Index, count existing entries. If count ≥ `document_lifecycle.spec_index_max_entries` (default: 30 from `.agent/config.yaml`), move the oldest `shipped` entries to a `## Spec Index Archive` section at the bottom of `current_state.md`. Archived entries are not auto-read during bootstrap.
    - MUST add the completion record at the **top** of the `## Ship History` section — immediately after the `## Ship History` header, newest-first, matching the established convention (the most recent ship is the first entry; older entries follow below). Use `.agentcortex/tools/guard_context_write.py --mode replace` (snapshot → insert the entry right after the header → write with `--expected-sha`), or a surgical anchored Edit. **Do NOT use `--mode append`**: it is `O_APPEND` (writes at file-end), which drops the entry at the *bottom* — the oldest position — silently breaking newest-first ordering. See `.agentcortex/docs/guides/guarded-context-writes.md`. **Note**: The Work Log `SSoT Sequence` header field is a bootstrap-time snapshot and is NOT incremented at ship — do not attempt to update it.
    - Use the format:
@@ -205,7 +207,7 @@ Before proceeding with ship, check `docs/reviews/` for any review snapshots that
    - NEVER edit, reorder, or delete previous entries in the `## Ship History`.
    - If Ship History exceeds 10 entries, archive older entries to `.agentcortex/context/archive/ship-history-YYYY.md` and keep only the latest 10 in `current_state.md`.
    - **Relative-link depth hazard**: `current_state.md` lives at depth 2 (`.agentcortex/context/`); `archive/` is at depth 3. Any relative links whose destination starts with `../` or `../../` in content copied from `current_state.md` to `archive/` will resolve one level too shallow and produce broken links caught by CI. **Before committing archived content that originated in `current_state.md`, strip or convert those links to plain text or absolute URLs.** `validate.sh` M8 also flags these as WARN.
-3. Archive `.agentcortex/context/work/<worklog-key>.md` to `.agentcortex/context/archive/<worklog-key>-<YYYYMMDD>.md` (the **root** of `archive/`, if task complete). This is **final archival** of the whole log — distinct from `/handoff §6` compaction, which offloads stale detail of a *still-active* log into the `archive/work/` subdir. The `-<YYYYMMDD>` suffix is required: it prevents a reused branch (e.g. a downstream that does all work on `main`) from overwriting its own prior archive on the next ship. Record the resulting filename in the `INDEX.jsonl` `log` field below.
+3. **Move** (not copy) `.agentcortex/context/work/<worklog-key>.md` to `.agentcortex/context/archive/<worklog-key>-<YYYYMMDD>.md` (the **root** of `archive/`, if task complete) — delete the `work/` original, else the validator WARNs "shipped work logs still in active work/ directory". This is **final archival** of the whole log — distinct from `/handoff §6` compaction, which offloads stale detail of a *still-active* log into the `archive/work/` subdir. The `-<YYYYMMDD>` suffix is required: it prevents a reused branch (e.g. a downstream that does all work on `main`) from overwriting its own prior archive on the next ship. Record the resulting filename in the `INDEX.jsonl` `log` field below.
     - Do NOT duplicate `/retro`-promoted Global Lessons during ship. `/retro` owns structured Global Lesson promotion.
     - **Archive Index Update**: After archiving, append a structured record to `.agentcortex/context/archive/INDEX.jsonl`. The archive index is a hash-chained audit log — every append MUST add `prev_sha` (computed by the helper) so the chain stays intact. Use:
       ```bash

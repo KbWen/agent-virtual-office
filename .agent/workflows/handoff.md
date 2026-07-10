@@ -20,7 +20,7 @@ Hard completion gate for non-`tiny-fix` tasks. Transitions `TESTED → HANDEDOFF
 
 ## 1a. Phase Verification
 
-**Phase Verification** (per bootstrap §2b): Read `Current Phase` from Work Log header. Verify transition to `handoff` is legal. If illegal, STOP. Otherwise update `Current Phase: handoff`. If a new commit was created since the last `Checkpoint SHA`, SHOULD refresh it.
+**Phase Verification** (per bootstrap §2b): Read `Current Phase` from Work Log header. Verify transition to `handoff` is legal. If illegal, STOP. Otherwise update `Current Phase: handoff`. If a new commit was created since the last `Checkpoint SHA`, SHOULD refresh `Checkpoint SHA` (AC-4: refresh `Checkpoint SHA` only; `Diff Base SHA` is immutable).
 
 **Uncommitted WIP guard**: If `Checkpoint SHA` is `none`, empty, or does not match `git rev-parse HEAD`, the agent MUST commit or `git stash` the WIP before completing handoff, then record the resulting SHA or stash ref in the Resume Block. Handing off with un-anchored WIP leaves the next agent unable to scope resume work via `git diff <checkpoint>..HEAD`.
 

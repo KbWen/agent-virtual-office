@@ -26,7 +26,7 @@ TARGET="${TARGET:-.}"
 TARGET="${TARGET%/}"
 
 MANIFEST_FILE="$TARGET/.agentcortex-manifest"
-ACX_VERSION="1.8.1"
+ACX_VERSION="1.8.11"
 
 # --- Self-deploy guard ---
 TARGET_ABS="$(cd "$TARGET" 2>/dev/null && pwd || echo "$TARGET")"
@@ -271,8 +271,10 @@ _deploy_file_now() {
                     cp ${CP_FLAG:+"$CP_FLAG"} "$src" "$dst.acx-incoming"
                     echo "  [SKIP] $rel (pre-existing/migrated; new version at $rel.acx-incoming — merge manually or ask AI agent to merge)"
                     COUNT_SKIPPED=$((COUNT_SKIPPED + 1))
-                    # Record the user's current normalized hash so future updates detect modification.
-                    record_deployed "$tier" "$rel" "$dst_hash"
+                    # Record the upstream baseline, never the preserved user hash.
+                    # Otherwise the next deploy treats unchanged user bytes as
+                    # framework-unmodified and overwrites them without a sidecar.
+                    record_deployed "$tier" "$rel" "$src_hash"
                     return 0
                 fi
                 # Same content — no-op; record the matching hash for future runs.
@@ -310,8 +312,10 @@ _deploy_file_now() {
                 cp ${CP_FLAG:+"$CP_FLAG"} "$src" "$dst.acx-incoming"
                 echo "  [SKIP] $rel (pre-existing; new version at $rel.acx-incoming — merge manually or ask AI agent to merge)"
                 COUNT_SKIPPED=$((COUNT_SKIPPED + 1))
-                # Record the USER's current normalized hash so future updates detect modification.
-                record_deployed "$tier" "$rel" "$dst_hash"
+                # Record the upstream baseline, never the preserved user hash.
+                # Otherwise the next deploy treats unchanged user bytes as
+                # framework-unmodified and overwrites them without a sidecar.
+                record_deployed "$tier" "$rel" "$src_hash"
                 return 0
             fi
             # Same content — safe to let it be (no cp needed since identical)
@@ -702,6 +706,14 @@ if [ ! -w "$TARGET" ]; then
     exit 1
 fi
 
+DOWNSTREAM_CURRENT_STATE_TEMPLATE="$REPO_ROOT/.agentcortex/templates/current_state.md"
+if [ ! -f "$DOWNSTREAM_CURRENT_STATE_TEMPLATE" ]; then
+    echo "" >&2
+    echo "ERROR: Missing downstream current_state template: .agentcortex/templates/current_state.md" >&2
+    echo "Deploy refuses to install the source repository's live .agentcortex/context/current_state.md downstream." >&2
+    exit 1
+fi
+
 # --- Dry-run mode: preview only ---
 if $DRY_RUN; then
     echo ""
@@ -724,7 +736,7 @@ if $DRY_RUN; then
     _dry_count=0
     # Enumerate only the files that are actually deployed (mirrors real deploy logic).
     # Runtime Python tools are a whitelist — NOT all *.py in tools/.
-    _runtime_tools="guard_context_write.py _yaml_loader.py check_command_sync.py check_text_integrity.py check_text_integrity.ps1 text_integrity_baseline.txt sync_skills.sh lint_governed_writes.py check_lifecycle_frontmatter.py check_lesson_chain.py check_adr_coverage.py append_chain_entry.py append_lesson.py recover_worklog_lock.py lint_spec_drift.py run_governance_eval.py scan_credentials.py credential_floor.sh credential_floor.ps1 generate_safety_nucleus.py validate_downstream_capabilities.py"
+    _runtime_tools="guard_context_write.py _yaml_loader.py check_command_sync.py check_text_integrity.py check_text_integrity.ps1 text_integrity_baseline.txt sync_skills.sh lint_governed_writes.py check_lifecycle_frontmatter.py check_lesson_chain.py check_ssot_caps.py check_adr_coverage.py append_chain_entry.py append_lesson.py recover_worklog_lock.py lint_spec_drift.py run_governance_eval.py scan_credentials.py credential_floor.sh credential_floor.ps1 generate_safety_nucleus.py validate_downstream_capabilities.py"
     _dry_print_file() {
         local src="$1"
         local rel="$2"
@@ -753,6 +765,8 @@ if $DRY_RUN; then
              "$REPO_ROOT"/.github/copilot-instructions.md; do
         _dry_print_file "$f" "${f#$REPO_ROOT/}"
     done
+    # Generated downstream runtime SSoT: source template installs to context/current_state.md.
+    _dry_print_file "$DOWNSTREAM_CURRENT_STATE_TEMPLATE" ".agentcortex/context/current_state.md"
     # Runtime tools (whitelist only — not all *.py)
     for _bname in $_runtime_tools; do
         f="$REPO_ROOT/.agentcortex/tools/$_bname"
@@ -922,6 +936,7 @@ runtime_tools=(
   lint_governed_writes.py
   check_lifecycle_frontmatter.py
   check_lesson_chain.py
+  check_ssot_caps.py
   check_adr_coverage.py
   append_chain_entry.py
   append_lesson.py
@@ -952,11 +967,7 @@ fi
 # --- Deploy: .agentcortex/context/current_state.md (scaffold) ---
 # Use the downstream template (generic placeholders) instead of the
 # framework's own SSoT which contains Agentic OS project-specific content.
-if [ -f "$REPO_ROOT/.agentcortex/templates/current_state.md" ]; then
-    deploy_file "$REPO_ROOT/.agentcortex/templates/current_state.md" ".agentcortex/context/current_state.md"
-else
-    deploy_file "$REPO_ROOT/.agentcortex/context/current_state.md" ".agentcortex/context/current_state.md"
-fi
+deploy_file "$DOWNSTREAM_CURRENT_STATE_TEMPLATE" ".agentcortex/context/current_state.md"
 
 # --- Deploy: .agentcortex/templates (scaffold) ---
 for f in "$REPO_ROOT"/.agentcortex/templates/*; do
@@ -1070,6 +1081,7 @@ write_downstream_ignore_block() {
 .agentcortex/context/work/*.lock.json
 !.agentcortex/context/work/.gitkeep.md
 .agentcortex/context/.guard_receipt.json
+.agentcortex/context/.guard_receipts/
 .agentcortex/context/.guard_locks/
 .agentcortex/context/private/
 .agent/private/
@@ -1100,6 +1112,7 @@ strip_managed_ignore_blocks() {
         managed[".agentcortex/context/work/*.lock.json"] = 1
         managed["!.agentcortex/context/work/.gitkeep.md"] = 1
         managed[".agentcortex/context/.guard_receipt.json"] = 1
+        managed[".agentcortex/context/.guard_receipts/"] = 1
         managed[".agentcortex/context/.guard_locks/"] = 1
         managed[".agentcortex/context/private/"] = 1
         managed[".agent/private/"] = 1

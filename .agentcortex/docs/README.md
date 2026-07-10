@@ -2,8 +2,7 @@
 
 <p align="center">
   <strong>"Done." — your AI coding agent, about code it didn't test.</strong><br/>
-  A rules file <em>asks</em> your agent to behave. Agentic OS <strong>checks that it did</strong> — it catches the agent
-  skipping tests, skipping review, or shipping a leaked secret, through your git hooks, a validator, and CI rather than the agent's own word.
+  A rules file <em>asks</em> your agent to behave. Agentic OS <strong>checks that it did</strong> — leaked secrets and a green check over zero tests fail your git hooks and CI; a skipped review or phase shows up when the validator reads the work trail. Backstops you control, not the agent's own word.
 </p>
 
 <p align="center">
@@ -38,6 +37,10 @@ Or run a gate yourself, no install — the credential scan that catches a leaked
 ```sh
 bash demo/run.sh          # Windows (PowerShell): pwsh demo/run.ps1
 ```
+
+<p align="center">
+  <img src="docs/assets/demo-gate.gif" alt="Terminal recording of the real credential gate: an AI agent writes config.env containing a leaked aws_access_key_id and reports 'Done - config added.'; Agentic OS runs scan_credentials.py, which detects the credential with the value redacted, and the commit is BLOCKED — the agent said done, the machine said no. Reproduce with bash demo/run.sh." width="820"/>
+</p>
 
 <details>
 <summary>Full terminal output</summary>
@@ -76,11 +79,29 @@ A rules file — Cursor Rules, a plain `AGENTS.md` — is a prompt the agent can
 | "Tests pass" with no tests | CI runs the real suite | pull request |
 | A phase skipped with no evidence | `validate.sh` reads the work trail | pre-commit (local) |
 
-The third row is the part a rules file can't reach: `validate.sh` parses each task's work log and fails if a required phase was skipped or its evidence is missing. The local pre-commit hook is opt-in and you can `--no-verify` past it; CI is the floor that can't be skipped. The Security badge above is this repo running the same credential and SAST gates on its own every push.
+The third row is the part a rules file can't reach: `validate.sh` parses each task's work log and fails if a required phase was skipped or its evidence is missing. The local pre-commit hook is opt-in and you can `--no-verify` past it; the three required CI checks (`Framework Validation`, `ShellCheck`, `Check Markdown Links`) are the floor that can't be skipped — they must pass before any PR merges. The security scanning jobs (credential scan, SAST, dependency audit) run on every PR but are not required merge checks unless you add them to branch protection. The Security badge above is this repo running the same credential and SAST gates on its own every push.
+
+## Sits under what you already have
+
+Agentic OS is the enforcement layer. A rules file or a skill pack tells your agent how to behave; this is the part that checks it actually did - in your git hooks and CI, where the agent's own report doesn't get a vote. Already have those? Keep them. This sits underneath and turns the discipline they ask for into a check that can fail your commit or your build.
 
 ## Gated phases, scaled to risk
 
 Every task runs a gated workflow, and the rigor scales to the risk. Skip a phase and `validate.sh` fails — but a typo doesn't run the same gauntlet as a feature:
+
+```text
+  tiny-fix    classify --> execute --> evidence --> done
+  quick-win   bootstrap --> plan --> implement --> evidence --> ship
+  feature     bootstrap --> spec --> plan --> implement --> review --> test --> ship
+
+  And the ship gate is not a formality:
+
+  ship attempt --> [ no review/test evidence ] --> BLOCKED
+  ship attempt --> [ evidence on record ]      --> SHIPPED
+
+  The agent can still cut a corner. It just can't cut this one
+  past a check it doesn't control.
+```
 
 <p align="center">
   <img src="docs/assets/pipeline-demo.gif" alt="A diagram of the Agentic OS workflow: a tiny-fix task flows through a short three-step path (classify, execute, done) and ships, while a feature task runs the full gated pipeline (bootstrap, plan, implement, review, test, ship) and is blocked at the ship gate for skipping tests, then passes once the test evidence is recorded." width="820"/>
@@ -155,7 +176,7 @@ Built for codebases where several AI sessions — or several people's agents —
 |:---|:---|:---|
 | **Claude Code** | Native | `CLAUDE.md` entrypoint + Claude platform guide |
 | **OpenAI Codex** | Native | `AGENTS.md`, Codex platform guide, CLI delegation workflow |
-| **Google Antigravity** | Native | Intent router + Antigravity runtime guidance |
+| **Google Antigravity** | Native | `GEMINI.md` entrypoint + Antigravity runtime guidance |
 | **Cursor** | Compatible | Reads `AGENTS.md` / project-rule style guidance — the slash-commands are plain prompts |
 | **GitHub Copilot** | Compatible | Uses repository instructions and guardrail docs |
 | **Any LLM agent** | Compatible | Model-agnostic Markdown workflows + evidence rules |
@@ -180,6 +201,15 @@ Then tell your agent: *"Read `AGENTS.md` and follow it. Do not claim completion 
 
 Existing files are never overwritten (saved as `.acx-incoming` sidecars to merge). Windows / no-Python mode, updating, customizing without conflicts, turning the CI floor into a required check, and the full entry-point templates → **[docs/INSTALL.md](docs/INSTALL.md)**.
 
+## Running the tests
+
+```bash
+# Fast local loop — mirrors what CI runs; skip the slow subprocess tests
+python -m pytest tests/ci/ tests/guard/ .agentcortex/tests/ -m "not slow"
+```
+
+Full details and the `slow` suite → [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## FAQ
 
 **What is Agentic OS?**
@@ -192,7 +222,7 @@ That's the core of it. The credential scan, the test suite, and the phase/eviden
 A rules file tells the agent how to behave, and the agent can ignore it. Agentic OS adds the workflow and the checks that hold it to that behavior: phase sequencing, evidence requirements, scope discipline, and a single source of truth that remembers decisions across sessions. The skills and discipline are still guidance the agent follows; what's *enforced* is the part that fails your commit or CI — leaked secrets, missing tests, a skipped phase.
 
 **Does it lock me into one AI vendor?**
-No. It's model-agnostic Markdown — native entry points for Claude Code (`CLAUDE.md`) and Codex / Antigravity (`AGENTS.md`), and it works with Cursor, Copilot, and any other LLM agent through the same workflow files.
+No. It's model-agnostic Markdown — native entry points for Claude Code (`CLAUDE.md`), Codex (`AGENTS.md`), and Gemini / Antigravity (`GEMINI.md`), and it works with Cursor, Copilot, and any other LLM agent through the same workflow files.
 
 **Is it free?**
 Yes — MIT licensed. Fork it and ship it.

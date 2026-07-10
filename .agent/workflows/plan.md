@@ -73,8 +73,8 @@ Skip → record reason in `## Drift Log` as `Skipped: <advisory> — <1-line rea
 
 If the planned changes modify **user-visible UI** (screens, components, layouts, styling, navigation):
 
-1. **DSoT Link Required**: The plan MUST include a `Design: <URL or file path>` entry pointing to the approved design in the project's Design Source of Truth tool (Stitch, Figma, Pencil, etc.).
-2. **No Link = Plan Incomplete**: If no design link is provided, verdict is **fail** with `missing: [design_link]`. Agent MUST stop: "⚠️ UI changes planned but no design link provided. Create or link the design in [DSoT tool] before planning can complete."
+1. **Design Artifact Required**: The plan MUST include a `Design:` entry — a DSoT link (Stitch/Figma/Pencil) **or** a committed wireframe file (`docs/design/<screen>.md`).
+2. **No Artifact = Plan Incomplete**: No design artifact → verdict **fail** (`missing: [design_link]`). Agent MUST stop: "⚠️ UI changes but no design link — provide a DSoT URL or a committed wireframe file (`docs/design/<screen>.md`) first."
 3. **Design Scope Coverage**: Every UI-affecting step in the plan MUST reference which screen/component in the DSoT it implements. Orphan UI steps (no DSoT mapping) = plan quality gate fail.
 
 **Exempt**: `tiny-fix`, backend-only changes, CLI tools, infrastructure, or non-visual config changes.
@@ -150,7 +150,7 @@ Rules:
 - MUST identify at least 1 Risk + viable Rollback.
 - List ONLY files being modified (Prevent scope creep).
 - MUST explicitly cite documentation (e.g., `Ref: docs/specs/auth.md`).
-- **Frozen Spec Pre-Check**: For each target file, check whether a corresponding `docs/specs/*.md` file exists on disk with `status: frozen` in its frontmatter (do NOT rely on a `[Frozen]` Spec Index tag — frozen specs are not yet indexed pre-ship under ADR-010). If any target file falls under a frozen spec, warn immediately: "⚠️ [file] is governed by Frozen Spec [spec-name]. Unfreeze required before proceeding. Approve? (yes/no)"
+- **Frozen Spec Pre-Check**: For each target file, check whether a corresponding `docs/specs/*.md` file exists on disk with `status: frozen` in its frontmatter (do NOT rely on a `[Frozen]` Spec Index tag — frozen specs are not yet indexed pre-ship under ADR-010). **Own-spec exemption**: the spec THIS plan implements is frozen by design (§4.2) — no unfreeze to implement it; editing that spec file itself routes via §Spec Feedback Loop. If a target file falls under a DIFFERENT frozen spec, warn immediately: "⚠️ [file] is governed by Frozen Spec [spec-name]. Unfreeze required before proceeding. Approve? (yes/no)"
 
 ## Spec Feedback Loop
 

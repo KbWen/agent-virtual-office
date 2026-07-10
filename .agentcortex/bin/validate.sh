@@ -290,7 +290,8 @@ check_file_group "required framework files present" "${required_files[@]}"
 check_optional_file_group "optional module workflow files present" \
   "$WORKFLOWS_DIR/ask-openrouter.md" \
   "$WORKFLOWS_DIR/codex-cli.md" \
-  "$WORKFLOWS_DIR/claude-cli.md"
+  "$WORKFLOWS_DIR/claude-cli.md" \
+  "$WORKFLOWS_DIR/ask-local.md"
 
 deprecated_files=("$WORKFLOWS_DIR/new-feature.md" "$WORKFLOWS_DIR/medium-feature.md" "$WORKFLOWS_DIR/small-fix.md")
 deprecated_found=()
@@ -382,6 +383,55 @@ if [[ -f "$ARCHIVE_INDEX_JSONL" ]]; then
   run_python_check "audit chain integrity (INDEX.jsonl)" FAIL "$AUDIT_CHAIN_CHECK" --path "$ARCHIVE_INDEX_JSONL" --quiet
 else
   record_result SKIP "audit chain integrity -- archive INDEX.jsonl not present"
+fi
+
+# D4: INDEX.jsonl referenced-file existence. The hash chain + git witness above
+# prove entries are append-only and unedited, but neither verifies that each
+# entry's `log` artifact still exists on disk — a DANGLING reference (entry
+# present, file gone) is an integrity gap the chain cannot see. WARN, not FAIL:
+# a genuine historical dangling ref cannot be cleanly removed (append-only chain
+# + git witness forbid entry deletion), so this SURFACES the gap for review
+# rather than blocking. Capability-by-presence; needs Python for robust JSON.
+if [[ -f "$ARCHIVE_INDEX_JSONL" ]] && [[ -n "$PYTHON_BIN" ]]; then
+  _acx_index_refs_py=$(cat <<'PYEOF'
+import json, os, sys
+archive = os.path.dirname(os.path.abspath(sys.argv[1]))
+missing = []
+seen = 0
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except Exception:
+                continue
+            log = entry.get("log")
+            if not log:
+                continue
+            seen += 1
+            cands = [os.path.join(archive, log), os.path.join(archive, "work", log)]
+            if not any(os.path.exists(c) for c in cands):
+                missing.append(log)
+except OSError:
+    print("error")
+    sys.exit(0)
+print(("missing:" + ",".join(missing)) if missing else ("ok:%d" % seen))
+PYEOF
+)
+  index_refs_result="$("$PYTHON_BIN" -c "$_acx_index_refs_py" "$ARCHIVE_INDEX_JSONL" 2>/dev/null)"
+  index_refs_level=PASS
+  index_refs_msg="INDEX.jsonl referenced logs all present on disk (${index_refs_result#ok:} checked)"
+  if [[ "$index_refs_result" == missing:* ]]; then
+    _acx_dangling="${index_refs_result#missing:}"
+    _acx_dangling_count="$(printf '%s' "$_acx_dangling" | tr ',' '\n' | grep -c '.')"
+    printf '  INDEX.jsonl references %s file(s) not present on disk: %s\n' "$_acx_dangling_count" "$_acx_dangling"
+    index_refs_level=WARN
+    index_refs_msg="INDEX.jsonl referenced logs missing on disk: ${_acx_dangling_count} (dangling audit reference)"
+  fi
+  record_result "$index_refs_level" "$index_refs_msg"
 fi
 
 # C1: git append-only WITNESS for INDEX.jsonl (ADR-003 amendment; spec
@@ -574,6 +624,15 @@ if [[ -f "$SAFETY_NUCLEUS_GEN" ]]; then
 else
   record_result SKIP "safety nucleus freshness -- generator not deployed (safe to ignore)"
 fi
+
+# ADR-006: advisory SSoT section-cap check (Ship History + Spec Index growth) as
+# a Python tool behind run_python_check (new checks = tools, not native lines, so
+# the native ratchet does not move). WARN-tier / never-FAIL: the tool ALWAYS exits
+# 0 and prints any over-cap finding, so an over-cap SSoT surfaces as advisory output
+# rather than a validator failure; the fix is the rotation procedure the tool names
+# (ship.md §State Update). No-python host -> WARN (advisory); tool absent -> SKIP
+# (run_python_check handles both). Caps live in .agent/config.yaml §document_lifecycle.
+run_python_check "ssot section caps (ship history + spec index)" WARN "$ROOT/.agentcortex/tools/check_ssot_caps.py" --root "$ROOT"
 
 ACTIVE_CODEX_RULES="$ROOT/codex/rules/default.rules"
 [[ -f "$ACTIVE_CODEX_RULES" ]] || ACTIVE_CODEX_RULES="$CODEX_RULES"
@@ -862,6 +921,23 @@ fi
 
 routing_action_errors=0
 routing_action_warnings=0
+routing_action_stale_warnings=0
+routing_actions_pending_warn_days=14
+if [[ -f "$AGENT_CONFIG_YAML" ]]; then
+  parsed_routing_actions_days="$(
+    awk '
+      /^document_lifecycle:[[:space:]]*$/ { in_section=1; next }
+      in_section && /^[^[:space:]]/ { in_section=0 }
+      in_section && /^[[:space:]]+routing_actions_pending_warn_days:[[:space:]]*[0-9]+[[:space:]]*$/ {
+        sub(/^[^:]*:[[:space:]]*/, "", $0); print $0; exit
+      }
+    ' "$AGENT_CONFIG_YAML" 2>/dev/null || true
+  )"
+  if [[ "$parsed_routing_actions_days" =~ ^[0-9]+$ ]]; then
+    routing_actions_pending_warn_days="$parsed_routing_actions_days"
+  fi
+fi
+routing_actions_today_epoch="$(date -u +%s 2>/dev/null || true)"
 for review in "$ROOT"/docs/reviews/*.md; do
   [[ -f "$review" ]] || continue
   if grep -F -q 'routing_actions:' "$review"; then
@@ -888,9 +964,23 @@ for review in "$ROOT"/docs/reviews/*.md; do
         *)
           printf '  routing_actions status must be pending, merged, or rejected: %s (%s)\n' "$review" "$status"
           routing_action_errors=$((routing_action_errors + 1))
-          ;;
+        ;;
       esac
     done < <(sed -n 's/^[[:space:]]*status:[[:space:]]*\([a-z]*\).*$/\1/p' "$review")
+    if [[ -n "$routing_actions_today_epoch" ]] && grep -Eq '^[[:space:]]*status:[[:space:]]*pending[[:space:]]*$' "$review"; then
+      review_base="$(basename "$review")"
+      if [[ "$review_base" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}) ]]; then
+        review_date="${BASH_REMATCH[1]}"
+        review_epoch="$(date -u -d "$review_date" +%s 2>/dev/null || date -j -f '%Y-%m-%d' "$review_date" +%s 2>/dev/null || true)"
+        if [[ "$review_epoch" =~ ^[0-9]+$ ]]; then
+          age_days=$(( (routing_actions_today_epoch - review_epoch) / 86400 ))
+          if [[ "$age_days" -ge "$routing_actions_pending_warn_days" ]]; then
+            printf '  stale pending routing_actions: %s (%sd old, threshold %sd)\n' "$review" "$age_days" "$routing_actions_pending_warn_days"
+            routing_action_stale_warnings=$((routing_action_stale_warnings + 1))
+          fi
+        fi
+      fi
+    fi
   fi
 done
 if [[ "$routing_action_errors" -gt 0 ]]; then
@@ -900,6 +990,9 @@ else
 fi
 if [[ "$routing_action_warnings" -gt 0 ]]; then
   record_result WARN "routing_actions target docs need follow-up: ${routing_action_warnings}"
+fi
+if [[ "$routing_action_stale_warnings" -gt 0 ]]; then
+  record_result WARN "stale pending routing_actions need canonical-doc follow-up: ${routing_action_stale_warnings}"
 fi
 shopt -u nullglob
 
@@ -938,6 +1031,7 @@ else
     '.agentcortex/context/work/*.md' \
     '.agentcortex/context/private/' \
     '.agentcortex/context/.guard_receipt.json' \
+    '.agentcortex/context/.guard_receipts/' \
     '.agentcortex/context/.guard_locks/' \
     '.agent/private/' \
     '.agentcortex-src/' \
@@ -1020,6 +1114,18 @@ ACTIVE_WORKLOG_FAIL_THRESHOLD="${ACTIVE_WORKLOG_FAIL_THRESHOLD:-12}"
 ARCHIVE_SIZE_WARN_KB="${ARCHIVE_SIZE_WARN_KB:-10240}"
 WORKLOG_GATE_EVIDENCE_LEGACY_CUTOFF="${WORKLOG_GATE_EVIDENCE_LEGACY_CUTOFF:-2026-03-25}"
 WORKLOG_DIR="$ROOT/.agentcortex/context/work"
+# AC-6: resolve current-branch worklog key once (slash→dash normalization).
+# Detached HEAD, no git, or git unavailable → cur_key="" (safe degrade: all logs treated as historical).
+cur_key=""
+if command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  # Use symbolic-ref --short first: works on empty repos (no commits yet).
+  # Fall back to rev-parse --abbrev-ref for detached-HEAD scenarios where symbolic-ref fails.
+  _cur_branch="$(git -C "$ROOT" symbolic-ref --short HEAD 2>/dev/null)" \
+    || _cur_branch="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null)" || true
+  if [[ -n "$_cur_branch" && "$_cur_branch" != "HEAD" ]]; then
+    cur_key="${_cur_branch//\//-}"
+  fi
+fi
 if [[ -d "$WORKLOG_DIR" ]]; then
   worklog_warnings=0
   worklog_count=0
@@ -1096,10 +1202,29 @@ if [[ -d "$WORKLOG_DIR" ]]; then
   handoff_resume_incomplete=0
   hotfix_ship_no_evidence=0
   adr_coverage_undocumented=0
+  # AC-6: current-branch gate invariant FAIL counter.
+  # Covers Resume block absent/incomplete + Test Gate Results missing at handoff/ship.
+  # ONE new native record_result FAIL site handles both (baseline +1).
+  current_branch_gate_fail=0
+  current_branch_gate_fail_list=""
   for wl in "$WORKLOG_DIR"/*.md; do
     [[ -f "$wl" ]] || continue
     wl_content="$(cat "$wl" 2>/dev/null)"
-    created_date="$(printf '%s' "$wl_content" | sed -n 's/^- \*\*Created Date\*\*:[[:space:]]*//p' | head -n 1 | tr -d '\r')"
+    # AC-6: determine whether this Work Log is the current-branch log.
+    # Match <cur_key>.md OR <owner>-<cur_key>.md (owner prefix pattern).
+    is_current_branch=0
+    if [[ -n "$cur_key" ]]; then
+      wl_basename="$(basename "$wl")"
+      if [[ "$wl_basename" == "${cur_key}.md" ]] || [[ "$wl_basename" == *"-${cur_key}.md" ]]; then
+        is_current_branch=1
+      fi
+    fi
+    # Accept list (bold-optional, backtick-optional) OR table form — the template
+    # emits `- Created Date: `<date>`` (plain/backtick, no bold) and real logs use
+    # list or table form; a bold-only parser left this empty for every real log,
+    # silently disabling the legacy exemption (and its D5 refinement). Extract the
+    # YYYY-MM-DD regardless of surrounding markup.
+    created_date="$(printf '%s' "$wl_content" | sed -n -E 's/^-[[:space:]]*\*{0,2}Created Date\*{0,2}:[[:space:]]*`?([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/p; s/^\|[[:space:]]*\*{0,2}Created Date\*{0,2}[[:space:]]*\|[[:space:]]*`?([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/p' | head -n 1 | tr -d '\r')"
     legacy_gate_evidence=0
     if [[ -n "$created_date" ]] && [[ "$created_date" < "$WORKLOG_GATE_EVIDENCE_LEGACY_CUTOFF" ]]; then
       legacy_gate_evidence=1
@@ -1115,15 +1240,23 @@ if [[ -d "$WORKLOG_DIR" ]]; then
     # Runtime section: ## Gate Evidence — check existence, receipt format,
     # AND phase progression legality. Illegal progression = FAIL.
     if ! printf '%s' "$wl_content" | grep -q '^## Gate Evidence'; then
-      if [[ "$legacy_gate_evidence" -eq 1 ]]; then
+      if [[ "$legacy_gate_evidence" -eq 1 ]] && [[ "$is_current_branch" -eq 0 ]]; then
         legacy_gate_evidence_missing=$((legacy_gate_evidence_missing + 1))
       else
+        # D5: a log on the CURRENT branch claiming legacy status (Created Date
+        # < cutoff) but missing gate evidence cannot legitimately be a
+        # pre-Runtime-v4 log — you are actively shipping on this branch now.
+        # Deny the legacy WARN downgrade and treat as a FAIL-tier miss.
         gate_evidence_missing=$((gate_evidence_missing + 1))
       fi
     elif ! printf '%s' "$wl_content" | grep -qiE '^(`?- )?gate:.*verdict:'; then
-      if [[ "$legacy_gate_evidence" -eq 1 ]]; then
+      if [[ "$legacy_gate_evidence" -eq 1 ]] && [[ "$is_current_branch" -eq 0 ]]; then
         legacy_gate_evidence_missing=$((legacy_gate_evidence_missing + 1))
       else
+        # D5: a log on the CURRENT branch claiming legacy status (Created Date
+        # < cutoff) but missing gate evidence cannot legitimately be a
+        # pre-Runtime-v4 log — you are actively shipping on this branch now.
+        # Deny the legacy WARN downgrade and treat as a FAIL-tier miss.
         gate_evidence_missing=$((gate_evidence_missing + 1))
       fi
     else
@@ -1156,7 +1289,10 @@ LEGAL_STRICT = {
     'implement': ['review','test'],
     'review':    ['implement','test'],
     'test':      ['handoff','implement'],
-    'handoff':   ['ship','retro'],
+    # 'implement' = HANDEDOFF->IMPLEMENTING reverse edge (state_machine.md §Allowed
+    # Transitions: "ship Entry Condition fail; code change required"); the loop must
+    # then re-run review->test->handoff, still enforced by the M10 stale-review check.
+    'handoff':   ['ship','retro','implement'],
     'ship':      [],
 }
 # hotfix: must review+test but handoff is optional (goes test->ship directly)
@@ -1267,6 +1403,7 @@ if gate_evidence_seen and not unmasked_receipt and masked_receipt_in_section:
 gates = []
 has_ship_receipt = False  # H3: track ANY ship receipt regardless of verdict
 review_not_ready = False  # track pending re-review requirement after NOT READY reverse edge
+had_not_ready = False  # sticky: a review NOT READY reverse edge occurred (for remediation hint)
 resets_used = 0  # H4: track consumed reclassification records
 for l in gate_lines:
     m = re.match(r'^(?:\x60?- )?gate:\s*(\w+)\s*\|', l, re.IGNORECASE)
@@ -1276,7 +1413,7 @@ for l in gate_lines:
         if phase == 'ship':
             has_ship_receipt = True
         # supporting workflows are out-of-band; exclude to avoid false illegal-transition flags
-        if phase in ('retro', 'research', 'brainstorm', 'decide', 'audit'):
+        if phase in ('retro', 'research', 'brainstorm', 'decide', 'audit', 'govern-audit'):
             continue
         # Only count PASS verdicts; NOT READY / FAIL are reverse edges, not forward progress
         v = re.search(r'\|[^|]*verdict:\s*([A-Za-z _]+?)(\s*\||$)', l, re.IGNORECASE)
@@ -1287,6 +1424,7 @@ for l in gate_lines:
             if phase == 'review' and gates and gates[-1] == 'implement':
                 gates.pop()
                 review_not_ready = True  # flag: re-review required before test/ship
+                had_not_ready = True  # remember for the re-review remediation hint below
             continue
         # PASS verdict: if review PASS, clear the pending re-review flag
         if phase == 'review':
@@ -1331,7 +1469,14 @@ for i in range(1, len(gates)):
     prev, curr = gates[i-1], gates[i]
     allowed = LEGAL.get(prev, [])
     if curr not in allowed:
-        print(f'illegal:{prev}->{curr} (classification:{wl_class or "unknown"})')
+        if curr == 'review' and had_not_ready:
+            # A NOT-READY re-review reached PASS with no fresh implement PASS in
+            # between (the reverse edge popped the prior implement, so plan->review
+            # is now the illegal edge). Still a FAIL — but name the exact remedy
+            # instead of the bare illegal-edge text.
+            print(f'illegal:{prev}->review (NOT READY re-review: add a fresh "Gate: implement | Verdict: PASS" receipt for the fix BEFORE the re-review PASS -- review.md §Reverse Transition)')
+        else:
+            print(f'illegal:{prev}->{curr} (classification:{wl_class or "unknown"})')
         sys.exit(0)
 # M10: stale-review check — if most recent implement follows most recent review,
 # then test/handoff/ship without a new review = stale review violation
@@ -1389,8 +1534,8 @@ PYEOF
     fi
     # Test Gate Results — engineering_guardrails.md §12.2 requires evidence be recorded
     # under "Test Gate Results" for feature/architecture-change work logs that have
-    # reached the implement or later phase. WARN-only: converts §12.2 from honor-system
-    # to auditable evidence requirement.
+    # reached the implement or later phase. WARN-only for historical logs.
+    # AC-6: FAIL for current-branch log when at handoff/ship phase without Test Gate Results.
     # Parse classification from list form ("- Classification:") or table form ("| Classification |")
     if [[ -n "$PYTHON_BIN" ]]; then
       # Python via single-quoted heredoc -> variable (verbatim; no bash metachar parsing)
@@ -1410,7 +1555,20 @@ PYEOF
     if [[ "$wl_class" == "feature" || "$wl_class" == "architecture-change" ]]; then
       if printf '%s' "$wl_content" | grep -qi 'Gate: implement'; then
         if ! printf '%s' "$wl_content" | grep -qiE '^#+[[:space:]]+Test Gate Results'; then
-          test_gate_results_missing=$((test_gate_results_missing + 1))
+          # AC-6: current-branch at handoff/ship → FAIL; otherwise WARN.
+          # Use gate-receipt presence only here (wl_phase_for_resume is set later in this iteration).
+          wl_at_handoff_ship=0
+          if [[ "$is_current_branch" -eq 1 ]]; then
+            if printf '%s' "$wl_content" | grep -qiE 'Gate:[[:space:]]*(handoff|ship)[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS'; then
+              wl_at_handoff_ship=1
+            fi
+          fi
+          if [[ "$wl_at_handoff_ship" -eq 1 ]]; then
+            current_branch_gate_fail=$((current_branch_gate_fail + 1))
+            current_branch_gate_fail_list="${current_branch_gate_fail_list}  $(basename "$wl"): Test Gate Results section missing (required for architecture-change/feature at handoff/ship)\n"
+          else
+            test_gate_results_missing=$((test_gate_results_missing + 1))
+          fi
         fi
       fi
     fi
@@ -1460,19 +1618,46 @@ PYEOF
         reclassify_header_not_reset=$((reclassify_header_not_reset + 1))
       fi
     fi
-    # Finding 5 (MEDIUM): Handoff Resume Block completeness — prose rule (handoff.md §1a)
-    # requires all sub-sections. Warn when ## Resume section exists but is missing
-    # any of the mandatory headings: Read Map, Skip List, Context Snapshot.
-    if printf '%s' "$wl_content" | grep -q '^## Resume'; then
-      resume_body="$(printf '%s' "$wl_content" | sed -n '/^## Resume/,/^## /p')"
-      missing_subsections=0
-      for subsec in "Read Map" "Skip List" "Context Snapshot"; do
-        if ! printf '%s' "$resume_body" | grep -qiE "^###[[:space:]]+${subsec}"; then
-          missing_subsections=$((missing_subsections + 1))
+    # Finding 5 (MEDIUM/HIGH): Handoff Resume Block completeness — prose rule (handoff.md §1a)
+    # requires all sub-sections only once feature/architecture-change work reaches
+    # handoff/ship. The Work Log template's pre-handoff `Resume: none` placeholder
+    # is valid and quick-win/hotfix paths are exempt from /handoff.
+    # AC-6: current-branch + resume_required + (absent ## Resume OR missing subsections) → FAIL.
+    #        historical or present-with-incomplete → WARN.
+    wl_phase_for_resume="$(printf '%s' "$wl_content" | grep -m1 -iE '^-[[:space:]]*\*?\*?Current Phase\*?\*?:' \
+      | sed 's/.*Current Phase[^:]*:[[:space:]]*//' | tr -d '`\r' | tr '[:upper:]' '[:lower:]' | xargs)" || true
+    resume_required=0
+    if [[ "$wl_class" == "feature" || "$wl_class" == "architecture-change" ]]; then
+      if [[ "$wl_phase_for_resume" == "handoff" || "$wl_phase_for_resume" == "ship" ]] \
+         || printf '%s' "$wl_content" | grep -qiE 'Gate:[[:space:]]*(handoff|ship)[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS'; then
+        resume_required=1
+      fi
+    fi
+    if [[ "$resume_required" -eq 1 ]]; then
+      if ! printf '%s' "$wl_content" | grep -q '^## Resume'; then
+        # AC-6: absent ## Resume section when required
+        if [[ "$is_current_branch" -eq 1 ]]; then
+          current_branch_gate_fail=$((current_branch_gate_fail + 1))
+          current_branch_gate_fail_list="${current_branch_gate_fail_list}  $(basename "$wl"): ## Resume section absent (required for architecture-change/feature at handoff/ship)\n"
+        else
+          handoff_resume_incomplete=$((handoff_resume_incomplete + 1))
         fi
-      done
-      if [[ "$missing_subsections" -gt 0 ]]; then
-        handoff_resume_incomplete=$((handoff_resume_incomplete + 1))
+      else
+        resume_body="$(printf '%s' "$wl_content" | sed -n '/^## Resume/,/^## /p')"
+        missing_subsections=0
+        for subsec in "Read Map" "Skip List" "Context Snapshot"; do
+          if ! printf '%s' "$resume_body" | grep -qiE "^###[[:space:]]+${subsec}"; then
+            missing_subsections=$((missing_subsections + 1))
+          fi
+        done
+        if [[ "$missing_subsections" -gt 0 ]]; then
+          if [[ "$is_current_branch" -eq 1 ]]; then
+            current_branch_gate_fail=$((current_branch_gate_fail + 1))
+            current_branch_gate_fail_list="${current_branch_gate_fail_list}  $(basename "$wl"): ## Resume missing required sub-sections (Read Map, Skip List, Context Snapshot)\n"
+          else
+            handoff_resume_incomplete=$((handoff_resume_incomplete + 1))
+          fi
+        fi
       fi
     fi
     # Finding 13 (MEDIUM): hotfix fast-path evidence check — hotfix is exempt from
@@ -1570,6 +1755,13 @@ PYEOF
     record_result WARN "work logs with ## Resume section missing required sub-sections (handoff.md §1a — Read Map, Skip List, Context Snapshot required): ${handoff_resume_incomplete}"
   elif [[ "$worklog_count" -gt 0 ]]; then
     record_result PASS "handoff Resume Blocks have required sub-sections where present"
+  fi
+  # AC-6: single FAIL record_result covering current-branch Resume + Test-Gate-Results invariants.
+  # Only fires when the current branch has a Work Log that is missing required evidence at handoff/ship.
+  # Historical logs and pre-handoff logs remain WARN (not counted here).
+  if [[ "$current_branch_gate_fail" -gt 0 ]]; then
+    record_result FAIL "current-branch work log missing required gate evidence at handoff/ship (AC-6 — Resume block and/or Test Gate Results absent): ${current_branch_gate_fail}"
+    printf '%b' "$current_branch_gate_fail_list"
   fi
   if [[ "$hotfix_ship_no_evidence" -gt 0 ]]; then
     record_result WARN "hotfix work logs shipped without ## Evidence (hotfix fast-path still requires diff + behavior verification per handoff.md §Trigger Conditions): ${hotfix_ship_no_evidence}"

@@ -35,13 +35,13 @@ Reply in the user's input language — detect it from their latest message and m
 - **SSoT Recovery Exception**: If Spec Index is `[STALE]`/empty, ONE targeted scan (`list_dir docs/specs/`) allowed — then update `current_state.md` and log recovery.
 - **Active Backlog**: `docs/specs/_product-backlog.md` — living index for multi-feature work. Bootstrap checks it; Ship updates it. Free-read (~200 tokens).
 - **Write Isolation**: Agents write only to their own Work Log. Only `/ship` updates SSoT (`current_state.md`) via `guard_context_write.py` (Python-unavailable fallback: write directly + log in `## Drift Log`). Exception: `_product-backlog.md` updates during spec-intake/ship. Zero-Python downstream: append directly, log unguarded writes in Drift Log.
-- **Classification Freeze**: Locked after bootstrap; silent downgrade prohibited. Reclassification: rollback to `CLASSIFIED`, re-run gate. Scope creep mid-implement → stop, surface to user. State transitions: `feature`/`architecture-change` → `TESTED→HANDEDOFF→SHIPPED`; `quick-win`/`hotfix` → `TESTED→SHIPPED`; `tiny-fix` skips TESTED. Full state machine: `.agent/rules/state_machine.md`.
+- **Classification Freeze**: Locked after bootstrap; silent downgrade prohibited. Reclassification: rollback to `CLASSIFIED`, re-run gate. Scope creep mid-implement → stop, surface to user. State transitions: `feature`/`architecture-change` → `TESTED→HANDEDOFF→SHIPPED`; `quick-win` → `SHIPPED` (review/test optional); `hotfix` → `TESTED→SHIPPED`; `tiny-fix` skips TESTED. Full state machine: `.agent/rules/state_machine.md`.
 - **Work Log Resolution**: Derive `<worklog-key>` from branch name (replace `/` with `-`). Missing logs are recoverable — create at `.agentcortex/context/work/<worklog-key>.md` before failing the gate.
 - **Work Log Contract**: Non-`tiny-fix` logs require header fields (`Branch`, `Classification`, `Owner`, `Current Phase`, `Checkpoint SHA`, etc.) and runtime sections (`## Session Info`, `## Drift Log`, `## Gate Evidence`, `## Evidence`, etc.). Missing sections → write `none`. Template: `.agentcortex/templates/worklog.md`.
 
 > [!IMPORTANT]
 > **Non-ship SSoT write exceptions (exhaustive list)**:
-> - `/retro`: may append `## Global Lessons` entries via `guard_context_write.py`.
+> - `/retro`: may append/archive `## Global Lessons` entries via `append_lesson.py`.
 > - `/app-init`: writes Project Name and ADR Index entry directly (guard has no section-targeting).
 > - `/adr`: writes new ADR entry to ADR Index directly (same reason); MUST log in Work Log `## Drift Log`.
 > All three MUST be logged in Work Log `## Drift Log`. Do NOT generalize to `/implement`, `/review`, or any other workflow.
