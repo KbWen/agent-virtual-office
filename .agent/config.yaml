@@ -132,6 +132,10 @@ downstream_capabilities:
 # Document lifecycle caps — prevents unbounded SSoT bloat.
 # See: docs/specs/tiered-doc-lifecycle.md
 document_lifecycle:
+  # Review snapshots with pending routing_actions older than this emit a validator WARN.
+  # They are temporal records; durable findings must move into canonical docs/specs.
+  routing_actions_pending_warn_days: 14
+
   # Global Lessons in current_state.md: max entries before oldest LOW-severity
   # lessons are archived to .agentcortex/context/archive/global-lessons-archive.md.
   # HIGH-severity lessons are pinned until manually demoted.
@@ -140,6 +144,12 @@ document_lifecycle:
   # Spec Index in current_state.md: max entries before oldest shipped entries
   # are collapsed into an archive section at bottom of the index.
   spec_index_max_entries: 30
+
+  # Ship History in current_state.md: max `### Ship-` entries before the oldest
+  # are rotated to .agentcortex/context/archive/ship-history-YYYY.md, keeping the
+  # latest 10 in-file (ship.md §State Update). Advisory only — surfaced by
+  # check_ssot_caps.py as a validator WARN, never a hard FAIL.
+  ship_history_max_entries: 10
 
   # _raw-intake*.md files: MUST be deleted (not archived) by /ship when
   # all features from the intake are Shipped or Cancelled.

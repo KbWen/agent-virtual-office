@@ -11,7 +11,9 @@ description: Workflow for implement
 
 **Resume-after-review**: If the prior phase was `review` (Work Log gate evidence shows a NOT READY verdict with `Transition: REVIEWED→IMPLEMENTING`), read Work Log `## Review Feedback` before writing any code. The resume scope is ONLY the UNPROVEN/blocking rows from the burden-of-proof table — do NOT re-implement already-passing items.
 
-**Checkpoint SHA**: Before any code changes, record `Checkpoint SHA: <git HEAD>` in the Work Log header. This anchors the resume point for interrupted sessions. The next agent can `git diff <checkpoint>..HEAD` to scope unfinished work.
+**Diff Base SHA** (AC-4, set ONCE): on first `/implement` entry (when absent/`none`), record `Diff Base SHA: <git HEAD>` — the immutable pre-implementation HEAD used as the stable review base (`lint_spec_drift.py --base <Diff Base SHA>`). Never update it on resume.
+
+**Checkpoint SHA**: before code changes, record `Checkpoint SHA: <git HEAD>` (refreshed on each new commit) so the next agent can `git diff <checkpoint>..HEAD` to scope resume work.
 
 **Gate Receipt (on completion)**: After the final commit (Checkpoint SHA is current), append to Work Log `## Gate Evidence`:
 ```

@@ -18,10 +18,10 @@ Before review, check the active Work Log size. If it exceeds compaction threshol
 If the active Work Log references a `docs/specs/<feature>.md` file, run the advisory spec drift linter before the Burden of Proof table:
 
 ```sh
-python .agentcortex/tools/lint_spec_drift.py --worklog .agentcortex/context/work/<worklog-key>.md --base <Checkpoint SHA> --head HEAD
+python .agentcortex/tools/lint_spec_drift.py --worklog .agentcortex/context/work/<worklog-key>.md --base <Diff Base SHA> --head HEAD
 ```
 
-Use the pre-implementation `Checkpoint SHA` recorded in the Work Log so the linter compares the implemented branch diff instead of only uncommitted working-tree changes.
+Use the immutable `Diff Base SHA` from the Work Log header (full implemented diff, not just recent commits — AC-4). **Legacy fallback** (logs lacking `Diff Base SHA`): use `Checkpoint SHA` with a one-time WARN; never silently reinterpret it as the diff base.
 
 This check is advisory and non-blocking. Warnings can inform review questions, but they do NOT change the review verdict rules; AC proof still comes from the Burden of Proof Protocol below.
 
