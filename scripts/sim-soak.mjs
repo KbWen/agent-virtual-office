@@ -177,23 +177,10 @@ try {
       const m = /translate\(([-\d.]+)[, ]+([-\d.]+)\)/.exec(g.getAttribute('transform') || '')
       return m ? { x: +m[1], y: +m[2] } : null
     }
-    // DIAGNOSTIC — rAF liveness. sustainedStack tails show agents pixel-frozen while the
-    // store still says isMoving. Two rival explanations predict OPPOSITE frame counts:
-    // a lost/throttled rAF chain (frames stop) vs deconfliction/targeting churn (frames
-    // keep coming, agents just have nowhere to go). This probe counts DELIVERED frames —
-    // per-sample delta is ~15 at 60fps, 0 if the page is getting no frames at all. With
-    // the store's watchdogRestarts counter it separates the two WITHOUT touching product
-    // code. NOTE: the probe itself keeps a rAF chain warm, so it proves frame DELIVERY to
-    // the page, not that any individual agent's chain is alive.
-    let rafTicks = 0
-    ;(function probeRaf() { rafTicks++; requestAnimationFrame(probeRaf) })()
-    let lastRafTicks = 0
     const out = []
     const t0 = Date.now()
     while (Date.now() - t0 < minutes * 60000) {
       const st = store.getState()
-      const rafDelta = rafTicks - lastRafTicks
-      lastRafTicks = rafTicks
       const agents = {}
       for (const el of document.querySelectorAll('[data-agent-id]')) {
         const id = el.getAttribute('data-agent-id')
@@ -204,20 +191,10 @@ try {
             x: p.x, y: p.y,
             moving: !!a.isMoving, group: !!a.inGroupEvent,
             offFloor: !isOnFloor(p.x, p.y) || isOnObstacle(p.x, p.y),
-            // DIAGNOSTIC — walk liveness. EVERY walk-start site publishes setAgentJourney
-            // BEFORE startWalkTo, so a genuinely live walk ALWAYS carries a journeyTarget;
-            // only the abort sites can leave isMoving=1 with journeyTarget=null. This is
-            // the discriminator the rAF probe could NOT give (it proves page-level frame
-            // delivery, not that an individual agent's rAF chain is alive):
-            //   moving=1, jt=0                  -> the walk was ABORTED, isMoving is a stale lie
-            //   moving=1, jt=1, (x,y) != (tx,ty) -> the walk is LIVE, the pixels are stalled
-            jt: a.journeyTarget ? 1 : 0,
-            tx: a.targetPosition ? Math.round(a.targetPosition.x) : null,
-            ty: a.targetPosition ? Math.round(a.targetPosition.y) : null,
           }
         }
       }
-      out.push({ t: Date.now() - t0, agents, raf: rafDelta, wd: st.watchdogRestarts || 0 })
+      out.push({ t: Date.now() - t0, agents })
       await new Promise(r => setTimeout(r, 250))
     }
     return out
@@ -225,41 +202,8 @@ try {
 
   const coverage = assessSoakCoverage(samples.length, MINUTES, SAMPLE_INTERVAL_MS)
   const result = evaluateSoak(samples)
-  // DIAGNOSTIC (see the rAF liveness probe above). rafPerSample ~15 = the page was being
-  // painted normally; a stack window with raf~0 = frames stopped there. `stackWindows`
-  // rows are [tSec, framesDeliveredThisSample, cumulativeWatchdogRestarts].
-  const rafDeltas = samples.map(s => s.raf ?? 0).sort((a, b) => a - b)
-  const diagnostics = {
-    rafPerSample: {
-      min: rafDeltas[0] ?? null,
-      p50: rafDeltas[Math.floor(rafDeltas.length / 2)] ?? null,
-      max: rafDeltas[rafDeltas.length - 1] ?? null,
-      zeroSamples: rafDeltas.filter(d => d === 0).length,
-    },
-    watchdogRestarts: samples.length ? (samples[samples.length - 1].wd ?? 0) : 0,
-    // +/-15s (not the invariant's 15-sample tail, which SATURATES ~3.7s after rest onset
-    // and therefore shows "1 moving sample then all-zero" for EVERY stack regardless of
-    // mechanism — an instrument artifact, not a signature). This width shows the approach,
-    // the full freeze duration, and the recovery.
-    stackWindows: (result.violations?.sustainedStack || []).map(v => {
-      const [A, B] = v.pair.split('+')
-      const rows = samples.filter(s => Math.abs(s.t / 1000 - v.tSec) <= 15)
-      const track = (id) => rows.flatMap(s => {
-        const a = s.agents[id]
-        return a ? [[Math.round(s.t / 100) / 10, Math.round(a.x), Math.round(a.y), a.moving ? 1 : 0, a.jt, a.tx, a.ty]] : []
-      })
-      return {
-        pair: v.pair,
-        tSec: v.tSec,
-        legend: 'raf:[tSec,framesDelivered,watchdogRestarts]  A/B:[tSec,x,y,moving,journeyTargetPresent,targetX,targetY]',
-        raf: rows.map(s => [Math.round(s.t / 100) / 10, s.raf ?? 0, s.wd ?? 0]),
-        A: { id: A, rows: track(A) },
-        B: { id: B, rows: track(B) },
-      }
-    }),
-  }
   if (process.env.SOAK_REPORT) {
-    writeFileSync(process.env.SOAK_REPORT, JSON.stringify({ minutes: MINUTES, samples: samples.length, coverage, diagnostics, ...result }, null, 1))
+    writeFileSync(process.env.SOAK_REPORT, JSON.stringify({ minutes: MINUTES, samples: samples.length, coverage, ...result }, null, 1))
   }
   if (!coverage.sufficient) {
     throw new Error(`insufficient samples: got ${samples.length}, expected at least ${coverage.minSamples}; partial invariant violations: ${result.total}`)
