@@ -177,10 +177,23 @@ try {
       const m = /translate\(([-\d.]+)[, ]+([-\d.]+)\)/.exec(g.getAttribute('transform') || '')
       return m ? { x: +m[1], y: +m[2] } : null
     }
+    // DIAGNOSTIC — rAF liveness. sustainedStack tails show agents pixel-frozen while the
+    // store still says isMoving. Two rival explanations predict OPPOSITE frame counts:
+    // a lost/throttled rAF chain (frames stop) vs deconfliction/targeting churn (frames
+    // keep coming, agents just have nowhere to go). This probe counts DELIVERED frames —
+    // per-sample delta is ~15 at 60fps, 0 if the page is getting no frames at all. With
+    // the store's watchdogRestarts counter it separates the two WITHOUT touching product
+    // code. NOTE: the probe itself keeps a rAF chain warm, so it proves frame DELIVERY to
+    // the page, not that any individual agent's chain is alive.
+    let rafTicks = 0
+    ;(function probeRaf() { rafTicks++; requestAnimationFrame(probeRaf) })()
+    let lastRafTicks = 0
     const out = []
     const t0 = Date.now()
     while (Date.now() - t0 < minutes * 60000) {
       const st = store.getState()
+      const rafDelta = rafTicks - lastRafTicks
+      lastRafTicks = rafTicks
       const agents = {}
       for (const el of document.querySelectorAll('[data-agent-id]')) {
         const id = el.getAttribute('data-agent-id')
@@ -194,7 +207,7 @@ try {
           }
         }
       }
-      out.push({ t: Date.now() - t0, agents })
+      out.push({ t: Date.now() - t0, agents, raf: rafDelta, wd: st.watchdogRestarts || 0 })
       await new Promise(r => setTimeout(r, 250))
     }
     return out
@@ -202,8 +215,28 @@ try {
 
   const coverage = assessSoakCoverage(samples.length, MINUTES, SAMPLE_INTERVAL_MS)
   const result = evaluateSoak(samples)
+  // DIAGNOSTIC (see the rAF liveness probe above). rafPerSample ~15 = the page was being
+  // painted normally; a stack window with raf~0 = frames stopped there. `stackWindows`
+  // rows are [tSec, framesDeliveredThisSample, cumulativeWatchdogRestarts].
+  const rafDeltas = samples.map(s => s.raf ?? 0).sort((a, b) => a - b)
+  const diagnostics = {
+    rafPerSample: {
+      min: rafDeltas[0] ?? null,
+      p50: rafDeltas[Math.floor(rafDeltas.length / 2)] ?? null,
+      max: rafDeltas[rafDeltas.length - 1] ?? null,
+      zeroSamples: rafDeltas.filter(d => d === 0).length,
+    },
+    watchdogRestarts: samples.length ? (samples[samples.length - 1].wd ?? 0) : 0,
+    stackWindows: (result.violations?.sustainedStack || []).map(v => ({
+      pair: v.pair,
+      tSec: v.tSec,
+      window: samples
+        .filter(s => Math.abs(s.t / 1000 - v.tSec) <= 5)
+        .map(s => [Math.round(s.t / 100) / 10, s.raf ?? 0, s.wd ?? 0]),
+    })),
+  }
   if (process.env.SOAK_REPORT) {
-    writeFileSync(process.env.SOAK_REPORT, JSON.stringify({ minutes: MINUTES, samples: samples.length, coverage, ...result }, null, 1))
+    writeFileSync(process.env.SOAK_REPORT, JSON.stringify({ minutes: MINUTES, samples: samples.length, coverage, diagnostics, ...result }, null, 1))
   }
   if (!coverage.sufficient) {
     throw new Error(`insufficient samples: got ${samples.length}, expected at least ${coverage.minSamples}; partial invariant violations: ${result.total}`)
