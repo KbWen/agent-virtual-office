@@ -464,6 +464,15 @@ function pushPoint(path, pt) {
 // — it cannot clip the door frame as long as the offset stays inside the passage, which the
 // per-endpoint floor/obstacle validation guarantees (door passages are FLOOR_ZONES). Falls
 // back to the raw anchors when a jittered endpoint would leave the floor.
+// KNOWN, UNFIXED (measured 2026-07-16 — characterized by tests/doorCrossingSeparation.test.js):
+// the offset below is PERPENDICULAR to travel only, so the TRAVEL axis gets EXACTLY ZERO spread
+// and two agents pausing at one door side are always <= DOOR_JITTER (20px) apart — inside the
+// soak's STACK_DIST_PX (30) alarm AND inside the 32x44 sprite ellipse. The ±10px added for the
+// forensic below turned a 0px point-stack into a 20px segment; it never cleared its own alarm.
+// A clean-CI soak put 4/4 stacks at x=585 exactly (mainToMeeting). RAISING DOOR_JITTER CANNOT
+// FIX THIS — the opening is ~50px and the isOnFloor/isOnObstacle check rejects anything outside
+// it, so the geometry cannot hold two agents 30px apart. The fix must be TEMPORAL (a door claim /
+// one-at-a-time crossing — target-time deconfliction per ADR-004), not spatial.
 function jitterDoorCrossing(fromSide, toSide) {
   const travelX = Math.abs(toSide.x - fromSide.x) >= Math.abs(toSide.y - fromSide.y)
   for (let attempt = 0; attempt < 4; attempt++) {
