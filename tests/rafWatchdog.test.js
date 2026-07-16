@@ -6,6 +6,7 @@ import {
   RAF_STALL_RESTART_MS,
   shouldRecordRafWatchdogRestart,
   shouldRestartRafWatchdog,
+  shouldRestoreWalk,
   shouldStopStaleLocalWalk,
 } from '../src/components/AgentCharacter.jsx'
 import { GAP_SNAP_MS } from '../src/systems/walkFrame.js'
@@ -67,6 +68,33 @@ describe('hasRafHandle', () => {
     expect(hasRafHandle(null)).toBe(false)
     expect(hasRafHandle(undefined)).toBe(false)
     expect(hasRafHandle(42)).toBe(true)
+  })
+})
+
+// React tears passive effects down on LIVE components (a depth-sorted keyed list re-places
+// fibers on every walk; StrictMode then double-invokes them). The teardown kills the rAF and
+// releases the journey claim, so the setup must put a still-live walk back together — measured
+// at 22 spurious teardowns per 150s, each freezing a walker for ~3000ms, which is exactly the
+// soak's STACK_SUSTAIN_MS.
+describe('shouldRestoreWalk', () => {
+  const pos = { x: 10, y: 20 }
+
+  it('restores a walk whose rAF chain was cancelled by a teardown', () => {
+    expect(shouldRestoreWalk(true, pos, pos, null)).toBe(true)
+  })
+
+  it('never starts a second chain when one is already live', () => {
+    expect(shouldRestoreWalk(true, pos, pos, 42)).toBe(false)
+    expect(shouldRestoreWalk(true, pos, pos, 0)).toBe(false)  // 0 is a valid rAF handle
+  })
+
+  it('never republishes a walk that already ended', () => {
+    expect(shouldRestoreWalk(false, pos, pos, null)).toBe(false)
+  })
+
+  it('declines when the walk has no position or target to resume from', () => {
+    expect(shouldRestoreWalk(true, null, pos, null)).toBe(false)
+    expect(shouldRestoreWalk(true, pos, null, null)).toBe(false)
   })
 })
 

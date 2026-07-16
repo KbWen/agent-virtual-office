@@ -53,6 +53,14 @@ export function hasRafHandle(value) {
   return value !== null && value !== undefined
 }
 
+// React tears passive effects down on LIVE components, not only on unmount (see the symmetric
+// setup/cleanup below). This decides whether a re-run setup must put a torn-down walk back
+// together. Pure so it is unit-testable — the rAF loop itself cannot run under vitest.
+export function shouldRestoreWalk(moving, visualPos, targetPos, rafHandle) {
+  if (!moving || !visualPos || !targetPos) return false  // no walk in flight — never republish
+  return !hasRafHandle(rafHandle)                        // a live chain needs no second one
+}
+
 export function collectArrivalNudgeClaims(agents, id) {
   const blockers = []
   const claims = []
@@ -924,27 +932,52 @@ function AgentCharacter({ agent }) {
     return () => clearInterval(watchdog)
   }, [isWalking, startRaf])
 
-  // Cleanup RAF + deferred timers on unmount
+  // Stashed by the cleanup BEFORE it releases the claim, so the setup can put it back.
+  const lastJourneyRef = useRef(null)
+
+  // SYMMETRIC setup/cleanup — this is NOT an unmount-only hook. React tears passive effects
+  // down on LIVE components: PixelOffice's depth-sorted agentList (PixelOffice.jsx:850) re-places
+  // these keyed fibers whenever a walker's y changes, and react-dom's placeChild MOVE branch sets
+  // Placement|PlacementDEV identically to an insert, so StrictMode double-invokes this mid-walk
+  // (measured: 22 spurious teardowns per 150s; 0 with StrictMode off). The old cleanup killed the
+  // rAF and dropped the journey claim on a LIVE walker, freezing it until the 2.5s stall
+  // watchdog's next 1s poll — a near-constant +3000ms, exactly soakInvariants' STACK_SUSTAIN_MS,
+  // so the nightly soak tripped stacks it created itself AND randomly disabled the only
+  // anti-stack mechanism (the journey claim) 22x per 150s. `<Activity mode="hidden">` drives the
+  // same disconnect/reconnect path in PRODUCTION — this is not a dev-only concern.
   useEffect(() => {
     isUnmountedRef.current = false
-    const deferred = deferredTimersRef.current
+    // Restore whatever a previous teardown released. Ref-gated only (see the dep note below).
+    if (shouldRestoreWalk(movingRef.current, visualPosRef.current, targetPosRef.current, rafRef.current)) {
+      if (lastJourneyRef.current) useOfficeStore.getState().setAgentJourney(id, lastJourneyRef.current)
+      startRaf()
+    }
     return () => {
       isUnmountedRef.current = true
       if (hasRafHandle(rafRef.current)) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null
       }
-      // A mid-walk unmount (roster-mode toggle swaps the office for NarrowRoster while
-      // s.agents persists) must release the journey claim — setAgentArrived will never
-      // fire for the dead walk, and a stale journeyTarget would block that spot for every
-      // picker until this agent's next walk start (AC-2, fresh review 2026-06-10 MED).
-      useOfficeStore.getState().setAgentJourney(id, null)
-      // Cancel any in-flight bubble-clear / handoff timers so they don't fire
-      // against a torn-down component after unmount.
-      for (const handle of deferred) clearTimeout(handle)
-      deferred.clear()
+      // A mid-walk teardown must still release the journey claim — setAgentArrived never fires
+      // for a dead walk, and a stale journeyTarget would block that spot for every picker
+      // (AC-2, fresh review 2026-06-10 MED). Stash it from the STORE (the SSoT for journeyTarget,
+      // store.js:735) rather than mirroring all six setAgentJourney call sites — a future seventh
+      // site cannot then silently break the restore above.
+      const store = useOfficeStore.getState()
+      lastJourneyRef.current = store.agents[id]?.journeyTarget || null
+      store.setAgentJourney(id, null)
+      // The deferred-timer clearTimeout loop that lived here is GONE on purpose: it also ran on
+      // LIVE components, and nothing re-arms a cleared handle. It permanently killed pending
+      // bubble-clears (leaving a bubble that asserts state the agent no longer has — the exact
+      // honesty failure this product exists to prevent) and the pass-document receive step
+      // (a handoff drawn but never received). scheduleDeferred's own isUnmountedRef guard
+      // already blocks post-unmount writes, which is all this loop ever legitimately did.
     }
-  }, [])
+    // Refs + stable callbacks ONLY: startRaf is useCallback(..., []) and `id` is the render key,
+    // so this stays []-equivalent and does NOT re-run mid-walk. NEVER add isWalking/agentState —
+    // this cleanup drops the journey claim and kills the rAF, so a dep that changed at walk start
+    // would tear down the very walk startWalkTo just armed.
+  }, [id, startRaf])
 
   // Move to a new target (called from doSchedule, group walks, and the arrival nudge).
   // Defined BEFORE onWaypointReached, which lists it as a dependency.
