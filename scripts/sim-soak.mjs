@@ -28,6 +28,7 @@ import { existsSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { evaluateSoak } from './soakInvariants.mjs'
+import { assessSoakCoverage } from './soakCoverage.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
@@ -199,14 +200,13 @@ try {
     return out
   }, { minutes: MINUTES })
 
-  const minSamples = Math.max(1, Math.floor((MINUTES * 60000) / SAMPLE_INTERVAL_MS) - 2)
-  if (samples.length < minSamples) {
-    throw new Error(`insufficient samples: got ${samples.length}, expected at least ${minSamples}`)
-  }
-
+  const coverage = assessSoakCoverage(samples.length, MINUTES, SAMPLE_INTERVAL_MS)
   const result = evaluateSoak(samples)
   if (process.env.SOAK_REPORT) {
-    writeFileSync(process.env.SOAK_REPORT, JSON.stringify({ minutes: MINUTES, samples: samples.length, ...result }, null, 1))
+    writeFileSync(process.env.SOAK_REPORT, JSON.stringify({ minutes: MINUTES, samples: samples.length, coverage, ...result }, null, 1))
+  }
+  if (!coverage.sufficient) {
+    throw new Error(`insufficient samples: got ${samples.length}, expected at least ${coverage.minSamples}; partial invariant violations: ${result.total}`)
   }
   for (const e of result.warnings?.groupStack || []) {
     console.log(`sim-soak WARN [groupStack, non-failing] ${JSON.stringify(e)}`)
