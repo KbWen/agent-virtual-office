@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-07-10T23:05:00+08:00
-- **Update Sequence**: 108
+- **Last Updated**: 2026-07-16T19:45:00+08:00
+- **Update Sequence**: 109
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -165,6 +165,24 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-soak-gate-2026-07-16 (PR #202 — sim-soak un-broken: bounded coverage + symmetric walk teardown)
+
+> [!WARNING]
+> **The nightly sim-soak is green again — this does NOT mean the office is healthy.** For 32 runs the
+> stack data was **uninterpretable, not merely false-red**: the rig injected ~22 spurious 3s freezes per
+> 150s AND randomly released the journey claim (the only anti-stack mechanism) 22x per 150s, so a real
+> stack was indistinguishable from a manufactured one. **We are not exonerating the movement system — we
+> are admitting we never measured it.** Do NOT infer "movement is healthy" from a green soak until several
+> clean nightlies accumulate. **AVO-187 (door-crossing stack) is REAL, production-reachable, and OPEN.**
+
+- Ended a **32-run nightly red streak** (last success 2026-06-13). Both causes were defects in the GATE, found by measurement after **three** wrong root-cause theories were killed by an adversarial panel. Merged as squash `eb0a83a`; CI 7/7; full suite **2263 pass**; three consecutive green soaks (branch probe-free x2 + merged main x1: 2395/2396 samples, 0 violations).
+- **(a) Coverage false-red.** The sample floor was `expected - 2` (2398/2400), tighter than ordinary 250ms timer jitter (clean CI yields 2393–2397), and the runner threw **before** `evaluateSoak` and the report write — so all 32 failures left **no artifact**. Fixed by `scripts/soakCoverage.mjs` (`assessSoakCoverage`: max 5 misses or 0.5%, fail-closed on material under-sampling) + report-before-fail ordering. *Implemented by the codex release-audit session; verified independently.*
+- **(b) The soak tripped a bug its own rig created.** `sim-soak.mjs` runs a **Vite dev server by design** (its sampler must import `/src` for ground truth) ⇒ StrictMode ⇒ React 19 **double-invokes passive effects on re-placed fibers**. `PixelOffice` re-sorts `agentList` by **live `position.y`** (SVG paint order *is* depth), so **any walker re-places every keyed `<AgentCharacter>`**; react-dom's `placeChild` MOVE branch flags `Placement|PlacementDEV` **byte-identically to an insert**. That fired the `[]`-dep "unmount" cleanup on **live mid-walk instances** — cancelling the rAF (frozen until the 2.5s watchdog's next 1s poll = a near-constant **+3000ms**, *exactly* `STACK_SUSTAIN_MS`) and dropping `journeyTarget`. **A/B: 22 spurious teardowns / 150s with StrictMode on, 0 with it off.** Fixed by making setup/cleanup **symmetric** (setup restores; pure `shouldRestoreWalk` guard; journey stashed from the store SSoT, not mirrored at the six publish sites). **No DEV/StrictMode branching** — a correct effect is invariant under double-invocation; `<Activity mode="hidden">` runs the same path in production. Also removed the deferred-timer `clearTimeout` loop from that cleanup: it too ran on live components and nothing re-arms a cleared handle, so it permanently killed pending bubble-clears (**a bubble asserting state the agent no longer has**) and the pass-document receive step (**a handoff drawn but never received**).
+- **Filed, NOT fixed** — `AVO-187` (P1, honesty-critical, production-reachable): `jitterDoorCrossing` offsets only **perpendicular to travel**, so every door pins its travel axis at **exactly zero spread**; two agents pausing at one side are always ≤`DOOR_JITTER` (20px) apart — inside `STACK_DIST_PX` (30) and the 32x44 ellipse. **Any pause at a door is a guaranteed stack** (measured: 4/4 clean-CI stacks at x=585 exactly). Its own comment cites the 2026-06-10 forensic at `(240,386)` — the coordinate `mainToLounge` **still pins today**; that mitigation turned a 0px point-stack into a 20px segment and never reached its own alarm. **Not fixable by raising `DOOR_JITTER`** (opening ~50px) — needs a **temporal door claim** + an ADR. Characterized by `tests/doorCrossingSeparation.test.js` + a source note so it cannot go quiet. Also filed: `AVO-188` (abort sites leave a stale `isMoving:true`; `AgentInspector` reads it and lies), `AVO-189` (`shouldRecordRafWatchdogRestart` is structurally unreachable — reads 0 on a broken build; **never assert on it**), `AVO-190` (`sim-soak` blind-reuses any server on :5173 — during this investigation that was a *different project*).
+- Downstream: `living-world` roadmap M4 got a precondition (`56d494e`) — extract from `eb0a83a`+, and the trap is **not AVO-specific**: any rAF-driven movement + depth-sorted keyed list hits it with zero AVO code.
+- Process: SSoT appended directly (guard bypassed deliberately — the documented stale-receipt hazard); Ship History now 11 vs the advisory cap of 10 (`check_ssot_caps.py` prints this under a `[PASS]`, never a FAIL) — recorded rather than silently rotated.
+- Tests: Pass
 
 ### Ship-chore-ssot-rotation-and-worklog-hygiene-2026-07-10 (SSoT rotation + work-log hygiene)
 
