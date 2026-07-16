@@ -336,8 +336,14 @@ if (host) {
 // shell-quoting dance — `process.execPath` + the resolved JS path is portable.
 const viteFlags = ['--port', port]
 if (host) viteFlags.push('--host')
+// Vite must run from `root` to resolve its own config and sources, so its cwd is the
+// package directory rather than the project the user launched us from. scanAndMerge
+// matches each session file's `_cwd` against the server's project root, so without
+// this the hook-written files all look foreign and get filtered out — leaving only
+// file-watcher fallback data. Forward the invoking cwd explicitly.
 const vite = spawn(process.execPath, [viteBinJs, ...viteFlags], {
   cwd: root,
+  env: { ...process.env, OFFICE_PROJECT_ROOT: process.env.OFFICE_PROJECT_ROOT || process.cwd() },
   stdio: 'inherit',
   shell: false,
 })
