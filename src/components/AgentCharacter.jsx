@@ -46,7 +46,7 @@ export function isDocumentFocused(doc) {
 }
 
 export function shouldRecordRafWatchdogRestart(hadPendingFrame, isFocused, consecutiveLostRestarts = 0) {
-  return !hadPendingFrame && isFocused && consecutiveLostRestarts >= 2
+  return !hadPendingFrame && isFocused && consecutiveLostRestarts >= 1
 }
 
 export function hasRafHandle(value) {

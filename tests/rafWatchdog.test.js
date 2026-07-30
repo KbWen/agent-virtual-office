@@ -42,8 +42,9 @@ describe('shouldRecordRafWatchdogRestart', () => {
     expect(shouldRecordRafWatchdogRestart(false, false, 5)).toBe(false)
   })
 
-  it('waits for repeated focused lost chains before surfacing a dev diagnostic', () => {
-    expect(shouldRecordRafWatchdogRestart(false, true, 1)).toBe(false)
+  it('records the first focused lost-chain restart', () => {
+    expect(shouldRecordRafWatchdogRestart(false, true, 0)).toBe(false)
+    expect(shouldRecordRafWatchdogRestart(false, true, 1)).toBe(true)
     expect(shouldRecordRafWatchdogRestart(false, true, 2)).toBe(true)
   })
 })
