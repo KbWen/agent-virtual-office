@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-07-30T23:42:00+08:00
-- **Update Sequence**: 112
+- **Last Updated**: 2026-07-30T23:59:00+08:00
+- **Update Sequence**: 113
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -84,6 +84,7 @@
   - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [ci-infra] docs/specs/avo-190-soak-target-identity.md [Shipped]  *(AVO-190 — fail-closed AVO identity preflight for soak and overlap recorder targets)*
+  - [ci-infra] docs/specs/avo-189-reachable-raf-watchdog-diagnostic.md [Shipped]  *(AVO-189 — first proven focused lost-chain restart is observable)*
   - [data-path] docs/specs/avo-188-abort-movement-in-place.md [Shipped]  *(AVO-188 — aborted walks stop at rendered truth without stale motion or teleporting)*
   - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
   - [ui-rendering] docs/specs/shareable-daily-card.md [Shipped]  *(AVO-115 / #31 — cozy pixel-art postcard share card; weather/mood hero + 1 number + warm caption; client-side canvas→PNG, opt-in ⚙ Share; honest (no event counting — Option C, derived from done+mood); store.js untouched)*
@@ -168,6 +169,12 @@
 
 ## Ship History
 
+### Ship-fix-avo-189-reachable-raf-watchdog-diagnostic-2026-07-30
+
+- Shipped AVO-189 on `codex/chore-upgrade-agentic-os-v1.8.17`: the first reachable focused lost-chain restart now increments the existing diagnostic counter and emits the existing dev warning. The change is the predicate threshold `>=2`→`>=1`; RAF timing, restart behavior, and frame reset semantics are unchanged.
+- Pending RAF handles and unfocused documents remain excluded, preserving the existing host-throttling noise guards. Commit: `feb23ef`.
+- Tests: Pass — focused 21/21; Vitest 111/111 files and 2271/2271 tests; build PASS; Agentic OS validator 112 PASS / 0 FAIL before Work Log wording cleanup.
+
 ### Ship-fix-avo-188-abort-movement-in-place-2026-07-30
 
 - Shipped AVO-188 on `codex/chore-upgrade-agentic-os-v1.8.17`: one atomic store action stops aborted walks at a defensive copy of the rendered position, clears `isMoving` and `journeyTarget`, and aligns `targetPosition` without teleporting to an abandoned waypoint.
@@ -239,14 +246,6 @@
 
 - Release cutting the merged office-layout-enrichment work (PR #192, squash `fcf5ee1`) as **v1.6.3**: `package.json` 1.6.2→1.6.3 + CHANGELOG narrative (Unreleased → v1.6.3 "Fuller corners, honest windows"). No further app change. Lockfile root version left stale per convention. Tag + `npm publish` performed manually by owner.
 - Tests: Pass (full suite 2222, from #192)
-
-### Ship-feat-office-layout-enrichment-2026-06-27 (meeting-room nook + hallway decor + interior-window fix)
-
-- Shipped office layout enrichment (quick-win, cosmetic, **decor-only — no movementSystem geometry touched**). Filled the two real dead zones found in a rendered-office audit: the meeting-room right column got a breakout nook (rug + couch + coffee table + plants); the entrance hallway got a gate-gap window + 2 framed pictures (new `<FramedArt>` component) + a reception water-cooler/plant corner; plus a 3rd meeting window, a meeting wall clock, and a night ceiling-light over the nook. **Owner-found correctness fix**: removed 4 "night-sky" windows wrongly mounted on the INTERIOR north wall (hallway is on the other side, not outdoors) + their `NightSky` moon/star clips → framed art + clock instead.
-- Process: owner-directed; passed a 4-lens expert review (3 SHIP-WITH-NITS + 1 SHIP; all core laws PASS) then a separate UI + UX polish pass (stacked-rug alignment, nook tightening, work-room art dimmed so decor whispers near status). Owner then caught an over-layered duplicate set of meeting chairs (the `MeetingTable` component already draws its own 6 chairs; an extra `MEETING_CHAIRS` overlay had doubled them into "weird coating") — the redundant overlay was removed. All new objects carry ZERO status signal; the panel verified status legibility + honesty intact. Declined (out of scope / owner-directive): dim pre-existing whiteboard widgets, unify clickable-affordance cue, remove hallway plants (owner asked for "more objects").
-- Guard: `tests/officeDecorationDensity.test.js` plant cap 6→9 (6 perimeter + 3 dead-zone); the legibility (no desk-zone plant) + no-cluster assertions are UNCHANGED and green.
-- Verify: full suite **2222 pass**; midday + night headless renders **0 console errors**; visual confirmation via `.pet-shots` day/night/meeting-crop. (`preview_screenshot` is broken in this project — headless Playwright is the visual path.)
-- Tests: Pass
 
 > Older entries (66) are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.

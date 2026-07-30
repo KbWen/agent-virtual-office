@@ -1,6 +1,6 @@
 ---
 title: AVO-189 Reachable RAF Watchdog Diagnostic
-status: frozen
+status: shipped
 classification: quick-win
 primary_domain: ci-infra
 ---
