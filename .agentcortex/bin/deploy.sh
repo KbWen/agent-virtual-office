@@ -26,7 +26,7 @@ TARGET="${TARGET:-.}"
 TARGET="${TARGET%/}"
 
 MANIFEST_FILE="$TARGET/.agentcortex-manifest"
-ACX_VERSION="1.8.11"
+ACX_VERSION="1.8.17"
 
 # --- Self-deploy guard ---
 TARGET_ABS="$(cd "$TARGET" 2>/dev/null && pwd || echo "$TARGET")"
@@ -736,7 +736,7 @@ if $DRY_RUN; then
     _dry_count=0
     # Enumerate only the files that are actually deployed (mirrors real deploy logic).
     # Runtime Python tools are a whitelist — NOT all *.py in tools/.
-    _runtime_tools="guard_context_write.py _yaml_loader.py check_command_sync.py check_text_integrity.py check_text_integrity.ps1 text_integrity_baseline.txt sync_skills.sh lint_governed_writes.py check_lifecycle_frontmatter.py check_lesson_chain.py check_ssot_caps.py check_adr_coverage.py append_chain_entry.py append_lesson.py recover_worklog_lock.py lint_spec_drift.py run_governance_eval.py scan_credentials.py credential_floor.sh credential_floor.ps1 generate_safety_nucleus.py validate_downstream_capabilities.py"
+    _runtime_tools="guard_context_write.py _yaml_loader.py check_command_sync.py check_text_integrity.py check_text_integrity.ps1 text_integrity_baseline.txt sync_skills.sh lint_governed_writes.py check_lifecycle_frontmatter.py check_lesson_chain.py check_ssot_caps.py check_decision_disposition.py check_adr_coverage.py append_chain_entry.py append_lesson.py recover_worklog_lock.py lint_spec_drift.py run_governance_eval.py scan_credentials.py credential_floor.sh credential_floor.ps1 generate_safety_nucleus.py validate_downstream_capabilities.py"
     _dry_print_file() {
         local src="$1"
         local rel="$2"
@@ -937,6 +937,7 @@ runtime_tools=(
   check_lifecycle_frontmatter.py
   check_lesson_chain.py
   check_ssot_caps.py
+  check_decision_disposition.py
   check_adr_coverage.py
   append_chain_entry.py
   append_lesson.py
@@ -1466,15 +1467,38 @@ echo "   Framework files are git-tracked (available in worktrees and branches)."
 echo "   Only work logs and private state are gitignored."
 echo "   .agentcortex-manifest tracks deployed files — commit this to your repo."
 echo ""
-echo "Next steps:"
-echo "   1. Validate the installation (optional — Python is NOT required):"
-echo "      .agentcortex/bin/validate.sh              # full validation (uses Python if available)"
-echo "      .agentcortex/bin/validate.sh --no-python  # lightweight, text-only checks"
-echo "   2. Stage framework files for git tracking:"
-echo "      git add .agentcortex-manifest AGENTS.md CLAUDE.md GEMINI.md .agent/ .agents/ .agentcortex/ .antigravity/ .codex/ codex/ docs/ installers/"
-echo "      # Also add if present: .claude/ .github/"
-echo "   3. Tell AI: 'Please run /bootstrap' to start"
-echo "   4. Agentic OS reference docs are under .agentcortex/docs/"
+echo "==================================================================="
+echo "TURN ON ENFORCEMENT  -  a fresh install runs NOTHING until you do"
+echo "==================================================================="
+echo ""
+echo "   1. Self-check now (no Python required) - confirms the framework's"
+echo "      governance + structural checks pass on this repo:"
+echo "         .agentcortex/bin/validate.sh"
+echo "         .agentcortex/bin/validate.sh --no-python   # text-only, no Python"
+echo ""
+echo "   2. Pre-commit hook - blocks leaked secrets & failed validation"
+echo "      before they reach git history:"
+echo "         # bash / Git Bash / macOS / Linux:"
+echo "         cp .githooks/pre-commit.guard-ssot.sample .githooks/pre-commit"
+echo "         chmod +x .githooks/pre-commit && git config core.hooksPath .githooks"
+echo "         # Windows PowerShell:"
+echo "         Copy-Item .githooks/pre-commit.guard-ssot.sample .githooks/pre-commit"
+echo "         git config core.hooksPath .githooks"
+echo "      NOTE: core.hooksPath replaces any existing hooks (husky/lefthook/"
+echo "      .git/hooks). Already use one? Integrate - don't overwrite."
+echo ""
+echo "   3. CI floor - make the checks block every PR, not just local commits:"
+echo "         Add a CI job that runs:  .agentcortex/bin/validate.sh"
+echo "         Mark it a REQUIRED status check in branch protection."
+echo "         Gates the framework's structural integrity on every PR"
+echo "         (secret scanning stays in the hook above; per-PR gate/"
+echo "         work-log discipline stays local - work logs are gitignored)."
+echo ""
+echo "Finish setup:"
+echo "   - git add .agentcortex-manifest AGENTS.md CLAUDE.md GEMINI.md .agent/ .agents/ .agentcortex/ .antigravity/ .codex/ codex/ docs/ installers/"
+echo "     # Also add if present: .claude/ .github/"
+echo "   - Tell AI: 'Please run /bootstrap' to start"
+echo "   - Reference docs live under .agentcortex/docs/"
 echo ""
 
 # Python advisory — framework runs without Python, but guard_context_write.py

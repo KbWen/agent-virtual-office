@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-07-16T19:45:00+08:00
-- **Update Sequence**: 109
+- **Last Updated**: 2026-07-30T17:30:00+08:00
+- **Update Sequence**: 110
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -166,6 +166,12 @@
 
 ## Ship History
 
+### Ship-codex-chore-upgrade-agentic-os-v1.8.17-2026-07-30
+
+- Upgraded the vendored Agentic OS governance framework from **v1.8.11** (`cada3c4`) to the latest formal release **v1.8.17** (`102e19b`) from canonical upstream `KbWen/agentic-os.git`. Supply-chain/provenance handling kept the task at `hotfix`; the deployed diff contains 49 tracked framework updates and 2 managed additions, with zero product, dependency, or test-path changes.
+- Downstream-owned scaffolds were preserved: the live project SSoT and Claude office hooks remained intact; generated `.acx-incoming` templates were inspected and removed. All deployed framework files match the v1.8.17 source bytes, excluding the target-generated manifest.
+- Tests: Pass — Agentic OS validator `pass=113 warn=7 fail=0 skip=4`; Vitest `2263/2263`; production build PASS. Branch retained locally; no push or PR performed.
+
 ### Ship-fix-soak-gate-2026-07-16 (PR #202 — sim-soak un-broken: bounded coverage + symmetric walk teardown)
 
 > [!WARNING]
@@ -243,20 +249,6 @@
 - **Release v1.6.1** cut in this chore PR: `package.json` 1.6.0→1.6.1 + CHANGELOG narrative covering #173–186. SSoT appended directly (guard bypassed deliberately — avoids the documented stale-receipt hazard). Tag + `npm publish` performed manually by owner.
 - Tests: Pass
 
-### Ship-fix-round2-leaks-and-guards-2026-06-19 (PR #179 — AVO-180 eviction leak + AVO-182 guards)
-
-- Shipped the verified, well-scoped items from the round-2 bug/tech-debt sweep (quick-win). **AVO-180**: the multi-session eviction site (`store.js`) now prunes the per-agent transient module state of an evicted dynamic worktree agent — `pruneRecentPicks(id)` (new export from `behaviorEngine.js`), `_storeRecentPicks.delete(id)`, and a cloned-then-deleted `recurringFailureLog[id]` (never mutates a published log). Mirrors `idleGapInfer`'s existing eviction prune; closes an unbounded-Map leak relevant to the owner's many-worktree workflow. +1 regression test (rfLog pruned on eviction). **AVO-182** (crash/corruption guards): `charName` null/non-string guard (was `charId.includes('~')` → throw; +2 tests) · `darken` non-`#RRGGBB` passthrough (was caching `#NaNNaNNaN`) · ambientSound gesture listeners `{once:true}`.
-- Deferred (catalogued, NOT in this PR): AVO-181 (blocked-family/VALID_ROLES set-consolidation — a multi-file refactor of honesty-critical code, do deliberately) · AVO-183 (two MED movement/POST edge cases — verify with a repro first) · AVO-184 (god-reducer extraction — explicit refactor, ADR/plan-gated).
-- Verify: full suite **2184 pass** (+3); build clean; EOL/whitespace clean. The round-2 sweep also dismissed the "dailyCard/lighting/ambientSound untested" FALSE POSITIVES (co-located `src/systems/*.test.js` exist).
-- Tests: Pass
-
-### Ship-fix-avo-174-title-inference-honesty-2026-06-19 (PR #174 — title channel can't fake blocked/done)
-
-- Shipped AVO-174 (quick-win, honesty). The document-title inference channel (`inferStatus.js` `listenTitleChanges`, wired at the channel list) injected `status:'blocked'` from any tab title matching `error|failed|blocked|stuck` and `status:'done'` from `done|complete|success|finished` — fabricating the most-alarming / a conclusive state from the weakest signal (e.g. an unrelated browser tab titled "build failed"). Removed both conclusive patterns; the channel is now capped to the working role-hints only. Extracted a pure `classifyTitle(title)` (exported) that can only ever return `status:'working'` or null; `listenTitleChanges` uses it.
-- Verify: new `tests/titleInference.test.js` (working-hint regression + "never blocked/done" + null cases); **test-the-test verified** (re-adding the blocked pattern fails the honesty assertion). Full suite **2172 pass** (+3); build clean.
-- Tests: Pass
-
-> Older entries (64) are archived, newest-first, in
+> Older entries (66) are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.
-
 

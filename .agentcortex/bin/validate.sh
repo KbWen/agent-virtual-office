@@ -50,6 +50,7 @@ ARCHIVE_INDEX_JSONL="$ROOT/.agentcortex/context/archive/INDEX.jsonl"
 LESSON_CHAIN_CHECK="$ROOT/.agentcortex/tools/check_lesson_chain.py"
 SSOT_CURRENT_STATE="$ROOT/.agentcortex/context/current_state.md"
 COMMAND_SYNC_CHECK="$ROOT/.agentcortex/tools/check_command_sync.py"
+ROUTING_ACTIONS_CHECK="$ROOT/.agentcortex/tools/check_routing_actions.py"
 SKILL_PROVENANCE_CHECK="$ROOT/.agentcortex/tools/check_skill_provenance.py"
 TRIGGER_REGISTRY="$ROOT/.agentcortex/metadata/trigger-registry.yaml"
 TRIGGER_COMPACT_INDEX="$ROOT/.agentcortex/metadata/trigger-compact-index.json"
@@ -267,14 +268,28 @@ required_dirs=(
   "$ROOT/.agent/skills"
 )
 
+# Python discovery by STARTABILITY, not mere existence (#144). On stock Windows,
+# %LOCALAPPDATA%\Microsoft\WindowsApps\python3.exe is an App Execution Alias stub
+# that EXISTS on PATH even with no Python installed; invoked with args it prints
+# "Python was not found" and exits 9009 (it does NOT open the Store UI when given
+# args). An existence-only check would select that broken stub and shadow a
+# working `python`, so every python-backed check would spuriously fail. Probe
+# each candidate (python3 then python) with a silent `-c "import sys"` and select
+# only the first that starts and exits 0. --no-python short-circuits before any
+# probe; neither candidate startable leaves PYTHON_BIN empty (SKIP/WARN/reduced-
+# assurance behavior unchanged).
 if [[ "$ACX_NO_PYTHON" -eq 1 ]]; then
   PYTHON_BIN=
-elif command -v python3 >/dev/null 2>&1; then
-  PYTHON_BIN=python3
-elif command -v python >/dev/null 2>&1; then
-  PYTHON_BIN=python
 else
   PYTHON_BIN=
+  for _py_candidate in python3 python; do
+    if command -v "$_py_candidate" >/dev/null 2>&1 \
+      && "$_py_candidate" -c "import sys" >/dev/null 2>&1; then
+      PYTHON_BIN="$_py_candidate"
+      break
+    fi
+  done
+  unset _py_candidate
 fi
 
 if [[ "$LIST_CHECKS_ONLY" -eq 1 ]]; then
@@ -634,6 +649,12 @@ fi
 # (run_python_check handles both). Caps live in .agent/config.yaml §document_lifecycle.
 run_python_check "ssot section caps (ship history + spec index)" WARN "$ROOT/.agentcortex/tools/check_ssot_caps.py" --root "$ROOT"
 
+# ADR-006: advisory decision-disposition check (archived Work Log `## Decisions`
+# entries missing a ship-time marker) as a Python tool behind run_python_check.
+# WARN-tier / never-FAIL (tool ALWAYS exits 0); silent no-op until a fork sets
+# document_lifecycle.decision_disposition_since. No-python -> WARN; tool absent -> SKIP.
+run_python_check "decision disposition (archived work logs)" WARN "$ROOT/.agentcortex/tools/check_decision_disposition.py" --root "$ROOT"
+
 ACTIVE_CODEX_RULES="$ROOT/codex/rules/default.rules"
 [[ -f "$ACTIVE_CODEX_RULES" ]] || ACTIVE_CODEX_RULES="$CODEX_RULES"
 if [[ -f "$ACTIVE_CODEX_RULES" ]]; then
@@ -919,6 +940,15 @@ else
   record_result PASS "domain doc candidates declare the full L1 contract when present"
 fi
 
+# routing_actions structural contract (governance self-audit F3). Structural
+# parsing lives in a Python tool (ADR-006, check_routing_actions.py) so
+# inline-map / fields-outside-block bypasses are rejected. The native block in
+# the else branch is the no-python degraded backstop (backlog #113): weaker
+# (whole-file substring + standalone-anchor based) but keeps reduced-assurance
+# coverage + the stale-pending WARN when Python is unavailable.
+if [[ -n "${PYTHON_BIN:-}" ]] && [[ -f "$ROUTING_ACTIONS_CHECK" ]]; then
+  run_python_check "routing_actions contract (structural)" FAIL "$ROUTING_ACTIONS_CHECK" --root "$ROOT"
+else
 routing_action_errors=0
 routing_action_warnings=0
 routing_action_stale_warnings=0
@@ -993,6 +1023,7 @@ if [[ "$routing_action_warnings" -gt 0 ]]; then
 fi
 if [[ "$routing_action_stale_warnings" -gt 0 ]]; then
   record_result WARN "stale pending routing_actions need canonical-doc follow-up: ${routing_action_stale_warnings}"
+fi
 fi
 shopt -u nullglob
 
@@ -1123,7 +1154,18 @@ if command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-parse --git-dir >/dev/nu
   _cur_branch="$(git -C "$ROOT" symbolic-ref --short HEAD 2>/dev/null)" \
     || _cur_branch="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null)" || true
   if [[ -n "$_cur_branch" && "$_cur_branch" != "HEAD" ]]; then
-    cur_key="${_cur_branch//\//-}"
+    # F10 (2026-07-11 receipt-integrity audit): apply the canonical Work Log
+    # key normalization (bootstrap.md:123-131) in full — (1) chars outside
+    # [a-zA-Z0-9._-] -> '-', (2) collapse '-' runs, (3) strip leading/trailing
+    # '-'/'.', (4) lowercase, (5) truncate to 100 chars. Previously this only
+    # replaced '/' with '-' and stayed case-sensitive, so an uppercase or
+    # punctuated branch (e.g. "Feat/X", "release/v1.2:rc") mismatched the
+    # canonical lowercase Work Log filename and was misdetected as historical,
+    # downgrading current-branch-only Resume/Test-Gate escalations FAIL->WARN.
+    cur_key="$(printf '%s' "$_cur_branch" \
+      | sed -E 's/[^a-zA-Z0-9._-]/-/g; s/-+/-/g; s/^[-.]+//; s/[-.]+$//' \
+      | tr '[:upper:]' '[:lower:]' \
+      | cut -c1-100)"
   fi
 fi
 if [[ -d "$WORKLOG_DIR" ]]; then
@@ -1172,8 +1214,8 @@ if [[ -d "$WORKLOG_DIR" ]]; then
     # Accept list form ("- Branch:" or "- **Branch**:") AND table form
     # ("| Branch | ... |") — the canonical template at .agentcortex/templates/worklog.md
     # uses a table for readability; earlier versions only matched list form.
-    if ! printf '%s' "$wl_content" | grep -Eq '(^- (\*\*Branch\*\*|Branch):|^\| (\*\*Branch\*\*|Branch) +\|)' || \
-       ! printf '%s' "$wl_content" | grep -q '^## '; then
+    if ! <<< "$wl_content" grep -Eq '(^- (\*\*Branch\*\*|Branch):|^\| (\*\*Branch\*\*|Branch) +\|)' || \
+       ! <<< "$wl_content" grep -q '^## '; then
       printf '  possibly truncated work log: %s\n' "$(basename "$wl")"
       worklog_truncated=$((worklog_truncated + 1))
     fi
@@ -1187,6 +1229,7 @@ if [[ -d "$WORKLOG_DIR" ]]; then
   # Work Log evidence chain check (per AGENTS.md Work Log Contract)
   phase_field_missing=0
   checkpoint_missing=0
+  checkpoint_violation_list=""
   gate_evidence_missing=0
   legacy_gate_evidence_missing=0
   gate_progression_illegal=0
@@ -1194,6 +1237,8 @@ if [[ -d "$WORKLOG_DIR" ]]; then
   phase_summary_missing=0
   sentinel_marker_missing=0
   test_gate_results_missing=0
+  security_findings_missing=0
+  guardrails_receipt_missing=0
   current_phase_incoherent=0
   shipped_not_archived=0
   evidence_placeholder_only=0
@@ -1207,6 +1252,50 @@ if [[ -d "$WORKLOG_DIR" ]]; then
   # ONE new native record_result FAIL site handles both (baseline +1).
   current_branch_gate_fail=0
   current_branch_gate_fail_list=""
+  # F8 (2026-07-11 receipt-integrity audit): shared value-shape + resolvability
+  # check for header SHA-like fields (Checkpoint SHA / Diff Base SHA). Previously
+  # presence-only: a heading with a non-SHA value (e.g. "not-a-sha") passed
+  # silently. Accepts a hex object id (7-40 chars, optionally followed by
+  # trailing note text) or an observed legitimate placeholder — "none",
+  # "pending-commit" (both seen in real archived logs), or the unfilled
+  # template default "<git-sha or none>" (templates/worklog.md; two real active
+  # logs still carry it) — anything else is a WARN-tier violation. Current-
+  # branch logs additionally get a `git rev-parse --verify` resolvability
+  # check; historical logs are shape-checked only (squash/rebase legitimately
+  # invalidates old SHAs). Mutates the pre-existing checkpoint_missing /
+  # checkpoint_violation_list counters (ADR-006 native-extension path — see
+  # Work Log Drift Log — not a new record_result call site).
+  _acx_check_sha_field() {
+    local content="$1" field="$2" is_cur="$3" wl_label="$4"
+    local raw val lc verify_val
+    raw="$(printf '%s' "$content" | grep -m1 -iE "(^-[[:space:]]*\`?${field}\`?:|^\|[[:space:]]*\`?${field}\`?[[:space:]]*\|)")" || true
+    [[ -z "$raw" ]] && return 0
+    if [[ "$raw" == -* ]]; then
+      val="$(printf '%s' "$raw" | sed -E "s/^-[[:space:]]*\`?${field}\`?:[[:space:]]*//")"
+    else
+      val="$(printf '%s' "$raw" | awk -F'|' '{print $3}')"
+    fi
+    val="$(printf '%s' "$val" | sed -E 's/<!--.*-->//' | tr -d '`\r' | xargs)" || true
+    [[ -z "$val" ]] && return 0  # unparseable — presence is already covered separately; degrade silently
+    lc="$(printf '%s' "$val" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$lc" == "none" || "$lc" == "pending-commit" || "$lc" == "<git-sha or none>" ]]; then
+      return 0
+    fi
+    if [[ "$lc" =~ ^[0-9a-f]{7,40}$ ]]; then
+      verify_val="$val"
+    elif [[ "${lc%% *}" =~ ^[0-9a-f]{7,40}$ ]]; then
+      verify_val="${val%% *}"
+    else
+      checkpoint_missing=$((checkpoint_missing + 1))
+      checkpoint_violation_list="${checkpoint_violation_list}  invalid ${field} value ('${val}') in ${wl_label}\n"
+      return 0
+    fi
+    if [[ "$is_cur" -eq 1 ]] && ! git -C "$ROOT" rev-parse --verify "${verify_val}^{commit}" >/dev/null 2>&1; then
+      checkpoint_missing=$((checkpoint_missing + 1))
+      checkpoint_violation_list="${checkpoint_violation_list}  unresolvable ${field} ('${verify_val}') in ${wl_label} (git rev-parse --verify failed)\n"
+    fi
+    return 0
+  }
   for wl in "$WORKLOG_DIR"/*.md; do
     [[ -f "$wl" ]] || continue
     wl_content="$(cat "$wl" 2>/dev/null)"
@@ -1214,7 +1303,10 @@ if [[ -d "$WORKLOG_DIR" ]]; then
     # Match <cur_key>.md OR <owner>-<cur_key>.md (owner prefix pattern).
     is_current_branch=0
     if [[ -n "$cur_key" ]]; then
-      wl_basename="$(basename "$wl")"
+      # F10: lowercase the basename too (cur_key is already lowercase) so the
+      # comparison is case-insensitive on both sides — defense against a
+      # non-conforming log filename that wasn't written in canonical case.
+      wl_basename="$(basename "$wl" | tr '[:upper:]' '[:lower:]')"
       if [[ "$wl_basename" == "${cur_key}.md" ]] || [[ "$wl_basename" == *"-${cur_key}.md" ]]; then
         is_current_branch=1
       fi
@@ -1224,22 +1316,29 @@ if [[ -d "$WORKLOG_DIR" ]]; then
     # list or table form; a bold-only parser left this empty for every real log,
     # silently disabling the legacy exemption (and its D5 refinement). Extract the
     # YYYY-MM-DD regardless of surrounding markup.
-    created_date="$(printf '%s' "$wl_content" | sed -n -E 's/^-[[:space:]]*\*{0,2}Created Date\*{0,2}:[[:space:]]*`?([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/p; s/^\|[[:space:]]*\*{0,2}Created Date\*{0,2}[[:space:]]*\|[[:space:]]*`?([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/p' | head -n 1 | tr -d '\r')"
+    created_date="$(<<< "$wl_content" sed -n -E 's/^-[[:space:]]*\*{0,2}Created Date\*{0,2}:[[:space:]]*`?([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/p; s/^\|[[:space:]]*\*{0,2}Created Date\*{0,2}[[:space:]]*\|[[:space:]]*`?([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/p' | head -n 1 | tr -d '\r')"
     legacy_gate_evidence=0
     if [[ -n "$created_date" ]] && [[ "$created_date" < "$WORKLOG_GATE_EVIDENCE_LEGACY_CUTOFF" ]]; then
       legacy_gate_evidence=1
     fi
     # Header field: Current Phase — accept list OR table form (see template/worklog.md)
-    if ! printf '%s' "$wl_content" | grep -qE '(^- (`Current Phase`|Current Phase):|^\| (`Current Phase`|Current Phase) +\|)'; then
+    if ! <<< "$wl_content" grep -qE '(^- (`Current Phase`|Current Phase):|^\| (`Current Phase`|Current Phase) +\|)'; then
       phase_field_missing=$((phase_field_missing + 1))
     fi
     # Header field: Checkpoint SHA — accept list OR table form
-    if ! printf '%s' "$wl_content" | grep -qE '(^- (`Checkpoint SHA`|Checkpoint SHA):|^\| (`Checkpoint SHA`|Checkpoint SHA) +\|)'; then
+    if ! <<< "$wl_content" grep -qE '(^- (`Checkpoint SHA`|Checkpoint SHA):|^\| (`Checkpoint SHA`|Checkpoint SHA) +\|)'; then
       checkpoint_missing=$((checkpoint_missing + 1))
+    else
+      # F8: value-shape + (current-branch-only) resolvability validation.
+      _acx_check_sha_field "$wl_content" "Checkpoint SHA" "$is_current_branch" "$(basename "$wl")"
     fi
+    # F8: Diff Base SHA gets the same value treatment when present. No pre-
+    # existing presence check for this field — presence is NOT newly required
+    # here, only value-shape/resolvability when the field IS present.
+    _acx_check_sha_field "$wl_content" "Diff Base SHA" "$is_current_branch" "$(basename "$wl")"
     # Runtime section: ## Gate Evidence — check existence, receipt format,
     # AND phase progression legality. Illegal progression = FAIL.
-    if ! printf '%s' "$wl_content" | grep -q '^## Gate Evidence'; then
+    if ! <<< "$wl_content" grep -q '^## Gate Evidence'; then
       if [[ "$legacy_gate_evidence" -eq 1 ]] && [[ "$is_current_branch" -eq 0 ]]; then
         legacy_gate_evidence_missing=$((legacy_gate_evidence_missing + 1))
       else
@@ -1249,7 +1348,7 @@ if [[ -d "$WORKLOG_DIR" ]]; then
         # Deny the legacy WARN downgrade and treat as a FAIL-tier miss.
         gate_evidence_missing=$((gate_evidence_missing + 1))
       fi
-    elif ! printf '%s' "$wl_content" | grep -qiE '^(`?- )?gate:.*verdict:'; then
+    elif ! <<< "$wl_content" grep -qiE '^(`?- )?gate:.*verdict:'; then
       if [[ "$legacy_gate_evidence" -eq 1 ]] && [[ "$is_current_branch" -eq 0 ]]; then
         legacy_gate_evidence_missing=$((legacy_gate_evidence_missing + 1))
       else
@@ -1509,9 +1608,9 @@ PYEOF
         # minimum prerequisite gates (plan + implement). Cannot verify legal ordering
         # but can detect obvious bypasses. Increments gate_progression_illegal so FAIL
         # is recorded — a shipped log without plan/implement is always a violation.
-        if printf '%s' "$wl_content" | grep -qiE 'Gate:[[:space:]]*ship[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS'; then
-          has_plan=$(printf '%s' "$wl_content" | grep -ciE 'Gate:[[:space:]]*plan[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS') || true
-          has_impl=$(printf '%s' "$wl_content" | grep -ciE 'Gate:[[:space:]]*implement[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS') || true
+        if <<< "$wl_content" grep -qiE 'Gate:[[:space:]]*ship[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS'; then
+          has_plan=$(<<< "$wl_content" grep -ciE 'Gate:[[:space:]]*plan[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS') || true
+          has_impl=$(<<< "$wl_content" grep -ciE 'Gate:[[:space:]]*implement[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS') || true
           if [[ "$has_plan" -eq 0 ]] || [[ "$has_impl" -eq 0 ]]; then
             printf '  [bash-fallback] shipped without plan/implement gate in %s\n' "$(basename "$wl")"
             gate_progression_illegal=$((gate_progression_illegal + 1))
@@ -1520,7 +1619,7 @@ PYEOF
       fi
     fi
     # Runtime section: ## Phase Summary
-    if ! printf '%s' "$wl_content" | grep -q '^## Phase Summary'; then
+    if ! <<< "$wl_content" grep -q '^## Phase Summary'; then
       phase_summary_missing=$((phase_summary_missing + 1))
     fi
     # Sentinel marker discoverability — Work Log Phase Summary SHOULD contain
@@ -1528,8 +1627,8 @@ PYEOF
     # audit trail (chat output is ephemeral). WARN-only — does not break ship.
     # Accept either the emoji form "⚡ ACX" or the plain "ACX" tag for
     # terminals that strip non-ASCII.
-    if printf '%s' "$wl_content" | grep -q '^## Phase Summary' \
-       && ! printf '%s' "$wl_content" | grep -qE '(⚡[[:space:]]?ACX|[[:space:]]ACX([[:space:]]|$))'; then
+    if <<< "$wl_content" grep -q '^## Phase Summary' \
+       && ! <<< "$wl_content" grep -qE '(⚡[[:space:]]?ACX|[[:space:]]ACX([[:space:]]|$))'; then
       sentinel_marker_missing=$((sentinel_marker_missing + 1))
     fi
     # Test Gate Results — engineering_guardrails.md §12.2 requires evidence be recorded
@@ -1539,27 +1638,37 @@ PYEOF
     # Parse classification from list form ("- Classification:") or table form ("| Classification |")
     if [[ -n "$PYTHON_BIN" ]]; then
       # Python via single-quoted heredoc -> variable (verbatim; no bash metachar parsing)
+      # (#336) sys.stdin.read() drains the pipe fully BEFORE the early `break`.
+      # Iterating `sys.stdin` line-by-line and breaking on the first match leaves
+      # printf with unwritten bytes on a >64 KB Work Log; printf then takes
+      # SIGPIPE (141), pipefail promotes it, and errexit aborts validate.sh
+      # mid-run with no Summary line. Draining first makes the break byte-safe.
       _acx_wlclass_py=$(cat <<'PYEOF'
 import re,sys
-for l in sys.stdin:
+for l in sys.stdin.read().splitlines():
     m=re.match(r'^-\s+\*{0,2}[Cc]lassification\*{0,2}\s*:\s*\x60?([a-zA-Z][\w-]*)',l)
     if not m: m=re.match(r'^\|\s*\*{0,2}[Cc]lassification\*{0,2}\s*\|\s*\x60?([a-zA-Z][\w-]*)',l)
     if m: print(m.group(1).lower()); break
 PYEOF
 )
-      wl_class="$(printf '%s' "$wl_content" | "$PYTHON_BIN" -c "$_acx_wlclass_py" 2>/dev/null)"
+      wl_class="$(<<< "$wl_content" "$PYTHON_BIN" -c "$_acx_wlclass_py" 2>/dev/null)"
     else
-      # Python unavailable: list-form-only fallback
-      wl_class="$(printf '%s' "$wl_content" | sed -n 's/^- \(**\)\?Classification\1\?:[[:space:]]*//p' | head -n 1 | tr -d '\r\`')"
+      # Python unavailable: list-form-only fallback.
+      # (#336) Capture ALL matches then take the first line in bash. Piping sed
+      # into `head -n 1` closes the pipe after one line, so sed/printf take
+      # SIGPIPE (141) on a >64 KB log and pipefail aborts the run before the
+      # Summary prints. sed here reads to EOF, so nothing closes the pipe early.
+      _wl_class_all="$(<<< "$wl_content" sed -n 's/^- \(**\)\?Classification\1\?:[[:space:]]*//p' | tr -d '\r\`')"
+      wl_class="${_wl_class_all%%$'\n'*}"
     fi
     if [[ "$wl_class" == "feature" || "$wl_class" == "architecture-change" ]]; then
-      if printf '%s' "$wl_content" | grep -qi 'Gate: implement'; then
-        if ! printf '%s' "$wl_content" | grep -qiE '^#+[[:space:]]+Test Gate Results'; then
+      if <<< "$wl_content" grep -qi 'Gate: implement'; then
+        if ! <<< "$wl_content" grep -qiE '^#+[[:space:]]+Test Gate Results'; then
           # AC-6: current-branch at handoff/ship → FAIL; otherwise WARN.
           # Use gate-receipt presence only here (wl_phase_for_resume is set later in this iteration).
           wl_at_handoff_ship=0
           if [[ "$is_current_branch" -eq 1 ]]; then
-            if printf '%s' "$wl_content" | grep -qiE 'Gate:[[:space:]]*(handoff|ship)[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS'; then
+            if <<< "$wl_content" grep -qiE 'Gate:[[:space:]]*(handoff|ship)[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS'; then
               wl_at_handoff_ship=1
             fi
           fi
@@ -1572,13 +1681,37 @@ PYEOF
         fi
       fi
     fi
+    # (#288) Security Findings audit — security_guardrails.md §Work Log requires
+    # findings be recorded under a `## Security Findings` heading. The security
+    # scan is auto-enforced during implement/review/ship, so audit feature-tier
+    # logs (feature/architecture-change/hotfix) that carry a review or ship
+    # receipt. WARN-tier: artifact presence, not proof the scan ran.
+    if [[ "$wl_class" == "feature" || "$wl_class" == "architecture-change" || "$wl_class" == "hotfix" ]]; then
+      if <<< "$wl_content" grep -qiE 'Gate:[[:space:]]*(review|ship)[[:space:]]*\|'; then
+        if ! <<< "$wl_content" grep -qE '^## Security Findings'; then
+          security_findings_missing=$((security_findings_missing + 1))
+        fi
+      fi
+    fi
+    # (#288) Loaded-Sections receipt audit — engineering_guardrails.md requires
+    # bootstrap (Full Mode) echo a `Guardrails loaded:` receipt in ## Session Info.
+    # Scope to the CURRENT-branch log only: historical/archived logs predate the
+    # convention and would flood WARNs (mirrors the AC-6 is_current_branch gate).
+    # Full-Mode tiers ONLY (feature/architecture-change/hotfix): quick-win runs
+    # Quick Mode and tiny-fix runs Lite — neither loads Full-Mode guardrails, so
+    # the receipt rule does not apply to them. WARN-tier: presence, not proof.
+    if [[ "$is_current_branch" -eq 1 && ( "$wl_class" == "feature" || "$wl_class" == "architecture-change" || "$wl_class" == "hotfix" ) ]]; then
+      if ! <<< "$wl_content" grep -qiE 'Guardrails loaded:'; then
+        guardrails_receipt_missing=$((guardrails_receipt_missing + 1))
+      fi
+    fi
     # MEDIUM-1 (review PASS with UNPROVEN rows): check for review PASS receipt alongside
     # unresolved UNPROVEN table rows — review.md §Burden of Proof requires NOT READY in this case.
     # Direct approach: flag if review PASS co-exists with any UNPROVEN row not tagged [NEEDS_HUMAN].
     # (The prior ! grep -qvE condition was always false because header/gate lines don't match
     # the UNPROVEN pattern, causing grep -qvE to succeed and the check to be permanently skipped.)
-    if printf '%s' "$wl_content" | grep -qiE 'Gate:[[:space:]]*review[[:space:]]*\|.*Verdict:[[:space:]]*PASS'; then
-      unproven_untagged="$(printf '%s' "$wl_content" | grep '✗ UNPROVEN' | grep -v '\[NEEDS_HUMAN\]' | head -1)" || true
+    if <<< "$wl_content" grep -qiE 'Gate:[[:space:]]*review[[:space:]]*\|.*Verdict:[[:space:]]*PASS'; then
+      unproven_untagged="$(<<< "$wl_content" grep '✗ UNPROVEN' | grep -v '\[NEEDS_HUMAN\]' | head -1)" || true
       if [[ -n "$unproven_untagged" ]]; then
         review_pass_with_unproven=$((review_pass_with_unproven + 1))
       fi
@@ -1586,8 +1719,8 @@ PYEOF
     # MEDIUM-3 (M5): evidence non-empty check for shipped feature/arch-change/quick-win logs.
     # The bootstrap placeholder "Pending: bootstrap only" is not real evidence.
     if [[ "$wl_class" == "feature" || "$wl_class" == "architecture-change" || "$wl_class" == "quick-win" ]]; then
-      if printf '%s' "$wl_content" | grep -qiE 'Gate:[[:space:]]*ship[[:space:]]*\|.*Verdict:[[:space:]]*PASS'; then
-        evidence_body="$(printf '%s' "$wl_content" | sed -n '/^## Evidence/,/^## /p' | tail -n +2 | grep -v '^## ' | grep -v '^$' | head -5)" || true
+      if <<< "$wl_content" grep -qiE 'Gate:[[:space:]]*ship[[:space:]]*\|.*Verdict:[[:space:]]*PASS'; then
+        evidence_body="$(<<< "$wl_content" sed -n '/^## Evidence/,/^## /p' | tail -n +2 | grep -v '^## ' | grep -v '^$' | head -5)" || true
         if [[ -z "$evidence_body" || "$evidence_body" == *"Pending: bootstrap only"* ]]; then
           evidence_placeholder_only=$((evidence_placeholder_only + 1))
         fi
@@ -1595,8 +1728,8 @@ PYEOF
     fi
     # Current Phase consistency (HIGH-2): if a ship PASS receipt exists,
     # Current Phase should be 'ship'. Divergence means the header was not updated.
-    if printf '%s' "$wl_content" | grep -qiE 'Gate:[[:space:]]*ship[[:space:]]*\|.*Verdict:[[:space:]]*PASS'; then
-      cp_val="$(printf '%s' "$wl_content" | grep -m1 -iE '^-[[:space:]]*\*?\*?Current Phase\*?\*?:' \
+    if <<< "$wl_content" grep -qiE 'Gate:[[:space:]]*ship[[:space:]]*\|.*Verdict:[[:space:]]*PASS'; then
+      cp_val="$(<<< "$wl_content" grep -m1 -iE '^-[[:space:]]*\*?\*?Current Phase\*?\*?:' \
         | sed 's/.*Current Phase[^:]*:[[:space:]]*//' | tr -d '`\r' | tr '[:upper:]' '[:lower:]' | xargs)" || true
       if [[ -n "$cp_val" && "$cp_val" != "ship" ]]; then
         current_phase_incoherent=$((current_phase_incoherent + 1))
@@ -1610,9 +1743,9 @@ PYEOF
     # Finding 9 (HIGH): Reclassification state inconsistency — Drift Log records
     # "Reclassification:" but Classification header was never reset to CLASSIFIED,
     # leaving downstream agents with a stale classification tier.
-    if printf '%s' "$wl_content" | grep -q '## Drift Log' \
-       && printf '%s' "$wl_content" | grep -qiE '^[[:space:]]*-[[:space:]]+Reclassif'; then
-      cls_hdr="$(printf '%s' "$wl_content" | grep -m1 -iE '^-[[:space:]]*\*?\*?Classification\*?\*?:' \
+    if <<< "$wl_content" grep -q '## Drift Log' \
+       && <<< "$wl_content" grep -qiE '^[[:space:]]*-[[:space:]]+Reclassif'; then
+      cls_hdr="$(<<< "$wl_content" grep -m1 -iE '^-[[:space:]]*\*?\*?Classification\*?\*?:' \
         | sed 's/.*Classification[^:]*:[[:space:]]*//' | tr -d '`\r' | tr '[:upper:]' '[:lower:]' | xargs)" || true
       if [[ -n "$cls_hdr" && "$cls_hdr" != "classified" ]]; then
         reclassify_header_not_reset=$((reclassify_header_not_reset + 1))
@@ -1624,17 +1757,17 @@ PYEOF
     # is valid and quick-win/hotfix paths are exempt from /handoff.
     # AC-6: current-branch + resume_required + (absent ## Resume OR missing subsections) → FAIL.
     #        historical or present-with-incomplete → WARN.
-    wl_phase_for_resume="$(printf '%s' "$wl_content" | grep -m1 -iE '^-[[:space:]]*\*?\*?Current Phase\*?\*?:' \
+    wl_phase_for_resume="$(<<< "$wl_content" grep -m1 -iE '^-[[:space:]]*\*?\*?Current Phase\*?\*?:' \
       | sed 's/.*Current Phase[^:]*:[[:space:]]*//' | tr -d '`\r' | tr '[:upper:]' '[:lower:]' | xargs)" || true
     resume_required=0
     if [[ "$wl_class" == "feature" || "$wl_class" == "architecture-change" ]]; then
       if [[ "$wl_phase_for_resume" == "handoff" || "$wl_phase_for_resume" == "ship" ]] \
-         || printf '%s' "$wl_content" | grep -qiE 'Gate:[[:space:]]*(handoff|ship)[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS'; then
+         || <<< "$wl_content" grep -qiE 'Gate:[[:space:]]*(handoff|ship)[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS'; then
         resume_required=1
       fi
     fi
     if [[ "$resume_required" -eq 1 ]]; then
-      if ! printf '%s' "$wl_content" | grep -q '^## Resume'; then
+      if ! <<< "$wl_content" grep -q '^## Resume'; then
         # AC-6: absent ## Resume section when required
         if [[ "$is_current_branch" -eq 1 ]]; then
           current_branch_gate_fail=$((current_branch_gate_fail + 1))
@@ -1643,7 +1776,7 @@ PYEOF
           handoff_resume_incomplete=$((handoff_resume_incomplete + 1))
         fi
       else
-        resume_body="$(printf '%s' "$wl_content" | sed -n '/^## Resume/,/^## /p')"
+        resume_body="$(<<< "$wl_content" sed -n '/^## Resume/,/^## /p')"
         missing_subsections=0
         for subsec in "Read Map" "Skip List" "Context Snapshot"; do
           if ! printf '%s' "$resume_body" | grep -qiE "^###[[:space:]]+${subsec}"; then
@@ -1664,8 +1797,8 @@ PYEOF
     # /handoff but MUST provide evidence. Warn when a hotfix reaches ship phase
     # but ## Evidence section is missing or contains only the bootstrap placeholder.
     if [[ "$wl_class" == "hotfix" ]]; then
-      if printf '%s' "$wl_content" | grep -qiE 'Gate:[[:space:]]*ship[[:space:]]*\|.*Verdict:[[:space:]]*PASS'; then
-        hotfix_evidence="$(printf '%s' "$wl_content" | sed -n '/^## Evidence/,/^## /p' | tail -n +2 | grep -v '^## ' | grep -v '^$' | head -5)" || true
+      if <<< "$wl_content" grep -qiE 'Gate:[[:space:]]*ship[[:space:]]*\|.*Verdict:[[:space:]]*PASS'; then
+        hotfix_evidence="$(<<< "$wl_content" sed -n '/^## Evidence/,/^## /p' | tail -n +2 | grep -v '^## ' | grep -v '^$' | head -5)" || true
         if [[ -z "$hotfix_evidence" || "$hotfix_evidence" == *"Pending: bootstrap only"* ]]; then
           hotfix_ship_no_evidence=$((hotfix_ship_no_evidence + 1))
         fi
@@ -1675,8 +1808,8 @@ PYEOF
     # bootstrap should have run the ADR Coverage Check and recorded the result (yes/skip)
     # in ## Drift Log. Missing record means the check was silently bypassed.
     if [[ "$wl_class" == "feature" || "$wl_class" == "architecture-change" ]]; then
-      if printf '%s' "$wl_content" | grep -qi 'Gate: plan\|Gate: implement'; then
-        if ! printf '%s' "$wl_content" | grep -qiE 'ADR.*[Cc]overage|[Cc]overage.*ADR|adr.*check|no.*adr.*found'; then
+      if <<< "$wl_content" grep -qi 'Gate: plan\|Gate: implement'; then
+        if ! <<< "$wl_content" grep -qiE 'ADR.*[Cc]overage|[Cc]overage.*ADR|adr.*check|no.*adr.*found'; then
           adr_coverage_undocumented=$((adr_coverage_undocumented + 1))
         fi
       fi
@@ -1688,9 +1821,13 @@ PYEOF
     record_result PASS "all active work logs have Current Phase field"
   fi
   if [[ "$checkpoint_missing" -gt 0 ]]; then
-    record_result WARN "work logs missing Checkpoint SHA field: ${checkpoint_missing}"
+    # F8: message now covers the field being absent OR present-with-an-invalid-
+    # or-unresolvable value (previously presence-only for Checkpoint SHA; Diff
+    # Base SHA had no coverage at all).
+    record_result WARN "work logs with missing/invalid Checkpoint SHA field or invalid/unresolvable Diff Base SHA / Checkpoint SHA values: ${checkpoint_missing}"
+    printf '%b' "$checkpoint_violation_list"
   elif [[ "$worklog_count" -gt 0 ]]; then
-    record_result PASS "all active work logs have Checkpoint SHA field"
+    record_result PASS "all active work logs have well-formed Checkpoint SHA / Diff Base SHA values"
   fi
   if [[ "$gate_evidence_missing" -gt 0 ]]; then
     record_result FAIL "work logs missing gate evidence receipts: ${gate_evidence_missing}"
@@ -1725,6 +1862,18 @@ PYEOF
     record_result WARN "feature/architecture-change work logs missing Test Gate Results section (engineering_guardrails.md §12.2): ${test_gate_results_missing}"
   elif [[ "$worklog_count" -gt 0 ]]; then
     record_result PASS "test gate results evidence present in applicable work logs"
+  fi
+  # (#288) Security Findings section presence (security_guardrails.md §Work Log).
+  if [[ "$security_findings_missing" -gt 0 ]]; then
+    record_result WARN "feature-tier work logs at review/ship missing ## Security Findings section (security_guardrails.md §Work Log): ${security_findings_missing}"
+  elif [[ "$worklog_count" -gt 0 ]]; then
+    record_result PASS "security findings section present in applicable work logs"
+  fi
+  # (#288) Loaded-Sections receipt presence in current-branch log (engineering_guardrails.md bootstrap receipt).
+  if [[ "$guardrails_receipt_missing" -gt 0 ]]; then
+    record_result WARN "current-branch work log missing 'Guardrails loaded:' receipt in ## Session Info (engineering_guardrails.md bootstrap receipt): ${guardrails_receipt_missing}"
+  elif [[ "$worklog_count" -gt 0 ]]; then
+    record_result PASS "loaded-sections receipt present in current-branch work log"
   fi
   if [[ "$current_phase_incoherent" -gt 0 ]]; then
     record_result WARN "work logs with ship PASS receipt but Current Phase != ship (header not updated): ${current_phase_incoherent}"
@@ -1775,13 +1924,37 @@ PYEOF
   fi
   # Gate receipt schema validation (§4.5 structural check) — every pipe-format gate
   # receipt in ## Gate Evidence must include Verdict: and Classification: fields.
-  # WARN not FAIL: archived Work Logs may predate this check; active logs with partial
-  # receipts are a process gap, not a ship-blocking error.
+  # WARN not FAIL: archived Work Logs may predate this check (a SEPARATE archive
+  # loop below covers Verdict/Classification presence only for archive/*.md and
+  # is untouched by F7/F9); active logs with partial receipts are a process gap,
+  # not a ship-blocking error.
+  # F7 (2026-07-11 receipt-integrity audit): also require a Timestamp: field with
+  # at least an ISO date. Order-of-appearance remains authoritative for gate
+  # progression (see templates/worklog.md ## Gate Evidence note) — Timestamp is
+  # provenance metadata only; no monotonic/chronological check is performed.
+  # F9: also compare each receipt's Classification value (case-insensitive)
+  # against the Work Log header Classification. Mismatch is WARN, not FAIL —
+  # reclassification epochs are legal (state machine rollback-to-CLASSIFIED) and
+  # epoch parsing is out of scope for this check.
   gate_schema_violations=0
   gate_schema_violation_list=""
   for wl in "$WORKLOG_DIR"/*.md; do
     [[ -f "$wl" ]] || continue
     wl_name="$(basename "$wl")"
+    wl_content="$(cat "$wl" 2>/dev/null)"
+    # F9: header Classification value — same strict "starts with a letter"
+    # extraction the gate-progression parser already uses, so an unfilled/
+    # malformed header (still the literal template placeholder) yields empty
+    # and is skipped rather than compared (nothing meaningful to compare).
+    hdr_class="$(printf '%s' "$wl_content" \
+      | grep -m1 -iE '^-[[:space:]]*\*{0,2}Classification\*{0,2}[[:space:]]*:[[:space:]]*`?[a-zA-Z]' \
+      | sed -E 's/^-[[:space:]]*\*{0,2}Classification\*{0,2}[[:space:]]*:[[:space:]]*`?([a-zA-Z][a-zA-Z0-9_-]*).*/\1/')" || true
+    if [[ -z "$hdr_class" ]]; then
+      hdr_class="$(printf '%s' "$wl_content" \
+        | grep -m1 -iE '^\|[[:space:]]*\*{0,2}Classification\*{0,2}[[:space:]]*\|[[:space:]]*`?[a-zA-Z]' \
+        | sed -E 's/^\|[[:space:]]*\*{0,2}Classification\*{0,2}[[:space:]]*\|[[:space:]]*`?([a-zA-Z][a-zA-Z0-9_-]*).*/\1/')" || true
+    fi
+    hdr_class="$(printf '%s' "$hdr_class" | tr '[:upper:]' '[:lower:]')"
     # Extract gate evidence section lines (pipe-format receipts starting with "- Gate:")
     while IFS= read -r receipt_line; do
       # Each receipt must contain Verdict: (case-insensitive) and Classification: (case-insensitive)
@@ -1795,13 +1968,32 @@ PYEOF
         gate_schema_violation_list="${gate_schema_violation_list}  malformed gate receipt (missing Classification:) in ${wl_name}\n"
         break
       fi
+      # F7: Timestamp field must be present with a parseable ISO date (a full ISO
+      # datetime like 2026-07-10T12:20:00Z is also accepted — the date-only regex
+      # matches its leading YYYY-MM-DD).
+      if ! printf '%s' "$receipt_line" | grep -qiE 'Timestamp[[:space:]]*:[[:space:]]*[0-9]{4}-[0-9]{2}-[0-9]{2}'; then
+        gate_schema_violations=$((gate_schema_violations + 1))
+        gate_schema_violation_list="${gate_schema_violation_list}  malformed gate receipt (missing/unparseable Timestamp:) in ${wl_name}: ${receipt_line}\n"
+        break
+      fi
+      # F9: receipt Classification must agree with the header Classification.
+      if [[ -n "$hdr_class" ]]; then
+        receipt_class="$(printf '%s' "$receipt_line" \
+          | sed -nE 's/.*[Cc]lassification[[:space:]]*:[[:space:]]*([a-zA-Z][a-zA-Z0-9_-]*).*/\1/p' \
+          | tr '[:upper:]' '[:lower:]')" || true
+        if [[ -n "$receipt_class" && "$receipt_class" != "$hdr_class" ]]; then
+          gate_schema_violations=$((gate_schema_violations + 1))
+          gate_schema_violation_list="${gate_schema_violation_list}  receipt Classification ('${receipt_class}') differs from header Classification ('${hdr_class}') in ${wl_name}: ${receipt_line}\n"
+          break
+        fi
+      fi
     done < <(grep -iE '^\-[[:space:]]+[Gg]ate[[:space:]]*:' "$wl" 2>/dev/null || true)
   done
   if [[ "$gate_schema_violations" -gt 0 ]]; then
-    record_result WARN "active work log gate receipts missing required fields (Verdict/Classification): ${gate_schema_violations}"
+    record_result WARN "active work log gate receipts with schema violations (missing Verdict/Classification/Timestamp, or Classification mismatched with header): ${gate_schema_violations}"
     printf '%b' "$gate_schema_violation_list"
   elif [[ "$worklog_count" -gt 0 ]]; then
-    record_result PASS "all active work log gate receipts have required fields (gate/verdict/classification)"
+    record_result PASS "all active work log gate receipts have required fields and consistent Classification (gate/verdict/classification/timestamp)"
   fi
   # Advisory lock staleness check — reads JSON fields per config.yaml §worklog_lock.
   # All JSON parsing and stale logic stays inside Python to avoid eval/injection.
@@ -1959,7 +2151,9 @@ if [[ -d "$ARCHIVE_DIR" ]]; then
   # Exclude ship-history-*.md (case-insensitive `-iname` for parity with the PS
   # `-notlike` filter): compacted ship-history archives are not Work Logs and
   # carry no `## Phase Summary` contract (#171).
-  done < <(find "$ARCHIVE_DIR" -name '*.md' -not -name '.gitkeep*' -not -iname 'ship-history-*' -print0 2>/dev/null || true)
+  # Also exclude global-lessons-archive*.md: the /retro chain-aware lesson
+  # archive is not a Work Log and has no '## Phase Summary' contract (#141).
+  done < <(find "$ARCHIVE_DIR" -name '*.md' -not -name '.gitkeep*' -not -iname 'ship-history-*' -not -iname 'global-lessons-archive*' -print0 2>/dev/null || true)
 fi
 if [[ "$phase_summary_violations" -gt 0 ]]; then
   record_result WARN "archived Work Logs with empty Phase Summary: ${phase_summary_violations}"
@@ -1977,11 +2171,11 @@ if [[ -d "$ARCHIVE_DIR" ]]; then
   while IFS= read -r -d '' wl; do
     wl_content="$(cat "$wl" 2>/dev/null)"
     [[ -z "$wl_content" ]] && continue
-    arc_class="$(printf '%s' "$wl_content" | grep -m1 -E '^- \*?\*?[Cc]lassification\*?\*?:' | sed -E 's/.*[Cc]lassification[^:]*:[[:space:]]*`?//; s/`.*//; s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')" || true
+    arc_class="$(<<< "$wl_content" grep -m1 -E '^- \*?\*?[Cc]lassification\*?\*?:' | sed -E 's/.*[Cc]lassification[^:]*:[[:space:]]*`?//; s/`.*//; s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')" || true
     [[ "$arc_class" == "tiny-fix" ]] && continue
-    if printf '%s' "$wl_content" | grep -qiE 'Gate:[[:space:]]*ship[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS'; then
-      arc_has_plan=$(printf '%s' "$wl_content" | grep -ciE 'Gate:[[:space:]]*plan[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS') || true
-      arc_has_impl=$(printf '%s' "$wl_content" | grep -ciE 'Gate:[[:space:]]*implement[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS') || true
+    if <<< "$wl_content" grep -qiE 'Gate:[[:space:]]*ship[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS'; then
+      arc_has_plan=$(<<< "$wl_content" grep -ciE 'Gate:[[:space:]]*plan[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS') || true
+      arc_has_impl=$(<<< "$wl_content" grep -ciE 'Gate:[[:space:]]*implement[[:space:]]*\|[^|]*Verdict:[[:space:]]*PASS') || true
       if [[ "$arc_has_plan" -eq 0 ]] || [[ "$arc_has_impl" -eq 0 ]]; then
         archive_gate_violations=$((archive_gate_violations + 1))
         archive_gate_violation_list="${archive_gate_violation_list}  archived gate bypass: ${wl#$ROOT/}\n"
@@ -2193,7 +2387,12 @@ if [[ -f "$CURRENT_STATE" ]]; then
       spec_phantom_count=$((spec_phantom_count + 1))
       spec_phantom_list="$spec_phantom_list  phantom index entry: $indexed_spec\n"
     fi
-  done < <(printf '%s' "$spec_index_section" | sed -n 's/.*\] \([^ ]*\.md\) .*/\1/p')
+    # Extract indexed spec paths format-robustly: anchor on the spec dirs, NOT
+    # on a preceding "]" — real index entries put the path before the [Shipped]
+    # tag (`- docs/specs/X.md — ..., [Shipped ...]`), so the old bracket-anchored
+    # sed matched nothing and this reverse check was silently dead. Mirror the
+    # ADR reverse check's robust extraction.
+  done < <(printf '%s' "$spec_index_section" | grep -oE '(docs/specs|\.agentcortex/specs)/[^[:space:]]+\.md')
   if [[ "$spec_missing_count" -gt 0 || "$spec_phantom_count" -gt 0 ]]; then
     spec_msg=""
     [[ "$spec_missing_count" -gt 0 ]] && spec_msg="${spec_missing_count} shipped/living spec(s) not in index"
@@ -2722,4 +2921,15 @@ if [[ "$FAIL_COUNT" -gt 0 ]]; then
   exit 1
 fi
 
-echo "Agentic OS integrity check passed"
+# (#113) Reduced-assurance labeling. PYTHON_BIN is empty in exactly two states:
+# the --no-python flag, or python genuinely unavailable. In both, python-dependent
+# checks did not run — most importantly the gate-progression ordering/completeness
+# check degrades to a SKIP here (the native bash M9 fallback only catches a ship
+# receipt missing plan/implement, NOT one missing review/test/handoff). A clean
+# FAIL==0 run in that state has NOT verified those gates, so the top-line MUST NOT
+# claim an unqualified pass. Labeling only — exit stays 0 (not a new gate).
+if [[ -z "${PYTHON_BIN:-}" ]]; then
+  echo "Agentic OS integrity check passed (reduced assurance: python-dependent checks skipped)"
+else
+  echo "Agentic OS integrity check passed"
+fi

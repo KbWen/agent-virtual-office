@@ -8,7 +8,22 @@ plain paths so they do not resolve one level too shallow from this depth.
 
 Rotated 64 entries on 2026-07-10 (SSoT Update Sequence 105 -> 106).
 
+Rotated 2 additional entries on 2026-07-30 (SSoT Update Sequence 109 -> 110).
+
 ---
+
+### Ship-fix-round2-leaks-and-guards-2026-06-19 (PR #179 — AVO-180 eviction leak + AVO-182 guards)
+
+- Shipped the verified, well-scoped items from the round-2 bug/tech-debt sweep (quick-win). **AVO-180**: the multi-session eviction site (`store.js`) now prunes the per-agent transient module state of an evicted dynamic worktree agent — `pruneRecentPicks(id)` (new export from `behaviorEngine.js`), `_storeRecentPicks.delete(id)`, and a cloned-then-deleted `recurringFailureLog[id]` (never mutates a published log). Mirrors `idleGapInfer`'s existing eviction prune; closes an unbounded-Map leak relevant to the owner's many-worktree workflow. +1 regression test (rfLog pruned on eviction). **AVO-182** (crash/corruption guards): `charName` null/non-string guard (was `charId.includes('~')` → throw; +2 tests) · `darken` non-`#RRGGBB` passthrough (was caching `#NaNNaNNaN`) · ambientSound gesture listeners `{once:true}`.
+- Deferred (catalogued, NOT in this PR): AVO-181 (blocked-family/VALID_ROLES set-consolidation — a multi-file refactor of honesty-critical code, do deliberately) · AVO-183 (two MED movement/POST edge cases — verify with a repro first) · AVO-184 (god-reducer extraction — explicit refactor, ADR/plan-gated).
+- Verify: full suite **2184 pass** (+3); build clean; EOL/whitespace clean. The round-2 sweep also dismissed the "dailyCard/lighting/ambientSound untested" FALSE POSITIVES (co-located `src/systems/*.test.js` exist).
+- Tests: Pass
+
+### Ship-fix-avo-174-title-inference-honesty-2026-06-19 (PR #174 — title channel can't fake blocked/done)
+
+- Shipped AVO-174 (quick-win, honesty). The document-title inference channel (`inferStatus.js` `listenTitleChanges`, wired at the channel list) injected `status:'blocked'` from any tab title matching `error|failed|blocked|stuck` and `status:'done'` from `done|complete|success|finished` — fabricating the most-alarming / a conclusive state from the weakest signal (e.g. an unrelated browser tab titled "build failed"). Removed both conclusive patterns; the channel is now capped to the working role-hints only. Extracted a pure `classifyTitle(title)` (exported) that can only ever return `status:'working'` or null; `listenTitleChanges` uses it.
+- Verify: new `tests/titleInference.test.js` (working-hint regression + "never blocked/done" + null cases); **test-the-test verified** (re-adding the blocked pattern fails the honesty assertion). Full suite **2172 pass** (+3); build clean.
+- Tests: Pass
 
 ### Ship-fix-honesty-a11y-bugs-2026-06-19 (PR #173 — AVO-171/172/173 + AVO-175/176/177 + audit catalogue)
 
