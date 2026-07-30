@@ -4,6 +4,7 @@ import {
   hasRafHandle,
   isDocumentFocused,
   RAF_STALL_RESTART_MS,
+  scheduleRemovedWalkAbort,
   shouldRecordRafWatchdogRestart,
   shouldRestartRafWatchdog,
   shouldRestoreWalk,
@@ -95,6 +96,32 @@ describe('shouldRestoreWalk', () => {
   it('declines when the walk has no position or target to resume from', () => {
     expect(shouldRestoreWalk(true, null, pos, null)).toBe(false)
     expect(shouldRestoreWalk(true, pos, null, null)).toBe(false)
+  })
+})
+
+describe('scheduleRemovedWalkAbort', () => {
+  it('aborts a true removal at a defensive copy of the rendered position', async () => {
+    const isUnmountedRef = { current: true }
+    const position = { x: 123, y: 234 }
+    let stoppedAt = null
+
+    scheduleRemovedWalkAbort(isUnmountedRef, position, (next) => { stoppedAt = next })
+    position.x = 999
+    await Promise.resolve()
+
+    expect(stoppedAt).toEqual({ x: 123, y: 234 })
+    expect(stoppedAt).not.toBe(position)
+  })
+
+  it('does not abort a live teardown that reconnects in the same flush', async () => {
+    const isUnmountedRef = { current: true }
+    let called = false
+
+    scheduleRemovedWalkAbort(isUnmountedRef, { x: 1, y: 2 }, () => { called = true })
+    isUnmountedRef.current = false
+    await Promise.resolve()
+
+    expect(called).toBe(false)
   })
 })
 

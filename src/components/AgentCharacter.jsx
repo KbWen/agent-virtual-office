@@ -61,6 +61,14 @@ export function shouldRestoreWalk(moving, visualPos, targetPos, rafHandle) {
   return !hasRafHandle(rafHandle)                        // a live chain needs no second one
 }
 
+export function scheduleRemovedWalkAbort(isUnmountedRef, position, abort) {
+  if (!position || typeof abort !== 'function') return
+  const stoppedAt = { ...position }
+  queueMicrotask(() => {
+    if (isUnmountedRef.current) abort(stoppedAt)
+  })
+}
+
 export function collectArrivalNudgeClaims(agents, id) {
   const blockers = []
   const claims = []
@@ -966,6 +974,13 @@ function AgentCharacter({ agent }) {
       const store = useOfficeStore.getState()
       lastJourneyRef.current = store.agents[id]?.journeyTarget || null
       store.setAgentJourney(id, null)
+      // A live passive-effect teardown reconnects synchronously and flips the ref back to false.
+      // A true removal stays unmounted through this microtask and must clear store motion truth.
+      if (movingRef.current) {
+        scheduleRemovedWalkAbort(isUnmountedRef, visualPosRef.current, (position) => {
+          useOfficeStore.getState().abortAgentMovement(id, position)
+        })
+      }
       // The deferred-timer clearTimeout loop that lived here is GONE on purpose: it also ran on
       // LIVE components, and nothing re-arms a cleared handle. It permanently killed pending
       // bubble-clears (leaving a bubble that asserts state the agent no longer has — the exact
@@ -1145,7 +1160,7 @@ function AgentCharacter({ agent }) {
           movingStuckRef.current = 0
           pendingBehaviorRef.current = null
           socialTargetRef.current = null  // abort: clear social target so no stale face-on-arrival
-          store.setAgentJourney(id, null) // abort: a dead walk must not keep claiming its landing spot
+          store.abortAgentMovement(id, visualPosRef.current)
           setIsWalking(false)
           if (hasRafHandle(rafRef.current)) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         } else {
@@ -1306,7 +1321,7 @@ function AgentCharacter({ agent }) {
         // must never be applied to a LATER unrelated arrival (the next doSchedule resets
         // this anyway; the explicit clear keeps the invariant local and refactor-proof).
         socialTargetRef.current = null
-        useOfficeStore.getState().setAgentJourney(id, null) // abort: release the claimed landing spot
+        useOfficeStore.getState().abortAgentMovement(id, visualPosRef.current)
         if (hasRafHandle(rafRef.current)) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         setIsWalking(false)
         timerRef.current = setTimeout(doSchedule, 500)

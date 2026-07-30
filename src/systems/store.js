@@ -750,6 +750,27 @@ export const useOfficeStore = create((set) => ({
       }
     }),
 
+  // Stop an abandoned walk at the last rendered position instead of snapping to the
+  // unfinished leg target. Callers may pass a live ref value, so copy it before storing.
+  abortAgentMovement: (id, position) =>
+    set((s) => {
+      const agent = s.agents[id]
+      const stoppedAt = position || agent?.position
+      if (!agent || !stoppedAt) return s
+      return {
+        agents: {
+          ...s.agents,
+          [id]: {
+            ...agent,
+            position: { ...stoppedAt },
+            targetPosition: { ...stoppedAt },
+            isMoving: false,
+            journeyTarget: null,
+          },
+        },
+      }
+    }),
+
   setAgentArrived: (id) =>
     set((s) => {
       if (!s.agents[id]) return s
