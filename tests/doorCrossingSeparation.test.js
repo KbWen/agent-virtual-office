@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { DOOR_SIDES, visuallyOverlapping } from '../src/systems/movementSystem.js'
+import { describe, it, expect, vi } from 'vitest'
+import { calculateJourney, calculatePath, DOOR_SIDES, visuallyOverlapping } from '../src/systems/movementSystem.js'
 import { DOOR_JITTER } from '../src/systems/constants.js'
 import { STACK_DIST_PX } from '../scripts/soakInvariants.mjs'
 
@@ -57,5 +57,32 @@ describe('door crossing separation (characterization: known defect, not a spec)'
     // Would need > 2x the alarm to guarantee clearance from a random ±JITTER/2 draw, through a
     // ~50px opening. Recorded so the next reader does not re-derive it by trying.
     expect(DOOR_JITTER).toBeLessThan(STACK_DIST_PX * 2)
+  })
+})
+
+describe('calculateJourney — physical door identity', () => {
+  it('reports no door for a same-zone journey without changing calculatePath output', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+    const from = { x: 300, y: 250 }
+    const to = { x: 420, y: 250 }
+
+    const journey = calculateJourney(from, to)
+    expect(journey.doorIds).toEqual([])
+    expect(journey.waypoints).toEqual(calculatePath(from, to))
+    vi.restoreAllMocks()
+  })
+
+  it('reports one physical door for main-office to lounge travel', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+    const journey = calculateJourney({ x: 300, y: 250 }, { x: 180, y: 490 })
+    expect(journey.doorIds).toEqual(['mainToLounge'])
+    vi.restoreAllMocks()
+  })
+
+  it('reports both physical doors in traversal order for a multi-room journey', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+    const journey = calculateJourney({ x: 180, y: 490 }, { x: 620, y: 490 })
+    expect(journey.doorIds).toEqual(['mainToLounge', 'mainToResearch'])
+    vi.restoreAllMocks()
   })
 })

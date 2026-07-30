@@ -13,8 +13,33 @@ import { pruneRecentPicks } from './behaviorEngine.js'  // AVO-180: prune on evi
 import { isValidTheme, DEFAULT_THEME } from './theme.js'
 import { recordEpisode, isNewBlockedEpisode } from './recurringFailure.js'
 import { AGENT_CARRY_FIELDS } from '../utils/statusFields.js'
+import {
+  createDoorClaimState,
+  releaseAgentDoorClaims as releaseAllAgentDoorClaims,
+  releaseDoorClaims,
+  renewDoorClaims,
+  requestDoorClaims,
+} from './doorClaims.js'
 
 export { STATUS_COLORS }
+
+function grantedDoorJourneyForAgent(doorTraffic, agentId) {
+  return Object.values(doorTraffic.requests).find(
+    (request) => request.agentId === agentId && request.state === 'granted',
+  ) || null
+}
+
+function releaseQueuedDoorRequests(doorTraffic, agentId) {
+  let next = doorTraffic
+  const canceledJourneyIds = []
+  for (const request of Object.values(doorTraffic.requests)) {
+    if (request.agentId === agentId && request.state === 'queued') {
+      canceledJourneyIds.push(request.journeyId)
+      next = releaseDoorClaims(next, { agentId, journeyId: request.journeyId })
+    }
+  }
+  return { doorTraffic: next, canceledJourneyIds }
+}
 
 // ─── Store working-bubble fallback (AC-S1b / AC-C1) ───────────────────────────────────────────
 // The store's sigChanged path previously called randomBubble('working-status') unconditionally
@@ -508,6 +533,8 @@ export const useOfficeStore = create((set) => ({
   // dev builds notice if frames are being dropped (tab throttling, HMR, etc.). Transient —
   // never persisted.
   watchdogRestarts: 0,
+  // AVO-187: transient, physical-door ownership. Never persisted or rendered.
+  doorTraffic: createDoorClaimState(),
 
   // POINT 2: live on-screen scale of the office SVG (the `meet` fit ratio = min(w/800, h/560)).
   // PixelOffice measures it on resize; AgentCharacter reads it to counter-scale name/status
@@ -750,14 +777,70 @@ export const useOfficeStore = create((set) => ({
       }
     }),
 
+  requestAgentDoorClaims: (agentId, journeyId, doorIds, now = Date.now()) => {
+    let status = 'queued'
+    set((s) => {
+      const result = requestDoorClaims(s.doorTraffic, { agentId, journeyId, doorIds, now })
+      status = result.status
+      return result.state === s.doorTraffic ? s : { doorTraffic: result.state }
+    })
+    return status
+  },
+
+  renewAgentDoorClaims: (agentId, journeyId, now = Date.now()) =>
+    set((s) => {
+      const doorTraffic = renewDoorClaims(s.doorTraffic, { agentId, journeyId, now })
+      return doorTraffic === s.doorTraffic ? s : { doorTraffic }
+    }),
+
+  releaseAgentDoorClaims: (agentId, journeyId = null) =>
+    set((s) => {
+      const doorTraffic = journeyId
+        ? releaseDoorClaims(s.doorTraffic, { agentId, journeyId })
+        : releaseAllAgentDoorClaims(s.doorTraffic, agentId)
+      return doorTraffic === s.doorTraffic ? s : { doorTraffic }
+    }),
+
+  acknowledgeAgentDoorCancellations: (id, journeyIds) =>
+    set((s) => {
+      const agent = s.agents[id]
+      if (!agent?.doorCancelJourneyIds?.length) return s
+      const acknowledged = new Set(journeyIds || [])
+      const remaining = agent.doorCancelJourneyIds.filter((journeyId) => !acknowledged.has(journeyId))
+      if (remaining.length === agent.doorCancelJourneyIds.length) return s
+      return { agents: { ...s.agents, [id]: { ...agent, doorCancelJourneyIds: remaining } } }
+    }),
+
   // Stop an abandoned walk at the last rendered position instead of snapping to the
   // unfinished leg target. Callers may pass a live ref value, so copy it before storing.
-  abortAgentMovement: (id, position) =>
+  abortAgentMovement: (id, position, journeyId = null) =>
     set((s) => {
       const agent = s.agents[id]
       const stoppedAt = position || agent?.position
       if (!agent || !stoppedAt) return s
+      const activeDoorJourney = grantedDoorJourneyForAgent(s.doorTraffic, id)
+      if (activeDoorJourney && activeDoorJourney.journeyId !== journeyId) return s
+      const doorTraffic = agent.removeAfterDoorAbort
+        ? releaseAllAgentDoorClaims(s.doorTraffic, id)
+        : journeyId
+        ? releaseDoorClaims(s.doorTraffic, { agentId: id, journeyId })
+        : releaseAllAgentDoorClaims(s.doorTraffic, id)
+      if (agent.removeAfterDoorAbort) {
+        const agents = { ...s.agents }
+        delete agents[id]
+        pruneRecentPicks(id)
+        _storeRecentPicks.delete(id)
+        const recurringFailureLog = { ...(s.recurringFailureLog || {}) }
+        delete recurringFailureLog[id]
+        return {
+          doorTraffic,
+          agents,
+          recurringFailureLog,
+          ...(s.selectedAgent === id ? { selectedAgent: null } : {}),
+        }
+      }
       return {
+        doorTraffic,
         agents: {
           ...s.agents,
           [id]: {
@@ -766,18 +849,25 @@ export const useOfficeStore = create((set) => ({
             targetPosition: { ...stoppedAt },
             isMoving: false,
             journeyTarget: null,
+            doorAbortJourneyId: null,
           },
         },
       }
     }),
 
-  setAgentArrived: (id) =>
+  setAgentArrived: (id, journeyId = null) =>
     set((s) => {
       if (!s.agents[id]) return s
+      const activeDoorJourney = grantedDoorJourneyForAgent(s.doorTraffic, id)
+      if (activeDoorJourney && activeDoorJourney.journeyId !== journeyId) return s
+      const doorTraffic = journeyId
+        ? releaseDoorClaims(s.doorTraffic, { agentId: id, journeyId })
+        : releaseAllAgentDoorClaims(s.doorTraffic, id)
       return {
+        doorTraffic,
         agents: {
           ...s.agents,
-          [id]: { ...s.agents[id], isMoving: false, position: { ...s.agents[id].targetPosition }, journeyTarget: null },
+          [id]: { ...s.agents[id], isMoving: false, position: { ...s.agents[id].targetPosition }, journeyTarget: null, doorAbortJourneyId: null },
         },
       }
     }),
@@ -939,6 +1029,7 @@ export const useOfficeStore = create((set) => ({
       const now = meta.now || Date.now()
       const ext = { ...s.externalStatus }
       const agents = { ...s.agents }
+      let doorTraffic = s.doorTraffic
       // Authoritative static roster for the active mode — the SAME source initAgents
       // uses to seed s.agents. This is the only stable way to tell a dynamic worktree
       // agent apart from a static one: dynamic agents may carry session:null (postMessage/
@@ -1090,7 +1181,7 @@ export const useOfficeStore = create((set) => ({
         // guard below can skip the re-allocation entirely and keep the agent's identity (no re-render).
         const { nextBehavior, nextExpression } = resolveAgentVisual(u, s.activeWorkflow, prevAgent, inGroup)
         if (
-          !createdThisUpdate && !dayChanged && !sigChanged &&
+          !createdThisUpdate && !dayChanged && !sigChanged && !prevAgent.removeAfterDoorAbort &&
           u.status === prevAgent.status &&
           nextBehavior === prevAgent.behavior &&
           nextExpression === prevAgent.expression
@@ -1103,6 +1194,7 @@ export const useOfficeStore = create((set) => ({
           status: u.status,
           behavior: nextBehavior,
           expression: nextExpression,
+          ...(prevAgent.removeAfterDoorAbort ? { removeAfterDoorAbort: false, doorAbortJourneyId: null } : {}),
         }
         // Bubble fires only on a REAL status/task change (sigChanged) — NOT on every poll re-apply.
         // A status file re-written each tick (changed timestamp/seq/expiry but SAME status+task) passes
@@ -1198,15 +1290,27 @@ export const useOfficeStore = create((set) => ({
           // a PRIOR applyExternalStatus call (so it now lives in s.agents too) — that is
           // exactly the case we must reconcile, so do not gate on s.agents membership.
           if (a && a.session && !present.has(id)) {
-            delete agents[id]
             delete ext[id]
             agentsMutated = true
-            evicted.push(id)
-            // If the inspector had this now-deleted dynamic agent selected, the id would
-            // dangle forever: AgentInspector renders nothing (its `agent` lookup is null)
-            // but selectedAgent stays set, so a future click on the SAME id toggles the
-            // panel off instead of open. Drop the selection when its target is evicted.
-            if (s.selectedAgent === id) evictedSelected = true
+            const queuedRelease = releaseQueuedDoorRequests(doorTraffic, id)
+            doorTraffic = queuedRelease.doorTraffic
+            const active = grantedDoorJourneyForAgent(doorTraffic, id)
+            if (active) {
+              agents[id] = {
+                ...a,
+                doorAbortJourneyId: active.journeyId,
+                doorCancelJourneyIds: [...new Set([...(a.doorCancelJourneyIds || []), ...queuedRelease.canceledJourneyIds])],
+                removeAfterDoorAbort: true,
+              }
+            } else {
+              delete agents[id]
+              evicted.push(id)
+              // If the inspector had this now-deleted dynamic agent selected, the id would
+              // dangle forever: AgentInspector renders nothing (its `agent` lookup is null)
+              // but selectedAgent stays set, so a future click on the SAME id toggles the
+              // panel off instead of open. Drop the selection when its target is evicted.
+              if (s.selectedAgent === id) evictedSelected = true
+            }
           }
         }
         // AVO-180: prune transient per-agent MODULE state for evicted dynamic agents so these Maps
@@ -1218,6 +1322,7 @@ export const useOfficeStore = create((set) => ({
           for (const id of evicted) {
             pruneRecentPicks(id)
             _storeRecentPicks.delete(id)
+            doorTraffic = releaseAllAgentDoorClaims(doorTraffic, id)
             if (rfLog[id]) {
               if (!rfCloned) { rfLog = { ...rfLog }; rfCloned = true }
               delete rfLog[id]
@@ -1244,6 +1349,7 @@ export const useOfficeStore = create((set) => ({
         // s.agents reference so Object-level subscribers don't re-fire on a pure
         // poll re-apply (the `{ ...s.agents }` working copy is discarded).
         externalStatus: ext, agents: agentsMutated ? agents : s.agents,
+        doorTraffic,
         activityLog: log, eventFeed: feedLog, dailyDoneLedger, dailyBlockedLedger,
         recurringFailureLog: rfLog,
         hasEverReceivedStatus: meta.skipHintDismiss ? s.hasEverReceivedStatus : true,
@@ -1262,9 +1368,20 @@ export const useOfficeStore = create((set) => ({
       // tick. It also mirrors applyExternalStatus's inGroup guard: officeLife owns
       // behavior/expression/bubble during a group event, so an external status that
       // expires mid-event must NOT wipe the in-progress meeting animation.
-      const resetStaticAgent = (a) => {
-        if (a.inGroupEvent) return { ...a, status: 'idle', returnHomeOnIdle: true }
-        return { ...a, status: 'idle', behavior: 'idle', expression: 'normal', bubble: null, returnHomeOnIdle: true }
+      const resetStaticAgent = (a, doorAbortJourneyId = null, canceledJourneyIds = []) => {
+        const doorCancelJourneyIds = [...new Set([...(a.doorCancelJourneyIds || []), ...canceledJourneyIds])]
+        if (a.inGroupEvent) {
+          const shouldResumeGroup = a.groupTarget && (doorAbortJourneyId || canceledJourneyIds.length > 0)
+          return {
+            ...a,
+            status: 'idle',
+            returnHomeOnIdle: true,
+            doorAbortJourneyId,
+            doorCancelJourneyIds,
+            groupTarget: shouldResumeGroup ? { ...a.groupTarget } : a.groupTarget,
+          }
+        }
+        return { ...a, status: 'idle', behavior: 'idle', expression: 'normal', bubble: null, returnHomeOnIdle: true, doorAbortJourneyId, doorCancelJourneyIds }
       }
       // Authoritative dynamic/static discriminator — the SAME one applyExternalStatus uses.
       // A `.session` check alone is wrong: a fallback-count or hash message routes to a
@@ -1284,39 +1401,73 @@ export const useOfficeStore = create((set) => ({
         const ext = { ...s.externalStatus }
         delete ext[agentId]
         const agents = { ...s.agents }
+        let doorTraffic = s.doorTraffic
         let evictedSelected = false
         if (agents[agentId]) {
           // Dynamic agents disappear when they expire; static roster agents go idle.
           if (isDynamic(agentId, agents[agentId])) {
-            delete agents[agentId]
-            if (s.selectedAgent === agentId) evictedSelected = true
+            const queuedRelease = releaseQueuedDoorRequests(doorTraffic, agentId)
+            doorTraffic = queuedRelease.doorTraffic
+            const active = grantedDoorJourneyForAgent(doorTraffic, agentId)
+            if (active) {
+              agents[agentId] = {
+                ...agents[agentId],
+                doorAbortJourneyId: active.journeyId,
+                doorCancelJourneyIds: [...new Set([...(agents[agentId].doorCancelJourneyIds || []), ...queuedRelease.canceledJourneyIds])],
+                removeAfterDoorAbort: true,
+              }
+            } else {
+              delete agents[agentId]
+              doorTraffic = releaseAllAgentDoorClaims(doorTraffic, agentId)
+              if (s.selectedAgent === agentId) evictedSelected = true
+            }
           } else {
-            agents[agentId] = resetStaticAgent(agents[agentId])
+            const queuedRelease = releaseQueuedDoorRequests(doorTraffic, agentId)
+            doorTraffic = queuedRelease.doorTraffic
+            const active = grantedDoorJourneyForAgent(doorTraffic, agentId)
+            agents[agentId] = resetStaticAgent(agents[agentId], active?.journeyId || null, queuedRelease.canceledJourneyIds)
           }
         }
         const selectionPatch = evictedSelected ? { selectedAgent: null } : {}
         if (Object.keys(ext).length === 0) {
           // Office went quiet → reset L2 scalars (updateStoreMood is NOT called on clear, so the
           // anchor would otherwise stay pinned in an idle office).
-          return { externalStatus: ext, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null, teamPulse: 0, focusAnchor: null, reluctant: {}, ...selectionPatch }
+          return { externalStatus: ext, agents, doorTraffic, statusSource: 'organic', integrationSource: null, activeWorkflow: null, teamPulse: 0, focusAnchor: null, reluctant: {}, ...selectionPatch }
         }
-        return { externalStatus: ext, agents, ...selectionPatch }
+        return { externalStatus: ext, agents, doorTraffic, ...selectionPatch }
       }
       // Clear all
       const agents = { ...s.agents }
+      let doorTraffic = s.doorTraffic
       let evictedSelected = false
       for (const id of Object.keys(s.externalStatus)) {
         if (agents[id]) {
           if (isDynamic(id, agents[id])) {
-            delete agents[id]
-            if (s.selectedAgent === id) evictedSelected = true
+            const queuedRelease = releaseQueuedDoorRequests(doorTraffic, id)
+            doorTraffic = queuedRelease.doorTraffic
+            const active = grantedDoorJourneyForAgent(doorTraffic, id)
+            if (active) {
+              agents[id] = {
+                ...agents[id],
+                doorAbortJourneyId: active.journeyId,
+                doorCancelJourneyIds: [...new Set([...(agents[id].doorCancelJourneyIds || []), ...queuedRelease.canceledJourneyIds])],
+                removeAfterDoorAbort: true,
+              }
+            } else {
+              delete agents[id]
+              doorTraffic = releaseAllAgentDoorClaims(doorTraffic, id)
+              if (s.selectedAgent === id) evictedSelected = true
+            }
           } else {
-            agents[id] = resetStaticAgent(agents[id])
+            const queuedRelease = releaseQueuedDoorRequests(doorTraffic, id)
+            doorTraffic = queuedRelease.doorTraffic
+            const active = grantedDoorJourneyForAgent(doorTraffic, id)
+            agents[id] = resetStaticAgent(agents[id], active?.journeyId || null, queuedRelease.canceledJourneyIds)
           }
         }
       }
       return {
-        externalStatus: {}, agents, statusSource: 'organic', integrationSource: null, activeWorkflow: null,
+        externalStatus: {}, agents, doorTraffic, statusSource: 'organic', integrationSource: null, activeWorkflow: null,
         teamPulse: 0, focusAnchor: null, reluctant: {},
         ...(evictedSelected ? { selectedAgent: null } : {}),
       }

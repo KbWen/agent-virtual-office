@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
 import { getNextBehavior } from '../systems/behaviorEngine'
-import { getTargetForBehavior, pickSocialTarget, calcFacing, calculatePath, needsLocationChange, HOME_POSITIONS, resolveClaimAwareHomePosition, resolveFocusFacing, SOCIAL_BEHAVIORS, visuallyOverlapping, avoidOverlap } from '../systems/movementSystem'
+import { getTargetForBehavior, pickSocialTarget, calcFacing, calculateJourney, needsLocationChange, HOME_POSITIONS, resolveClaimAwareHomePosition, resolveFocusFacing, SOCIAL_BEHAVIORS, visuallyOverlapping, avoidOverlap } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale, t } from '../i18n'
 import { BlockedReasonBadge } from './blockedReasonBadge'
 import { recurringInfo } from '../systems/recurringFailure'
@@ -16,6 +16,12 @@ import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
 // 1/CHAR_SCALE. Keep both in sync via this one constant.
 const CHAR_SCALE = 1.35
 export const RAF_STALL_RESTART_MS = 2500
+let doorJourneySequence = 0
+
+export function createDoorJourneyId(agentId) {
+  doorJourneySequence += 1
+  return `${agentId}:door:${doorJourneySequence}`
+}
 
 // Pure guard: returns true if a social arriver's TARGET should face back.
 // R1: tracked agents (live externalStatus entry) are NEVER modulated.
@@ -47,6 +53,13 @@ export function isDocumentFocused(doc) {
 
 export function shouldRecordRafWatchdogRestart(hadPendingFrame, isFocused, consecutiveLostRestarts = 0) {
   return !hadPendingFrame && isFocused && consecutiveLostRestarts >= 1
+}
+
+export function shouldAbortExpiredDoorClaim(request, now, visibilityState) {
+  return visibilityState === 'visible'
+    && request?.state === 'granted'
+    && Number.isFinite(request.deadlineAt)
+    && now > request.deadlineAt
 }
 
 export function hasRafHandle(value) {
@@ -749,6 +762,9 @@ function AgentCharacter({ agent }) {
 
   const timerRef = useRef(null)
   const pathRef = useRef([])
+  const activeDoorJourneyRef = useRef(null)
+  const pendingDoorJourneyRef = useRef(null)
+  const lastGroupTargetRef = useRef(null)
   const movingRef = useRef(false)
   const movingStuckRef = useRef(0)
   const pendingBehaviorRef = useRef(null) // deferred behavior for location-based actions
@@ -842,6 +858,40 @@ function AgentCharacter({ agent }) {
     setIsWalking(false)
   }, [agentState?.isMoving, isWalking, agentState])
 
+  // A static status clear cannot release a granted claim from store-only coordinates: the
+  // rendered sprite may still be between waypoints. The store marks the fenced journey here;
+  // stop at pixel truth first, then let abortAgentMovement release it atomically.
+  useEffect(() => {
+    const requestedJourneyId = agentState?.doorAbortJourneyId
+    if (!requestedJourneyId || activeDoorJourneyRef.current !== requestedJourneyId) return
+    if (hasRafHandle(rafRef.current)) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    pathRef.current = []
+    movingRef.current = false
+    movingStuckRef.current = 0
+    pendingBehaviorRef.current = null
+    socialTargetRef.current = null
+    if (agentState?.inGroupEvent) lastGroupTargetRef.current = null
+    useOfficeStore.getState().abortAgentMovement(id, visualPosRef.current, requestedJourneyId)
+    activeDoorJourneyRef.current = null
+    setIsWalking(false)
+  }, [agentState?.doorAbortJourneyId, id])
+
+  // A static clear also cancels queued (not-yet-moving) journeys. Invalidate the component ref
+  // as well as the store request so its already-scheduled retry cannot resurrect obsolete work.
+  useEffect(() => {
+    const canceledJourneyIds = agentState?.doorCancelJourneyIds || []
+    if (canceledJourneyIds.length === 0) return
+    const pending = pendingDoorJourneyRef.current
+    if (pending && canceledJourneyIds.includes(pending.journeyId)) {
+      pendingDoorJourneyRef.current = null
+      if (agentState?.inGroupEvent) lastGroupTargetRef.current = null
+    }
+    useOfficeStore.getState().acknowledgeAgentDoorCancellations(id, canceledJourneyIds)
+  }, [agentState?.doorCancelJourneyIds, id])
+
   // Walk animation timer (leg alternation)
   useEffect(() => {
     if (!isWalking) return
@@ -917,7 +967,24 @@ function AgentCharacter({ agent }) {
       // A backgrounded tab pauses RAF; skip the watchdog while hidden to avoid
       // false-positive stall diagnostics and spurious RAF re-queues.
       if (document.visibilityState !== 'visible') return
-      if (!shouldRestartRafWatchdog(lastFrameWallTimeRef.current, Date.now(), document.visibilityState)) return
+      const now = Date.now()
+      const journeyId = activeDoorJourneyRef.current
+      const store = useOfficeStore.getState()
+      const doorRequest = journeyId ? store.doorTraffic.requests[journeyId] : null
+      if (shouldAbortExpiredDoorClaim(doorRequest, now, document.visibilityState)) {
+        if (hasRafHandle(rafRef.current)) cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+        pathRef.current = []
+        movingRef.current = false
+        movingStuckRef.current = 0
+        pendingBehaviorRef.current = null
+        socialTargetRef.current = null
+        store.abortAgentMovement(id, visualPosRef.current, journeyId)
+        activeDoorJourneyRef.current = null
+        setIsWalking(false)
+        return
+      }
+      if (!shouldRestartRafWatchdog(lastFrameWallTimeRef.current, now, document.visibilityState)) return
       const hadPendingFrame = hasRafHandle(rafRef.current)
       if (hadPendingFrame) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
@@ -938,9 +1005,10 @@ function AgentCharacter({ agent }) {
       startRaf()
     }, 1000)
     return () => clearInterval(watchdog)
-  }, [isWalking, startRaf])
+  }, [id, isWalking, startRaf])
 
-  // Stashed by the cleanup BEFORE it releases the claim, so the setup can put it back.
+  // Stashed before a transient cleanup clears journeyTarget, so setup can put it back.
+  // The physical-door claim stays fenced until arrival, abort, or confirmed true removal.
   const lastJourneyRef = useRef(null)
 
   // SYMMETRIC setup/cleanup — this is NOT an unmount-only hook. React tears passive effects
@@ -966,8 +1034,9 @@ function AgentCharacter({ agent }) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null
       }
-      // A mid-walk teardown must still release the journey claim — setAgentArrived never fires
-      // for a dead walk, and a stale journeyTarget would block that spot for every picker
+      // Clear the store's journeyTarget during teardown so a dead walk cannot block that spot.
+      // A live teardown restores it synchronously; only the confirmed-removal microtask below
+      // may abort and release the physical-door claim.
       // (AC-2, fresh review 2026-06-10 MED). Stash it from the STORE (the SSoT for journeyTarget,
       // store.js:735) rather than mirroring all six setAgentJourney call sites — a future seventh
       // site cannot then silently break the restore above.
@@ -976,9 +1045,12 @@ function AgentCharacter({ agent }) {
       store.setAgentJourney(id, null)
       // A live passive-effect teardown reconnects synchronously and flips the ref back to false.
       // A true removal stays unmounted through this microtask and must clear store motion truth.
-      if (movingRef.current) {
+      const removalJourneyId = activeDoorJourneyRef.current || pendingDoorJourneyRef.current?.journeyId || null
+      if (movingRef.current || removalJourneyId) {
         scheduleRemovedWalkAbort(isUnmountedRef, visualPosRef.current, (position) => {
-          useOfficeStore.getState().abortAgentMovement(id, position)
+          const latest = useOfficeStore.getState()
+          if (movingRef.current) latest.abortAgentMovement(id, position, removalJourneyId)
+          else latest.releaseAgentDoorClaims(id, removalJourneyId)
         })
       }
       // The deferred-timer clearTimeout loop that lived here is GONE on purpose: it also ran on
@@ -1006,12 +1078,76 @@ function AgentCharacter({ agent }) {
     startRaf()
   }, [id, startRaf])
 
+  // AVO-187: every journey starts through one route-assignment gate. Doorless journeys keep the
+  // old behavior; cross-zone journeys remain stationary until their complete physical-door set is
+  // granted. A queued retry reuses its journeyId, preserving FIFO position and release fencing.
+  const beginJourney = useCallback(({ destination, journey, kind, onGranted, journeyId: requestedId }) => {
+    if (!journey?.waypoints?.length) return 'none'
+    const store = useOfficeStore.getState()
+    const requestKey = `${kind}:${destination.x}:${destination.y}:${journey.doorIds.join(',')}`
+    const prior = pendingDoorJourneyRef.current
+    if (prior && prior.requestKey !== requestKey) {
+      store.releaseAgentDoorClaims(id, prior.journeyId)
+      pendingDoorJourneyRef.current = null
+    }
+
+    let journeyId = requestedId
+    if (journey.doorIds.length > 0) {
+      if (!journeyId && prior?.requestKey === requestKey) journeyId = prior.journeyId
+      if (!journeyId) journeyId = createDoorJourneyId(id)
+      const status = store.requestAgentDoorClaims(id, journeyId, journey.doorIds)
+      if (status !== 'granted') {
+        const pending = {
+          destination,
+          journey,
+          kind,
+          onGranted,
+          journeyId,
+          requestKey,
+          retryScheduled: prior?.journeyId === journeyId && prior.retryScheduled,
+        }
+        pendingDoorJourneyRef.current = pending
+        if (!pending.retryScheduled) {
+          pending.retryScheduled = true
+          scheduleDeferred(() => {
+            const latest = pendingDoorJourneyRef.current
+            if (!latest || latest.journeyId !== journeyId) return
+            const canceledJourneyIds = useOfficeStore.getState().agents[id]?.doorCancelJourneyIds || []
+            if (canceledJourneyIds.includes(journeyId)) {
+              pendingDoorJourneyRef.current = null
+              useOfficeStore.getState().acknowledgeAgentDoorCancellations(id, canceledJourneyIds)
+              return
+            }
+            latest.retryScheduled = false
+            beginJourney(latest)
+          }, 250)
+        }
+        return 'queued'
+      }
+      activeDoorJourneyRef.current = journeyId
+    } else {
+      activeDoorJourneyRef.current = null
+    }
+
+    pendingDoorJourneyRef.current = null
+    movingRef.current = true
+    pathRef.current = journey.waypoints.slice(1)
+    nudgeCountRef.current = 0
+    if (typeof onGranted === 'function') onGranted()
+    store.setAgentJourney(id, destination)
+    startWalkTo(journey.waypoints[0])
+    return 'started'
+  }, [id, scheduleDeferred, startWalkTo])
+
   // Handle arriving at a waypoint
   const onWaypointReached = useCallback(() => {
     const store = useOfficeStore.getState()
 
     if (pathRef.current.length > 0) {
       const next = pathRef.current.shift()
+      if (activeDoorJourneyRef.current) {
+        store.renewAgentDoorClaims(id, activeDoorJourneyRef.current)
+      }
       // Continue to next waypoint
       targetPosRef.current = { ...next }
       // Merge "arrived at this waypoint" + "retarget to next" into one store write.
@@ -1026,7 +1162,8 @@ function AgentCharacter({ agent }) {
       }
       startRaf()
     } else {
-      store.setAgentArrived(id)
+      store.setAgentArrived(id, activeDoorJourneyRef.current)
+      activeDoorJourneyRef.current = null
       movingRef.current = false
       setIsWalking(false)  // FINAL arrival — the only legitimate walk-complete clear (see animate())
       // Apply deferred behavior now that character has arrived at destination.
@@ -1092,19 +1229,16 @@ function AgentCharacter({ agent }) {
           // an unresolvable cluster keeps the attempt for the next arrival instead of
           // burning it on a sideways hop into another stack.
           if (clear && Math.hypot(nudged.x - myPos.x, nudged.y - myPos.y) > 2) {
-            const nudgePath = calculatePath(myPos, nudged)
-            if (nudgePath.length > 0) {
+            const nudgeJourney = calculateJourney(myPos, nudged)
+            if (nudgeJourney.waypoints.length > 0) {
               nudgeCountRef.current = 1
-              movingRef.current = true
-              pathRef.current = nudgePath.slice(1)
-              s2.setAgentJourney(id, nudged)
-              startWalkTo(nudgePath[0])
+              beginJourney({ destination: nudged, journey: nudgeJourney, kind: 'arrival-nudge' })
             }
           }
         }
       }
     }
-  }, [id, startRaf, scheduleDeferred, startWalkTo])
+  }, [beginJourney, id, scheduleDeferred, startRaf])
 
   // Keep ref in sync
   onWaypointReachedRef.current = onWaypointReached
@@ -1118,14 +1252,9 @@ function AgentCharacter({ agent }) {
     if (!home) return
     store.clearReturnHomeIntent(id)
     if (Math.hypot(current.x - home.x, current.y - home.y) < 5) return
-    const path = calculatePath(current, home)
-    if (path.length === 0) return
-    movingRef.current = true
-    pathRef.current = path.slice(1)
-    nudgeCountRef.current = 0
-    store.setAgentJourney(id, home)  // publish journey END (AVO-156 RC-3)
-    startWalkTo(path[0])
-  }, [agentState?.returnHomeOnIdle, agentState?.status, agentState?.inGroupEvent, id, isWalking, startWalkTo, visualReady])
+    const journey = calculateJourney(current, home)
+    beginJourney({ destination: home, journey, kind: 'return-home' })
+  }, [agentState?.returnHomeOnIdle, agentState?.status, agentState?.inGroupEvent, beginJourney, id, isWalking, visualReady])
 
   // Behavior scheduling — wrapped in try/catch to guarantee the chain never breaks
   const doSchedule = useCallback(() => {
@@ -1144,6 +1273,10 @@ function AgentCharacter({ agent }) {
         timerRef.current = setTimeout(doSchedule, 3000)
         return
       }
+      if (pendingDoorJourneyRef.current) {
+        timerRef.current = setTimeout(doSchedule, 1000)
+        return
+      }
 
       // Skip scheduling during group events — officeLife controls behavior
       if (agent.inGroupEvent) {
@@ -1160,7 +1293,8 @@ function AgentCharacter({ agent }) {
           movingStuckRef.current = 0
           pendingBehaviorRef.current = null
           socialTargetRef.current = null  // abort: clear social target so no stale face-on-arrival
-          store.abortAgentMovement(id, visualPosRef.current)
+          store.abortAgentMovement(id, visualPosRef.current, activeDoorJourneyRef.current)
+          activeDoorJourneyRef.current = null
           setIsWalking(false)
           if (hasRafHandle(rafRef.current)) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         } else {
@@ -1197,17 +1331,16 @@ function AgentCharacter({ agent }) {
         const current = visualPosRef.current
         const sameSpot = Math.abs(current.x - destination.x) < 5 && Math.abs(current.y - destination.y) < 5
         if (!sameSpot) {
-          const path = calculatePath(current, destination)
-          if (path.length > 0) {
-            willWalk = true
-            movingRef.current = true
-            pathRef.current = path.slice(1)
-            nudgeCountRef.current = 0
-            // Capture the social target so onWaypointReached can set facing on arrival.
-            socialTargetRef.current = (isSocialBehavior && socialPick) ? socialPick : null
-            store.setAgentJourney(id, destination)  // publish journey END (AVO-156 RC-3)
-            startWalkTo(path[0])
-          }
+          const journey = calculateJourney(current, destination)
+          const result = beginJourney({
+            destination,
+            journey,
+            kind: 'behavior',
+            onGranted: () => {
+              socialTargetRef.current = (isSocialBehavior && socialPick) ? socialPick : null
+            },
+          })
+          willWalk = result !== 'none'
         }
       }
       // Walk aborted (same spot or no path) — clear any stale social target ref.
@@ -1258,14 +1391,21 @@ function AgentCharacter({ agent }) {
 
     // ALWAYS schedule next — even if an error occurred above
     timerRef.current = setTimeout(doSchedule, nextDelay)
-  }, [id, startWalkTo, scheduleDeferred])
+  }, [beginJourney, id, scheduleDeferred])
 
   // Watch for group event movement targets
-  const lastGroupTargetRef = useRef(null)
   useEffect(() => {
     // When a group event clears (groupTarget → null), reset the dedup ref so the NEXT
     // group event always re-evaluates — even if it happens to assign the same coords.
-    if (!agentState?.groupTarget) { lastGroupTargetRef.current = null; return }
+    if (!agentState?.groupTarget) {
+      lastGroupTargetRef.current = null
+      const pending = pendingDoorJourneyRef.current
+      if (pending?.kind === 'group') {
+        useOfficeStore.getState().releaseAgentDoorClaims(id, pending.journeyId)
+        pendingDoorJourneyRef.current = null
+      }
+      return
+    }
     if (!visualPosRef.current) return
     const gt = agentState.groupTarget
     // Only trigger if target actually changed
@@ -1275,18 +1415,23 @@ function AgentCharacter({ agent }) {
     const current = visualPosRef.current
     const sameSpot = Math.abs(current.x - gt.x) < 5 && Math.abs(current.y - gt.y) < 5
     if (!sameSpot) {
-      const path = calculatePath(current, gt)
-      if (path.length > 0) {
+      const journey = calculateJourney(current, gt)
+      if (journey.waypoints.length > 0) {
         // Group event hijacks the walk — clear any pending social facing (R1: group event owns behavior)
         socialTargetRef.current = null
-        movingRef.current = true
-        pathRef.current = path.slice(1)
-        nudgeCountRef.current = 0
-        useOfficeStore.getState().setAgentJourney(id, gt)  // publish journey END (AVO-156 RC-3)
-        startWalkTo(path[0])
+        if (movingRef.current) {
+          const store = useOfficeStore.getState()
+          store.abortAgentMovement(id, current, activeDoorJourneyRef.current)
+          activeDoorJourneyRef.current = null
+          movingRef.current = false
+          pathRef.current = []
+          if (hasRafHandle(rafRef.current)) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
+          setIsWalking(false)
+        }
+        beginJourney({ destination: gt, journey, kind: 'group' })
       }
     }
-  }, [agentState?.groupTarget, startWalkTo, visualReady])
+  }, [agentState?.groupTarget, beginJourney, id, visualReady])
 
   // Start behavior loop — with watchdog to restart if chain dies
   useEffect(() => {
@@ -1321,7 +1466,8 @@ function AgentCharacter({ agent }) {
         // must never be applied to a LATER unrelated arrival (the next doSchedule resets
         // this anyway; the explicit clear keeps the invariant local and refactor-proof).
         socialTargetRef.current = null
-        useOfficeStore.getState().abortAgentMovement(id, visualPosRef.current)
+        useOfficeStore.getState().abortAgentMovement(id, visualPosRef.current, activeDoorJourneyRef.current)
+        activeDoorJourneyRef.current = null
         if (hasRafHandle(rafRef.current)) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
         setIsWalking(false)
         timerRef.current = setTimeout(doSchedule, 500)

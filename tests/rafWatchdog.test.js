@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import {
   collectArrivalNudgeClaims,
+  createDoorJourneyId,
   hasRafHandle,
   isDocumentFocused,
   RAF_STALL_RESTART_MS,
   scheduleRemovedWalkAbort,
+  shouldAbortExpiredDoorClaim,
   shouldRecordRafWatchdogRestart,
   shouldRestartRafWatchdog,
   shouldRestoreWalk,
@@ -97,6 +99,31 @@ describe('shouldRestoreWalk', () => {
   it('declines when the walk has no position or target to resume from', () => {
     expect(shouldRestoreWalk(true, null, pos, null)).toBe(false)
     expect(shouldRestoreWalk(true, pos, null, null)).toBe(false)
+  })
+})
+
+describe('shouldAbortExpiredDoorClaim', () => {
+  const granted = { state: 'granted', deadlineAt: 5000 }
+
+  it('aborts only a visible granted claim after its deadline', () => {
+    expect(shouldAbortExpiredDoorClaim(granted, 5001, 'visible')).toBe(true)
+    expect(shouldAbortExpiredDoorClaim(granted, 5000, 'visible')).toBe(false)
+  })
+
+  it('never transfers ownership while the document is hidden or the request is queued', () => {
+    expect(shouldAbortExpiredDoorClaim(granted, 9000, 'hidden')).toBe(false)
+    expect(shouldAbortExpiredDoorClaim({ state: 'queued', deadlineAt: 1 }, 9000, 'visible')).toBe(false)
+    expect(shouldAbortExpiredDoorClaim(null, 9000, 'visible')).toBe(false)
+  })
+})
+
+describe('createDoorJourneyId', () => {
+  it('creates stable fencing-token shapes without reusing a journey id', () => {
+    const first = createDoorJourneyId('dev')
+    const second = createDoorJourneyId('dev')
+    expect(first).toMatch(/^dev:door:\d+$/)
+    expect(second).toMatch(/^dev:door:\d+$/)
+    expect(second).not.toBe(first)
   })
 })
 
