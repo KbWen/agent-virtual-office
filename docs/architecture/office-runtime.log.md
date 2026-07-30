@@ -70,3 +70,14 @@ cross_ref: docs/architecture/monolith-extraction-map.md, docs/architecture/silen
 - [CONSTRAINT] First extraction PR for any seam must be behavior-preserving and reversible as one commit; no visual/layout behavior changes are allowed in the extraction-only step.
 - [CONSTRAINT] Silent catches must be classified as `expected-no-op`, `best-effort-dev-observable`, or `production-observable`. New bare `catch {}` additions must include a nearby comment naming the class or a test proving harmless degradation.
 - [DECISION] The user-reported full-office crop regression exposed a render-smoke blind spot: descendant count is not enough. `scripts/render-smoke.mjs` now checks a viewport matrix and visible top/bottom scene anchors.
+
+### [office-runtime][2026-07-31][codex/chore-upgrade-agentic-os-v1.8.17]
+source_spec: docs/specs/avo-187-temporal-doorway-claim.md
+source_sha: 018ef1ef2225c4ebb53cf9aee05c3eae1bb5e1b2
+
+- [DECISION] Use physical-door IDs, not direction or side, because both directions share one opening.
+- [DECISION] Atomically reserve every door in the complete route before movement; all-or-none removes partial ownership and multi-door deadlock without a traffic graph.
+- [DECISION] Preserve FIFO position across retries and fence ownership by `journeyId`, so contention is deterministic and stale callbacks cannot release a newer journey.
+- [CONSTRAINT] Timeout recovery must abort the owner at rendered truth before release; clock expiry alone can never transfer a live claim.
+- [CONSTRAINT] StrictMode/live teardown is not removal and cannot release door ownership.
+- [TRADEOFF] Full-route claims reduce throughput versus next-door claims; accept this bounded cost for the first version and reopen only with measured wait or owner game-feel evidence.

@@ -1,6 +1,6 @@
 ---
 title: "AVO-187 — Temporal Doorway Claim"
-status: frozen
+status: shipped
 classification: feature
 ticket: AVO-187
 created: 2026-07-31

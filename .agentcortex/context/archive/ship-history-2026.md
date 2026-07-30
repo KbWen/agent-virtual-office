@@ -16,7 +16,14 @@ Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 111 -> 112).
 
 Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 112 -> 113).
 
+Rotated 1 additional entry on 2026-07-31 (SSoT Update Sequence 113 -> 114).
+
 ---
+
+### Ship-chore-release-v1.6.3-2026-06-27 (office layout enrichment) · release v1.6.3
+
+- Release cutting the merged office-layout-enrichment work (PR #192, squash `fcf5ee1`) as **v1.6.3**: `package.json` 1.6.2→1.6.3 + CHANGELOG narrative (Unreleased → v1.6.3 "Fuller corners, honest windows"). No further app change. Lockfile root version left stale per convention. Tag + `npm publish` performed manually by owner.
+- Tests: Pass (full suite 2222, from #192)
 
 ### Ship-feat-office-layout-enrichment-2026-06-27 (meeting-room nook + hallway decor + interior-window fix)
 
