@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-07-30T17:30:00+08:00
-- **Update Sequence**: 110
+- **Last Updated**: 2026-07-30T21:36:00+08:00
+- **Update Sequence**: 111
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -83,6 +83,7 @@
   - [multi-agent] docs/specs/review-gate-waiting.md [Shipped]  *(AVO-107 / #112 — honest reframe: gate-desk "waiting" in-tray driven by awaiting-approval only; no queue/type fabrication; complements AVO-105 arrows; panel-decided)*
   - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
+  - [ci-infra] docs/specs/avo-190-soak-target-identity.md [Shipped]  *(AVO-190 — fail-closed AVO identity preflight for soak and overlap recorder targets)*
   - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
   - [ui-rendering] docs/specs/shareable-daily-card.md [Shipped]  *(AVO-115 / #31 — cozy pixel-art postcard share card; weather/mood hero + 1 number + warm caption; client-side canvas→PNG, opt-in ⚙ Share; honest (no event counting — Option C, derived from done+mood); store.js untouched)*
   - [ui-rendering] docs/specs/poke-acknowledge.md [Shipped]  *(AVO-158 — Poke / acknowledge micro-interaction (Model A, layered on existing click); honest in-place bob + real-status quip; ZERO position/status write; replaces rejected AVO-142 per ADR-005)*
@@ -166,6 +167,12 @@
 
 ## Ship History
 
+### Ship-fix-avo-190-soak-target-identity-2026-07-30
+
+- Shipped AVO-190 on `codex/chore-upgrade-agentic-os-v1.8.17`: `sim-soak` and `overlap-recorder` now share a fail-closed `/src/systems/store.js` identity preflight before Playwright launches. Unrelated HTTP 200 targets, timeouts, invalid URLs, and non-2xx probes fail with the rejected URL; only explicit connection refusal on the default origin permits the spawn fallback.
+- Commit: `fec1086` (`fix(soak): verify target identity before sampling`). Scope is limited to the soak scripts, shared probe, focused tests, and spec; no product runtime files changed.
+- Tests: Pass — Vitest 111/111 files and 2268/2268 tests; build PASS; fake HTTP 200 rejected by both consumers; forced-spawn soak 5 samples / 0 violations; Agentic OS validator 113 PASS / 0 FAIL.
+
 ### Ship-codex-chore-upgrade-agentic-os-v1.8.17-2026-07-30
 
 - Upgraded the vendored Agentic OS governance framework from **v1.8.11** (`cada3c4`) to the latest formal release **v1.8.17** (`102e19b`) from canonical upstream `KbWen/agentic-os.git`. Supply-chain/provenance handling kept the task at `hotfix`; the deployed diff contains 49 tracked framework updates and 2 managed additions, with zero product, dependency, or test-path changes.
@@ -241,14 +248,5 @@
 - **Release v1.6.2** cut in this chore PR: `package.json` 1.6.1→1.6.2 + CHANGELOG narrative. SSoT appended directly (guard bypassed deliberately — avoids the documented stale-receipt hazard). Tag + `npm publish` performed manually by owner.
 - Tests: Pass
 
-### Ship-feat-avo-186-cozy-visual-pass-2026-06-20 (PR #186 — declutter + warm-palette restyle) · release v1.6.1
-
-- Shipped **AVO-186** (quick-win, cosmetic). **VR-1 declutter**: decorative `<Plant>` 12→6 into a symmetric perimeter frame (dropped 4 redundant stacked pairs + the center-lounge crowder); plants carry zero status signal so fewer = pure noise removed. **VR-2 restyle** via a 5-lens design/game expert panel (cozy-interior / pixel-art / cozy-life-sim-game / color-art-director / honesty-adversary) → synthesizer; the adversary lens pulled the group back from full terracotta to a DESATURATED clay so the couch stays furniture-ground and agents stay the focal figures. Pure fill swaps (silhouettes/shading ramps unchanged): Couch grey-blue→clay ramp (base `#B97A4E` + cushions `#CC8C5E` + trim `#9A5E38` + arms `#A86B44`; component default param aligned to avoid a future half-recolor) · CoffeeMachine body `#444`→espresso `#5A4A3E` · WaterCooler housing `#ccc`→putty `#D8CDBE`. RoundTable nudge SKIPPED (panel gated it on "flat live"; it isn't). **NO signal-bearing colour touched** (windows/monitors/gate/kanban/rug hues/clocks).
-- Guard: new `tests/officeDecorationDensity.test.js` (plant count ∈ [4,6], no desk-zone plant, no <40px cluster). Origin: `docs/reviews/2026-06-20-audit.md` — a read-only delta audit that found no other actionable tech debt (god-files grew only marginally since v1.6.0).
-- Verify: full suite **2222 pass**; production build clean (484KB / 152KB gz); CI all green (Semgrep / render-smoke×2 / test 22+24 / pack-smoke / npm audit / TruffleHog); merged-main rendered live (6 plants + clay couch, 0 errors).
-- **Release v1.6.1** cut in this chore PR: `package.json` 1.6.0→1.6.1 + CHANGELOG narrative covering #173–186. SSoT appended directly (guard bypassed deliberately — avoids the documented stale-receipt hazard). Tag + `npm publish` performed manually by owner.
-- Tests: Pass
-
 > Older entries (66) are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.
-

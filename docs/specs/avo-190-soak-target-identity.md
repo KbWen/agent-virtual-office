@@ -1,6 +1,6 @@
 ---
 title: AVO-190 Soak Target Identity
-status: frozen
+status: shipped
 classification: quick-win
 primary_domain: ci-infra
 ---

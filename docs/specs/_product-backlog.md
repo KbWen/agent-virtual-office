@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-06-15
+last_updated: 2026-07-30
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -37,7 +37,7 @@ last_updated: 2026-06-15
 | AVO-187 | Door-crossing stack — agents pausing at a door are ALWAYS visually overlapped | product | office-runtime | **P1** | — | feature | Pending | **Honesty-critical, production-reachable.** `jitterDoorCrossing` offsets only PERPENDICULAR to travel → every door pins its travel axis at **exactly zero spread**; two agents at one door side are always ≤`DOOR_JITTER` (20px) apart — inside `STACK_DIST_PX` (30) **and** the 32×44 sprite ellipse. Its own comment cites the 2026-06-10 forensic (10/12 real stacks at `(240,386)`) — the coordinate `mainToLounge` **still pins today**; that fix turned a 0px point-stack into a 20px segment and never reached its own alarm. Measured 2026-07-16: **4/4 clean-CI soak stacks at x=585 exactly**. **NOT fixable by raising `DOOR_JITTER`** (opening ~50px; `isOnFloor`/`isOnObstacle` reject anything outside) — geometry cannot hold two agents 30px apart. Fix must be **temporal**: a door claim / one-at-a-time crossing (target-time deconfliction per ADR-004). **Needs an ADR.** Characterized by `tests/doorCrossingSeparation.test.js` (PR #202). |
 | AVO-188 | Abort sites leave a stale `isMoving: true` on a standing agent | product | data-path | P2 | — | quick-win | Pending | **Honesty bug.** force-unstick, the behavior watchdog, and the unmount cleanup each clear the local refs + `journeyTarget` but **never clear the store's `isMoving`** — so a motionless agent reports as moving. `AgentInspector` reads `isMoving` and lies. `setAgentArrived` is NOT the fix (it snaps `position` to `targetPosition` → teleports an agent that never got there); needs an abort-in-place action writing the agent's REAL position. Beware: `at` is a **live mutable ref** (`walkFrame` mutates vp in place) → must defensive-copy. |
 | AVO-189 | `shouldRecordRafWatchdogRestart` is structurally dead — reads 0 on a broken build | product | ci-infra | P3 | — | tiny-fix | Pending | Requires `consecutiveLostRestarts >= 2`, but `lostRafRestartRef` resets to 0 on **any** delivered frame → it can never reach 2. The `[watchdog]` dev warn never fires either. 22 spurious teardowns/150s produced **zero** diagnostics. **Never assert on `watchdogRestarts` in a test — `=== 0` passes on the broken build.** |
-| AVO-190 | `sim-soak` blind-reuses ANY server on :5173 without verifying it is AVO | product | ci-infra | P2 | — | quick-win | Pending | `sim-soak.mjs` (non-`--spawn` path) attaches to whatever answers on :5173. During the 2026-07-16 investigation :5173 was serving a **different project's dev server** — `npm run soak` (the documented command) would have soaked it and reported confident nonsense about AVO. `overlap-recorder.mjs` hardcodes :5173 with the same hazard. Verify app identity before attaching, or fail closed. |
+| AVO-190 | `sim-soak` blind-reuses ANY server on :5173 without verifying it is AVO | product | ci-infra | P2 | [Spec](avo-190-soak-target-identity.md) | quick-win | Shipped | Shared source-module identity probe now rejects unrelated or unproven targets before Playwright; only explicit connection refusal on the default origin permits spawning Vite. Commit `fec1086`. |
 
 > [!NOTE]
 > **Reality check (2026-06-15):** the planned-feature backlog is essentially exhausted. After the
