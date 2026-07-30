@@ -12,8 +12,8 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-07-30T21:36:00+08:00
-- **Update Sequence**: 111
+- **Last Updated**: 2026-07-30T23:42:00+08:00
+- **Update Sequence**: 112
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -84,6 +84,7 @@
   - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [ci-infra] docs/specs/avo-190-soak-target-identity.md [Shipped]  *(AVO-190 — fail-closed AVO identity preflight for soak and overlap recorder targets)*
+  - [data-path] docs/specs/avo-188-abort-movement-in-place.md [Shipped]  *(AVO-188 — aborted walks stop at rendered truth without stale motion or teleporting)*
   - [office-runtime] docs/specs/standing-overlap-deconfliction.md [Shipped]  *(AVO-156 — standing-stack五層根因: isWalking lifecycle + door jitter + journeyTarget + ellipse spacing + arrival nudge; live A/B 12→0 events)*
   - [ui-rendering] docs/specs/shareable-daily-card.md [Shipped]  *(AVO-115 / #31 — cozy pixel-art postcard share card; weather/mood hero + 1 number + warm caption; client-side canvas→PNG, opt-in ⚙ Share; honest (no event counting — Option C, derived from done+mood); store.js untouched)*
   - [ui-rendering] docs/specs/poke-acknowledge.md [Shipped]  *(AVO-158 — Poke / acknowledge micro-interaction (Model A, layered on existing click); honest in-place bob + real-status quip; ZERO position/status write; replaces rejected AVO-142 per ADR-005)*
@@ -167,6 +168,12 @@
 
 ## Ship History
 
+### Ship-fix-avo-188-abort-movement-in-place-2026-07-30
+
+- Shipped AVO-188 on `codex/chore-upgrade-agentic-os-v1.8.17`: one atomic store action stops aborted walks at a defensive copy of the rendered position, clears `isMoving` and `journeyTarget`, and aligns `targetPosition` without teleporting to an abandoned waypoint.
+- Force-unstick and behavior-watchdog use the action directly. True component removal defers one microtask; same-flush live teardown/setup clears the unmounted flag and keeps the existing restoration path intact. Commit: `ac07a4d`.
+- Tests: Pass — focused 67/67; Vitest 111/111 files and 2271/2271 tests; build PASS; forced-spawn soak 5 samples / 0 violations; Agentic OS validator 113 PASS / 0 FAIL.
+
 ### Ship-fix-avo-190-soak-target-identity-2026-07-30
 
 - Shipped AVO-190 on `codex/chore-upgrade-agentic-os-v1.8.17`: `sim-soak` and `overlap-recorder` now share a fail-closed `/src/systems/store.js` identity preflight before Playwright launches. Unrelated HTTP 200 targets, timeouts, invalid URLs, and non-2xx probes fail with the rejected URL; only explicit connection refusal on the default origin permits the spawn fallback.
@@ -239,13 +246,6 @@
 - Process: owner-directed; passed a 4-lens expert review (3 SHIP-WITH-NITS + 1 SHIP; all core laws PASS) then a separate UI + UX polish pass (stacked-rug alignment, nook tightening, work-room art dimmed so decor whispers near status). Owner then caught an over-layered duplicate set of meeting chairs (the `MeetingTable` component already draws its own 6 chairs; an extra `MEETING_CHAIRS` overlay had doubled them into "weird coating") — the redundant overlay was removed. All new objects carry ZERO status signal; the panel verified status legibility + honesty intact. Declined (out of scope / owner-directive): dim pre-existing whiteboard widgets, unify clickable-affordance cue, remove hallway plants (owner asked for "more objects").
 - Guard: `tests/officeDecorationDensity.test.js` plant cap 6→9 (6 perimeter + 3 dead-zone); the legibility (no desk-zone plant) + no-cluster assertions are UNCHANGED and green.
 - Verify: full suite **2222 pass**; midday + night headless renders **0 console errors**; visual confirmation via `.pet-shots` day/night/meeting-crop. (`preview_screenshot` is broken in this project — headless Playwright is the visual path.)
-- Tests: Pass
-
-### Ship-chore-release-v1.6.2-2026-06-23 (PRs #188/#189/#190 — agentic-os v1.8.1 + README cozy images + dialogue docs) · release v1.6.2
-
-- Docs + internal-maintenance release, **no runtime/app change**. Three merged PRs squashed to `main`: **#188** Agentic OS governance brain v1.5.2→v1.8.1 (new credential/safety layer, manifest `b172145`; external KB seam wired locally via gitignored `downstream-capabilities.yaml`, literal path); **#189** README hero/scene images regenerated from the cozy build (v1.6.1 declutter + warm-palette), daytime-staged so the hero stays sunny; **#190** dialogue/voice layer (Wave A, ADR-007) documented in README en+繁中 + a DESIGN_SPEC pointer.
-- Verify: all 3 PRs CI-green (Semgrep / render-smoke / test 22+24 / pack-smoke / npm audit / TruffleHog); merged-`main` verified against git (3 squash commits, no dup; manifest v1.8.1; dialogue present in README+zh; copilot file single). `validate.sh` fail=0.
-- **Release v1.6.2** cut in this chore PR: `package.json` 1.6.1→1.6.2 + CHANGELOG narrative. SSoT appended directly (guard bypassed deliberately — avoids the documented stale-receipt hazard). Tag + `npm publish` performed manually by owner.
 - Tests: Pass
 
 > Older entries (66) are archived, newest-first, in

@@ -1,6 +1,6 @@
 ---
 title: AVO-188 Abort Movement in Place
-status: frozen
+status: shipped
 classification: quick-win
 primary_domain: data-path
 ---

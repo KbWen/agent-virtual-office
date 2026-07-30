@@ -12,7 +12,16 @@ Rotated 2 additional entries on 2026-07-30 (SSoT Update Sequence 109 -> 110).
 
 Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 110 -> 111).
 
+Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 111 -> 112).
+
 ---
+
+### Ship-chore-release-v1.6.2-2026-06-23 (PRs #188/#189/#190 — agentic-os v1.8.1 + README cozy images + dialogue docs) · release v1.6.2
+
+- Docs + internal-maintenance release, **no runtime/app change**. Three merged PRs squashed to `main`: **#188** Agentic OS governance brain v1.5.2→v1.8.1 (new credential/safety layer, manifest `b172145`; external KB seam wired locally via gitignored `downstream-capabilities.yaml`, literal path); **#189** README hero/scene images regenerated from the cozy build (v1.6.1 declutter + warm-palette), daytime-staged so the hero stays sunny; **#190** dialogue/voice layer (Wave A, ADR-007) documented in README en+繁中 + a DESIGN_SPEC pointer.
+- Verify: all 3 PRs CI-green (Semgrep / render-smoke / test 22+24 / pack-smoke / npm audit / TruffleHog); merged-`main` verified against git (3 squash commits, no dup; manifest v1.8.1; dialogue present in README+zh; copilot file single). `validate.sh` fail=0.
+- **Release v1.6.2** cut in this chore PR: `package.json` 1.6.1→1.6.2 + CHANGELOG narrative. SSoT appended directly (guard bypassed deliberately — avoids the documented stale-receipt hazard). Tag + `npm publish` performed manually by owner.
+- Tests: Pass
 
 ### Ship-feat-avo-186-cozy-visual-pass-2026-06-20 (PR #186 — declutter + warm-palette restyle) · release v1.6.1
 
