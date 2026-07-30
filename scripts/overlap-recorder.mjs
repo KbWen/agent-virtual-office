@@ -5,14 +5,21 @@
 // ~12s ring buffer so the mechanism that brought them together is visible (leg-target hole?
 // group event? returnHome? social?). Default 12 minutes.
 import { chromium } from 'playwright-core'
+import { formatTargetIdentityError, inspectAvoViteTarget } from './soakTarget.mjs'
 
 const MINUTES = Number(process.argv[2] || 12)
+const configuredBaseUrl = process.env.SOAK_URL || 'http://localhost:5173'
+const targetIdentity = await inspectAvoViteTarget(configuredBaseUrl)
+if (targetIdentity.status !== 'match') {
+  console.error(`overlap-recorder ERROR: ${formatTargetIdentityError(configuredBaseUrl, targetIdentity)}`)
+  process.exit(1)
+}
 
 const browser = await chromium.launch({ headless: true }).catch(() =>
   chromium.launch({ headless: true, executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe' }))
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
 await page.addInitScript(() => { try { localStorage.setItem('office-onboarded', '1') } catch {} })
-await page.goto('http://localhost:5173/?lang=en', { waitUntil: 'domcontentloaded' })
+await page.goto(`${targetIdentity.baseUrl}/?lang=en`, { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('svg [data-agent-id]', { timeout: 15000 })
 await page.waitForTimeout(1000)
 

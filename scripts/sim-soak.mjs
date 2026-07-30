@@ -29,6 +29,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { evaluateSoak } from './soakInvariants.mjs'
 import { assessSoakCoverage } from './soakCoverage.mjs'
+import { formatTargetIdentityError, inspectAvoViteTarget } from './soakTarget.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
@@ -77,10 +78,18 @@ async function urlUp(url) {
 
 // ── Server: reuse SOAK_URL / a running :5173 dev server, else spawn vite ──────────────
 // SOAK_SPAWN=1 / --spawn skips reuse shortcuts — lets the CI spawn path be exercised locally.
-let baseUrl = FORCE_SPAWN ? null : (process.env.SOAK_URL || null)
+const explicitBaseUrl = FORCE_SPAWN ? null : (process.env.SOAK_URL || null)
+let baseUrl = explicitBaseUrl
+let targetIdentity = null
 let serverProc = null
 let serverExit = null
-if (!baseUrl && !FORCE_SPAWN && await urlUp('http://localhost:5173/')) baseUrl = 'http://localhost:5173'
+if (!baseUrl && !FORCE_SPAWN) {
+  const defaultUrl = 'http://localhost:5173'
+  targetIdentity = await inspectAvoViteTarget(defaultUrl, { timeoutMs: FETCH_ATTEMPT_TIMEOUT_MS })
+  if (targetIdentity.status === 'match') baseUrl = targetIdentity.baseUrl
+  else if (targetIdentity.status !== 'unreachable') failEarly(formatTargetIdentityError(defaultUrl, targetIdentity))
+  else targetIdentity = null
+}
 if (!baseUrl) {
   const viteBin = path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js')
   if (!existsSync(viteBin)) {
@@ -151,6 +160,13 @@ process.once('exit', () => {
   if (!serverProc?.pid || serverExit || process.platform === 'win32') return
   try { process.kill(-serverProc.pid, 'SIGKILL') } catch {}
 })
+
+targetIdentity ||= await inspectAvoViteTarget(baseUrl, { timeoutMs: serverProc ? 5000 : FETCH_ATTEMPT_TIMEOUT_MS })
+if (targetIdentity.status !== 'match') {
+  await cleanup()
+  failEarly(formatTargetIdentityError(baseUrl, targetIdentity))
+}
+baseUrl = targetIdentity.baseUrl
 
 let exitCode = 0
 try {
