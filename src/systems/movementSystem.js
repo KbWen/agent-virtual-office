@@ -641,18 +641,20 @@ function appendZoneRoute(path, from, to, zone) {
   for (const pt of routeWithinZone(from, to, zone)) pushPoint(path, pt)
 }
 
-export function calculatePath(from, to) {
+export function calculateJourney(from, to) {
   const fromZone = getZone(from.x, from.y)
   const toZone = getZone(to.x, to.y)
 
   if (fromZone === toZone) {
-    return routeWithinZone(from, to, fromZone)
+    return { waypoints: routeWithinZone(from, to, fromZone), doorIds: [] }
   }
 
   const path = []
+  const doorIds = []
   const exitDoor = ROUTE[fromZone]?.[toZone]
 
   if (exitDoor) {
+    doorIds.push(exitDoor)
     const sides = DOOR_SIDES[exitDoor]
     const rawFromSide = sides?.[fromZone] || DOORS[exitDoor]
     const exitToZone = toZone === 'mainOffice' || fromZone === 'mainOffice' ? toZone : 'mainOffice'
@@ -666,6 +668,7 @@ export function calculatePath(from, to) {
   if (fromZone !== 'mainOffice' && toZone !== 'mainOffice') {
     const entryDoor = ROUTE.mainOffice?.[toZone]
     if (entryDoor && entryDoor !== exitDoor) {
+      doorIds.push(entryDoor)
       const sides = DOOR_SIDES[entryDoor]
       const rawMainSide = sides?.mainOffice || DOORS[entryDoor]
       const rawToSide = sides?.[toZone] || DOORS[entryDoor]
@@ -678,7 +681,11 @@ export function calculatePath(from, to) {
 
   const last = path[path.length - 1] || from
   appendZoneRoute(path, last, to, toZone)
-  return path
+  return { waypoints: path, doorIds }
+}
+
+export function calculatePath(from, to) {
+  return calculateJourney(from, to).waypoints
 }
 
 // ─── Behavior → destination mapping ─────────────────────────────────

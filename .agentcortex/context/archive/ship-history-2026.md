@@ -8,7 +8,66 @@ plain paths so they do not resolve one level too shallow from this depth.
 
 Rotated 64 entries on 2026-07-10 (SSoT Update Sequence 105 -> 106).
 
+Rotated 2 additional entries on 2026-07-30 (SSoT Update Sequence 109 -> 110).
+
+Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 110 -> 111).
+
+Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 111 -> 112).
+
+Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 112 -> 113).
+
+Rotated 1 additional entry on 2026-07-31 (SSoT Update Sequence 113 -> 114).
+
+Rotated 1 additional entry on 2026-08-01 (SSoT Update Sequence 114 -> 115).
+
 ---
+
+### Ship-codex-product-action-strip-2026-07-02
+
+- Feature shipped: polished agent status surfaces and visual/copy clarity. Persistent blockers now surface in the control panel, activity-feed implementation artifacts are translated through an explicit reusable classifier, quiet agents collapse into a clean count, first-run setup hint readability improved, and local audit screenshots are ignored.
+- Commit: aeea422 feat(ui): polish agent status surfaces
+- Tests: Pass (focused Vitest 31, build, smoke, full suite 2246)
+
+### Ship-chore-release-v1.6.3-2026-06-27 (office layout enrichment) · release v1.6.3
+
+- Release cutting the merged office-layout-enrichment work (PR #192, squash `fcf5ee1`) as **v1.6.3**: `package.json` 1.6.2→1.6.3 + CHANGELOG narrative (Unreleased → v1.6.3 "Fuller corners, honest windows"). No further app change. Lockfile root version left stale per convention. Tag + `npm publish` performed manually by owner.
+- Tests: Pass (full suite 2222, from #192)
+
+### Ship-feat-office-layout-enrichment-2026-06-27 (meeting-room nook + hallway decor + interior-window fix)
+
+- Shipped office layout enrichment (quick-win, cosmetic, **decor-only — no movementSystem geometry touched**). Filled the two real dead zones found in a rendered-office audit: the meeting-room right column got a breakout nook (rug + couch + coffee table + plants); the entrance hallway got a gate-gap window + 2 framed pictures (new `<FramedArt>` component) + a reception water-cooler/plant corner; plus a 3rd meeting window, a meeting wall clock, and a night ceiling-light over the nook. **Owner-found correctness fix**: removed 4 "night-sky" windows wrongly mounted on the INTERIOR north wall (hallway is on the other side, not outdoors) + their `NightSky` moon/star clips → framed art + clock instead.
+- Process: owner-directed; passed a 4-lens expert review (3 SHIP-WITH-NITS + 1 SHIP; all core laws PASS) then a separate UI + UX polish pass (stacked-rug alignment, nook tightening, work-room art dimmed so decor whispers near status). Owner then caught an over-layered duplicate set of meeting chairs (the `MeetingTable` component already draws its own 6 chairs; an extra `MEETING_CHAIRS` overlay had doubled them into "weird coating") — the redundant overlay was removed. All new objects carry ZERO status signal; the panel verified status legibility + honesty intact. Declined (out of scope / owner-directive): dim pre-existing whiteboard widgets, unify clickable-affordance cue, remove hallway plants (owner asked for "more objects").
+- Guard: `tests/officeDecorationDensity.test.js` plant cap 6→9 (6 perimeter + 3 dead-zone); the legibility (no desk-zone plant) + no-cluster assertions are UNCHANGED and green.
+- Verify: full suite **2222 pass**; midday + night headless renders **0 console errors**; visual confirmation via `.pet-shots` day/night/meeting-crop. (`preview_screenshot` is broken in this project — headless Playwright is the visual path.)
+- Tests: Pass
+
+### Ship-chore-release-v1.6.2-2026-06-23 (PRs #188/#189/#190 — agentic-os v1.8.1 + README cozy images + dialogue docs) · release v1.6.2
+
+- Docs + internal-maintenance release, **no runtime/app change**. Three merged PRs squashed to `main`: **#188** Agentic OS governance brain v1.5.2→v1.8.1 (new credential/safety layer, manifest `b172145`; external KB seam wired locally via gitignored `downstream-capabilities.yaml`, literal path); **#189** README hero/scene images regenerated from the cozy build (v1.6.1 declutter + warm-palette), daytime-staged so the hero stays sunny; **#190** dialogue/voice layer (Wave A, ADR-007) documented in README en+繁中 + a DESIGN_SPEC pointer.
+- Verify: all 3 PRs CI-green (Semgrep / render-smoke / test 22+24 / pack-smoke / npm audit / TruffleHog); merged-`main` verified against git (3 squash commits, no dup; manifest v1.8.1; dialogue present in README+zh; copilot file single). `validate.sh` fail=0.
+- **Release v1.6.2** cut in this chore PR: `package.json` 1.6.1→1.6.2 + CHANGELOG narrative. SSoT appended directly (guard bypassed deliberately — avoids the documented stale-receipt hazard). Tag + `npm publish` performed manually by owner.
+- Tests: Pass
+
+### Ship-feat-avo-186-cozy-visual-pass-2026-06-20 (PR #186 — declutter + warm-palette restyle) · release v1.6.1
+
+- Shipped **AVO-186** (quick-win, cosmetic). **VR-1 declutter**: decorative `<Plant>` 12→6 into a symmetric perimeter frame (dropped 4 redundant stacked pairs + the center-lounge crowder); plants carry zero status signal so fewer = pure noise removed. **VR-2 restyle** via a 5-lens design/game expert panel (cozy-interior / pixel-art / cozy-life-sim-game / color-art-director / honesty-adversary) → synthesizer; the adversary lens pulled the group back from full terracotta to a DESATURATED clay so the couch stays furniture-ground and agents stay the focal figures. Pure fill swaps (silhouettes/shading ramps unchanged): Couch grey-blue→clay ramp (base `#B97A4E` + cushions `#CC8C5E` + trim `#9A5E38` + arms `#A86B44`; component default param aligned to avoid a future half-recolor) · CoffeeMachine body `#444`→espresso `#5A4A3E` · WaterCooler housing `#ccc`→putty `#D8CDBE`. RoundTable nudge SKIPPED (panel gated it on "flat live"; it isn't). **NO signal-bearing colour touched** (windows/monitors/gate/kanban/rug hues/clocks).
+- Guard: new `tests/officeDecorationDensity.test.js` (plant count ∈ [4,6], no desk-zone plant, no <40px cluster). Origin: `docs/reviews/2026-06-20-audit.md` — a read-only delta audit that found no other actionable tech debt (god-files grew only marginally since v1.6.0).
+- Verify: full suite **2222 pass**; production build clean (484KB / 152KB gz); CI all green (Semgrep / render-smoke×2 / test 22+24 / pack-smoke / npm audit / TruffleHog); merged-main rendered live (6 plants + clay couch, 0 errors).
+- **Release v1.6.1** cut in this chore PR: `package.json` 1.6.0→1.6.1 + CHANGELOG narrative covering #173–186. SSoT appended directly (guard bypassed deliberately — avoids the documented stale-receipt hazard). Tag + `npm publish` performed manually by owner.
+- Tests: Pass
+
+### Ship-fix-round2-leaks-and-guards-2026-06-19 (PR #179 — AVO-180 eviction leak + AVO-182 guards)
+
+- Shipped the verified, well-scoped items from the round-2 bug/tech-debt sweep (quick-win). **AVO-180**: the multi-session eviction site (`store.js`) now prunes the per-agent transient module state of an evicted dynamic worktree agent — `pruneRecentPicks(id)` (new export from `behaviorEngine.js`), `_storeRecentPicks.delete(id)`, and a cloned-then-deleted `recurringFailureLog[id]` (never mutates a published log). Mirrors `idleGapInfer`'s existing eviction prune; closes an unbounded-Map leak relevant to the owner's many-worktree workflow. +1 regression test (rfLog pruned on eviction). **AVO-182** (crash/corruption guards): `charName` null/non-string guard (was `charId.includes('~')` → throw; +2 tests) · `darken` non-`#RRGGBB` passthrough (was caching `#NaNNaNNaN`) · ambientSound gesture listeners `{once:true}`.
+- Deferred (catalogued, NOT in this PR): AVO-181 (blocked-family/VALID_ROLES set-consolidation — a multi-file refactor of honesty-critical code, do deliberately) · AVO-183 (two MED movement/POST edge cases — verify with a repro first) · AVO-184 (god-reducer extraction — explicit refactor, ADR/plan-gated).
+- Verify: full suite **2184 pass** (+3); build clean; EOL/whitespace clean. The round-2 sweep also dismissed the "dailyCard/lighting/ambientSound untested" FALSE POSITIVES (co-located `src/systems/*.test.js` exist).
+- Tests: Pass
+
+### Ship-fix-avo-174-title-inference-honesty-2026-06-19 (PR #174 — title channel can't fake blocked/done)
+
+- Shipped AVO-174 (quick-win, honesty). The document-title inference channel (`inferStatus.js` `listenTitleChanges`, wired at the channel list) injected `status:'blocked'` from any tab title matching `error|failed|blocked|stuck` and `status:'done'` from `done|complete|success|finished` — fabricating the most-alarming / a conclusive state from the weakest signal (e.g. an unrelated browser tab titled "build failed"). Removed both conclusive patterns; the channel is now capped to the working role-hints only. Extracted a pure `classifyTitle(title)` (exported) that can only ever return `status:'working'` or null; `listenTitleChanges` uses it.
+- Verify: new `tests/titleInference.test.js` (working-hint regression + "never blocked/done" + null cases); **test-the-test verified** (re-adding the blocked pattern fails the honesty assertion). Full suite **2172 pass** (+3); build clean.
+- Tests: Pass
 
 ### Ship-fix-honesty-a11y-bugs-2026-06-19 (PR #173 — AVO-171/172/173 + AVO-175/176/177 + audit catalogue)
 

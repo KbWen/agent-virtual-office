@@ -184,4 +184,30 @@ describe('journeyTarget — landing spots are visible to other destination picke
     useOfficeStore.getState().setAgentJourney(id, null)
     expect(useOfficeStore.getState().agents[id].journeyTarget).toBeNull()
   })
+
+  it('store: abortAgentMovement stops at the rendered position without teleporting or aliasing', () => {
+    useOfficeStore.getState().initAgents?.()
+    const id = Object.keys(useOfficeStore.getState().agents)[0]
+    const rendered = { x: 333, y: 277 }
+    const abandonedTarget = { x: 700, y: 500 }
+
+    useOfficeStore.getState().setAgentJourney(id, abandonedTarget)
+    useOfficeStore.getState().setAgentTarget(id, abandonedTarget)
+    useOfficeStore.getState().abortAgentMovement(id, rendered)
+
+    const agent = useOfficeStore.getState().agents[id]
+    expect(agent).toMatchObject({
+      position: rendered,
+      targetPosition: rendered,
+      isMoving: false,
+      journeyTarget: null,
+    })
+    expect(agent.position).not.toBe(rendered)
+    expect(agent.targetPosition).not.toBe(rendered)
+    expect(agent.position).not.toBe(agent.targetPosition)
+    expect(agent.position).not.toEqual(abandonedTarget)
+
+    rendered.x = 999
+    expect(useOfficeStore.getState().agents[id].position).toEqual({ x: 333, y: 277 })
+  })
 })

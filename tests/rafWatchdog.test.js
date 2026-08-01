@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import {
   collectArrivalNudgeClaims,
+  createDoorJourneyId,
   hasRafHandle,
   isDocumentFocused,
   RAF_STALL_RESTART_MS,
+  scheduleRemovedWalkAbort,
+  shouldAbortExpiredDoorClaim,
   shouldRecordRafWatchdogRestart,
   shouldRestartRafWatchdog,
   shouldRestoreWalk,
@@ -41,8 +44,9 @@ describe('shouldRecordRafWatchdogRestart', () => {
     expect(shouldRecordRafWatchdogRestart(false, false, 5)).toBe(false)
   })
 
-  it('waits for repeated focused lost chains before surfacing a dev diagnostic', () => {
-    expect(shouldRecordRafWatchdogRestart(false, true, 1)).toBe(false)
+  it('records the first focused lost-chain restart', () => {
+    expect(shouldRecordRafWatchdogRestart(false, true, 0)).toBe(false)
+    expect(shouldRecordRafWatchdogRestart(false, true, 1)).toBe(true)
     expect(shouldRecordRafWatchdogRestart(false, true, 2)).toBe(true)
   })
 })
@@ -95,6 +99,57 @@ describe('shouldRestoreWalk', () => {
   it('declines when the walk has no position or target to resume from', () => {
     expect(shouldRestoreWalk(true, null, pos, null)).toBe(false)
     expect(shouldRestoreWalk(true, pos, null, null)).toBe(false)
+  })
+})
+
+describe('shouldAbortExpiredDoorClaim', () => {
+  const granted = { state: 'granted', deadlineAt: 5000 }
+
+  it('aborts only a visible granted claim after its deadline', () => {
+    expect(shouldAbortExpiredDoorClaim(granted, 5001, 'visible')).toBe(true)
+    expect(shouldAbortExpiredDoorClaim(granted, 5000, 'visible')).toBe(false)
+  })
+
+  it('never transfers ownership while the document is hidden or the request is queued', () => {
+    expect(shouldAbortExpiredDoorClaim(granted, 9000, 'hidden')).toBe(false)
+    expect(shouldAbortExpiredDoorClaim({ state: 'queued', deadlineAt: 1 }, 9000, 'visible')).toBe(false)
+    expect(shouldAbortExpiredDoorClaim(null, 9000, 'visible')).toBe(false)
+  })
+})
+
+describe('createDoorJourneyId', () => {
+  it('creates stable fencing-token shapes without reusing a journey id', () => {
+    const first = createDoorJourneyId('dev')
+    const second = createDoorJourneyId('dev')
+    expect(first).toMatch(/^dev:door:\d+$/)
+    expect(second).toMatch(/^dev:door:\d+$/)
+    expect(second).not.toBe(first)
+  })
+})
+
+describe('scheduleRemovedWalkAbort', () => {
+  it('aborts a true removal at a defensive copy of the rendered position', async () => {
+    const isUnmountedRef = { current: true }
+    const position = { x: 123, y: 234 }
+    let stoppedAt = null
+
+    scheduleRemovedWalkAbort(isUnmountedRef, position, (next) => { stoppedAt = next })
+    position.x = 999
+    await Promise.resolve()
+
+    expect(stoppedAt).toEqual({ x: 123, y: 234 })
+    expect(stoppedAt).not.toBe(position)
+  })
+
+  it('does not abort a live teardown that reconnects in the same flush', async () => {
+    const isUnmountedRef = { current: true }
+    let called = false
+
+    scheduleRemovedWalkAbort(isUnmountedRef, { x: 1, y: 2 }, () => { called = true })
+    isUnmountedRef.current = false
+    await Promise.resolve()
+
+    expect(called).toBe(false)
   })
 })
 

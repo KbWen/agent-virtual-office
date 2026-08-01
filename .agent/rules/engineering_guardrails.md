@@ -93,7 +93,7 @@ Before executing any implementation step, AI MUST internally assess and state:
 
 **Narrative vs structured receipt**: "Silent above 90%" means no free-text narrative or chat prose. It does NOT mean silent in structured phase outputs — `/plan`, `/implement`, and `/ship` compact blocks MUST always include a `Confidence:` field (e.g., `Confidence: 95% — high`) so the gate is auditable in the Work Log. This keeps chat output terse while making the gate traceable.
 
-### §4.5 Anti-Rationalization Rule
+### 4.5 Anti-Rationalization Rule
 
 Before emitting any verdict (phase pass/fail, classification, completion claim), the agent MUST form conclusions from evidence first — not construct evidence to support a pre-formed conclusion. Operationally: every PASS verdict requires a traceable evidence citation (`file:line`, test name, or tool output) **written to the Work Log before the verdict appears in the same response**. A narrative argument with no concrete citation is a rationalization, not evidence. If no citation can be written to the Work Log first, the verdict MUST be `UNPROVEN` until evidence is recorded.
 
@@ -233,16 +233,16 @@ To prevent Work Log bloat and premature context compaction, agents MUST NOT past
 
 ### 8.2 External Tool Delegation Protocol
 
-External CLI tools (e.g., `ask-openrouter`, `codex`) are **OPTIONAL accelerators**. Projects MAY operate without any of them.
+External CLI tools (e.g., `ask-openrouter`, `codex`, `claude`) are **OPTIONAL accelerators**; projects MAY operate without any.
 
-**Pre/Post-Flight (Mandatory for all external tool invocations)**:
+**Pre/Post-Flight (mandatory, canonical order)**:
 
 - **Pre-Flight** (in order — fail fast):
-  1. **Cost-Tier Confirmation** (memory-only): low-cost → auto-execute; high-cost (quality/max profile) → confirm with user first.
-  2. Update Work Log with `Executor: <tool-name>` (only if cost-tier passes).
-  3. **Availability Check (Silent)**: run health check (e.g., `python -m ask_openrouter --help`, `codex --version`). If unavailable: **silently fall back** to AI-native execution. DO NOT warn user. DO NOT suggest installation. Cache per session.
-- **Post-Flight**: Read tool output, verify scope alignment, update Work Log, apply Gate Check per §10.2.
-- External tool output is treated as **Junior Tool output** — AI MUST review before accepting.
+  1. **Cost-Tier** (memory-only): low-cost → auto-execute; high-cost → confirm with user first.
+  2. Record `Requested Executor: <tool>` in the Work Log **before** probing availability, then **Baseline Capture** the worktree (`git status --porcelain` + `git diff`) so scope reverts can tell executor edits from files already **dirty at baseline**.
+  3. **Availability (silent)**: health-check the tool; if unavailable, silently fall back for *implicit* acceleration (no install prompt; cache per session), but an *explicit* executor request MUST **disclose** the fallback (final handoff at latest). Record `Actual Executor: <tool | native>` (+ reason when it differs from Requested).
+- **Post-Flight**: read output, verify scope, update Work Log, Gate Check per §10.2. On **abnormal exit** (timeout / nonzero / kill): STOP retries, wait for termination, re-derive state from the baseline diff, record partial state, reconcile explicitly before re-invoking. Never whole-file-revert (`git checkout -- <path>`) a path **dirty at baseline** — reverse only executor hunks or escalate.
+- External tool output = **Junior Tool output** — AI MUST review before accepting.
 
 ## 9. Intent Safety Rules
 
@@ -283,10 +283,6 @@ Agentic OS deploys workflows and skills into downstream projects. Those projects
 3. **Natural language routing**: When AI receives natural language that could map to either an Agentic OS phase or a user-defined command, AI MUST check: "Is the user talking about the Agentic OS governance process, or about their project-specific action?" If ambiguous, ask.
 4. **Governance still applies**: User-defined workflows and skills are not exempt from Agentic OS governance. Phase order, gates, and evidence requirements still apply — but the user's custom logic drives the implementation, not Agentic OS's.
 
-### 9.5 Core Principle
->
-> When intent is unclear, ASK. Never guess. Never proceed.
-
 ## 10. vNext Governance & Classification
 
 ### 10.1 Escalation Rules
@@ -306,12 +302,14 @@ Agentic OS deploys workflows and skills into downstream projects. Those projects
 | Category | Mandatory Gates | Min Evidence Required |
 | --- | --- | --- |
 | **tiny-fix** | classify → plan (inline) → execute | diff summary + 1-line verification |
-| **quick-win** | bootstrap → check Spec Index → plan → implement → evidence → ship (review and test are optional when evidence is inline) | diff + before/after behavior statement |
-| **feature** | bootstrap → spec → plan → implement → review → test → handoff → ship | test output + verifiable demo steps |
-| **architecture-change** | bootstrap → ADR → spec → plan → implement → review → test → handoff → ship | migration plan + rollback verification |
+| **quick-win** | bootstrap → check Spec Index (advisory, no gate receipt) → plan → implement → evidence → ship (review and test are optional when evidence is inline) | diff + before/after behavior statement |
+| **feature** | bootstrap → spec (advisory, no gate receipt) → plan → implement → review → test → handoff → ship | test output + verifiable demo steps |
+| **architecture-change** | bootstrap → ADR (advisory, no gate receipt) → spec (advisory, no gate receipt) → plan → implement → review → test → handoff → ship | migration plan + rollback verification |
 | **hotfix** | bootstrap → research (advisory, no gate receipt) → plan → implement → review → test → ship | root cause + fix verification + retro |
 
 AI self-enforces the phase order above. Users may invoke phases via slash commands (as shortcuts) or natural language.
+
+**Receipt vocabulary is the 7 gate phases** — bootstrap, plan, implement, review, test, handoff, ship. Entries marked *(advisory, no gate receipt)* are evidenced by their artifact (a frozen spec, an ADR file, a Spec Index read), never by a `Gate:` line; writing one for them is rejected by the validator's progression check. The transition table also permits `implement → test` as a reverse-edge accommodation — review-before-test remains the order above, held by the stale-review check rather than by the edge list.
 
 For non-`tiny-fix` Work Logs, the minimum runtime contract is:
 
@@ -361,8 +359,8 @@ If a section is not applicable, write `none` instead of omitting it. This keeps 
 When AI detects a task is nearing completion (e.g., user says "done", "完成了", "差不多了", or AI has finished all planned steps), AI MUST self-check BEFORE responding:
 
 1. Is the task classified as `quick-win` or higher?
-2. Has the handoff phase been executed? (Check: does Work Log have a `## Resume` block?)
-3. Has the retro phase been executed? (Check: does Work Log have a `## Lessons` block?)
+2. Has the handoff phase been executed? (Check: does `## Resume` hold more than `none`? The template ships the heading, so presence alone proves nothing.)
+3. Has the retro phase been executed? (Check: does `## Lessons` hold more than `none`?)
 
 **For `feature` / `architecture-change`**: If handoff or retro is missing, AI MUST remind: "📋 Before closing: handoff and retro haven't run yet. Want me to proceed with them now?"
 
@@ -433,4 +431,4 @@ Acceptable answers: revert commit SHA, feature-flag toggle, migration rollback s
   - **T3 named human observer**: name the consumer + record a 1-line unmeasurable-rationale.
 - External citations (standards, research) are supporting metadata on any tier — never a tier by themselves. No feasible tier → do NOT add the rule; prefer deletion.
 - Governance-rule-introducing specs declare `signal_tier:` in frontmatter (`none` when the spec adds no new rule) — an advisory validator WARN checks presence.
-- Existing rules are grandfathered; retrofit opportunistically (use `docs/guides/delete-bias-workflow.md` to prove a rule is load-bearing before deleting it).
+- Per ADR-011, grandfathering has ENDED for the four phase-entry surfaces (AGENTS.md, engineering_guardrails.md, security_guardrails.md, shared-contracts.md): each directive there carries an explicit tier in the enumeration (`docs/reviews/2026-07-19-phase-entry-directive-enumeration.md`), growth capped by `tests/ci/test_directive_count_ratchet.py`. Elsewhere, rules stay grandfathered — retrofit opportunistically via `docs/guides/delete-bias-workflow.md`.
