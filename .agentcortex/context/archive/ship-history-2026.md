@@ -18,7 +18,15 @@ Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 112 -> 113).
 
 Rotated 1 additional entry on 2026-07-31 (SSoT Update Sequence 113 -> 114).
 
+Rotated 1 additional entry on 2026-08-01 (SSoT Update Sequence 114 -> 115).
+
 ---
+
+### Ship-codex-product-action-strip-2026-07-02
+
+- Feature shipped: polished agent status surfaces and visual/copy clarity. Persistent blockers now surface in the control panel, activity-feed implementation artifacts are translated through an explicit reusable classifier, quiet agents collapse into a clean count, first-run setup hint readability improved, and local audit screenshots are ignored.
+- Commit: aeea422 feat(ui): polish agent status surfaces
+- Tests: Pass (focused Vitest 31, build, smoke, full suite 2246)
 
 ### Ship-chore-release-v1.6.3-2026-06-27 (office layout enrichment) · release v1.6.3
 

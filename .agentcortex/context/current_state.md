@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-07-31T04:20:00+08:00
-- **Last Verified**: 2026-07-31
-- **Update Sequence**: 114
+- **Last Updated**: 2026-08-01T12:20:00+08:00
+- **Last Verified**: 2026-08-01
+- **Update Sequence**: 115
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -172,6 +172,11 @@
 
 ## Ship History
 
+### Ship-pr-204-ci-release-gates-2026-08-01
+
+- Cleared PR #204 release gates with a lockfile-only PostCSS 8.5.18 security patch and an intentional AVO-187 bundle-budget rebase to the measured 496,504-byte production bundle. No product source or dependency range changed. Commit: `cfabe93`.
+- Tests: Pass — local npm audit 0 vulnerabilities, PostCSS 8.5.18, build/bundle gate, and 2295/2295 tests; GitHub CI #451 and Security Scanning #360 passed test (22/24), pack/render/soak smoke, npm audit, Semgrep, and TruffleHog.
+
 ### Ship-avo-187-temporal-doorway-claim-2026-07-31
 
 - Shipped AVO-187 on `codex/chore-upgrade-agentic-os-v1.8.17`: atomic full-route physical-door claims serialize both directions with stable FIFO tickets, journey fencing, complete lifecycle release, and rendered-truth timeout/dynamic-removal aborts. Commit: `018ef1e`.
@@ -243,12 +248,6 @@
 - Release cutting the merged Phase-1 product-action-strip polish (PR #196, squash `dacb682`) as **v1.6.4**: `package.json` 1.6.3→1.6.4 + CHANGELOG narrative ("Clearer signals, plainer words"). No further app change. Lockfile root version left stale per convention. Git tag `v1.6.4` created + pushed by the agent (annotated, on release commit `d7911e0`).
 - Scope note: this branch's Phase-2 in-repo portable-core layer (34-subpath package API + `.mjs` mirrors) was PARKED not merged per **ADR-009** (owner Option A — AVO stays a local, unpublished app; the reusable core is deferred to a clean-room copy-out into a NEW repo if a second consumer firms up). PR #195 closed as the parked reference; self-review findings F1–F9 preserved in ADR-009 (F1/F4 honesty-critical).
 - Tests: Pass (full suite 2251, from #196; CI 7/7 green — Semgrep / render-smoke / test 22+24 / pack-smoke / npm audit / TruffleHog)
-
-### Ship-codex-product-action-strip-2026-07-02
-
-- Feature shipped: polished agent status surfaces and visual/copy clarity. Persistent blockers now surface in the control panel, activity-feed implementation artifacts are translated through an explicit reusable classifier, quiet agents collapse into a clean count, first-run setup hint readability improved, and local audit screenshots are ignored.
-- Commit: aeea422 feat(ui): polish agent status surfaces
-- Tests: Pass (focused Vitest 31, build, smoke, full suite 2246)
 
 > Older entries (66) are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.
