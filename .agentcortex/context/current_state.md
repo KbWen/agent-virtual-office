@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-08-01T12:20:00+08:00
-- **Last Verified**: 2026-08-01
-- **Update Sequence**: 115
+- **Last Updated**: 2026-08-03T23:30:00+08:00
+- **Last Verified**: 2026-08-03
+- **Update Sequence**: 116
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -22,7 +22,7 @@
   - docs/adr/ADR-004-no-per-frame-agent-separation.md — AVO-144 resolved by decision: per-frame separation rejected (3-lens panel); re-open conditions recorded
   - docs/adr/ADR-005-no-user-drag-to-move-agents.md — AVO-142 rejected by decision: user drag-to-move rejected (4-lens panel unanimous); position=state honesty; interaction redirected to AVO-158 Poke; re-open conditions recorded
   - docs/adr/ADR-006-no-observability-cost-dashboard-scope.md — AVO is not an observability/cost dashboard; Cancels off-mission AVO-109/113/114/116/118/119/120 + descopes AVO-108 $ remainder; conditions for opening a NEW item recorded
-  - docs/adr/ADR-007-dialogue-channel-separation-and-honesty-gate.md — dialogue layer: bubble=voice / status=symbol+ring (detail→inspector, blocked=exception) + open-ended non-conclusive content rule + inter-agent honesty gate G1–G10 (reject relationship-memory); applies_to: src/systems/{banter,behaviorEngine,officeLife,contextBubble}, src/components/{AgentCharacter,BehaviorBubble}, src/locales/*.json
+  - docs/adr/ADR-007-dialogue-channel-separation-and-honesty-gate.md — dialogue layer: bubble=voice / status=symbol+ring (detail→inspector, blocked=exception) + open-ended non-conclusive content rule + inter-agent honesty gate G1–G10 (reject relationship-memory); applies_to: src/systems/{roleArchetype,behaviorEngine,officeLife,contextBubble}, src/components/{AgentCharacter,BehaviorBubble}, src/locales/*.json
   - docs/adr/ADR-008-no-fabricated-need-ambient-honesty.md — ambient/companion honesty rule: no fabricated need/engagement/emotional-state (N1–N7 checklist: anti decay/streak/loot-for-time-open; pet hides on blocker incl. awaiting-approval; no unbound decorative channel; degrade to honest neutral; real-clock-only variety; no engagement notification); consolidates ADR-004/005/006/007; closes backlog AVO-166
   - docs/adr/ADR-009-no-in-repo-portable-core-extraction.md — portable status-core extraction stays OUT of AVO (deferred to a clean-room NEW repo; AVO untouched, unpublished). `codex/product-action-strip` PR #195 Phase-1 UI polish ships; Phase-2 in-repo package API (34 subpaths / .mjs mirrors / manifest) parked-not-merged. YAGNI/REDUCE + no npm consumer + 88-byte bundle headroom; preserves Phase-2 findings F1–F9 for the future extraction (F1/F4 honesty-critical). Re-open: a concrete consumer project is ready to depend on the core
   - docs/adr/ADR-010-atomic-door-route-claims.md — AVO-187 shipped atomic full-route physical-door claims with FIFO fairness and fenced lifecycle; extends ADR-004; applies_to: movementSystem, store, AgentCharacter, doorway tests and soak
@@ -172,6 +172,20 @@
 
 ## Ship History
 
+### Ship-chore-release-v1.6.5-2026-08-03 (npx project-root fix + maintenance sweep) · release v1.6.5
+
+- Release cutting the merged npx/project-root correctness work as **v1.6.5**: `package.json` 1.6.4→1.6.5 + CHANGELOG narrative ("It works where you actually run it") + Ship History. The stale `package-lock.json` root version (1.4.0, unchanged since v1.4.0) was corrected to 1.6.5 in the same commit — it is a metadata field npm regenerates, and leaving it skewed was a standing doc/description inconsistency the owner asked to clear. Git tag `v1.6.5` created + pushed by the agent (annotated, on the release commit).
+- Covers PRs #198–#205 since v1.6.4: the npx hook-filtering fix (#205), AVO-187/188/189/190 doorway reliability + Agentic OS v1.8.17 (#204), the sim-soak gate repair (#202), and SSoT/governance maintenance (#198–#200, #203).
+- Scope note: GitHub Releases still has no release page for v1.6.2–v1.6.4 (tags exist). Owner decided against backfilling; only v1.6.5 gets a release page. Recorded here so the gap is not mistaken for missing tags.
+
+### Ship-fix-npx-project-root-2026-08-03 (PR #205 — the office was blind under the documented npx path)
+
+- Shipped as squash `89ff577`. `bin/cli.js` spawns both servers with `cwd` set to the PACKAGE root, so under `npx` their `process.cwd()` is the npx cache dir. Session files are matched against that root while the hooks stamp `_cwd` with the real project — so **every hook-written status file was discarded as foreign** and the office fell back to file-watcher data (`source: 'file-watcher'`, `_hint: 'no-hooks'`, labels degraded to raw `.jsonl` filenames). Status visibility, the product's core value, was dead on the documented install path. Diagnosed by external contributor @whoffmandesign in PR #201.
+- `resolveProjectRoot()` now lives in `src/server/scanSessions.mjs` — the module that owns the `_cwd` matching contract and is imported by both servers, so the two cannot drift. `bin/cli.js` forwards the invoking cwd as `OFFICE_PROJECT_ROOT` on **both** spawn sites; an explicit value wins (multi-worktree).
+- **Two gaps beyond #201, both proven not asserted.** (a) The original patch converted only the 6 read sites; both POST handlers stamp `_cwd` themselves, so a read-only fix makes the server filter out its own `POST /api/status` / `/api/event` writes — trading the hook path for the webhook path. Simulated: the read-only variant fails `serverProjectRootE2E > reads back its own POSTed status`. (b) `server.mjs` (the `serve`/Docker path) had all 8 identical sites and was equally broken.
+- Also swept: `tests/agentInspector.test.js` mixed fixed `+08:00` ISO literals with a LOCAL-time `dayKey`, so 2 cases failed on any host outside UTC+8/UTC — the same defect this file already fixed once for CI, never swept. And doc drift: README (en+zh-TW), ARCHITECTURE, INTEGRATIONS, DEPLOYMENT env table, ADR-002 all stated the filter keys off `process.cwd()`; ADR-007 `applies_to` pointed at `src/systems/banter.js`, a file that never existed.
+- Tests: Pass — Vitest 114/114 files and 2306/2306 tests under TZ = UTC, America/Los_Angeles, Pacific/Kiritimati (UTC+14), Pacific/Midway (UTC-11), Europe/Berlin; both new test files verified RED on pre-fix source; build PASS with the bundle unchanged at 496.50 kB; validator `pass=112 warn=8 fail=0 skip=4`; CI 7/7.
+
 ### Ship-pr-204-ci-release-gates-2026-08-01
 
 - Cleared PR #204 release gates with a lockfile-only PostCSS 8.5.18 security patch and an intentional AVO-187 bundle-budget rebase to the measured 496,504-byte production bundle. No product source or dependency range changed. Commit: `cfabe93`.
@@ -234,20 +248,5 @@
 - **Upstream**: the `validate.sh` exit-141 SIGPIPE abort (unfixed in v1.8.11) is reported as `KbWen/agentic-os` issue #336, with root cause, a reproduction, and three suggested fixes.
 - Evidence: `check_ssot_caps.py` -> `ssot caps OK - ship history 10/10, spec index 30/30`; `validate.ps1` (pwsh 7) fail=0; vitest 2251 passed; build clean.
 
-### Ship-chore-upgrade-agentic-os-v1.8.11-2026-07-10 (governance brain v1.8.1 -> v1.8.11)
-
-- Upgraded the vendored Agentic OS brain from **v1.8.1** (`source_commit b172145`) to **v1.8.11** (`cada3c4`) from canonical upstream `KbWen/agentic-os.git`. Classified `hotfix` (supply-chain/provenance escalation: the deploy replaces `.agentcortex/bin/deploy.sh` and regenerates `.agentcortex-manifest`). Commits `442039d` (archival) + `b84330e` (deploy). Cache aligned by `checkout cada3c4` on a verified-clean tree, so `reset --hard` was never needed.
-- Deploy: `195 updated / 2 skipped / 5 new / 1 removed`; git sees 49 real modifications (remainder are EOL-normalized no-ops). Team-owned `current_state.md` + `.claude/settings.json` SKIPped and preserved; both `.acx-incoming` sidecars inspected then discarded. Orphan `.agent/workflows/superpowers-playbook.md` removed. New surfaces: `/ask-local`, `/govern-audit`, `check_ssot_caps.py`.
-- Evidence: `validate.ps1` (pwsh 7) `pass=98 -> 100, warn=17, fail=0, skip=4`; vitest `2251 passed (108 files)`; `vite build` clean. The deploy touched no `src/`, `public/`, or `tests/` file.
-- Value: v1.8.4 deploy data-loss fix (a preserved file's baseline now records the upstream hash, not the user's, so a later deploy cannot silently overwrite a customization); **v1.8.9 Design Gate accepts a committed Markdown/ASCII wireframe (`docs/design/<screen>.md`) as a valid design artifact** - UI planning no longer dead-ends without a paid DSoT tool; v1.8.9 Claude same-turn continuation; v1.8.10 drops a contradictory guardrails required-read from 10 command stubs; v1.8.7 Windows `guard_context_write` lock fix; v1.8.7 chain-aware Global Lessons archival unfreezes the 20/20-capped registry.
-- **Known gap, NOT fixed upstream**: `validate.sh` under git-bash aborts (exit 141 / SIGPIPE) on any work log larger than the 64 KB pipe buffer - `set -euo pipefail` plus a Python matcher that breaks early - and separately exhausts Windows fork resources on a full run. **On Windows use `validate.ps1` under pwsh 7.** The trigger, `work/codex-product-action-strip.md` (98,825 B, shipped but never cleaned up), is archived at `archive/work/codex-product-action-strip-20260704-full.md`; it holds the 2026-07-04 PR #195 final review, Red Team Findings, and Resume block that the compacted 2026-07-02 archive lacks.
-- New advisories from `check_ssot_caps.py` (printed indented under a `[PASS]`, never a FAIL): Ship History 73 entries (cap 10), Spec Index 43 entries (cap 30). Rotation deferred and recorded here rather than silently dropped.
-
-### Ship-chore-release-v1.6.4-2026-07-04 (product action strip Phase-1) · release v1.6.4
-
-- Release cutting the merged Phase-1 product-action-strip polish (PR #196, squash `dacb682`) as **v1.6.4**: `package.json` 1.6.3→1.6.4 + CHANGELOG narrative ("Clearer signals, plainer words"). No further app change. Lockfile root version left stale per convention. Git tag `v1.6.4` created + pushed by the agent (annotated, on release commit `d7911e0`).
-- Scope note: this branch's Phase-2 in-repo portable-core layer (34-subpath package API + `.mjs` mirrors) was PARKED not merged per **ADR-009** (owner Option A — AVO stays a local, unpublished app; the reusable core is deferred to a clean-room copy-out into a NEW repo if a second consumer firms up). PR #195 closed as the parked reference; self-review findings F1–F9 preserved in ADR-009 (F1/F4 honesty-critical).
-- Tests: Pass (full suite 2251, from #196; CI 7/7 green — Semgrep / render-smoke / test 22+24 / pack-smoke / npm audit / TruffleHog)
-
-> Older entries (66) are archived, newest-first, in
+> Older entries (68) are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.

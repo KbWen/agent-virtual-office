@@ -5,6 +5,46 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.5 — 2026-08-03 — It works where you actually run it
+
+A correctness release. The headline fix is embarrassing and worth stating plainly: launched the way
+the README tells you to, the office could not see your agents at all.
+
+### Fixed
+
+- **The office shows your agents over `npx` again** — launched via `npx agent-virtual-office`, every
+  hook-written status file was discarded as belonging to "another project", so the banner sat on
+  *"No agent signal yet"* and agent names degraded to raw `.jsonl` filenames no matter how correctly
+  the hook was installed. The office matched sessions against its own package directory instead of the
+  directory you launched it from. It also affected `serve` (production / Docker) mode. Reported and
+  diagnosed by [@whoffmandesign](https://github.com/whoffmandesign) (#201, #205).
+- **Agents take turns at doorways** — two agents heading for the same door used to arrive on top of
+  each other and stand there overlapping. Doorway crossings are now claimed one route at a time, in
+  arrival order, so the queue is visible instead of a pile (#204).
+- **A stopped agent stops where it stands** — when a walk was cut short the agent could keep an
+  internal "still moving" flag, and the inspector would report movement that wasn't happening. Aborted
+  walks now settle at the position actually on screen (#204).
+- **No more stuck bubbles or undelivered handoffs** — a re-render at the wrong moment could cancel an
+  agent's in-flight walk and silently drop its pending timers: a speech bubble left asserting a state
+  the agent no longer had, and a handoff document drawn but never received (#202).
+
+### Documentation
+
+- **`OFFICE_PROJECT_ROOT` is documented** — set it to watch a project other than the directory you
+  launched from (multi-worktree setups). README troubleshooting, the deployment env table, and the
+  architecture notes all describe the real matching rule now, instead of the outdated
+  "filters by `process.cwd()`".
+
+### Internal
+
+- **The nightly soak is trustworthy again** — a 32-run red streak turned out to be two defects in the
+  test rig, not the office. It also now refuses to sample a server that isn't this project (#202,
+  #204). The green streak is a starting point for measurement, not a clean bill of health.
+- **Tests are timezone-portable** — part of the suite only passed on UTC and UTC+8 hosts, so a
+  contributor on US time saw failures on a clean checkout. Green from UTC-11 to UTC+14 now (#205).
+- **Governance tooling upgraded** — the Agentic OS workflow brain used during development moved
+  v1.8.1 → v1.8.17. Dev-time only; no effect on the shipped app (#199, #204).
+
 ## v1.6.4 — 2026-07-04 — Clearer signals, plainer words
 
 ### Added

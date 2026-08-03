@@ -20,7 +20,24 @@ Rotated 1 additional entry on 2026-07-31 (SSoT Update Sequence 113 -> 114).
 
 Rotated 1 additional entry on 2026-08-01 (SSoT Update Sequence 114 -> 115).
 
+Rotated 2 additional entries on 2026-08-03 (SSoT Update Sequence 115 -> 116).
+
 ---
+
+### Ship-chore-upgrade-agentic-os-v1.8.11-2026-07-10 (governance brain v1.8.1 -> v1.8.11)
+
+- Upgraded the vendored Agentic OS brain from **v1.8.1** (`source_commit b172145`) to **v1.8.11** (`cada3c4`) from canonical upstream `KbWen/agentic-os.git`. Classified `hotfix` (supply-chain/provenance escalation: the deploy replaces `.agentcortex/bin/deploy.sh` and regenerates `.agentcortex-manifest`). Commits `442039d` (archival) + `b84330e` (deploy). Cache aligned by `checkout cada3c4` on a verified-clean tree, so `reset --hard` was never needed.
+- Deploy: `195 updated / 2 skipped / 5 new / 1 removed`; git sees 49 real modifications (remainder are EOL-normalized no-ops). Team-owned `current_state.md` + `.claude/settings.json` SKIPped and preserved; both `.acx-incoming` sidecars inspected then discarded. Orphan `.agent/workflows/superpowers-playbook.md` removed. New surfaces: `/ask-local`, `/govern-audit`, `check_ssot_caps.py`.
+- Evidence: `validate.ps1` (pwsh 7) `pass=98 -> 100, warn=17, fail=0, skip=4`; vitest `2251 passed (108 files)`; `vite build` clean. The deploy touched no `src/`, `public/`, or `tests/` file.
+- Value: v1.8.4 deploy data-loss fix (a preserved file's baseline now records the upstream hash, not the user's, so a later deploy cannot silently overwrite a customization); **v1.8.9 Design Gate accepts a committed Markdown/ASCII wireframe (`docs/design/<screen>.md`) as a valid design artifact** - UI planning no longer dead-ends without a paid DSoT tool; v1.8.9 Claude same-turn continuation; v1.8.10 drops a contradictory guardrails required-read from 10 command stubs; v1.8.7 Windows `guard_context_write` lock fix; v1.8.7 chain-aware Global Lessons archival unfreezes the 20/20-capped registry.
+- **Known gap, NOT fixed upstream**: `validate.sh` under git-bash aborts (exit 141 / SIGPIPE) on any work log larger than the 64 KB pipe buffer - `set -euo pipefail` plus a Python matcher that breaks early - and separately exhausts Windows fork resources on a full run. **On Windows use `validate.ps1` under pwsh 7.** The trigger, `work/codex-product-action-strip.md` (98,825 B, shipped but never cleaned up), is archived at `archive/work/codex-product-action-strip-20260704-full.md`; it holds the 2026-07-04 PR #195 final review, Red Team Findings, and Resume block that the compacted 2026-07-02 archive lacks.
+- New advisories from `check_ssot_caps.py` (printed indented under a `[PASS]`, never a FAIL): Ship History 73 entries (cap 10), Spec Index 43 entries (cap 30). Rotation deferred and recorded here rather than silently dropped.
+
+### Ship-chore-release-v1.6.4-2026-07-04 (product action strip Phase-1) · release v1.6.4
+
+- Release cutting the merged Phase-1 product-action-strip polish (PR #196, squash `dacb682`) as **v1.6.4**: `package.json` 1.6.3→1.6.4 + CHANGELOG narrative ("Clearer signals, plainer words"). No further app change. Lockfile root version left stale per convention. Git tag `v1.6.4` created + pushed by the agent (annotated, on release commit `d7911e0`).
+- Scope note: this branch's Phase-2 in-repo portable-core layer (34-subpath package API + `.mjs` mirrors) was PARKED not merged per **ADR-009** (owner Option A — AVO stays a local, unpublished app; the reusable core is deferred to a clean-room copy-out into a NEW repo if a second consumer firms up). PR #195 closed as the parked reference; self-review findings F1–F9 preserved in ADR-009 (F1/F4 honesty-critical).
+- Tests: Pass (full suite 2251, from #196; CI 7/7 green — Semgrep / render-smoke / test 22+24 / pack-smoke / npm audit / TruffleHog)
 
 ### Ship-codex-product-action-strip-2026-07-02
 
