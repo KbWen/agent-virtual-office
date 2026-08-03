@@ -19,7 +19,7 @@ import os from 'node:os'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
-import { scanAndMerge, getSessionStats } from './src/server/scanSessions.mjs'
+import { scanAndMerge, getSessionStats, resolveProjectRoot } from './src/server/scanSessions.mjs'
 // AVO-146: replaced inline normalizePost copy with the canonical src module.
 // This also fixes the #52 divergence: the old inline copy dropped agents with
 // invalid status; the canonical src module coerces them to 'idle' instead.
@@ -66,6 +66,11 @@ if (!fs.existsSync(path.join(dist, 'index.html'))) {
 
 // ─── Shared paths ────────────────────────────────────────────────────────────
 const STATUS_PATH = path.join(os.homedir(), '.claude', 'office-status.json')
+
+// The project directory session files are matched against. This process is spawned with its
+// cwd set to the package root by bin/cli.js (and therefore by npx), so process.cwd() cannot
+// be used here — see resolveProjectRoot() in src/server/scanSessions.mjs.
+const PROJECT_ROOT = resolveProjectRoot()
 
 // Fail fast if the state directory is not writable (catches Docker bind-mount misconfiguration).
 try {
@@ -219,7 +224,7 @@ function handleStatus(req, res) {
   if (req.method === 'GET') {
     try {
       const clientEtag = req.headers['if-none-match']
-      const merged = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
+      const merged = scanAndMerge(path.dirname(STATUS_PATH), PROJECT_ROOT)
       if (!merged) return res.end('null')
       const data = JSON.stringify(merged)
       const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
@@ -247,7 +252,7 @@ function handleStatus(req, res) {
       let normalized
       try {
         normalized = normalizePost(JSON.parse(body))
-        normalized._cwd = process.cwd()
+        normalized._cwd = PROJECT_ROOT
         if (!atomicWrite(STATUS_PATH, JSON.stringify(normalized, null, 2))) {
           res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
         }
@@ -260,7 +265,7 @@ function handleStatus(req, res) {
       // scanAndMerge re-reads and re-parses every status file in ~/.claude/.
       if (sseClients.size > 0) {
         try {
-          const ssePayload = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
+          const ssePayload = scanAndMerge(path.dirname(STATUS_PATH), PROJECT_ROOT)
           if (ssePayload) broadcastSSE(ssePayload)
         } catch {}
       }
@@ -370,7 +375,7 @@ function handleEvent(req, res) {
         activeCount: countActive(agents),
         workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : null,
         source: 'webhook',
-        _cwd: process.cwd(),
+        _cwd: PROJECT_ROOT,
       }
       if (!atomicWrite(STATUS_PATH, JSON.stringify(output, null, 2))) {
         res.statusCode = 500; return res.end(JSON.stringify({ ok: false, error: 'Write failed' }))
@@ -382,7 +387,7 @@ function handleEvent(req, res) {
     // Skip the broadcast scan when no SSE clients are connected (see /api/status POST).
     if (sseClients.size > 0) {
       try {
-        const ssePayload = scanAndMerge(path.dirname(STATUS_PATH), process.cwd())
+        const ssePayload = scanAndMerge(path.dirname(STATUS_PATH), PROJECT_ROOT)
         if (ssePayload) broadcastSSE(ssePayload)
       } catch {}
     }
@@ -466,7 +471,7 @@ const server = http.createServer((req, res) => {
     // try/catch: an uncaught scanAndMerge throw in this request handler would crash the
     // server (req/res 'error' listeners don't catch synchronous handler-body throws).
     let snapshot = null
-    try { snapshot = scanAndMerge(path.dirname(STATUS_PATH), process.cwd()) } catch {}
+    try { snapshot = scanAndMerge(path.dirname(STATUS_PATH), PROJECT_ROOT) } catch {}
     if (snapshot) {
       try { res.write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`) }
       catch { sseClients.delete(res) }
@@ -481,7 +486,7 @@ const server = http.createServer((req, res) => {
     setCors(res, req.headers.origin, 'GET, OPTIONS')
     if (req.method === 'OPTIONS') return handlePreflight(req, res)
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.setHeader('Allow', 'GET, HEAD, OPTIONS'); res.statusCode = 405; return res.end() }
-    const stats = getSessionStats(path.dirname(STATUS_PATH), process.cwd())
+    const stats = getSessionStats(path.dirname(STATUS_PATH), PROJECT_ROOT)
     return res.end(JSON.stringify({ ok: true, uptime: Math.floor(process.uptime()), ...stats }))
   }
   return serveStatic(req, res)
@@ -557,7 +562,7 @@ let _watchDebounce = null
         // (e.g. a malformed session file reaching scanAndMerge) would crash the whole server
         // process. Mirrors the POST-broadcast caller's guard above.
         try {
-          const merged = scanAndMerge(watchDir, process.cwd())
+          const merged = scanAndMerge(watchDir, PROJECT_ROOT)
           if (merged) broadcastSSE(merged)
         } catch {}
       }, 80)  // debounce: atomic rename fires two events on some platforms

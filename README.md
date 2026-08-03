@@ -235,7 +235,8 @@ v1.4.0 started from one of these captures.
 
 **Office is blank — no agents appear**
 1. No hooks installed? Run `npx agent-virtual-office setup`.
-2. Wrong directory? The office filters by `process.cwd()` — run it in the same directory as your session.
+2. Wrong directory? The office only shows sessions from the directory you launched it in — run it from
+   your project root, or point it somewhere else with `OFFICE_PROJECT_ROOT=/path/to/project`.
 3. Stale status? Status expires after 5 minutes of inactivity — start a new session.
 4. Not using Claude Code? Push status with `curl` (see [Connect Your Agent](#connect-your-agent)).
 
