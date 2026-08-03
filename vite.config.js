@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { normalizePost, VALID_ROLES, VALID_STATUSES } from './src/utils/normalizePost.js'
-import { scanAndMerge, getSessionStats } from './src/server/scanSessions.mjs'
+import { scanAndMerge, getSessionStats, resolveProjectRoot } from './src/server/scanSessions.mjs'
 
 // Middleware: Universal status API
 //   GET  /api/status → read current status (browser polls this)
@@ -22,6 +22,11 @@ import { scanAndMerge, getSessionStats } from './src/server/scanSessions.mjs'
 
 // Shared status file path (shared between plugins)
 const STATUS_PATH = path.join(os.homedir(), '.claude', 'office-status.json')
+
+// The project directory session files are matched against. Vite's own cwd is the package
+// root when launched via bin/cli.js (and therefore npx), so it cannot be used here —
+// see resolveProjectRoot() in src/server/scanSessions.mjs.
+const PROJECT_ROOT = resolveProjectRoot()
 
 const LOOPBACK_ORIGIN_RE = /^https?:\/\/(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?$/i
 
@@ -184,7 +189,7 @@ function officeStatusPlugin() {
         if (req.method === 'GET') {
           try {
             const clientEtag = req.headers['if-none-match']
-            const merged = scanAndMerge(path.dirname(statusPath), process.cwd())
+            const merged = scanAndMerge(path.dirname(statusPath), PROJECT_ROOT)
             if (!merged) { res.end('null'); return }
             const data = JSON.stringify(merged)
             const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
@@ -236,7 +241,7 @@ function officeStatusPlugin() {
             try {
               const parsed = JSON.parse(body)
               normalized = normalizePost(parsed)
-              normalized._cwd = process.cwd()
+              normalized._cwd = PROJECT_ROOT
               const dir = path.dirname(statusPath)
               if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
               if (!atomicWrite(statusPath, JSON.stringify(normalized, null, 2))) {
@@ -258,7 +263,7 @@ function officeStatusPlugin() {
             // Running it for a broadcast that has no recipients is pure waste.
             if (sseClients.size > 0) {
               try {
-                const sseData = scanAndMerge(path.dirname(statusPath), process.cwd())
+                const sseData = scanAndMerge(path.dirname(statusPath), PROJECT_ROOT)
                 if (sseData) broadcastSSE(sseData)
               } catch {}
             }
@@ -298,7 +303,7 @@ function officeStatusPlugin() {
         req.on('close', () => sseClients.delete(res))
         req.on('error', () => sseClients.delete(res))
         res.on('error', () => sseClients.delete(res))
-        const snapshot = scanAndMerge(path.dirname(statusPath), process.cwd())
+        const snapshot = scanAndMerge(path.dirname(statusPath), PROJECT_ROOT)
         if (snapshot) {
           try { res.write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`) }
           catch { sseClients.delete(res) }
@@ -321,7 +326,7 @@ function officeStatusPlugin() {
         if (sseClients.size === 0) return
         clearTimeout(watchDebounce)
         watchDebounce = setTimeout(() => {
-          const merged = scanAndMerge(path.dirname(statusPath), process.cwd())
+          const merged = scanAndMerge(path.dirname(statusPath), PROJECT_ROOT)
           if (merged) broadcastSSE(merged)
         }, 80)
         if (watchDebounce.unref) watchDebounce.unref()
@@ -551,7 +556,7 @@ function officeStatusPlugin() {
 
             const output = {
               _seq: nextSeq(),
-              _cwd: process.cwd(),
+              _cwd: PROJECT_ROOT,
               type: 'office-status',
               agents,
               activeCount: agents.filter(a => a.status === 'working' || a.status === 'blocked' || a.status === 'planning' || a.status === 'awaiting-approval').length,
@@ -576,7 +581,7 @@ function officeStatusPlugin() {
           // Skip the broadcast scan when no SSE clients are connected (see POST handler).
           if (sseClients.size > 0) {
             try {
-              const sseData = scanAndMerge(path.dirname(statusPath), process.cwd())
+              const sseData = scanAndMerge(path.dirname(statusPath), PROJECT_ROOT)
               if (sseData) broadcastSSE(sseData)
             } catch {}
           }
@@ -602,7 +607,7 @@ function officeStatusPlugin() {
           res.setHeader('Allow', 'GET, HEAD, OPTIONS')
           res.statusCode = 405; res.end(JSON.stringify({ error: 'Method not allowed' })); return
         }
-        const stats = getSessionStats(path.dirname(statusPath), process.cwd())
+        const stats = getSessionStats(path.dirname(statusPath), PROJECT_ROOT)
         res.end(JSON.stringify({ ok: true, uptime: Math.floor(process.uptime()), ...stats }))
       })
 

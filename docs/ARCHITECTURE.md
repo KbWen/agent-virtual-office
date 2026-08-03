@@ -373,6 +373,12 @@ session 文件
   └── 其他 → 納入合併
 ```
 
+`projectRoot` 由 `resolveProjectRoot()`（`src/server/scanSessions.mjs`）決定：`OFFICE_PROJECT_ROOT`
+優先，否則用 `process.cwd()`。兩個 server 都由 `bin/cli.js` 以 `cwd: <套件目錄>` spawn（Vite 需要在那裡
+解析自己的設定），所以在 `npx` 下 `process.cwd()` 是 npx cache 而非使用者的專案 —— `bin/cli.js` 會把呼叫
+當下的 cwd 以 `OFFICE_PROJECT_ROOT` 傳進子行程。**讀（`scanAndMerge`/`getSessionStats`）與寫（POST
+handler 蓋 `_cwd`）兩邊必須用同一個 root**，否則 server 會過濾掉自己寫入的狀態（#201）。
+
 ### GET /api/status 多 Session 合併流程
 
 ```

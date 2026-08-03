@@ -151,7 +151,8 @@ window.__office_config__ = {
 
 **辦公室一片空白 — 沒有小人**
 1. 沒裝 hook？跑 `npx agent-virtual-office setup`。
-2. 目錄不對？辦公室以 `process.cwd()` 過濾 —— 請在和 session 相同的目錄跑它。
+2. 目錄不對？辦公室只顯示「啟動它的那個目錄」的 session —— 請在專案根目錄執行，或用
+   `OFFICE_PROJECT_ROOT=/path/to/project` 指到別處。
 3. 狀態過期？閒置 5 分鐘後狀態會過期 —— 開一個新 session。
 4. 沒在用 Claude Code？用 `curl` 推狀態（見[接上你的 Agent](#接上你的-agent)）。
 

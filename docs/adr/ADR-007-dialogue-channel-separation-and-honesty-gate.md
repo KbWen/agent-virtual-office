@@ -3,7 +3,7 @@ title: "ADR-007 — Dialogue channel separation + dialogue honesty gate"
 date: 2026-06-15
 status: accepted
 applies_to:
-  - "src/systems/banter.js"
+  - "src/systems/roleArchetype.js"
   - "src/systems/behaviorEngine.js"
   - "src/systems/officeLife.js"
   - "src/systems/contextBubble.js"

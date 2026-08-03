@@ -1,6 +1,12 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Timestamps here MUST be built with the local-time constructor `new Date(y, m, d, …)`.
+// The ledger derives `dayKey` from the LOCAL date, so a fixed-offset ISO literal
+// (`…T12:00:00+08:00`) only lands on the hardcoded '2026-04-08' dayKey on machines whose
+// TZ is UTC+8 — elsewhere it silently rolls the ledger to the previous/next day and the
+// day-rollover and replay-guard cases fail. Reported from a UTC-7 host in #201.
+
 const { countAgentDoneToday, inspectorTaskLabel, stateDurationLabel } = await import('../src/components/agentInspectorModel.js')
 const { useOfficeStore } = await import('../src/systems/store.js')
 
@@ -134,19 +140,19 @@ describe('AgentInspector', () => {
   })
 
   it('counts only same-day done events for the selected agent', () => {
-    const now = new Date('2026-04-08T18:00:00+08:00').getTime()
+    const now = new Date(2026, 3, 8, 18, 0, 0).getTime()
 
     expect(countAgentDoneToday([
       { agentId: 'dev', type: 'status', status: 'done', timestamp: now - 1_000, message: 'Finished step' },
       { agentId: 'dev', type: 'status', status: 'done', timestamp: now - 3_600_000, message: 'Another done' },
       { agentId: 'dev', type: 'status', status: 'working', timestamp: now - 2_000, message: 'Still working' },
       { agentId: 'qa', type: 'status', status: 'done', timestamp: now - 2_000, message: 'Other agent' },
-      { agentId: 'dev', type: 'status', status: 'done', timestamp: new Date('2026-04-07T23:00:00+08:00').getTime(), message: 'Yesterday' },
+      { agentId: 'dev', type: 'status', status: 'done', timestamp: new Date(2026, 3, 7, 23, 0, 0).getTime(), message: 'Yesterday' },
     ], 'dev', now)).toBe(2)
   })
 
   it('reads same-day done counts from the durable ledger when available', () => {
-    const now = new Date('2026-04-08T18:00:00+08:00').getTime()
+    const now = new Date(2026, 3, 8, 18, 0, 0).getTime()
 
     expect(countAgentDoneToday({
       dayKey: '2026-04-08',
@@ -185,7 +191,7 @@ describe('AgentInspector', () => {
     ], {
       source: 'claude-cli',
       seq: '9001',
-      now: new Date('2026-04-08T18:00:00+08:00').getTime(),
+      now: new Date(2026, 3, 8, 18, 0, 0).getTime(),
     })
 
     expect(useOfficeStore.getState().dailyDoneLedger).toMatchObject({
@@ -198,7 +204,7 @@ describe('AgentInspector', () => {
     ], {
       source: 'claude-cli',
       seq: '9002',
-      now: new Date('2026-04-08T18:05:00+08:00').getTime(),
+      now: new Date(2026, 3, 8, 18, 5, 0).getTime(),
     })
 
     expect(useOfficeStore.getState().dailyDoneLedger).toMatchObject({
@@ -217,7 +223,7 @@ describe('AgentInspector', () => {
     ], {
       source: 'claude-cli',
       seq: '9002',
-      now: new Date('2026-04-08T18:10:00+08:00').getTime(),
+      now: new Date(2026, 3, 8, 18, 10, 0).getTime(),
     })
 
     expect(useOfficeStore.getState().dailyDoneLedger).toMatchObject({
@@ -239,7 +245,7 @@ describe('AgentInspector', () => {
       externalStatus: {},
       dailyDoneLedger: { dayKey: '2026-04-08', counts: {}, seenEventKeys: [] },
     })
-    const now = new Date('2026-04-08T12:00:00+08:00').getTime()
+    const now = new Date(2026, 3, 8, 12, 0, 0).getTime()
 
     useOfficeStore.getState().applyExternalStatus(
       [{ agentId: 'dev', status: 'done', task: 'Edit', label: 'fix' }],
@@ -268,7 +274,7 @@ describe('AgentInspector', () => {
       },
       dailyDoneLedger: { dayKey: '2026-04-08', counts: { dev: 5 }, seenEventKeys: ['claude-cli:seen:dev'] },
     })
-    const now = new Date('2026-04-08T12:00:00+08:00').getTime()
+    const now = new Date(2026, 3, 8, 12, 0, 0).getTime()
 
     // Same eventKey as already-seen → shouldCount is false → no growth.
     useOfficeStore.getState().applyExternalStatus(
@@ -283,7 +289,7 @@ describe('AgentInspector', () => {
       externalStatus: {},
       dailyDoneLedger: { dayKey: '2026-04-08', counts: {}, seenEventKeys: [] },
     })
-    const now = new Date('2026-04-08T12:00:00+08:00').getTime()
+    const now = new Date(2026, 3, 8, 12, 0, 0).getTime()
 
     useOfficeStore.getState().applyExternalStatus(
       [{ agentId: 'feat-x~dev', status: 'done', task: 'Edit', label: 'fix', session: 'feat-x' }],
@@ -433,7 +439,7 @@ describe('store — dailyDoneLedger day rollover via applyExternalStatus', () =>
       dailyDoneLedger: { dayKey: '2026-04-08', counts: { dev: 4 }, seenEventKeys: ['claude-cli:x:dev'] },
     })
 
-    const nextDayNow = new Date('2026-04-09T09:00:00+08:00').getTime()
+    const nextDayNow = new Date(2026, 3, 9, 9, 0, 0).getTime()
     useOfficeStore.getState().applyExternalStatus(
       [{ agentId: 'dev', status: 'done', task: 'Edit', label: 'New day work' }],
       { source: 'claude-cli', seq: 'nd1', now: nextDayNow },

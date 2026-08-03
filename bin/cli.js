@@ -9,6 +9,18 @@ const root = path.resolve(__dirname, '..')
 const args = process.argv.slice(2)
 const command = args[0]
 
+// Both servers are spawned with `cwd: root` so Vite can resolve its own config and sources.
+// That makes their process.cwd() the package directory — under `npx` the npx cache — while
+// the hooks stamp each session file with the real project directory. Without forwarding the
+// invoking cwd, every hook file looks foreign and is filtered out, leaving only file-watcher
+// fallback data (`source: 'file-watcher'`, `_hint: 'no-hooks'`). This process is never
+// chdir'd, so its cwd is still the directory the user launched us from. An explicitly set
+// OFFICE_PROJECT_ROOT wins, so multi-worktree setups can point the office at one root.
+// Reported by @whoffmandesign (#201).
+function childEnv() {
+  return { ...process.env, OFFICE_PROJECT_ROOT: process.env.OFFICE_PROJECT_ROOT || process.cwd() }
+}
+
 // ─── setup: one-click Claude Code hook installation ───
 if (command === 'setup') {
   const claudeDir = path.join(os.homedir(), '.claude')
@@ -188,6 +200,7 @@ if (command === 'serve') {
   const serverArgs = process.argv.slice(3)
   const child = spawn(process.execPath, [serverScript, ...serverArgs], {
     cwd: root,
+    env: childEnv(),
     stdio: 'inherit',
     shell: false,
   })
@@ -338,6 +351,7 @@ const viteFlags = ['--port', port]
 if (host) viteFlags.push('--host')
 const vite = spawn(process.execPath, [viteBinJs, ...viteFlags], {
   cwd: root,
+  env: childEnv(),
   stdio: 'inherit',
   shell: false,
 })

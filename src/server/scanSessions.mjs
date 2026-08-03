@@ -36,6 +36,28 @@ function pathsEqual(a, b) {
   return isWin ? a.toLowerCase() === b.toLowerCase() : a === b
 }
 
+/**
+ * The project directory that session files are matched against.
+ *
+ * Both servers are spawned by `bin/cli.js` with `cwd` set to the PACKAGE root (Vite must
+ * resolve its own config and sources from there), so under `npx agent-virtual-office` the
+ * process cwd is the npx cache directory — not the project the user launched us from.
+ * Hooks stamp `_cwd` with the real project, so every hook file then looks foreign and is
+ * filtered out, leaving only file-watcher fallback data. `bin/cli.js` forwards the invoking
+ * cwd as OFFICE_PROJECT_ROOT; an explicitly set value wins (useful for multi-worktree
+ * setups), and the process.cwd() default keeps `npm run dev` unchanged.
+ *
+ * MUST be used for BOTH the read sites (scanAndMerge/getSessionStats) and the write sites
+ * that stamp `_cwd` on POSTed payloads — a root that differs between the two makes the
+ * server filter out its own writes.
+ */
+export function resolveProjectRoot(env = process.env, cwd = process.cwd()) {
+  const override = env.OFFICE_PROJECT_ROOT
+  return typeof override === 'string' && override.trim() !== ''
+    ? path.resolve(override)
+    : cwd
+}
+
 function hasValidBaseRole(role) {
   if (typeof role !== 'string' || role.length === 0) return false
   const sep = role.lastIndexOf('~')

@@ -128,7 +128,7 @@ Register it in `~/.claude/settings.json` (the hook reads events from stdin, no a
 }
 ```
 
-The hook auto-detects the current git branch slug, writes `~/.claude/office-status-{slug}.json`, and the office filters by `process.cwd()` so sessions from other projects never appear.
+The hook auto-detects the current git branch slug, writes `~/.claude/office-status-{slug}.json`, and the office filters by the directory it was launched in so sessions from other projects never appear. Set `OFFICE_PROJECT_ROOT` to match against a different project root (e.g. a multi-worktree setup).
 
 ---
 

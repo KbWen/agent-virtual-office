@@ -46,7 +46,7 @@ Every session file written by the hook includes the project root:
 ```
 
 The GET `/api/status` handler filters:
-- If `_cwd` is set and does not resolve to `process.cwd()` → **skip** (other project)
+- If `_cwd` is set and does not resolve to the project root → **skip** (other project). The project root is `OFFICE_PROJECT_ROOT` when set, otherwise the launching directory — `process.cwd()` alone is wrong under `npx` (#201).
 - If `_cwd` is absent and filename is NOT `office-status.json` → **skip** (slugged file from old hookless run)
 - If `_cwd` is absent and filename IS `office-status.json` → **allow** (legacy fallback)
 
