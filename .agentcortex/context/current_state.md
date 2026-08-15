@@ -172,6 +172,13 @@
 
 ## Ship History
 
+### Ship-chore-remove-dead-deskcluster-2026-08-16 (1 genuinely dead export; 6 of 7 candidates were my own false positives)
+
+- Removed `DeskCluster` from `src/components/TopDownFurniture.jsx` -- exported, never imported or rendered. 1 file, **-17 lines, 0 additions**; bundle 496.50 -> **496.18 kB**.
+- The scan that found it originally flagged **7** dead exports and **6 were false positives**: the detector excluded the defining file from its reference search, so symbols used only within their own module looked unreferenced (`onLocaleChange`, `drawCard`, `DOOR_CLAIM_LEASE_MS`, `HELPER_OFFSETS`, `HELPER_HEAVY_THRESHOLD`, `MODE_EMOTE`). Each was re-checked individually before anything was deleted. `DeskCluster` appears exactly once in the whole repo -- at its own declaration.
+- **The verification that mattered, and the near-miss inside it.** `render-smoke` reported `min svg descendants 2042` while an earlier run this session reported **2051** -- which would mean removing "dead" code changed the render, i.e. that it was not dead. It did not mean that: the 2051 run was on a different branch (the dependency refresh), so two variables had moved at once. Re-measured as a **same-branch A/B**: `main` unmodified -> 2042, with the removal -> 2042. Provably render-inert. Worth keeping: `min svg descendants` is a **floor assertion over a live animated scene**, not a render fingerprint -- cross-branch or cross-run comparisons of that number prove nothing, only a same-tree A/B does.
+- Tests: Pass -- Vitest 114/114 files and 2306/2306 tests; build PASS; `render-smoke` PASS across 4 viewports with 0 pageerrors and 0 console errors; same-branch A/B render proof above.
+
 ### Ship-chore-release-v1.6.5-2026-08-03 (npx project-root fix + maintenance sweep) · release v1.6.5
 
 - Release cutting the merged npx/project-root correctness work as **v1.6.5**: `package.json` 1.6.4→1.6.5 + CHANGELOG narrative ("It works where you actually run it") + Ship History. The stale `package-lock.json` root version (1.4.0, unchanged since v1.4.0) was corrected to 1.6.5 in the same commit — it is a metadata field npm regenerates, and leaving it skewed was a standing doc/description inconsistency the owner asked to clear. Git tag `v1.6.5` created + pushed by the agent (annotated, on the release commit).
