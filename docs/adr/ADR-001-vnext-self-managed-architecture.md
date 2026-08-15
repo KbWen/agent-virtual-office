@@ -2,6 +2,13 @@
 title: "ADR-001 — vNext Self-Managed AI Architecture"
 date: 2026-04-02
 status: accepted
+applies_to:
+  - "AGENTS.md"
+  - "CLAUDE.md"
+  - "GEMINI.md"
+  - ".agent/rules/state_machine.md"
+  - ".agent/rules/engineering_guardrails.md"
+  - ".agentcortex/context/current_state.md"
 lifecycle:
   owner: KbWen
   review_cadence: on-event
