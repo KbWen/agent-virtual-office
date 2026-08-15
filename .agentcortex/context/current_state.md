@@ -13,7 +13,7 @@
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-08-03T23:30:00+08:00
-- **Last Verified**: 2026-08-03
+- **Last Verified**: 2026-08-15
 - **Update Sequence**: 116
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
@@ -171,6 +171,17 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-upgrade-agentic-os-v1.8.21-2026-08-15 (governance brain v1.8.17 -> v1.8.21)
+
+- Upgraded the vendored Agentic OS framework from **v1.8.17** (`102e19b`) to the latest upstream release **v1.8.21** (`f5a161c`) from canonical `KbWen/agentic-os.git`. Classified `hotfix` under the Supply-Chain / Provenance Escalation rule. Deploy: `202 updated / 2 skipped / 0 new / 0 removed`; real change set = **30 tracked files, 0 product files**.
+- The 2 SKIPs were the correct ones. Both `.acx-incoming` sidecars were generic framework templates that would have destroyed project content -- the SSoT sidecar was the blank `[Describe your project in one line]` placeholder, and the `.claude/settings.json` sidecar carried **no hooks at all** (this project's 8 `office-status-hook.js` entries are the whole status-transport spine). Inspected and deleted; residue 0.
+- `.gitignore` is the one file deploy **merges** rather than copies, so it was excluded from byte-parity and hand-audited instead: purely additive (upstream PR #408's `.claude/settings.local.json` entry), zero pre-existing entries dropped.
+- **Two long-standing local blockers are fixed upstream and the prior records here were stale.** (a) `validate.sh` exit-141 SIGPIPE on Windows (upstream issue #336, recorded above as "unfixed in v1.8.11") now completes: `pass=112 warn=7 fail=0 skip=5`, exit 0 -- and the trigger condition is still present (2 files >64KB, `ship-history-2026.md` = 136KB), so it is a real fix, not an absent trigger. (b) The Spec Index rotation trap (recorded above as "attempted, then REVERTED" because the validators' regex knew nothing about `## Spec Index Archive`) is fixed by upstream `b5d2e29` (#381); both v1.8.21 validators now reference that section and `ship.md:184` documents the collapse with an over-fold guard.
+- **Deliberately NOT done in this ship**: the Spec Index collapse (now 47 entries vs cap 30) and Ship History rotation (this entry makes 11 vs advisory cap 10). Both are now unblocked by the fixes above, but doing them inside a supply-chain hotfix is scope creep; they are the first items of the follow-on technical-debt pass, where the newly-safe rotation gets verified rather than assumed. `check_ssot_caps.py` prints both under a non-failing WARN/PASS.
+- **Upstream findings routed to the owner.** NEW: `validate.sh` and `validate.ps1` disagree on the same tree -- `pass=112` vs `pass=113`; `docs/specs` frontmatter check exists only in the `.ps1`; `backlog label vocabulary` reports 2 vs 1 distinct labels; `archive size` measures 1108KB vs 878KB; the Evidence-floor check covers one more classification in the `.ps1`. Not new: the phantom `-- tool not present` SKIPs are already upstream **#173** ("19 tools referenced, 7 absent, at least 4 deliberately, no allowlist separates intent from oversight"); `check_worklog_references.py` being source-only follows the **#137** precedent.
+- Review limits stated rather than implied: no fresh-context reviewer was dispatched (same-session author reviewed own work; the trust-boundary external signal was the upstream CHANGELOG cross-check plus an independent `git ls-remote` provenance check), and the 202 deployed files were NOT line-by-line audited for malicious content -- the applied control is provenance + byte-parity, which is the appropriate control for vendored framework code, not a code audit.
+- Tests: Pass -- Vitest 114/114 files and 2306/2306 tests; build PASS with the bundle unchanged at 496.50 kB; `validate.ps1` `pass=113 warn=7 fail=0 skip=5` (baseline `113/6/0/4`, fail stays 0); `validate.sh` `pass=112 warn=7 fail=0 skip=5`; 202/202 deployed files byte-match the v1.8.21 source after CRLF normalization; upgraded-tool functional smoke 9/9 including a proven stale-`expected-sha` rejection by `guard_context_write.py`.
 
 ### Ship-chore-release-v1.6.5-2026-08-03 (npx project-root fix + maintenance sweep) · release v1.6.5
 

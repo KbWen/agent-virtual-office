@@ -26,7 +26,7 @@ TARGET="${TARGET:-.}"
 TARGET="${TARGET%/}"
 
 MANIFEST_FILE="$TARGET/.agentcortex-manifest"
-ACX_VERSION="1.8.17"
+ACX_VERSION="1.8.21"
 
 # --- Self-deploy guard ---
 TARGET_ABS="$(cd "$TARGET" 2>/dev/null && pwd || echo "$TARGET")"
@@ -1092,6 +1092,10 @@ write_downstream_ignore_block() {
 *.acx-incoming
 *.acx-local
 
+# Per-Operator Tool State (this project's .claude/settings.json declares
+# settings.local.json user-local; keep git agreeing with that declaration)
+.claude/settings.local.json
+
 # Third-party AI Tool Local State
 .openrouter/
 .claude-chat/
@@ -1120,6 +1124,7 @@ strip_managed_ignore_blocks() {
         managed[".agentcortex-src/"] = 1
         managed["*.acx-incoming"] = 1
         managed["*.acx-local"] = 1
+        managed[".claude/settings.local.json"] = 1
         managed[".openrouter/"] = 1
         managed[".claude-chat/"] = 1
         managed[".cursor/"] = 1
