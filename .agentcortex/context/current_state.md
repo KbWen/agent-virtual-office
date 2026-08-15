@@ -61,25 +61,7 @@
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
-  - [feature] docs/specs/agent-inspector-info-enhancement.md [Shipped]
-  - [architecture] docs/specs/codex-status-parity-and-done-count.md [Shipped]
-  - [feature] docs/specs/character-growth-system.md [Shipped]
-  - [feature] docs/specs/clickable-office-objects.md [Shipped]
-  - [v1.1.0 classifier] docs/specs/classifier-foundation.md [Shipped]  *(#A1)*
-  - [v1.1.0 classifier] docs/specs/classifier-wiring.md [Shipped]  *(#A2 + #A2.1)*
-  - [v1.1.0 classifier] docs/specs/classifier-unknown-log.md [Shipped]  *(#A3)*
-  - [v1.1.0 classifier] docs/specs/mcp-inner-verb-fix.md [Shipped]  *(MCP follow-up)*
-  - [v1.1.0 visual] docs/specs/perf-metrics-chip.md [Shipped]  *(#6)*
-  - [v1.1.0 visual] docs/specs/weather-system.md [Shipped]  *(#14 + #15 closure)*
-  - [v1.1.0 visual] docs/specs/tool-inventory-label.md [Shipped]  *(AVO-103)*
-  - [v1.1.0 visual] docs/specs/workflow-handoff-arrows.md [Shipped]  *(AVO-105)*
-  - [v1.1.0 inference] docs/specs/desktop-notifications.md [Shipped]  *(#8)*
-  - [v1.1.0 inference] docs/specs/idle-gap-inference.md [Shipped]  *(#C)*
-  - [v1.1.0 compatibility] docs/specs/csp-compatibility.md [Shipped]  *(#27)*
-  - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Shipped]  *(AVO-126/127/128/129/131/132 — MERGED to main via squash PR #44, v1.2.0, 2026-06-05)*
-  - [living-office] docs/specs/living-office-events.md [Shipped]  *(AVO-140 — MERGED to main via squash PR #44, v1.2.0, 2026-06-05)*
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
-  - [vibe-rebalance] docs/specs/control-bar-reduction.md [Shipped]  *(AVO-130 / #116 — 4 health pills→1 expandable health dot; lang/run/view/help/platform demoted into ⚙ menu / info popover)*
   - [real-ai-behavior] docs/specs/skill-activation-badge.md [Shipped]  *(AVO-104 / #30 — transient skill bubble on SubagentStart via existing bubble cap (working-tier); panel Option B, honest no-over-head-element)*
   - [game-feel] docs/specs/event-juice-pass.md [Shipped]  *(AVO-136 / #117 — rare-event juice: deploy confetti + eureka sparkle + desk-slam local shake; pure juiceForEvent resolver, reduced-motion-safe, never occludes status)*
   - [multi-agent] docs/specs/review-gate-waiting.md [Shipped]  *(AVO-107 / #112 — honest reframe: gate-desk "waiting" in-tray driven by awaiting-approval only; no queue/type fabrication; complements AVO-105 arrows; panel-decided)*
@@ -107,6 +89,7 @@
   - [game-feel] docs/specs/ambient-soundscape.md [Shipped]  *(AVO-122 / chill-fun wave — off-by-default 0-KB procedural Web Audio; clatter∝teamPulse (silent@0) + double-gated rain; coffee gurgle DROPPED on honesty (tea-break is a clock event))*
   - [ui-rendering] docs/specs/dialogue-interaction-layer.md [Frozen]  *(dialogue layer — ADR-007 channel separation + open-ended content + honesty gate; S1/S1b reduction commits, S2–5 killable hypotheses; red-team + expert/PM hardened)*
   - When reading specs: only open files tagged with the current task's module.
+  - Older `[Shipped]` index lines are in `## Spec Index Archive` at the bottom of this file. Spec bodies stay in `docs/specs/` — only index lines rotate.
 - **Canonical Commands**:
   - `/spec-intake`: Import external specs (from other LLMs, documents, or natural language). Handles large product specs via decomposition. Runs before `/bootstrap`.
   - `/bootstrap`: Task initialization & classification freeze.
@@ -168,9 +151,19 @@
 - **`movementSystem.js` agent coordinates / HOME_POSITIONS / MEETING_CHAIRS / event gather spots** (`officeLife.js` EVENT_HANDLERS) — hardcoded. Tight gather spots caused an all-agent pile-up (sprites stack → SVG occlusion hides the lower one). NOW the store (`setMultipleAgentGroupEvents`/`setAgentGroupEvent`) runs every `groupTarget` through `clampToFloor` + `avoidOverlap` (≥`MIN_AGENT_DIST`) so participants can't stack — guarded by `tests/agentSeparationInvariants.test.js`. Keep that deconfliction; don't bypass it by writing `groupTarget`/`position` directly elsewhere. NOTE: there is still NO per-frame separation in free movement (agents pass through each other in transit — AVO-144).
 - **`LABEL_SCALE_MAX = 1.5`** (`AgentCharacter.jsx`) — POINT-2-tuned so active name tags don't collide. Raising it improves small-dock readability but risks label collision — owner's call, verify collisions by measuring label rects at a small window.
 - **`officeLife.js` event cadence** — real-seed triggers are GLOBAL-cooldown-gated to stay rare (calm-tech); do NOT seed all-gather events (e.g. `standup`) off frequent signals (SubagentStart) — that froze the office in perpetual gathering.
+- **A green sim-soak does NOT mean movement is healthy.** Preserved here because the ship entry carrying this warning was rotated to `archive/ship-history-2026.md` on 2026-08-16, and archived entries are not auto-read at bootstrap. For 32 runs the soak's stack data was *uninterpretable, not merely false-red*: the rig injected ~22 spurious 3s freezes per 150s AND released the journey claim (the only anti-stack mechanism) ~22x per 150s, so a real stack was indistinguishable from a manufactured one. The 2026-07-16 fix repaired the GATE, not the office — it means we can finally measure, not that movement is fine. Full account: archived `Ship-fix-soak-gate-2026-07-16`.
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-ssot-index-rotation-2026-08-16 (both SSoT caps restored; the "never rotate" rule retired)
+
+- Spec Index collapsed **47 -> 30 inline + 18 archived** into `## Spec Index Archive`, and Ship History rotated **11 -> 10**. `check_ssot_caps.py` now prints `ssot caps OK - ship history 10/10, spec index 30/30 (+18 archived)` -- the first time both caps have been satisfied.
+- **This retires the standing "never rotate the Spec Index" rule, by measurement rather than by trusting a changelog.** That rule came from the 2026-07-10 entry below, where rotating produced 13 hard FAILs because both validators scraped the index with a regex that stopped at the next `##` header and contained zero references to `## Spec Index Archive`. Upstream fixed it in `b5d2e29` (#381): `validate.ps1:2240-2243` now scrapes the live index block **and unions the archive section into it**. The rotation was applied and then measured -- `[PASS] SSoT Spec Index completeness: all shipped/living specs are indexed`, `fail=0`.
+- **Merge-order constraint, and it is load-bearing.** This branch is stacked on `chore/upgrade-agentic-os-v1.8.21` because the fix lives *in the validators*, which only exist at v1.8.21. Verified before starting: `main`'s v1.8.17 validators contain **0** references to `Spec Index Archive`; the v1.8.21 pair contains **2 each**. Merging this rotation ahead of the upgrade would reproduce the original 13-FAIL outcome exactly.
+- Only `[Shipped]` index lines moved. The 1 `[Draft]`, the 2 `[Frozen]`, and the trailing "When reading specs..." instruction line stay inline -- archiving a non-shipped spec would hide live design authority behind an archive header.
+- **Two things measurement caught that reading would not have.** (a) The first pass moved 17 lines and the count stayed at 31: the explanatory pointer line added to the index is itself an indented child entry, and the cap counter counts those. Fixed by moving one more `[Shipped]` line. (b) The Ship History closing note claimed "Older entries (68)" while the archive actually held **74** -- a hand-carried count already drifted by 6 before this task touched anything. It was **deleted** rather than corrected to 75, following upstream's own precedent in this same release wave (`aca9bf4`, "delete the hand-carried backlog count"); a number nobody recomputes is a number that lies again next rotation.
+- Tests: Pass -- `check_ssot_caps.py` OK on both caps; `validate.ps1` `pass=113 warn=6 fail=0 skip=5` with `[PASS] SSoT Spec Index completeness`; rotated entry carries no `](../` links so the archive depth hazard did not apply.
 
 ### Ship-chore-upgrade-agentic-os-v1.8.21-2026-08-15 (governance brain v1.8.17 -> v1.8.21)
 
@@ -231,33 +224,31 @@
 - Downstream-owned scaffolds were preserved: the live project SSoT and Claude office hooks remained intact; generated `.acx-incoming` templates were inspected and removed. All deployed framework files match the v1.8.17 source bytes, excluding the target-generated manifest.
 - Tests: Pass — Agentic OS validator `pass=113 warn=7 fail=0 skip=4`; Vitest `2263/2263`; production build PASS. Branch retained locally; no push or PR performed.
 
-### Ship-fix-soak-gate-2026-07-16 (PR #202 — sim-soak un-broken: bounded coverage + symmetric walk teardown)
-
-> [!WARNING]
-> **The nightly sim-soak is green again — this does NOT mean the office is healthy.** For 32 runs the
-> stack data was **uninterpretable, not merely false-red**: the rig injected ~22 spurious 3s freezes per
-> 150s AND randomly released the journey claim (the only anti-stack mechanism) 22x per 150s, so a real
-> stack was indistinguishable from a manufactured one. **We are not exonerating the movement system — we
-> are admitting we never measured it.** Do NOT infer "movement is healthy" from a green soak until several
-> clean nightlies accumulate. **AVO-187 (door-crossing stack) is REAL, production-reachable, and OPEN.**
-
-- Ended a **32-run nightly red streak** (last success 2026-06-13). Both causes were defects in the GATE, found by measurement after **three** wrong root-cause theories were killed by an adversarial panel. Merged as squash `eb0a83a`; CI 7/7; full suite **2263 pass**; three consecutive green soaks (branch probe-free x2 + merged main x1: 2395/2396 samples, 0 violations).
-- **(a) Coverage false-red.** The sample floor was `expected - 2` (2398/2400), tighter than ordinary 250ms timer jitter (clean CI yields 2393–2397), and the runner threw **before** `evaluateSoak` and the report write — so all 32 failures left **no artifact**. Fixed by `scripts/soakCoverage.mjs` (`assessSoakCoverage`: max 5 misses or 0.5%, fail-closed on material under-sampling) + report-before-fail ordering. *Implemented by the codex release-audit session; verified independently.*
-- **(b) The soak tripped a bug its own rig created.** `sim-soak.mjs` runs a **Vite dev server by design** (its sampler must import `/src` for ground truth) ⇒ StrictMode ⇒ React 19 **double-invokes passive effects on re-placed fibers**. `PixelOffice` re-sorts `agentList` by **live `position.y`** (SVG paint order *is* depth), so **any walker re-places every keyed `<AgentCharacter>`**; react-dom's `placeChild` MOVE branch flags `Placement|PlacementDEV` **byte-identically to an insert**. That fired the `[]`-dep "unmount" cleanup on **live mid-walk instances** — cancelling the rAF (frozen until the 2.5s watchdog's next 1s poll = a near-constant **+3000ms**, *exactly* `STACK_SUSTAIN_MS`) and dropping `journeyTarget`. **A/B: 22 spurious teardowns / 150s with StrictMode on, 0 with it off.** Fixed by making setup/cleanup **symmetric** (setup restores; pure `shouldRestoreWalk` guard; journey stashed from the store SSoT, not mirrored at the six publish sites). **No DEV/StrictMode branching** — a correct effect is invariant under double-invocation; `<Activity mode="hidden">` runs the same path in production. Also removed the deferred-timer `clearTimeout` loop from that cleanup: it too ran on live components and nothing re-arms a cleared handle, so it permanently killed pending bubble-clears (**a bubble asserting state the agent no longer has**) and the pass-document receive step (**a handoff drawn but never received**).
-- **Filed, NOT fixed** — `AVO-187` (P1, honesty-critical, production-reachable): `jitterDoorCrossing` offsets only **perpendicular to travel**, so every door pins its travel axis at **exactly zero spread**; two agents pausing at one side are always ≤`DOOR_JITTER` (20px) apart — inside `STACK_DIST_PX` (30) and the 32x44 ellipse. **Any pause at a door is a guaranteed stack** (measured: 4/4 clean-CI stacks at x=585 exactly). Its own comment cites the 2026-06-10 forensic at `(240,386)` — the coordinate `mainToLounge` **still pins today**; that mitigation turned a 0px point-stack into a 20px segment and never reached its own alarm. **Not fixable by raising `DOOR_JITTER`** (opening ~50px) — needs a **temporal door claim** + an ADR. Characterized by `tests/doorCrossingSeparation.test.js` + a source note so it cannot go quiet. Also filed: `AVO-188` (abort sites leave a stale `isMoving:true`; `AgentInspector` reads it and lies), `AVO-189` (`shouldRecordRafWatchdogRestart` is structurally unreachable — reads 0 on a broken build; **never assert on it**), `AVO-190` (`sim-soak` blind-reuses any server on :5173 — during this investigation that was a *different project*).
-- Downstream: `living-world` roadmap M4 got a precondition (`56d494e`) — extract from `eb0a83a`+, and the trap is **not AVO-specific**: any rAF-driven movement + depth-sorted keyed list hits it with zero AVO code.
-- Process: SSoT appended directly (guard bypassed deliberately — the documented stale-receipt hazard); Ship History now 11 vs the advisory cap of 10 (`check_ssot_caps.py` prints this under a `[PASS]`, never a FAIL) — recorded rather than silently rotated.
-- Tests: Pass
-
-### Ship-chore-ssot-rotation-and-worklog-hygiene-2026-07-10 (SSoT rotation + work-log hygiene)
-
-- Closes the three follow-ups left open by the Agentic OS v1.8.11 brain upgrade (PR #199, squash `884a0ac`).
-- **Ship History rotation** (`ship.md:208`): 74 -> 10 entries. The 64 oldest moved verbatim to `.agentcortex/context/archive/ship-history-2026.md`. The surviving 10 are byte-identical - no entry was edited or reordered (`ship.md:207`). One `../../docs/specs/...` link inside the moved content was flattened to a plain path, per the depth hazard called out at `ship.md:209`.
-- **Spec Index rotation: attempted, then REVERTED.** `ship.md:197` says to collapse the oldest `[Shipped]` entries into a `## Spec Index Archive` section once the index passes 30. Doing so turns a never-failing advisory into a hard failure: `validate.{sh,ps1}` scrape the index with a regex that stops at the next `##` header (`validate.ps1:1999`) and contain **zero** references to `Spec Index Archive`, so all 13 rotated specs immediately report as `[FAIL] SSoT Spec Index completeness: 13 shipped/living spec(s) not in index`. The index stays at 43 entries and `check_ssot_caps.py` keeps printing its advisory. Reported upstream; the documented procedure and the validator disagree.
-- **Work-log hygiene**: 9 active -> 2. Six live logs were `cmp`-proven byte-identical to their committed archive copies and deleted (feat-avo-104/107/123/130/136, refactor-avo-146). Two shipped-but-unarchived logs (`codex/strengthen-panel-feature-verifier`, office-layout-enrichment) were archived with hash-chained `INDEX.jsonl` entries. An 8-day-expired `main.lock.json` (owner `codex`, 60-min timeout) was released.
-- **Deliberately untouched**: `.agentcortex/context/work/main.md` - codex's audit log on the live `main` branch. Reported, not archived: promoting an incomplete gate chain into git would manufacture validator FAILs.
-- **Upstream**: the `validate.sh` exit-141 SIGPIPE abort (unfixed in v1.8.11) is reported as `KbWen/agentic-os` issue #336, with root cause, a reproduction, and three suggested fixes.
-- Evidence: `check_ssot_caps.py` -> `ssot caps OK - ship history 10/10, spec index 30/30`; `validate.ps1` (pwsh 7) fail=0; vitest 2251 passed; build clean.
-
-> Older entries (68) are archived, newest-first, in
+> Older entries are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.
+
+## Spec Index Archive
+
+> Rotated out of the live **Spec Index** on 2026-08-16 to satisfy the `check_ssot_caps.py`
+> 30-entry advisory cap. These are index lines only — every spec body remains at its
+> `docs/specs/` path and is still validated for completeness (both validators union this
+> section with the live index; `validate.ps1:2243`). Never delete entries from here.
+
+  - [vibe-rebalance] docs/specs/control-bar-reduction.md [Shipped]  *(AVO-130 / #116 — 4 health pills→1 expandable health dot; lang/run/view/help/platform demoted into ⚙ menu / info popover)*
+  - [feature] docs/specs/agent-inspector-info-enhancement.md [Shipped]
+  - [architecture] docs/specs/codex-status-parity-and-done-count.md [Shipped]
+  - [feature] docs/specs/character-growth-system.md [Shipped]
+  - [feature] docs/specs/clickable-office-objects.md [Shipped]
+  - [v1.1.0 classifier] docs/specs/classifier-foundation.md [Shipped]  *(#A1)*
+  - [v1.1.0 classifier] docs/specs/classifier-wiring.md [Shipped]  *(#A2 + #A2.1)*
+  - [v1.1.0 classifier] docs/specs/classifier-unknown-log.md [Shipped]  *(#A3)*
+  - [v1.1.0 classifier] docs/specs/mcp-inner-verb-fix.md [Shipped]  *(MCP follow-up)*
+  - [v1.1.0 visual] docs/specs/perf-metrics-chip.md [Shipped]  *(#6)*
+  - [v1.1.0 visual] docs/specs/weather-system.md [Shipped]  *(#14 + #15 closure)*
+  - [v1.1.0 visual] docs/specs/tool-inventory-label.md [Shipped]  *(AVO-103)*
+  - [v1.1.0 visual] docs/specs/workflow-handoff-arrows.md [Shipped]  *(AVO-105)*
+  - [v1.1.0 inference] docs/specs/desktop-notifications.md [Shipped]  *(#8)*
+  - [v1.1.0 inference] docs/specs/idle-gap-inference.md [Shipped]  *(#C)*
+  - [v1.1.0 compatibility] docs/specs/csp-compatibility.md [Shipped]  *(#27)*
+  - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Shipped]  *(AVO-126/127/128/129/131/132 — MERGED to main via squash PR #44, v1.2.0, 2026-06-05)*
+  - [living-office] docs/specs/living-office-events.md [Shipped]  *(AVO-140 — MERGED to main via squash PR #44, v1.2.0, 2026-06-05)*
