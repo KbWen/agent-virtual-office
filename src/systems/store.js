@@ -592,13 +592,28 @@ export const useOfficeStore = create((set) => ({
         // non-participant at dev's chair for the whole event — a full visual stack).
         gt = avoidOverlap(clampToFloor(groupTarget), claimed)
       } else {
-        // React-in-place participant (spiller, caller, dog-reactor): if the event happens
-        // to FREEZE them mid-transit while visually overlapping someone, give them a short
-        // honest side-step instead of locking the stack in for the event's duration.
-        // R1-safe: pickParticipants never selects tracked working/blocked agents.
+        // React-in-place participant (spiller, caller, dog-reactor): the event FREEZES them
+        // wherever they stand, so that spot has to survive the event's duration on two axes —
+        // vs the map and vs other agents. Clamp first, then side-step, mirroring the
+        // groupTarget branch above. R1-safe: pickParticipants never selects tracked
+        // working/blocked agents.
+        //
+        // The clamp used to run only on the overlap path, so an event that caught an agent
+        // mid-transit THROUGH furniture with nobody nearby froze it inside that furniture
+        // (nightly soak catch 2026-08-16: `ops` walked (115,175)->(95,108)->(89,103), all
+        // isOnObstacle, and was parked at (89,103) — which also landed 25px from `gate` at
+        // its HOME, tripping the group-stack rule too). Pinned by
+        // tests/reactInPlaceRestValidity.test.js.
         const myPos = s.agents[id].position
-        if (myPos && claimed.some(p => visuallyOverlapping(myPos, p))) {
-          gt = avoidOverlap({ x: myPos.x, y: myPos.y }, claimed)
+        if (myPos) {
+          const seed = clampToFloor({ x: myPos.x, y: myPos.y })
+          if (claimed.some(p => visuallyOverlapping(seed, p))) {
+            gt = avoidOverlap(seed, claimed)
+          } else if (seed.x !== myPos.x || seed.y !== myPos.y) {
+            // Only publish a target when the clamp actually moved them; an agent already
+            // standing somewhere valid keeps `gt === null` and simply stays put.
+            gt = seed
+          }
         }
       }
       return {
@@ -705,16 +720,20 @@ export const useOfficeStore = create((set) => ({
           gt = avoidOverlap(clampToFloor(groupTarget), assigned)
           assigned.push(gt)
         } else {
-          // React-in-place batch participant: side-step if frozen overlapping someone
-          // (mirrors setAgentGroupEvent); either way their spot is CLAIMED so later batch
-          // entries can't be assigned on top of them (batch ids are excluded from the
-          // outsider seed above — without this push they'd be invisible).
+          // React-in-place batch participant: clamp, then side-step if frozen overlapping
+          // someone (mirrors setAgentGroupEvent). Either way their spot is CLAIMED so later
+          // batch entries can't be assigned on top of them (batch ids are excluded from the
+          // outsider seed above — without this push they'd be invisible). The claimed spot
+          // must be the one they will ACTUALLY occupy, so it is pushed post-clamp.
           const myPos = agents[id].position
-          if (myPos && assigned.some(p => visuallyOverlapping(myPos, p))) {
-            gt = avoidOverlap({ x: myPos.x, y: myPos.y }, assigned)
-            assigned.push(gt)
-          } else if (myPos) {
-            assigned.push(myPos)
+          if (myPos) {
+            const seed = clampToFloor({ x: myPos.x, y: myPos.y })
+            if (assigned.some(p => visuallyOverlapping(seed, p))) {
+              gt = avoidOverlap(seed, assigned)
+            } else if (seed.x !== myPos.x || seed.y !== myPos.y) {
+              gt = seed
+            }
+            assigned.push(gt || myPos)
           }
         }
         agents[id] = {
