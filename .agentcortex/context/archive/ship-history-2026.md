@@ -26,6 +26,12 @@ Rotated 2 additional entries on 2026-08-03 (SSoT Update Sequence 115 -> 116).
 
 ---
 
+### Ship-fix-avo-189-reachable-raf-watchdog-diagnostic-2026-07-30
+
+- Shipped AVO-189 on `codex/chore-upgrade-agentic-os-v1.8.17`: the first reachable focused lost-chain restart now increments the existing diagnostic counter and emits the existing dev warning. The change is the predicate threshold `>=2`→`>=1`; RAF timing, restart behavior, and frame reset semantics are unchanged.
+- Pending RAF handles and unfocused documents remain excluded, preserving the existing host-throttling noise guards. Commit: `feb23ef`.
+- Tests: Pass — focused 21/21; Vitest 111/111 files and 2271/2271 tests; build PASS; Agentic OS validator 112 PASS / 0 FAIL before Work Log wording cleanup.
+
 ### Ship-fix-avo-188-abort-movement-in-place-2026-07-30
 
 - Shipped AVO-188 on `codex/chore-upgrade-agentic-os-v1.8.17`: one atomic store action stops aborted walks at a defensive copy of the rendered position, clears `isMoving` and `journeyTarget`, and aligns `targetPosition` without teleporting to an abandoned waypoint.

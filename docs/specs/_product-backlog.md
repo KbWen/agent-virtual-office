@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-07-31
+last_updated: 2026-08-16
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -38,6 +38,7 @@ last_updated: 2026-07-31
 | AVO-188 | Abort sites leave a stale `isMoving: true` on a standing agent | product | data-path | P2 | [Spec](avo-188-abort-movement-in-place.md) | quick-win | Shipped | Abort paths now atomically copy the last rendered position into `position` and `targetPosition`, clear motion/journey truth, and preserve live teardown restoration. Commit `ac07a4d`. |
 | AVO-189 | `shouldRecordRafWatchdogRestart` is structurally dead — reads 0 on a broken build | product | ci-infra | P3 | [Spec](avo-189-reachable-raf-watchdog-diagnostic.md) | quick-win | Shipped | The first focused lost-chain restart is now observable while pending-frame and unfocused noise gates remain unchanged. Commit `feb23ef`. |
 | AVO-190 | `sim-soak` blind-reuses ANY server on :5173 without verifying it is AVO | product | ci-infra | P2 | [Spec](avo-190-soak-target-identity.md) | quick-win | Shipped | Shared source-module identity probe now rejects unrelated or unproven targets before Playwright; only explicit connection refusal on the default origin permits spawning Vite. Commit `fec1086`. |
+| AVO-191 | `pickParticipants` falls back to ALL agents when <2 are available — a genuinely-working agent can be taken over by an office event | review-finding | office-runtime | P2 | — | quick-win | Pending | Found during the AVO-192 panel. `officeLife.js` guards R1 with `available.length >= 2 ? available : agentIds` (twice), so on a quiet office an event CAN pick a working/blocked agent — while store.js's comment asserts "R1-safe: pickParticipants never selects tracked working/blocked agents". The comment is wrong. Pre-dates AVO-192; that fix only made the relocation slightly more reachable. |
 
 > [!NOTE]
 > **Reality check (2026-06-15):** the planned-feature backlog is essentially exhausted. After the

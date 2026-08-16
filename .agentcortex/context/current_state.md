@@ -156,6 +156,15 @@
 
 ## Ship History
 
+### Ship-hotfix-offfloor-sidestep-clamp-2026-08-16 (AVO-192 — an event could freeze an agent inside a desk)
+
+- Nightly `sim-soak` on `main` (`cb6a76e`) caught `[offFloorRest] ops at (89,103)` + `[sustainedStack] gate+ops dist 25, group:true`. Forensic tail: `ops` walked (115,175)->(95,108)->(89,103), all `isOnObstacle`, still in transit; a group event froze it there for the event's duration, 25px from `gate` at its HOME (100,80).
+- **Cause**: the react-in-place branch of both group-event chokepoints validated the resting spot ONLY when the frozen agent happened to visually overlap another agent. With nobody nearby it left `groupTarget` null and froze the agent exactly where it stood -- including inside furniture. The adjacent `groupTarget` branch has always clamped first; a one-sided gap, not a design choice. Fix mirrors that branch: clamp, then side-step. **No-op for an already-valid position** (pinned by a dedicated test), so it is not "nudge everyone". `clampToFloor` itself is untouched -- transit-time furniture clipping stays the accepted trade-off (AVO-183a).
+- **Three root causes were stated before the right one; the first two are recorded because the correction pattern is the durable lesson.** (1) "the fallback lacks clampToFloor" -- wrong, `avoidOverlap` clamps internally. (2) "the agent is off the walkable floor" -- wrong, `isOnFloor(89,103)` is **true**. The soak's `offFloor` flag is `!isOnFloor || isOnObstacle`, so "off-floor rest" INCLUDES standing inside furniture; a test asserting only `isOnFloor` would have passed against the broken code and proved nothing.
+- **A measurement that was refused rather than reported.** An in-page probe returned "0 hits / 73 moving samples", but had run ~6s of an intended 200s -- the Browser pane freezes timers when hidden. Publishing that as "0%" would have been a false all-clear. Replaced with a bound from real constants (`DAILY_EVENT_INTERVAL [60s,180s]`, `SEED_COOLDOWN_MS 120s`): **at most one 11px shuffle per 1-3 min**, far less in practice since gather events carry a `groupTarget` and never reach this path -- negligible against the ambient out-trip rate.
+- Reviewed by a 5-lens panel plus a 4-lens game-design pass, unanimous keep. Decisive argument is UI/UX: an agent half-buried in a desk is the single most obviously-wrong thing on a small ambient screen and persists for the whole event, while the correction is a sub-second shuffle that adds no new visual vocabulary. The panel surfaced a separate pre-existing R1 hole -- `pickParticipants` falls back to ALL agents when fewer than 2 are available, so the "R1-safe" comment in `store.js` is false -- filed as **AVO-191**, not folded into this hotfix.
+- Tests: Pass -- MFR RED at exactly (89,103) on both chokepoints before the change and GREEN after; Vitest 115/115 files and 2309/2309 tests; `agentSeparationInvariants` 9/9 unchanged; build PASS, bundle 496,263 bytes (-0.05%); `render-smoke` 4 viewports 0 errors; 4x10-min `sim-soak` green, weighted as corroboration only (p ~= 0.32 under the null at the observed hit rate).
+
 ### Ship-chore-remove-dead-deskcluster-2026-08-16 (1 genuinely dead export; 6 of 7 candidates were my own false positives)
 
 - Removed `DeskCluster` from `src/components/TopDownFurniture.jsx` -- exported, never imported or rendered. 1 file, **-17 lines, 0 additions**; bundle 496.50 -> **496.18 kB**.
@@ -223,12 +232,6 @@
 
 - Shipped AVO-187 on `codex/chore-upgrade-agentic-os-v1.8.17`: atomic full-route physical-door claims serialize both directions with stable FIFO tickets, journey fencing, complete lifecycle release, and rendered-truth timeout/dynamic-removal aborts. Commit: `018ef1e`.
 - Tests: Pass — Vitest 112/112 files and 2295/2295 tests; production build PASS; Agentic OS validator 112 PASS / 0 FAIL; real-server 4/4 doors over 22 batches with empty final owners/requests; 10.005-minute cold-watch with zero invariant violations.
-
-### Ship-fix-avo-189-reachable-raf-watchdog-diagnostic-2026-07-30
-
-- Shipped AVO-189 on `codex/chore-upgrade-agentic-os-v1.8.17`: the first reachable focused lost-chain restart now increments the existing diagnostic counter and emits the existing dev warning. The change is the predicate threshold `>=2`→`>=1`; RAF timing, restart behavior, and frame reset semantics are unchanged.
-- Pending RAF handles and unfocused documents remain excluded, preserving the existing host-throttling noise guards. Commit: `feb23ef`.
-- Tests: Pass — focused 21/21; Vitest 111/111 files and 2271/2271 tests; build PASS; Agentic OS validator 112 PASS / 0 FAIL before Work Log wording cleanup.
 
 > Older entries are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.
