@@ -2,6 +2,10 @@
 title: "ADR-005 — No User Drag-to-Move Agents (AVO-142 rejected by decision)"
 date: 2026-06-14
 status: accepted
+applies_to:
+  - "src/systems/store.js"
+  - "src/components/AgentCharacter.jsx"
+  - "src/components/PixelOffice.jsx"
 lifecycle:
   owner: KbWen
   review_cadence: on-event

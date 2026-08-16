@@ -2,6 +2,13 @@
 title: "ADR-003 — Status Source Parity for Codex"
 date: 2026-04-08
 status: accepted
+applies_to:
+  - "src/utils/statusContract.mjs"
+  - "src/utils/normalizePost.mjs"
+  - "src/inference/inferStatus.js"
+  - "src/server/scanSessions.mjs"
+  - "public/hooks/office-status-codex.js"
+  - "public/hooks/generic-llm-bridge.js"
 lifecycle:
   owner: KbWen
   review_cadence: on-event

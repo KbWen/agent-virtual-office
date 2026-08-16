@@ -2,6 +2,10 @@
 title: "ADR-004 — No Per-Frame Agent Separation (AVO-144 resolved by decision)"
 date: 2026-06-10
 status: accepted
+applies_to:
+  - "src/systems/movementSystem.js"
+  - "src/systems/doorClaims.js"
+  - "src/components/AgentCharacter.jsx"
 lifecycle:
   owner: KbWen
   review_cadence: on-event

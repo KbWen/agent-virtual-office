@@ -26,6 +26,12 @@ Rotated 2 additional entries on 2026-08-03 (SSoT Update Sequence 115 -> 116).
 
 ---
 
+### Ship-fix-avo-190-soak-target-identity-2026-07-30
+
+- Shipped AVO-190 on `codex/chore-upgrade-agentic-os-v1.8.17`: `sim-soak` and `overlap-recorder` now share a fail-closed `/src/systems/store.js` identity preflight before Playwright launches. Unrelated HTTP 200 targets, timeouts, invalid URLs, and non-2xx probes fail with the rejected URL; only explicit connection refusal on the default origin permits the spawn fallback.
+- Commit: `fec1086` (`fix(soak): verify target identity before sampling`). Scope is limited to the soak scripts, shared probe, focused tests, and spec; no product runtime files changed.
+- Tests: Pass — Vitest 111/111 files and 2268/2268 tests; build PASS; fake HTTP 200 rejected by both consumers; forced-spawn soak 5 samples / 0 violations; Agentic OS validator 113 PASS / 0 FAIL.
+
 ### Ship-codex-chore-upgrade-agentic-os-v1.8.17-2026-07-30
 
 - Upgraded the vendored Agentic OS governance framework from **v1.8.11** (`cada3c4`) to the latest formal release **v1.8.17** (`102e19b`) from canonical upstream `KbWen/agentic-os.git`. Supply-chain/provenance handling kept the task at `hotfix`; the deployed diff contains 49 tracked framework updates and 2 managed additions, with zero product, dependency, or test-path changes.

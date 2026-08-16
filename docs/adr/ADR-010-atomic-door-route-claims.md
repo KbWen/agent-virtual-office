@@ -2,6 +2,14 @@
 title: "ADR-010 — Atomic Door-Route Claims"
 date: 2026-07-31
 status: accepted
+applies_to:
+  - "src/systems/movementSystem.js"
+  - "src/systems/store.js"
+  - "src/systems/doorClaims.js"
+  - "src/components/AgentCharacter.jsx"
+  - "tests/doorClaims.test.js"
+  - "tests/doorCrossingSeparation.test.js"
+  - "scripts/sim-soak.mjs"
 lifecycle:
   owner: KbWen
   review_cadence: on-event
