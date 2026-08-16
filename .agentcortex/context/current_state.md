@@ -156,7 +156,6 @@
 
 ## Ship History
 
-<<<<<<< HEAD
 ### Ship-chore-adr-applies-to-backfill-2026-08-16 (ADR coverage gate was blind to 8 of 10 ADRs)
 
 - `check_adr_coverage.py` reported **8 of 10 ADRs missing `applies_to:` frontmatter**, so `/bootstrap`'s ADR coverage gate could never fire for the files those decisions govern -- it was structurally blind, not merely quiet. Declared `applies_to:` on **6** ADRs (47 globs); `--paths .agentcortex/ .agent/` used to return `no_covering_adr` and now resolves to ADR-001. 8 files, +43 lines, frontmatter only, no ADR body text altered.
@@ -164,6 +163,7 @@
 - Surfaces were derived per-ADR from that ADR's own `review_trigger` prose plus its Decision section, never from a directory wildcard; the broadest pattern written is a single named file. Every glob was then existence-checked: **47 checked, 0 phantoms**. That audit caught a real error before it landed -- `statusContract.mjs` lives at `src/utils/`, not `src/systems/` as this SSoT's own Spec Index line implies.
 - Tests: Pass -- coverage matrix resolves `AGENTS.md`/`state_machine.md`→ADR-001, `office-status-hook.js`→ADR-002, `statusContract.mjs`→ADR-003, `store.js`→ADR-005+ADR-010, `doorClaims.test.js`→ADR-010; `check_lifecycle_frontmatter.py` 10 PASS / 2 WARN / 0 FAIL (both WARNs pre-existing and untouched); `validate.ps1` `pass=113 warn=6 fail=0 skip=4`, identical to the pre-change baseline.
 =======
+
 ### Ship-chore-dependency-refresh-cve-clearance-2026-08-16 (2 CVEs cleared; 9 deps refreshed)
 
 - Cleared both open advisories by bumping the declared `vite` range 8.0.16 -> 8.2.1: it requires `postcss ^8.5.25`, above the `<=8.5.22` advisory range, and pulls the fixed `nanoid` 3.3.18. Resolved chain is now `vite@8.2.1 -> postcss@8.5.26 -> nanoid@3.3.18`; `npm audit --omit=dev` reports **0 vulnerabilities**. The other 8 stale direct deps were refreshed in the same pass (all patch/minor); `npm outdated` is empty. Only `package.json` + `package-lock.json` changed -- zero source files.
@@ -192,7 +192,6 @@
 - **Upstream findings routed to the owner.** NEW: `validate.sh` and `validate.ps1` disagree on the same tree -- `pass=112` vs `pass=113`; `docs/specs` frontmatter check exists only in the `.ps1`; `backlog label vocabulary` reports 2 vs 1 distinct labels; `archive size` measures 1108KB vs 878KB; the Evidence-floor check covers one more classification in the `.ps1`. Not new: the phantom `-- tool not present` SKIPs are already upstream **#173** ("19 tools referenced, 7 absent, at least 4 deliberately, no allowlist separates intent from oversight"); `check_worklog_references.py` being source-only follows the **#137** precedent.
 - Review limits stated rather than implied: no fresh-context reviewer was dispatched (same-session author reviewed own work; the trust-boundary external signal was the upstream CHANGELOG cross-check plus an independent `git ls-remote` provenance check), and the 202 deployed files were NOT line-by-line audited for malicious content -- the applied control is provenance + byte-parity, which is the appropriate control for vendored framework code, not a code audit.
 - Tests: Pass -- Vitest 114/114 files and 2306/2306 tests; build PASS with the bundle unchanged at 496.50 kB; `validate.ps1` `pass=113 warn=7 fail=0 skip=5` (baseline `113/6/0/4`, fail stays 0); `validate.sh` `pass=112 warn=7 fail=0 skip=5`; 202/202 deployed files byte-match the v1.8.21 source after CRLF normalization; upgraded-tool functional smoke 9/9 including a proven stale-`expected-sha` rejection by `guard_context_write.py`.
->>>>>>> main
 
 ### Ship-chore-release-v1.6.5-2026-08-03 (npx project-root fix + maintenance sweep) · release v1.6.5
 
@@ -229,12 +228,6 @@
 - Shipped AVO-188 on `codex/chore-upgrade-agentic-os-v1.8.17`: one atomic store action stops aborted walks at a defensive copy of the rendered position, clears `isMoving` and `journeyTarget`, and aligns `targetPosition` without teleporting to an abandoned waypoint.
 - Force-unstick and behavior-watchdog use the action directly. True component removal defers one microtask; same-flush live teardown/setup clears the unmounted flag and keeps the existing restoration path intact. Commit: `ac07a4d`.
 - Tests: Pass — focused 67/67; Vitest 111/111 files and 2271/2271 tests; build PASS; forced-spawn soak 5 samples / 0 violations; Agentic OS validator 113 PASS / 0 FAIL.
-
-### Ship-fix-avo-190-soak-target-identity-2026-07-30
-
-- Shipped AVO-190 on `codex/chore-upgrade-agentic-os-v1.8.17`: `sim-soak` and `overlap-recorder` now share a fail-closed `/src/systems/store.js` identity preflight before Playwright launches. Unrelated HTTP 200 targets, timeouts, invalid URLs, and non-2xx probes fail with the rejected URL; only explicit connection refusal on the default origin permits the spawn fallback.
-- Commit: `fec1086` (`fix(soak): verify target identity before sampling`). Scope is limited to the soak scripts, shared probe, focused tests, and spec; no product runtime files changed.
-- Tests: Pass — Vitest 111/111 files and 2268/2268 tests; build PASS; fake HTTP 200 rejected by both consumers; forced-spawn soak 5 samples / 0 violations; Agentic OS validator 113 PASS / 0 FAIL.
 
 > Older entries are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.
