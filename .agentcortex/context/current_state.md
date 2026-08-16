@@ -156,6 +156,15 @@
 
 ## Ship History
 
+### Ship-chore-dependency-refresh-cve-clearance-2026-08-16 (2 CVEs cleared; 9 deps refreshed)
+
+- Cleared both open advisories by bumping the declared `vite` range 8.0.16 -> 8.2.1: it requires `postcss ^8.5.25`, above the `<=8.5.22` advisory range, and pulls the fixed `nanoid` 3.3.18. Resolved chain is now `vite@8.2.1 -> postcss@8.5.26 -> nanoid@3.3.18`; `npm audit --omit=dev` reports **0 vulnerabilities**. The other 8 stale direct deps were refreshed in the same pass (all patch/minor); `npm outdated` is empty. Only `package.json` + `package-lock.json` changed -- zero source files.
+- **A rejected approach, recorded so it cannot quietly return.** The scan's first proposal was to move `vite` / `@vitejs/plugin-react` / `@tailwindcss/vite` / `tailwindcss` out of `dependencies` into `devDependencies`, reasoning that build tools do not belong in production deps and that this was why `npm audit --omit=dev` surfaced build-chain CVEs as production vulnerabilities. **That would have broken the documented install path.** `bin/cli.js:294` resolves and executes Vite's CLI via `require.resolve('vite/package.json', { paths: [root] })`, and `package.json files:` ships `vite.config.js` + `src/`, so under `npx agent-virtual-office` Vite runs on the consumer's machine as a genuine runtime dependency. Reclassifying it would have re-opened precisely the failure v1.6.5 shipped to fix (PR #205). Refuted by reading `bin/cli.js` before any edit was made; **no dependency was reclassified.**
+- Honest severity, stated rather than inflated: neither library reaches the shipped browser bundle (0 occurrences in `dist/`). They execute in the build / dev-server process -- which under `npx` is the consumer's machine, so the exposure is real but needs attacker-controlled input into that user's own build chain. This is dependency hygiene, not an incident.
+- The `rolldown 1.0.3 -> 1.2.4` jump inside vite 8.2.1 was the actual regression risk and it landed clean. Bundle grew 496,504 -> **496,515 bytes (+11)**; `scripts/bundle-budget.mjs` PASSES at +0.00% against its 10% headroom, so `bundle-budget.json` was deliberately **not** re-based -- the budget is a ceiling with room, not an exact pin, and editing it would have been an unnecessary change to a deliberately-managed file.
+- Lockfile scope audited against the git baseline rather than the audit summary: 73 entries changed, all traceable to the 9 declared bumps and their platform-binary fanout; the 5 removals (`@emnapi/*`, `@tybys/wasm-util`, `@rolldown/binding-wasm32-wasi`, `tslib`) are the wasm-fallback chain rolldown 1.2.4 drops. Zero out-of-scope packages.
+- Tests: Pass -- `npm audit --omit=dev` 0 vulnerabilities; Vitest 114/114 files and 2306/2306 tests on vitest 4.1.10; build PASS; bundle-budget gate PASS; `npm run smoke` PASS (4 viewports, 0 pageerrors, 0 console errors); **`npm run smoke:pack` ALL ASSERTIONS PASSED**, including booting the packed tarball's dev server and getting HTML with the app mount -- the direct proof that Vite still resolves and runs from an installed package.
+
 ### Ship-chore-ssot-index-rotation-2026-08-16 (both SSoT caps restored; the "never rotate" rule retired)
 
 - Spec Index collapsed **47 -> 30 inline + 18 archived** into `## Spec Index Archive`, and Ship History rotated **11 -> 10**. `check_ssot_caps.py` now prints `ssot caps OK - ship history 10/10, spec index 30/30 (+18 archived)` -- the first time both caps have been satisfied.
@@ -217,12 +226,6 @@
 - Shipped AVO-190 on `codex/chore-upgrade-agentic-os-v1.8.17`: `sim-soak` and `overlap-recorder` now share a fail-closed `/src/systems/store.js` identity preflight before Playwright launches. Unrelated HTTP 200 targets, timeouts, invalid URLs, and non-2xx probes fail with the rejected URL; only explicit connection refusal on the default origin permits the spawn fallback.
 - Commit: `fec1086` (`fix(soak): verify target identity before sampling`). Scope is limited to the soak scripts, shared probe, focused tests, and spec; no product runtime files changed.
 - Tests: Pass — Vitest 111/111 files and 2268/2268 tests; build PASS; fake HTTP 200 rejected by both consumers; forced-spawn soak 5 samples / 0 violations; Agentic OS validator 113 PASS / 0 FAIL.
-
-### Ship-codex-chore-upgrade-agentic-os-v1.8.17-2026-07-30
-
-- Upgraded the vendored Agentic OS governance framework from **v1.8.11** (`cada3c4`) to the latest formal release **v1.8.17** (`102e19b`) from canonical upstream `KbWen/agentic-os.git`. Supply-chain/provenance handling kept the task at `hotfix`; the deployed diff contains 49 tracked framework updates and 2 managed additions, with zero product, dependency, or test-path changes.
-- Downstream-owned scaffolds were preserved: the live project SSoT and Claude office hooks remained intact; generated `.acx-incoming` templates were inspected and removed. All deployed framework files match the v1.8.17 source bytes, excluding the target-generated manifest.
-- Tests: Pass — Agentic OS validator `pass=113 warn=7 fail=0 skip=4`; Vitest `2263/2263`; production build PASS. Branch retained locally; no push or PR performed.
 
 > Older entries are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.
