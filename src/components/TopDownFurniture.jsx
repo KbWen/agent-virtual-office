@@ -56,23 +56,6 @@ export const Desk = React.memo(function Desk({ x, y, color = '#B8864E', hasMonit
   )
 })
 
-// ─── Desk Cluster (two facing desks) ─────────────────────────────────────
-// topAgent faces down, bottomAgent faces up — they sit across from each other
-export const DeskCluster = React.memo(function DeskCluster({ x, topY, bottomY, topCoffee = 0, bottomCoffee = 0, label }) {
-  return (
-    <g>
-      {/* Cluster label */}
-      {label && (
-        <text x={x} y={topY - 28} textAnchor="middle" fontSize="6" fill="#888" fontFamily="sans-serif" opacity="0.6">{label}</text>
-      )}
-      {/* Top desk: character sits below desk, faces down at monitor on top */}
-      <Desk x={x} y={topY} facing="down" coffeeCount={topCoffee} />
-      {/* Bottom desk: character sits above desk, faces up at monitor on bottom */}
-      <Desk x={x} y={bottomY} facing="up" coffeeCount={bottomCoffee} />
-    </g>
-  )
-})
-
 // ─── Coffee Cup ──────────────────────────────────────────────────────────
 export const CoffeeCup = React.memo(function CoffeeCup({ x, y, steaming = true }) {
   return (

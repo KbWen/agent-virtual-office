@@ -156,6 +156,13 @@
 
 ## Ship History
 
+### Ship-chore-remove-dead-deskcluster-2026-08-16 (1 genuinely dead export; 6 of 7 candidates were my own false positives)
+
+- Removed `DeskCluster` from `src/components/TopDownFurniture.jsx` -- exported, never imported or rendered. 1 file, **-17 lines, 0 additions**; bundle 496.50 -> **496.18 kB**.
+- The scan that found it originally flagged **7** dead exports and **6 were false positives**: the detector excluded the defining file from its reference search, so symbols used only within their own module looked unreferenced (`onLocaleChange`, `drawCard`, `DOOR_CLAIM_LEASE_MS`, `HELPER_OFFSETS`, `HELPER_HEAVY_THRESHOLD`, `MODE_EMOTE`). Each was re-checked individually before anything was deleted. `DeskCluster` appears exactly once in the whole repo -- at its own declaration.
+- **The verification that mattered, and the near-miss inside it.** `render-smoke` reported `min svg descendants 2042` while an earlier run this session reported **2051** -- which would mean removing "dead" code changed the render, i.e. that it was not dead. It did not mean that: the 2051 run was on a different branch (the dependency refresh), so two variables had moved at once. Re-measured as a **same-branch A/B**: `main` unmodified -> 2042, with the removal -> 2042. Provably render-inert. Worth keeping: `min svg descendants` is a **floor assertion over a live animated scene**, not a render fingerprint -- cross-branch or cross-run comparisons of that number prove nothing, only a same-tree A/B does.
+- Tests: Pass -- Vitest 114/114 files and 2306/2306 tests; build PASS; `render-smoke` PASS across 4 viewports with 0 pageerrors and 0 console errors; same-branch A/B render proof above.
+
 ### Ship-chore-adr-applies-to-backfill-2026-08-16 (ADR coverage gate was blind to 8 of 10 ADRs)
 
 - `check_adr_coverage.py` reported **8 of 10 ADRs missing `applies_to:` frontmatter**, so `/bootstrap`'s ADR coverage gate could never fire for the files those decisions govern -- it was structurally blind, not merely quiet. Declared `applies_to:` on **6** ADRs (47 globs); `--paths .agentcortex/ .agent/` used to return `no_covering_adr` and now resolves to ADR-001. 8 files, +43 lines, frontmatter only, no ADR body text altered.
@@ -222,12 +229,6 @@
 - Shipped AVO-189 on `codex/chore-upgrade-agentic-os-v1.8.17`: the first reachable focused lost-chain restart now increments the existing diagnostic counter and emits the existing dev warning. The change is the predicate threshold `>=2`→`>=1`; RAF timing, restart behavior, and frame reset semantics are unchanged.
 - Pending RAF handles and unfocused documents remain excluded, preserving the existing host-throttling noise guards. Commit: `feb23ef`.
 - Tests: Pass — focused 21/21; Vitest 111/111 files and 2271/2271 tests; build PASS; Agentic OS validator 112 PASS / 0 FAIL before Work Log wording cleanup.
-
-### Ship-fix-avo-188-abort-movement-in-place-2026-07-30
-
-- Shipped AVO-188 on `codex/chore-upgrade-agentic-os-v1.8.17`: one atomic store action stops aborted walks at a defensive copy of the rendered position, clears `isMoving` and `journeyTarget`, and aligns `targetPosition` without teleporting to an abandoned waypoint.
-- Force-unstick and behavior-watchdog use the action directly. True component removal defers one microtask; same-flush live teardown/setup clears the unmounted flag and keeps the existing restoration path intact. Commit: `ac07a4d`.
-- Tests: Pass — focused 67/67; Vitest 111/111 files and 2271/2271 tests; build PASS; forced-spawn soak 5 samples / 0 violations; Agentic OS validator 113 PASS / 0 FAIL.
 
 > Older entries are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.
