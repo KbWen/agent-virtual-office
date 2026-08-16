@@ -46,6 +46,15 @@ naively (ADR-006):
 
 `check_ssot_caps.py` is the working template — copy its wiring, not just its logic.
 
+The inverse trips people who never touched `deploy` at all. The governance docs that ship
+downstream — `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and the top level of `.agent/workflows/` and
+`.agent/rules/` — get scanned by `test_deployed_governance_referenced_tools_are_deployed` for tool
+paths under the runtime-tools directory, and a cited tool that `deploy` does not ship fails the
+test. Not every checker is meant to ship: the skill-provenance one self-skips as soon as a deploy
+manifest is present, so shipping it would only add a permanent no-op downstream. Prose describing
+the upstream enforcement passes; a bare tool path in these files is a command the downstream
+reader cannot run.
+
 ## 3. Local `validate` FAILs about work logs are usually invisible to CI
 
 Work logs under `.agentcortex/context/work/` are gitignored. Local FAILs about work-log
@@ -55,6 +64,19 @@ CI reports `fail=0` on the same commit.
 Clear them by **archiving tracked logs**, not by editing the validator. `/ship` archival is a
 MOVE, not a copy. Before assuming a validator bug, check whether the offending path is
 gitignored.
+
+The inverse bites harder, because it turns CI red rather than green. **Archiving flips a log
+from gitignored to tracked**, so checks that skipped it while it lived in `work/` start
+judging it — `check_decision_disposition.py` is the one that catches people, since it excludes
+`work/` entirely and enforces a date cutoff on the archive. A `## Decisions` entry that never
+received its ship-time disposition marker (`ship.md` 2b: `→ promoted: ADR-<id>` /
+`→ consolidated: L2 <domain>` / `→ local`) passes every local run right up until the moment
+you archive it.
+
+Consequence for ordering: a full-suite run taken **before** archival does not cover the
+archived state. Run it after the move, or at minimum re-run the guard suite. Confirmed
+2026-07-27 — a green 813-test local run preceded the archival, and CI went red on `main`
+immediately after (PR #374 → #375).
 
 ## 4. The 355k lifecycle ceiling does not count `AGENTS.md` or `CLAUDE.md`
 
@@ -167,6 +189,40 @@ something.
 ```bash
 git worktree add ../baseline main
 ```
+
+## 14. Isolate a validator count shift by stashing, not by a clean worktree
+
+`validate.sh` / `validate.ps1` end with `pass=N warn=N fail=N skip=N`. When that line moves
+and you want to know whether your diff caused it, the clean-worktree technique from #13 does
+**not** transfer. The reason is specific: roughly **18 PASS lines come from the active
+work-log checks**, and those do not run when `.agentcortex/context/work/` holds no `*.md` log
+(the shipped `.gitkeep.md` placeholder does not count — both validators exclude dotfiles). A
+fresh worktree has no work logs, so its totals are structurally lower than yours no matter
+what you changed.
+
+Measured 2026-07-27 on one commit: a clean `main` worktree reported `pass=99 warn=3`; the real
+tree with two active logs reported `pass=116 warn=4`; after archiving both logs the real tree
+reported `pass=99 warn=3` as well. Nothing in that gap was a diff.
+
+Since backlog #149 the run at least *says* so — one `SKIP` line reading `active work-log
+checks -- no active work logs`. That marks the absence; it does not restore the missing PASS
+lines, so the totals still are not comparable across trees.
+
+Stash only your own change and re-run in place instead, then compare the result **lines**
+rather than the totals:
+
+```bash
+git stash push -- path/to/changed-file && bash .agentcortex/bin/validate.sh > after.txt
+```
+
+An identical result-line set proves a zero delta far better than an identical count does.
+
+One culprit worth checking first, because it is self-inflicted and easy to miss: if you
+reclassified mid-task, your own gitignored work log now carries a `## Gate Evidence` receipt
+whose `Classification:` disagrees with the header. That surfaces as
+`active work log gate receipts with schema violations: 1` and one fewer PASS — a real finding
+about your session, not about the tree. Re-issue the receipt at the new tier and keep the
+original classification in `## Drift Log`, since the receipt grammar is pipe-field-strict.
 
 ---
 
