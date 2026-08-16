@@ -2,6 +2,9 @@
 title: "ADR-006 — AVO is not an observability / cost dashboard (off-mission backlog closures)"
 date: 2026-06-15
 status: accepted
+# applies_to: intentionally absent — this ADR governs what must NOT be built (cost meters, telemetry export,
+# analytics panels, productivity ranking). It has no existing file surface to match,
+# and a speculative glob would manufacture false coverage. Enforced by review, not by path.
 lifecycle:
   owner: KbWen
   review_cadence: on-event

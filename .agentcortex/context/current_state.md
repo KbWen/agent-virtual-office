@@ -163,6 +163,14 @@
 - **The verification that mattered, and the near-miss inside it.** `render-smoke` reported `min svg descendants 2042` while an earlier run this session reported **2051** -- which would mean removing "dead" code changed the render, i.e. that it was not dead. It did not mean that: the 2051 run was on a different branch (the dependency refresh), so two variables had moved at once. Re-measured as a **same-branch A/B**: `main` unmodified -> 2042, with the removal -> 2042. Provably render-inert. Worth keeping: `min svg descendants` is a **floor assertion over a live animated scene**, not a render fingerprint -- cross-branch or cross-run comparisons of that number prove nothing, only a same-tree A/B does.
 - Tests: Pass -- Vitest 114/114 files and 2306/2306 tests; build PASS; `render-smoke` PASS across 4 viewports with 0 pageerrors and 0 console errors; same-branch A/B render proof above.
 
+### Ship-chore-adr-applies-to-backfill-2026-08-16 (ADR coverage gate was blind to 8 of 10 ADRs)
+
+- `check_adr_coverage.py` reported **8 of 10 ADRs missing `applies_to:` frontmatter**, so `/bootstrap`'s ADR coverage gate could never fire for the files those decisions govern -- it was structurally blind, not merely quiet. Declared `applies_to:` on **6** ADRs (47 globs); `--paths .agentcortex/ .agent/` used to return `no_covering_adr` and now resolves to ADR-001. 8 files, +43 lines, frontmatter only, no ADR body text altered.
+- **Not a mechanical 8/8 backfill, on purpose.** A wrong `applies_to` is worse than a missing one: it manufactures false coverage, so bootstrap reports "covered" and silently skips the `/adr` prompt for a decision that does not actually govern those files. **ADR-006** (AVO is not an observability/cost dashboard) and **ADR-009** (portable status-core stays out of this repo) govern *what must NOT be built* -- their subject is code that deliberately does not exist, so any glob would be speculative. They keep no `applies_to:` and instead carry a YAML comment stating why, so the omission does not read as an oversight and get "fixed" later. A `#`-prefixed comment cannot match the tool's `^applies_to\s*:` regex, so it is inert to the parser. For the same reason `src/systems/classify.js` is left uncovered -- no ADR governs the classifier.
+- Surfaces were derived per-ADR from that ADR's own `review_trigger` prose plus its Decision section, never from a directory wildcard; the broadest pattern written is a single named file. Every glob was then existence-checked: **47 checked, 0 phantoms**. That audit caught a real error before it landed -- `statusContract.mjs` lives at `src/utils/`, not `src/systems/` as this SSoT's own Spec Index line implies.
+- Tests: Pass -- coverage matrix resolves `AGENTS.md`/`state_machine.md`→ADR-001, `office-status-hook.js`→ADR-002, `statusContract.mjs`→ADR-003, `store.js`→ADR-005+ADR-010, `doorClaims.test.js`→ADR-010; `check_lifecycle_frontmatter.py` 10 PASS / 2 WARN / 0 FAIL (both WARNs pre-existing and untouched); `validate.ps1` `pass=113 warn=6 fail=0 skip=4`, identical to the pre-change baseline.
+=======
+
 ### Ship-chore-dependency-refresh-cve-clearance-2026-08-16 (2 CVEs cleared; 9 deps refreshed)
 
 - Cleared both open advisories by bumping the declared `vite` range 8.0.16 -> 8.2.1: it requires `postcss ^8.5.25`, above the `<=8.5.22` advisory range, and pulls the fixed `nanoid` 3.3.18. Resolved chain is now `vite@8.2.1 -> postcss@8.5.26 -> nanoid@3.3.18`; `npm audit --omit=dev` reports **0 vulnerabilities**. The other 8 stale direct deps were refreshed in the same pass (all patch/minor); `npm outdated` is empty. Only `package.json` + `package-lock.json` changed -- zero source files.
@@ -221,12 +229,6 @@
 - Shipped AVO-189 on `codex/chore-upgrade-agentic-os-v1.8.17`: the first reachable focused lost-chain restart now increments the existing diagnostic counter and emits the existing dev warning. The change is the predicate threshold `>=2`→`>=1`; RAF timing, restart behavior, and frame reset semantics are unchanged.
 - Pending RAF handles and unfocused documents remain excluded, preserving the existing host-throttling noise guards. Commit: `feb23ef`.
 - Tests: Pass — focused 21/21; Vitest 111/111 files and 2271/2271 tests; build PASS; Agentic OS validator 112 PASS / 0 FAIL before Work Log wording cleanup.
-
-### Ship-fix-avo-188-abort-movement-in-place-2026-07-30
-
-- Shipped AVO-188 on `codex/chore-upgrade-agentic-os-v1.8.17`: one atomic store action stops aborted walks at a defensive copy of the rendered position, clears `isMoving` and `journeyTarget`, and aligns `targetPosition` without teleporting to an abandoned waypoint.
-- Force-unstick and behavior-watchdog use the action directly. True component removal defers one microtask; same-flush live teardown/setup clears the unmounted flag and keeps the existing restoration path intact. Commit: `ac07a4d`.
-- Tests: Pass — focused 67/67; Vitest 111/111 files and 2271/2271 tests; build PASS; forced-spawn soak 5 samples / 0 violations; Agentic OS validator 113 PASS / 0 FAIL.
 
 > Older entries are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.

@@ -2,6 +2,13 @@
 title: "ADR-002 — Multi-Worktree Session Design"
 date: 2026-04-02
 status: accepted
+applies_to:
+  - "public/hooks/office-status-hook.js"
+  - "public/hooks/office-status-hook.sh"
+  - "public/hooks/office-status-codex.js"
+  - "src/server/scanSessions.mjs"
+  - "bin/cli.js"
+  - "server.mjs"
 lifecycle:
   owner: KbWen
   review_cadence: on-event

@@ -2,6 +2,9 @@
 title: "ADR-009 — Portable status-core extraction stays OUT of AVO (deferred to a clean-room new repo)"
 date: 2026-07-04
 status: accepted
+# applies_to: intentionally absent — this ADR keeps a portable status-core OUT of this repo. Its subject is a
+# structure that deliberately does not exist here, so there is no path to declare.
+# Enforced by review, not by path.
 lifecycle:
   owner: KbWen
   review_cadence: on-event
