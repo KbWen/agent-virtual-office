@@ -10,6 +10,8 @@ Rotated 64 entries on 2026-07-10 (SSoT Update Sequence 105 -> 106).
 
 Rotated 2 additional entries on 2026-07-30 (SSoT Update Sequence 109 -> 110).
 
+Rotated 2 additional entries on 2026-08-16 (ship-history cap restored to 10).
+
 Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 110 -> 111).
 
 Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 111 -> 112).
@@ -23,6 +25,46 @@ Rotated 1 additional entry on 2026-08-01 (SSoT Update Sequence 114 -> 115).
 Rotated 2 additional entries on 2026-08-03 (SSoT Update Sequence 115 -> 116).
 
 ---
+
+### Ship-fix-avo-190-soak-target-identity-2026-07-30
+
+- Shipped AVO-190 on `codex/chore-upgrade-agentic-os-v1.8.17`: `sim-soak` and `overlap-recorder` now share a fail-closed `/src/systems/store.js` identity preflight before Playwright launches. Unrelated HTTP 200 targets, timeouts, invalid URLs, and non-2xx probes fail with the rejected URL; only explicit connection refusal on the default origin permits the spawn fallback.
+- Commit: `fec1086` (`fix(soak): verify target identity before sampling`). Scope is limited to the soak scripts, shared probe, focused tests, and spec; no product runtime files changed.
+- Tests: Pass — Vitest 111/111 files and 2268/2268 tests; build PASS; fake HTTP 200 rejected by both consumers; forced-spawn soak 5 samples / 0 violations; Agentic OS validator 113 PASS / 0 FAIL.
+
+### Ship-codex-chore-upgrade-agentic-os-v1.8.17-2026-07-30
+
+- Upgraded the vendored Agentic OS governance framework from **v1.8.11** (`cada3c4`) to the latest formal release **v1.8.17** (`102e19b`) from canonical upstream `KbWen/agentic-os.git`. Supply-chain/provenance handling kept the task at `hotfix`; the deployed diff contains 49 tracked framework updates and 2 managed additions, with zero product, dependency, or test-path changes.
+- Downstream-owned scaffolds were preserved: the live project SSoT and Claude office hooks remained intact; generated `.acx-incoming` templates were inspected and removed. All deployed framework files match the v1.8.17 source bytes, excluding the target-generated manifest.
+- Tests: Pass — Agentic OS validator `pass=113 warn=7 fail=0 skip=4`; Vitest `2263/2263`; production build PASS. Branch retained locally; no push or PR performed.
+
+### Ship-fix-soak-gate-2026-07-16 (PR #202 — sim-soak un-broken: bounded coverage + symmetric walk teardown)
+
+> [!WARNING]
+> **The nightly sim-soak is green again — this does NOT mean the office is healthy.** For 32 runs the
+> stack data was **uninterpretable, not merely false-red**: the rig injected ~22 spurious 3s freezes per
+> 150s AND randomly released the journey claim (the only anti-stack mechanism) 22x per 150s, so a real
+> stack was indistinguishable from a manufactured one. **We are not exonerating the movement system — we
+> are admitting we never measured it.** Do NOT infer "movement is healthy" from a green soak until several
+> clean nightlies accumulate. **AVO-187 (door-crossing stack) is REAL, production-reachable, and OPEN.**
+
+- Ended a **32-run nightly red streak** (last success 2026-06-13). Both causes were defects in the GATE, found by measurement after **three** wrong root-cause theories were killed by an adversarial panel. Merged as squash `eb0a83a`; CI 7/7; full suite **2263 pass**; three consecutive green soaks (branch probe-free x2 + merged main x1: 2395/2396 samples, 0 violations).
+- **(a) Coverage false-red.** The sample floor was `expected - 2` (2398/2400), tighter than ordinary 250ms timer jitter (clean CI yields 2393–2397), and the runner threw **before** `evaluateSoak` and the report write — so all 32 failures left **no artifact**. Fixed by `scripts/soakCoverage.mjs` (`assessSoakCoverage`: max 5 misses or 0.5%, fail-closed on material under-sampling) + report-before-fail ordering. *Implemented by the codex release-audit session; verified independently.*
+- **(b) The soak tripped a bug its own rig created.** `sim-soak.mjs` runs a **Vite dev server by design** (its sampler must import `/src` for ground truth) ⇒ StrictMode ⇒ React 19 **double-invokes passive effects on re-placed fibers**. `PixelOffice` re-sorts `agentList` by **live `position.y`** (SVG paint order *is* depth), so **any walker re-places every keyed `<AgentCharacter>`**; react-dom's `placeChild` MOVE branch flags `Placement|PlacementDEV` **byte-identically to an insert**. That fired the `[]`-dep "unmount" cleanup on **live mid-walk instances** — cancelling the rAF (frozen until the 2.5s watchdog's next 1s poll = a near-constant **+3000ms**, *exactly* `STACK_SUSTAIN_MS`) and dropping `journeyTarget`. **A/B: 22 spurious teardowns / 150s with StrictMode on, 0 with it off.** Fixed by making setup/cleanup **symmetric** (setup restores; pure `shouldRestoreWalk` guard; journey stashed from the store SSoT, not mirrored at the six publish sites). **No DEV/StrictMode branching** — a correct effect is invariant under double-invocation; `<Activity mode="hidden">` runs the same path in production. Also removed the deferred-timer `clearTimeout` loop from that cleanup: it too ran on live components and nothing re-arms a cleared handle, so it permanently killed pending bubble-clears (**a bubble asserting state the agent no longer has**) and the pass-document receive step (**a handoff drawn but never received**).
+- **Filed, NOT fixed** — `AVO-187` (P1, honesty-critical, production-reachable): `jitterDoorCrossing` offsets only **perpendicular to travel**, so every door pins its travel axis at **exactly zero spread**; two agents pausing at one side are always ≤`DOOR_JITTER` (20px) apart — inside `STACK_DIST_PX` (30) and the 32x44 ellipse. **Any pause at a door is a guaranteed stack** (measured: 4/4 clean-CI stacks at x=585 exactly). Its own comment cites the 2026-06-10 forensic at `(240,386)` — the coordinate `mainToLounge` **still pins today**; that mitigation turned a 0px point-stack into a 20px segment and never reached its own alarm. **Not fixable by raising `DOOR_JITTER`** (opening ~50px) — needs a **temporal door claim** + an ADR. Characterized by `tests/doorCrossingSeparation.test.js` + a source note so it cannot go quiet. Also filed: `AVO-188` (abort sites leave a stale `isMoving:true`; `AgentInspector` reads it and lies), `AVO-189` (`shouldRecordRafWatchdogRestart` is structurally unreachable — reads 0 on a broken build; **never assert on it**), `AVO-190` (`sim-soak` blind-reuses any server on :5173 — during this investigation that was a *different project*).
+- Downstream: `living-world` roadmap M4 got a precondition (`56d494e`) — extract from `eb0a83a`+, and the trap is **not AVO-specific**: any rAF-driven movement + depth-sorted keyed list hits it with zero AVO code.
+- Process: SSoT appended directly (guard bypassed deliberately — the documented stale-receipt hazard); Ship History now 11 vs the advisory cap of 10 (`check_ssot_caps.py` prints this under a `[PASS]`, never a FAIL) — recorded rather than silently rotated.
+- Tests: Pass
+
+### Ship-chore-ssot-rotation-and-worklog-hygiene-2026-07-10 (SSoT rotation + work-log hygiene)
+
+- Closes the three follow-ups left open by the Agentic OS v1.8.11 brain upgrade (PR #199, squash `884a0ac`).
+- **Ship History rotation** (`ship.md:208`): 74 -> 10 entries. The 64 oldest moved verbatim to `.agentcortex/context/archive/ship-history-2026.md`. The surviving 10 are byte-identical - no entry was edited or reordered (`ship.md:207`). One `../../docs/specs/...` link inside the moved content was flattened to a plain path, per the depth hazard called out at `ship.md:209`.
+- **Spec Index rotation: attempted, then REVERTED.** `ship.md:197` says to collapse the oldest `[Shipped]` entries into a `## Spec Index Archive` section once the index passes 30. Doing so turns a never-failing advisory into a hard failure: `validate.{sh,ps1}` scrape the index with a regex that stops at the next `##` header (`validate.ps1:1999`) and contain **zero** references to `Spec Index Archive`, so all 13 rotated specs immediately report as `[FAIL] SSoT Spec Index completeness: 13 shipped/living spec(s) not in index`. The index stays at 43 entries and `check_ssot_caps.py` keeps printing its advisory. Reported upstream; the documented procedure and the validator disagree.
+- **Work-log hygiene**: 9 active -> 2. Six live logs were `cmp`-proven byte-identical to their committed archive copies and deleted (feat-avo-104/107/123/130/136, refactor-avo-146). Two shipped-but-unarchived logs (`codex/strengthen-panel-feature-verifier`, office-layout-enrichment) were archived with hash-chained `INDEX.jsonl` entries. An 8-day-expired `main.lock.json` (owner `codex`, 60-min timeout) was released.
+- **Deliberately untouched**: `.agentcortex/context/work/main.md` - codex's audit log on the live `main` branch. Reported, not archived: promoting an incomplete gate chain into git would manufacture validator FAILs.
+- **Upstream**: the `validate.sh` exit-141 SIGPIPE abort (unfixed in v1.8.11) is reported as `KbWen/agentic-os` issue #336, with root cause, a reproduction, and three suggested fixes.
+- Evidence: `check_ssot_caps.py` -> `ssot caps OK - ship history 10/10, spec index 30/30`; `validate.ps1` (pwsh 7) fail=0; vitest 2251 passed; build clean.
 
 ### Ship-chore-upgrade-agentic-os-v1.8.11-2026-07-10 (governance brain v1.8.1 -> v1.8.11)
 
