@@ -133,3 +133,43 @@ describe('AVO-191 — office events never seize a genuinely-working agent', () =
     expect(seized(store, ['dev', 'qa']).length).toBeGreaterThanOrEqual(2)
   })
 })
+
+// Property sweep: the invariant is "no tracked-busy agent ever ends up in an event", and it has to
+// hold for EVERY ungated event under EVERY busy mask -- not just the three shapes hand-written
+// above. Only the SOCIAL/WORLD events are swept: the work-claim ones carry their own eventEligible
+// gate, so a refusal there would prove the gate, not this guarantee.
+describe('AVO-191 -- invariant sweep over every ungated event and busy mask', () => {
+  const UNGATED = [
+    'tea-break', 'standup', 'food-delivery', 'coffee-spill', 'group-meeting',
+    'pm-all-meeting', 'dog-visit', 'ac-broken', 'boss-visit', 'group-stretch',
+  ]
+  const IDS = ['ops', 'arch', 'dev', 'qa']
+  const BUSY = ['working', 'blocked']
+
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-01-05T09:00:00')) })
+  afterEach(() => { vi.runOnlyPendingTimers(); vi.useRealTimers(); vi.restoreAllMocks() })
+
+  it('no agent reporting working or blocked is ever placed in an event', () => {
+    let masksCovered = 0
+    for (const eventId of UNGATED) {
+      // All 16 subsets of the 4 agents, so the <2-available cases are covered exhaustively
+      // rather than sampled -- including the all-busy one, which is where the old fallback fired.
+      for (let mask = 0; mask < 16; mask++) {
+        const externalStatus = {}
+        IDS.forEach((id, i) => {
+          if (mask & (1 << i)) externalStatus[id] = { status: BUSY[i % 2] }
+        })
+        const store = makeStore({ mood: 'smooth', externalStatus })
+        triggerInteractiveEvent(store, eventId)
+
+        const busyIds = Object.keys(externalStatus)
+        expect(seized(store, busyIds)).toEqual([])
+        for (const id of busyIds) {
+          expect(store.getState().agents[id].groupTarget).toBeNull()
+        }
+        masksCovered++
+      }
+    }
+    expect(masksCovered).toBe(UNGATED.length * 16)
+  })
+})

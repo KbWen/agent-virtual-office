@@ -595,11 +595,15 @@ export const useOfficeStore = create((set) => ({
         // React-in-place participant (spiller, caller, dog-reactor): the event FREEZES them
         // wherever they stand, so that spot has to survive the event's duration on two axes —
         // vs the map and vs other agents. Clamp first, then side-step, mirroring the
-        // groupTarget branch above. R1-safe: pickParticipants never selects tracked
-        // working/blocked agents -- true since AVO-191. It was NOT true before: the picker
-        // fell back to the full roster whenever fewer than 2 agents were available, so this
-        // comment asserted a guarantee the producer did not enforce. Pinned by
-        // tests/eventParticipantR1.test.js.
+        // groupTarget branch above. R1: `pickParticipants` never selects tracked working/blocked
+        // agents -- true since AVO-191, and NOT true before (the picker fell back to the full
+        // roster whenever fewer than 2 were available, so this comment asserted a guarantee the
+        // producer did not enforce). Pinned by tests/eventParticipantR1.test.js.
+        //
+        // Scope of that guarantee, stated precisely rather than as a blanket "R1-safe": it covers
+        // the callers that go through `pickParticipants`. The `lunch-nap` path does NOT -- it
+        // filters on `!inGroupEvent` alone and never reads externalStatus, so it can still hand
+        // this branch an agent that is genuinely working. Tracked as AVO-194.
         //
         // The clamp used to run only on the overlap path, so an event that caught an agent
         // mid-transit THROUGH furniture with nobody nearby froze it inside that furniture
