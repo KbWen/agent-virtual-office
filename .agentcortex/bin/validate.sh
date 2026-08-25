@@ -63,6 +63,11 @@ PASS_COUNT=0
 WARN_COUNT=0
 FAIL_COUNT=0
 SKIP_COUNT=0
+# Referenced-but-absent tools with NO stated reason. A deliberate source-only absence names
+# itself via ACX_ABSENT_REASON and does not count; an unnamed one is an accident and
+# qualifies the summary line, which otherwise reports an unconditional pass.
+TOOL_ABSENT_UNEXPECTED=0
+ACX_ABSENT_REASON=""
 
 record_result() {
   local level="$1"
@@ -173,7 +178,10 @@ run_python_check() {
   shift 3
 
   if [[ ! -f "$script" ]]; then
-    record_result SKIP "$label -- tool not present"
+    if [[ -z "${ACX_ABSENT_REASON:-}" ]]; then
+      TOOL_ABSENT_UNEXPECTED=$((TOOL_ABSENT_UNEXPECTED + 1))
+    fi
+    record_result SKIP "$label -- ${ACX_ABSENT_REASON:-tool not present}"
     return 0
   fi
 
@@ -195,6 +203,19 @@ run_python_check() {
     record_result FAIL "$label"
   fi
   print_indented_output "$output"
+}
+
+# Same contract as run_python_check, for a tool deploy.sh deliberately does not ship.
+# The reason travels with the call site -- the only place a reader looks -- instead of a
+# separate registry, and "unexpected" stays defined as an absence with NO stated reason
+# rather than as absence from a list that can go stale. Set-and-clear is structural here
+# so a caller cannot leak the reason onto the next check.
+run_python_check_source_only() {
+  local reason="$1"
+  shift
+  ACX_ABSENT_REASON="$reason"
+  run_python_check "$@"
+  ACX_ABSENT_REASON=""
 }
 
 required_files=(
@@ -387,7 +408,8 @@ run_python_check "lifecycle frontmatter (governance docs)" FAIL "$LIFECYCLE_FRON
 # the tool self-skips downstream when a .agentcortex-manifest is present, and as
 # a CI/source validator it is not in deploy.sh runtime_tools, so it is simply
 # absent downstream -> run_python_check records a graceful SKIP.
-run_python_check "skill provenance + compatibility floor" FAIL "$SKILL_PROVENANCE_CHECK" --root "$ROOT"
+run_python_check_source_only "source-only tool, not deployed by design (safe to ignore downstream)" \
+  "skill provenance + compatibility floor" FAIL "$SKILL_PROVENANCE_CHECK" --root "$ROOT"
 
 # Verify the hash chain on the archive INDEX.jsonl. A broken chain means an
 # entry was retroactively rewritten without going through
@@ -662,7 +684,8 @@ run_python_check "decision disposition (archived work logs)" WARN "$ROOT/.agentc
 # (docs/reviews/2026-08-08-govern-audit-task-simulation.md F7): a log citing a
 # nonexistent spec path or PR previously passed both validators untouched.
 # No-python -> WARN; tool absent -> SKIP.
-run_python_check "worklog external references (spec/ADR existence, advisory)" WARN "$ROOT/.agentcortex/tools/check_worklog_references.py" --root "$ROOT"
+run_python_check_source_only "source-only tool, not deployed by design (safe to ignore downstream)" \
+  "worklog external references (spec/ADR existence, advisory)" WARN "$ROOT/.agentcortex/tools/check_worklog_references.py" --root "$ROOT"
 
 ACTIVE_CODEX_RULES="$ROOT/codex/rules/default.rules"
 [[ -f "$ACTIVE_CODEX_RULES" ]] || ACTIVE_CODEX_RULES="$CODEX_RULES"
@@ -1207,7 +1230,13 @@ if [[ -d "$WORKLOG_DIR" ]]; then
   # ingestion-time hazard. WARN-only; opt-out via ARCHIVE_SIZE_WARN_KB=0.
   ARCHIVE_DIR="$ROOT/.agentcortex/context/archive"
   if [[ -d "$ARCHIVE_DIR" ]] && [[ "$ARCHIVE_SIZE_WARN_KB" -gt 0 ]]; then
-    archive_kb="$(du -sk "$ARCHIVE_DIR" 2>/dev/null | awk '{print $1}')" || true
+    # Logical bytes, not disk-allocated. `du -sk` counts allocated blocks, so it read
+    # ~27% high (measured 2026-08-16: 2326KB vs 1835KB over 181 files) and disagreed with
+    # validate.ps1, which sums file lengths (#174). Logical size is the right measure:
+    # threshold is a proxy for ingestion cost, and block rounding is not even stable
+    # across filesystems for identical content. `du --apparent-size` is GNU-only and
+    # would break macOS/BSD adopters, so sum via ls (portable, one exec for the batch).
+    archive_kb="$(find "$ARCHIVE_DIR" -type f -exec ls -ln {} + 2>/dev/null | awk '{s+=$5} END {print int(s/1024)}')" || true
     if [[ -n "$archive_kb" ]] && [[ "$archive_kb" -gt "$ARCHIVE_SIZE_WARN_KB" ]]; then
       record_result WARN "archive size ${archive_kb}KB exceeds threshold ${ARCHIVE_SIZE_WARN_KB}KB; consider /retro-driven cold-tier rotation"
     else
@@ -1907,7 +1936,7 @@ PYEOF
   if [[ "$evidence_placeholder_only" -gt 0 ]]; then
     record_result FAIL "feature/arch-change/quick-win shipped work logs with bootstrap-placeholder ## Evidence (NO EVIDENCE = NO SHIP per AGENTS.md §Delivery Gates): ${evidence_placeholder_only}"
   elif [[ "$worklog_count" -gt 0 ]]; then
-    record_result PASS "shipped feature/arch-change work logs have non-placeholder Evidence sections"
+    record_result PASS "shipped feature/arch-change/quick-win work logs have non-placeholder Evidence sections"
   fi
   if [[ "$review_pass_with_unproven" -gt 0 ]]; then
     record_result WARN "work logs with review PASS receipt but unresolved UNPROVEN rows (receipt should be NOT READY per review.md §Burden of Proof): ${review_pass_with_unproven}"
@@ -2297,28 +2326,94 @@ PYEOF
   fi
 fi
 
-GITIGNORE="$ROOT/.gitignore"
-if [[ -f "$GITIGNORE" ]]; then
-  gitignore_errors=0
-  for must_track in \
-    '.agentcortex/context/current_state.md' \
-    '.agentcortex/context/archive/' \
-    '.agentcortex/specs/' \
-    '.agentcortex/adr/' \
-    'docs/specs/' \
-    'docs/adr/'; do
-    if grep -x -F -q -- "$must_track" "$GITIGNORE"; then
-      printf '  .gitignore must NOT ignore persistent SSoT artifact: %s\n' "$must_track"
+# Persistent SSoT artifacts must stay visible to git. Ask git, not `.gitignore`:
+# a pattern like `docs/specs/*.md` or `.agentcortex/context/archive/*.md` ignores the
+# contents without ever naming the directory, so matching directory lines literally
+# reported a false PASS while the governance record silently stopped being committed
+# (reported by a downstream fork whose archive ignore had exactly that shape).
+#
+# Three flags carry the correctness here, each verified against real git behaviour:
+#   -q          the VERDICT. `-v` exits 0 whenever a pattern MATCHED, including a
+#               negation -- on `docs/adr/*` + `!docs/adr/*.md` (an ordinary idiom)
+#               `-v` exits 0 while `-q` exits 1, and git tracks the file fine. Reading
+#               `-v`'s status as "ignored" fails an adopter whose tree is correct and
+#               names the PROTECTIVE `!` line as the one to remove.
+#   --no-index  without it check-ignore skips TRACKED files, so the one real path here
+#               (`current_state.md`) is inert in every healthy deploy -- a .gitignore
+#               naming it outright would report clean.
+#   -v          message only, run once on the failing path to name source:line.
+#
+# The probes are REPRESENTATIVE, not exhaustive: they are synthetic filenames shaped
+# like each directory's real contents, so a pattern that matches real files but not the
+# probe (`archive/*-worklog.md`) still slips through, and a negation aimed at a narrower
+# name than the probe (`!docs/adr/ADR-2*.md`) can flag a tree that is fine. This catches
+# the whole-directory and whole-extension shapes, which is the class that bit downstream.
+#
+# Deliberately NOT gated on `.gitignore` existing: `.git/info/exclude` and a global
+# core.excludesFile hide files just as effectively, and the branch this replaced
+# claimed "no persistent SSoT artifacts are ignored" without checking anything.
+gitignore_probes=(
+  '.agentcortex/context/current_state.md'
+  '.agentcortex/context/archive/acx-ignore-probe-20260101.md'
+  '.agentcortex/specs/acx-ignore-probe.md'
+  '.agentcortex/adr/ADR-000-acx-ignore-probe.md'
+  'docs/specs/acx-ignore-probe.md'
+  'docs/adr/ADR-000-acx-ignore-probe.md'
+)
+gitignore_errors=0
+gitignore_unknown=0
+gitignore_report=()
+for probe in "${gitignore_probes[@]}"; do
+  set +e
+  git -C "$ROOT" check-ignore -q --no-index -- "$probe" 2>/dev/null
+  probe_status=$?
+  set -e
+  case "$probe_status" in
+    0)
       gitignore_errors=$((gitignore_errors + 1))
-    fi
-  done
-  if [[ "$gitignore_errors" -gt 0 ]]; then
-    record_result FAIL ".gitignore blocks persistent SSoT artifacts"
+      set +e
+      probe_source="$(git -C "$ROOT" check-ignore -v --no-index -- "$probe" 2>/dev/null)"
+      set -e
+      gitignore_report+=("  ${probe_source:-$probe}")
+      ;;
+    1) ;;
+    *) gitignore_unknown=$((gitignore_unknown + 1)) ;;
+  esac
+done
+# Re-label only, never re-decide. When EVERY probe is ignored and this tree sits
+# inside a larger repository, the cause is that outer repo hiding the whole
+# directory, and per-probe blame would name its `vendor/`-style rule as "the pattern
+# to remove" -- advice that breaks something load-bearing. This runs after the loop
+# and only when errors>0, so it can never turn a PASS into a FAIL.
+#
+# Deliberately NOT `check-ignore -- .`: a blank CRLF line in .gitignore is the
+# pattern "\r", which git strips to the empty string, and the empty pattern matches
+# the pathspec `.`. Every Git-for-Windows clone (core.autocrlf=true) would then be
+# reported as ignored-by-an-outer-repo on a perfectly healthy tree. Measured, not
+# theorised: `printf '\r\n' > .gitignore` makes that probe exit 0.
+gitignore_outer_prefix=""
+if [[ "$gitignore_errors" -eq "${#gitignore_probes[@]}" ]]; then
+  set +e
+  gitignore_outer_prefix="$(git -C "$ROOT" rev-parse --show-prefix 2>/dev/null)"
+  set -e
+fi
+if [[ "$gitignore_errors" -gt 0 ]]; then
+  printf '%s
+' "${gitignore_report[@]}"
+  if [[ -n "$gitignore_outer_prefix" ]]; then
+    gitignore_fail_message="persistent SSoT artifacts are untracked: every probe is ignored and this project sits at '${gitignore_outer_prefix}' inside a larger repository, so an outer rule (source:line above) is hiding the whole directory and no governance record here can be committed. Fix by running \`git init\` in this directory, or by un-ignoring this path in the outer repository -- do NOT delete that rule blindly, it is probably load-bearing there"
   else
-    record_result PASS ".gitignore preserves persistent SSoT artifacts"
+    gitignore_tail=""
+    if [[ "$gitignore_unknown" -gt 0 ]]; then
+      gitignore_tail="; ${gitignore_unknown} further probe(s) could not be resolved"
+    fi
+    gitignore_fail_message=".gitignore blocks persistent SSoT artifacts (${gitignore_errors}/${#gitignore_probes[@]} probes ignored; the ignore source:line shown above is the pattern to remove${gitignore_tail})"
   fi
+  record_result FAIL "$gitignore_fail_message"
+elif [[ "$gitignore_unknown" -gt 0 ]]; then
+  record_result SKIP "persistent SSoT artifacts vs .gitignore -- git check-ignore could not resolve ${gitignore_unknown}/${#gitignore_probes[@]} probes here (not a git work tree, or git unavailable); the check did NOT run"
 else
-  record_result PASS ".gitignore absent -- no persistent SSoT artifacts are ignored"
+  record_result PASS ".gitignore preserves persistent SSoT artifacts"
 fi
 
 # SSoT completeness checks — verify current_state.md indexes match disk reality
@@ -2528,7 +2623,23 @@ if [[ -f "$BACKLOG_FILE" ]]; then
     fi
 
     # L-2: label vocabulary drift — warn if distinct label count exceeds max_distinct_labels (default 15)
-    distinct_labels=$(grep '| Pending\|In Progress' "$BACKLOG_FILE" 2>/dev/null | awk -F'|' '{print $5}' | tr ',' '\n' | sed 's/[[:space:]]//g' | grep -v '^—$' | grep -v '^$' | sort -u | wc -l | tr -d '[:space:]')
+    # ACTIVE rows = Pending OR In Progress, anchored as a whole cell between column
+    # pipes with TOLERANT padding — a literal space and a literal TAB — rather than
+    # demanding exactly one space. (Deliberately NOT `[[:space:]]`: POSIX and .NET
+    # whitespace shorthands disagree on Unicode blanks, so the twins would diverge on
+    # an NBSP-padded backlog. tests/ci/test_validator_twin_parity.py pins this.) A rigid ` X ` anchor selects
+    # rows whose padding is wider than one space — on a column-aligned backlog it keeps
+    # only the rows whose status happens to be the widest value, so the count is
+    # silently PARTIAL and still reported as a PASS. (An earlier note here said it
+    # emits nothing; measured, it is the wrong-number case, which is worse to spot.)
+    # The backlog's own header defines active work as Pending / In Progress, and an
+    # In-Progress row's labels are part of the active vocabulary this check exists to
+    # watch, so the row set stays wide. What was actually broken (#174) is that the old
+    # `| Pending\|In Progress` gave the second alternative NO leading pipe-space, so it
+    # matched those words anywhere in a row — a Notes cell counted as a match. The
+    # anchored form fixes that without narrowing coverage, and validate.ps1 uses the
+    # same row set for this one check (its $pendingRows stays Pending-only for L-1/L-3).
+    distinct_labels=$(grep -E '\|[ 	]*(Pending|In Progress)[ 	]*\|' "$BACKLOG_FILE" 2>/dev/null | awk -F'|' '{print $5}' | tr ',' '\n' | sed 's/[[:space:]]//g' | grep -v '^—$' | grep -v '^$' | sort -u | wc -l | tr -d '[:space:]' || true)
     distinct_labels=${distinct_labels:-0}
     if [[ "$distinct_labels" -gt 15 ]]; then
       record_result WARN "backlog label vocabulary: ${distinct_labels} distinct labels (>15) — possible drift across sessions; review and consolidate via /spec-intake"
@@ -2758,6 +2869,7 @@ fi
 VALID_SPEC_STATUSES="draft|frozen|shipped|cancelled|living"
 spec_bad_status=0
 spec_missing_frontmatter=0
+spec_file_count=0
 if [[ -d "$ROOT/docs/specs" ]]; then
   shopt -s nullglob
   for spec in "$ROOT/docs/specs"/*.md; do
@@ -2769,6 +2881,9 @@ if [[ -d "$ROOT/docs/specs" ]]; then
     # and are exempt from the spec-status enum, matching the `_*` skip convention
     # already used for the Spec Index completeness check above (#170).
     [[ "$(basename "$spec")" == _* ]] && continue
+    # Counted here, past both skips: this is the set of GOVERNED specs, and it is what
+    # gates the PASS below (validate.ps1 increments at the same point).
+    spec_file_count=$((spec_file_count + 1))
     # Check YAML frontmatter presence (first line must be ---)
     first_line="$(head -n1 "$spec" 2>/dev/null | tr -d '\r')"
     if [[ "$first_line" != "---" ]]; then
@@ -2789,11 +2904,24 @@ if [[ "$spec_missing_frontmatter" -gt 0 ]]; then
   record_result WARN "docs/specs/ files missing YAML frontmatter or status field: ${spec_missing_frontmatter} (engineering_guardrails.md §4.2 requires status: draft|frozen|shipped|cancelled)"
 elif [[ "$spec_bad_status" -gt 0 ]]; then
   record_result WARN "docs/specs/ files with unrecognized status value: ${spec_bad_status} (valid: draft, frozen, shipped, cancelled, living)"
+elif [[ "$spec_file_count" -gt 0 ]]; then
+  # PASS only when GOVERNED specs were actually checked. This reuses the scanning loop's
+  # own counter instead of re-globbing: the old bare glob counted the `_*` meta files the
+  # scanning loop had just skipped, so a fresh downstream whose docs/specs/ holds only
+  # those got a PASS asserting valid frontmatter over ZERO governed specs (#174). (Not
+  # `.gitkeep.md` — bash `*.md` never matches a dotfile without dotglob; see below.) validate.ps1
+  # already counted inside its filtered loop, so this also closes the twin divergence.
+  record_result PASS "all docs/specs/ files have valid status frontmatter"
 else
-  # Only emit PASS when specs directory has files to check
-  spec_file_count=0
-  for f in "$ROOT/docs/specs"/*.md; do [[ -f "$f" ]] && spec_file_count=$((spec_file_count + 1)); done
-  [[ "$spec_file_count" -gt 0 ]] && record_result PASS "all docs/specs/ files have valid status frontmatter"
+  # And SKIP, not silence, when there are none. Dropping the vacuous PASS without saying
+  # anything would trade one defect for the other: ratchet justification #7 (backlog
+  # #149) records that a check emitting NOTHING while the summary still prints "integrity
+  # check passed" IS the defect. An adopter who has run /spec-intake but written no spec
+  # yet should see that this check found nothing to check, not nothing at all.
+  # Precision on the original bug, since an earlier note here overstated it: bash `*.md`
+  # never matches a dotfile without `dotglob`, so the old re-glob could NOT have counted
+  # `.gitkeep.md`. The `_*` meta files alone were the whole defect.
+  record_result SKIP "docs/specs/ status frontmatter -- no governed specs present (meta/_* and .gitkeep.md excluded)"
 fi
 
 # ACX phase shim skill-existence check: for each .claude/agents/acx-*.md,
@@ -2874,14 +3002,19 @@ fi
 # --dry-run and WARN when any scenario/aggregate GREW beyond slack (advisory, never
 # FAIL). Baseline absent -> WARN to seed. Shrink is intentionally not flagged
 # (trimming token cost is good). Teeth live in tests/ci/test_lifecycle_baseline_drift.py.
+# Updater-absence is tested FIRST: neither the baseline nor the updater is deployed
+# downstream, so testing baseline-absence first made every adopter hit a permanent WARN
+# telling them to run a tool their tree does not contain -- the honest SKIP below it was
+# unreachable. Order is updater -> baseline -> python; the baseline/python order is
+# deliberately left as-is (changing it is a separate semantic change, not this defect).
 ACX_LIFECYCLE_BASELINE="$ROOT/.agentcortex/metadata/lifecycle-baseline.json"
 ACX_LIFECYCLE_UPDATER="$ROOT/.agentcortex/tools/update_lifecycle_baseline.py"
-if [[ ! -f "$ACX_LIFECYCLE_BASELINE" ]]; then
+if [[ ! -f "$ACX_LIFECYCLE_UPDATER" ]]; then
+  record_result SKIP "token lifecycle drift -- updater not present; not deployed downstream by design (safe to ignore there)" || true
+elif [[ ! -f "$ACX_LIFECYCLE_BASELINE" ]]; then
   record_result WARN "token lifecycle baseline absent (.agentcortex/metadata/lifecycle-baseline.json); seed with update_lifecycle_baseline.py --init" || true
 elif [[ -z "${PYTHON_BIN:-}" ]]; then
   record_result SKIP "token lifecycle drift -- python unavailable or disabled (--no-python)" || true
-elif [[ ! -f "$ACX_LIFECYCLE_UPDATER" ]]; then
-  record_result SKIP "token lifecycle drift -- updater not present (update_lifecycle_baseline.py missing)" || true
 else
   _acx_drift_out="$("$PYTHON_BIN" "$ACX_LIFECYCLE_UPDATER" --root "$ROOT" --dry-run 2>&1)" && _acx_drift_status=0 || _acx_drift_status=$?
   if [[ "$_acx_drift_status" -eq 0 ]]; then
@@ -2961,6 +3094,12 @@ fi
 # claim an unqualified pass. Labeling only — exit stays 0 (not a new gate).
 if [[ -z "${PYTHON_BIN:-}" ]]; then
   echo "Agentic OS integrity check passed (reduced assurance: python-dependent checks skipped)"
+elif [[ "$TOOL_ABSENT_UNEXPECTED" -gt 0 ]]; then
+  # Same failure class as the work-log family SKIP (backlog #149): checks that never ran
+  # must not be reported as an unqualified pass. Keyed on tool absence, which the
+  # python-only condition above is blind to. A deliberate source-only absence names itself
+  # via ACX_ABSENT_REASON and is excluded, so this never fires on a healthy downstream.
+  echo "Agentic OS integrity check passed (reduced assurance: ${TOOL_ABSENT_UNEXPECTED} referenced tool(s) absent -- those checks did not run)"
 else
   echo "Agentic OS integrity check passed"
 fi
