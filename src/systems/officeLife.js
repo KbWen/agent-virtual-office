@@ -126,31 +126,47 @@ function pickParticipants(event, agents, externalStatus) {
   const agentIds = Object.keys(agents)
   const available = agentIds.filter(isAvailable)
 
-  // For 'all' events, use everyone available (skip if too few)
+  // AVO-191: when too few agents are available the cast is EMPTY — never the full roster.
+  // Each branch used to fall back to `agentIds`, so on a busy office an event picked
+  // working/blocked agents and relocated them, while store.js documented the opposite
+  // ("R1-safe: pickParticipants never selects tracked working/blocked agents").
+  //
+  // Removing the fallback is safe precisely because of how `isAvailable` reads: an agent with
+  // NO externalStatus entry is already available, so a fresh or demo office keeps a full cast.
+  // The fallback only ever fired when agents were genuinely tracked-busy — the one case where
+  // it must not. An empty cast means the event does not happen; callers MUST skip rather than
+  // set a phantom activeEvent, which is the global event mutex.
   if (event.participants === 'all') {
-    return available.length >= 2 ? available : agentIds
+    return available.length >= 2 ? available : []
   }
   if (event.participants === 'random-2-3') {
-    const pool = available.length >= 2 ? available : agentIds
+    if (available.length < 2) return []
     const count = 2 + Math.floor(Math.random() * 2)
-    return [...pool].sort(() => Math.random() - 0.5).slice(0, count)
+    return [...available].sort(() => Math.random() - 0.5).slice(0, count)
   }
   if (event.participants === 'random-1-neighbor') {
-    const pool = available.length >= 2 ? available : agentIds
-    // Guard empty pool: if no agents exist, return [] rather than [undefined].
-    // An empty/single-element pool produced [undefined] which triggerInteractiveEvent
-    // then used to create a phantom activeEvent — blocking all subsequent events.
-    if (pool.length === 0) return []
-    const idx = Math.floor(Math.random() * pool.length)
-    const result = [pool[idx]].filter(Boolean)
-    if (idx + 1 < pool.length) result.push(pool[idx + 1])
+    // A spill needs one person; the neighbour is optional. One available agent is a real cast.
+    if (available.length === 0) return []
+    const idx = Math.floor(Math.random() * available.length)
+    const result = [available[idx]]
+    if (idx + 1 < available.length) result.push(available[idx + 1])
     return result
   }
   if (Array.isArray(event.participants)) {
     return event.participants.filter((p) => agents[p] && isAvailable(p))
   }
-  const pool = available.length >= 2 ? available : agentIds
-  return pool.slice(0, 3)
+  return available.slice(0, 3)
+}
+
+// Pick a cast and fire, or do nothing. Returns whether the event actually fired.
+// An empty cast must NOT reach setActiveEvent: activeEvent is the global event mutex, so a
+// phantom one blocks every subsequent event for its whole duration.
+function fireWithCast(store, event, state, cancelled) {
+  const participants = pickParticipants(event, state.agents, state.externalStatus)
+  if (participants.length === 0) return false
+  store.getState().setActiveEvent(event)
+  executeEvent(store, event, participants, cancelled)
+  return true
 }
 
 // ─── Event handlers: each sets visual states for participants ────────
@@ -591,7 +607,15 @@ export function triggerInteractiveEvent(store, eventId) {
     return false
   }
 
+  // AVO-191: no honest cast (everyone is genuinely working/blocked) — treat the click exactly
+  // like a gated-out one: a neutral in-place reaction, never a set-piece that drags a working
+  // agent to the coffee machine, and never a phantom activeEvent.
   const participants = pickParticipants(event, state.agents, state.externalStatus)
+  if (participants.length === 0) {
+    fireInteractionReaction(store, eventId)
+    return false
+  }
+
   const cancelled = { value: false }
   // Register so startOfficeLife teardown can cancel this event's deferred callbacks.
   interactiveCancellers.add(cancelled)
@@ -657,11 +681,7 @@ export function startOfficeLife(store) {
       if (!state.isPaused && !state.activeEvent && floorTickAllowed(state)) {
         // Honesty gate: skip ungated work-claim events; draw an eligible SOCIAL/WORLD one instead.
         const event = pickEligibleEvent(eventsData.daily, state)
-        if (event) {
-          const participants = pickParticipants(event, state.agents, state.externalStatus)
-          store.getState().setActiveEvent(event)
-          executeEvent(store, event, participants, cancelled)
-        }
+        if (event) fireWithCast(store, event, state, cancelled)
       }
       scheduleDaily()
     }, randomInterval(DAILY_EVENT_INTERVAL))
@@ -674,11 +694,7 @@ export function startOfficeLife(store) {
       const state = store.getState()
       if (!state.isPaused && !state.activeEvent && floorTickAllowed(state)) {
         const event = pickEligibleEvent(eventsData.rare, state)
-        if (event) {
-          const participants = pickParticipants(event, state.agents, state.externalStatus)
-          store.getState().setActiveEvent(event)
-          executeEvent(store, event, participants, cancelled)
-        }
+        if (event) fireWithCast(store, event, state, cancelled)
       }
       scheduleRare()
     }, randomInterval(RARE_EVENT_INTERVAL))
@@ -704,11 +720,12 @@ export function startOfficeLife(store) {
     const now = Date.now()
     if (now - lastSeedAt < SEED_COOLDOWN_MS) return                       // GLOBAL gate (anti event-spam)
     if (seedCooldown[eventId] && now - seedCooldown[eventId] < SEED_COOLDOWN_MS * 3) return // per-event
+    // AVO-191: cast first, and bail BEFORE the cooldowns are stamped. An event that never fired
+    // must not consume the anti-spam budget — otherwise a busy office silently suppresses the
+    // next real signal edge for minutes on account of one that produced nothing.
+    if (!fireWithCast(store, ev, state, cancelled)) return
     seedCooldown[eventId] = now
     lastSeedAt = now
-    const participants = pickParticipants(ev, state.agents, state.externalStatus)
-    store.getState().setActiveEvent(ev)
-    executeEvent(store, ev, participants, cancelled)
   }
   seedUnsub = typeof store.subscribe === 'function' ? store.subscribe((state, prev) => {
     if (cancelled.value || !prev) return
@@ -833,22 +850,14 @@ export function startOfficeLife(store) {
     // 10:00 or 15:00 — Auto tea break
     if (hour === 10 || hour === 15) {
       const teaEvent = EVENT_BY_ID['tea-break']
-      if (teaEvent) {
-        const participants = pickParticipants(teaEvent, state.agents, state.externalStatus)
-        store.getState().setActiveEvent(teaEvent)
-        executeEvent(store, teaEvent, participants, cancelled)
-      }
+      if (teaEvent) fireWithCast(store, teaEvent, state, cancelled)
     }
 
     // Friday 15:00+ — Social boost (handled via behavior weights already, but trigger a group-meeting)
     const day = new Date().getDay()
     if (day === 5 && hour === 15) {
       const meetEvent = EVENT_BY_ID['group-meeting']
-      if (meetEvent) {
-        const participants = pickParticipants(meetEvent, state.agents, state.externalStatus)
-        store.getState().setActiveEvent(meetEvent)
-        executeEvent(store, meetEvent, participants, cancelled)
-      }
+      if (meetEvent) fireWithCast(store, meetEvent, state, cancelled)
     }
   }, TIME_CHECK_INTERVAL)
 

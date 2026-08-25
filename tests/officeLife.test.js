@@ -464,8 +464,8 @@ describe('officeLife — pickParticipants filtering', () => {
 describe('triggerInteractiveEvent — guards (isPaused, unknown event)', () => {
   // Minimal inline store — triggerInteractiveEvent only reads isPaused and activeEvent
   // on the fast-return path, so we don't need the full officeLife fake store here.
-  function makeGuardStore({ isPaused = false, activeEvent = null } = {}) {
-    const state = { isPaused, activeEvent, agents: {}, externalStatus: {}, hour: 9 }
+  function makeGuardStore({ isPaused = false, activeEvent = null, agents = {} } = {}) {
+    const state = { isPaused, activeEvent, agents, externalStatus: {}, hour: 9 }
     return {
       getState: () => ({
         get isPaused()    { return state.isPaused },
@@ -509,10 +509,26 @@ describe('triggerInteractiveEvent — guards (isPaused, unknown event)', () => {
 
   it('returns true for a known event id when nothing blocks it', () => {
     // Smoke check: all guards pass, EVENT_BY_ID lookup succeeds.
-    const store = makeGuardStore()
+    // The office needs an actual cast. This fixture used to pass `agents: {}` and still expect
+    // `true` — which asserted the AVO-191 defect: an EMPTY office fired a set-piece with zero
+    // participants and set activeEvent, the global mutex, blocking every later event for its
+    // duration. The guard-chain intent of the test is preserved; the phantom is not.
+    const store = makeGuardStore({
+      agents: {
+        dev: { id: 'dev', inGroupEvent: false, groupTarget: null, behavior: 'typing', expression: 'normal', bubble: null, position: { x: 100, y: 100 } },
+        qa:  { id: 'qa',  inGroupEvent: false, groupTarget: null, behavior: 'typing', expression: 'normal', bubble: null, position: { x: 200, y: 200 } },
+      },
+    })
     const result = triggerInteractiveEvent(store, 'boss-visit')
     // EVENT_BY_ID['boss-visit'] exists → should return true.
     expect(result).toBe(true)
+  })
+
+  it('an office with no agents fires nothing and leaves activeEvent null (AVO-191)', () => {
+    const store = makeGuardStore()          // agents: {}
+    const result = triggerInteractiveEvent(store, 'boss-visit')
+    expect(result).toBe(false)
+    expect(store.getState().activeEvent).toBeNull()
   })
 })
 
