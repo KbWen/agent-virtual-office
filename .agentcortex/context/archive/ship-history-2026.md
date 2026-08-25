@@ -24,7 +24,14 @@ Rotated 1 additional entry on 2026-08-01 (SSoT Update Sequence 114 -> 115).
 
 Rotated 2 additional entries on 2026-08-03 (SSoT Update Sequence 115 -> 116).
 
+Rotated 1 additional entry on 2026-08-25 (SSoT Update Sequence 116 -> 117).
+
 ---
+
+### Ship-avo-187-temporal-doorway-claim-2026-07-31
+
+- Shipped AVO-187 on `codex/chore-upgrade-agentic-os-v1.8.17`: atomic full-route physical-door claims serialize both directions with stable FIFO tickets, journey fencing, complete lifecycle release, and rendered-truth timeout/dynamic-removal aborts. Commit: `018ef1e`.
+- Tests: Pass — Vitest 112/112 files and 2295/2295 tests; production build PASS; Agentic OS validator 112 PASS / 0 FAIL; real-server 4/4 doors over 22 batches with empty final owners/requests; 10.005-minute cold-watch with zero invariant violations.
 
 ### Ship-fix-avo-189-reachable-raf-watchdog-diagnostic-2026-07-30
 
