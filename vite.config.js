@@ -20,8 +20,20 @@ import { scanAndMerge, getSessionStats, resolveProjectRoot } from './src/server/
 // Shorthand format: { "dev": "working", "qa": "blocked", "workflow": "name" }
 // Full format:      { "type": "office-status", "agents": [...], "workflow": "name" }
 
-// Shared status file path (shared between plugins)
-const STATUS_PATH = path.join(os.homedir(), '.claude', 'office-status.json')
+// Shared status file path (shared between plugins).
+//
+// OFFICE_STATUS_DIR overrides the directory the dev server reads status from. It exists so a
+// visual shot can run against an EMPTY directory: otherwise the operator's own live Claude Code
+// hook traffic lands here every few seconds and overwrites any staged scene, which is why every
+// prior visual judgement in this repo was taken under uncontrolled conditions.
+//
+// This is NOT a status mock and adds no fabrication capability — `applyExternalStatus` staging
+// already exists and is what every `scripts/*-shot.mjs` uses. This only removes the contention.
+// It also cannot reach a shipped office: the status API below is registered under
+// `configureServer` ONLY, so it does not run for `vite build` / `vite preview` / the packaged
+// serve path, and this file is Node build tooling that is never bundled into the browser payload.
+const STATUS_DIR = process.env.OFFICE_STATUS_DIR || path.join(os.homedir(), '.claude')
+const STATUS_PATH = path.join(STATUS_DIR, 'office-status.json')
 
 // The project directory session files are matched against. Vite's own cwd is the package
 // root when launched via bin/cli.js (and therefore npx), so it cannot be used here —
