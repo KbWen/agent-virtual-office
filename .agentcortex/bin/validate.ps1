@@ -6,6 +6,14 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# (#175) Non-UTF8 Windows consoles (e.g. cp950/Big5) render this file's `§` and `—`
+# as mojibake. [Console]::OutputEncoding is PROCESS-GLOBAL and this script runs in the
+# caller's live session, so it is saved here and restored in the matching `finally` at
+# the end of the file -- never set-and-leave, which would mutate console state after exit.
+$acxPreviousOutputEncoding = [Console]::OutputEncoding
+try {
+    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+
 function Normalize-PathString {
     param([Parameter(Mandatory = $true)][string]$Path)
     # Strip Windows long-path prefix (\\?\) before any further normalization.
@@ -153,11 +161,19 @@ function Invoke-PythonCheck {
         [Parameter(Mandatory = $true)][string]$Label,
         [Parameter(Mandatory = $true)][string]$MissingPythonLevel,
         [Parameter(Mandatory = $true)][string]$ScriptPath,
-        [string[]]$Arguments = @()
+        [string[]]$Arguments = @(),
+        # Names a DELIBERATE absence (a tool deploy.sh does not ship). The reason travels
+        # with the call site rather than a separate registry, and "unexpected" stays defined
+        # as an absence with NO stated reason -- see the summary line at the end of this file.
+        [string]$AbsentReason = ''
     )
 
     if (-not (Test-Path -Path $ScriptPath -PathType Leaf)) {
-        Add-Result -Level 'SKIP' -Message "$Label -- tool not present"
+        if ([string]::IsNullOrEmpty($AbsentReason)) {
+            $script:ToolAbsentUnexpected++
+            $AbsentReason = 'tool not present'
+        }
+        Add-Result -Level 'SKIP' -Message "$Label -- $AbsentReason"
         return
     }
     if (-not $script:PythonCommand) {
@@ -199,6 +215,8 @@ $script:PassCount = 0
 $script:WarnCount = 0
 $script:FailCount = 0
 $script:SkipCount = 0
+# Referenced-but-absent tools with NO stated reason (see Invoke-PythonCheck -AbsentReason).
+$script:ToolAbsentUnexpected = 0
 if ($NoPython) {
     $script:PythonCommand = $null
 } else {
@@ -444,7 +462,7 @@ Invoke-PythonCheck -Label 'lifecycle frontmatter (governance docs)' -MissingPyth
 
 # Skill provenance + compatibility floor (backlog #80/#81) -- mirror of validate.sh.
 # Source-repo only; absent downstream (not in deploy runtime_tools) -> graceful SKIP.
-Invoke-PythonCheck -Label 'skill provenance + compatibility floor' -MissingPythonLevel 'FAIL' -ScriptPath $skillProvenanceCheck -Arguments @('--root', $root)
+Invoke-PythonCheck -Label 'skill provenance + compatibility floor' -MissingPythonLevel 'FAIL' -ScriptPath $skillProvenanceCheck -Arguments @('--root', $root) -AbsentReason 'source-only tool, not deployed by design (safe to ignore downstream)'
 
 # Verify the hash chain on the archive INDEX.jsonl.
 if (Test-Path -Path $archiveIndexJsonl -PathType Leaf) {
@@ -581,14 +599,19 @@ if (Test-Path -Path $ssotCurrentState -PathType Leaf) {
 # validate.sh block. WARN when any scenario/aggregate GREW beyond slack (advisory,
 # never FAIL); baseline absent -> WARN to seed; shrink is intentionally not flagged.
 # Teeth live in tests/ci/test_lifecycle_baseline_drift.py.
+# Updater-absence is tested FIRST: neither the baseline nor the updater is deployed
+# downstream, so testing baseline-absence first made every adopter hit a permanent WARN
+# telling them to run a tool their tree does not contain -- the honest SKIP below it was
+# unreachable. Order is updater -> baseline -> python; the baseline/python order is
+# deliberately left as-is (changing it is a separate semantic change, not this defect).
 $lifecycleBaseline = Join-Path $root '.agentcortex/metadata/lifecycle-baseline.json'
 $lifecycleUpdater = Join-Path $root '.agentcortex/tools/update_lifecycle_baseline.py'
-if (-not (Test-Path -Path $lifecycleBaseline -PathType Leaf)) {
+if (-not (Test-Path -Path $lifecycleUpdater -PathType Leaf)) {
+    Add-Result -Level 'SKIP' -Message 'token lifecycle drift -- updater not present; not deployed downstream by design (safe to ignore there)'
+} elseif (-not (Test-Path -Path $lifecycleBaseline -PathType Leaf)) {
     Add-Result -Level 'WARN' -Message 'token lifecycle baseline absent (.agentcortex/metadata/lifecycle-baseline.json); seed with update_lifecycle_baseline.py --init'
 } elseif (-not $script:PythonCommand) {
     Add-Result -Level 'SKIP' -Message 'token lifecycle drift -- python unavailable or disabled (--NoPython)'
-} elseif (-not (Test-Path -Path $lifecycleUpdater -PathType Leaf)) {
-    Add-Result -Level 'SKIP' -Message 'token lifecycle drift -- updater not present (update_lifecycle_baseline.py missing)'
 } else {
     $prevEap = $ErrorActionPreference
     $hadNative = Test-Path variable:PSNativeCommandUseErrorActionPreference
@@ -796,7 +819,7 @@ Invoke-PythonCheck -Label 'decision disposition (archived work logs)' -MissingPy
 # network call). WARN-tier / never-FAIL (tool ALWAYS exits 0); silent no-op when
 # no active Work Log exists. Backlog #161 (2026-08-08 govern-audit F7): a log
 # citing a nonexistent spec path or PR previously passed both validators untouched.
-Invoke-PythonCheck -Label 'worklog external references (spec/ADR existence, advisory)' -MissingPythonLevel 'WARN' -ScriptPath (Join-NormalPath $root '.agentcortex/tools/check_worklog_references.py') -Arguments @('--root', $root)
+Invoke-PythonCheck -Label 'worklog external references (spec/ADR existence, advisory)' -MissingPythonLevel 'WARN' -ScriptPath (Join-NormalPath $root '.agentcortex/tools/check_worklog_references.py') -Arguments @('--root', $root) -AbsentReason 'source-only tool, not deployed by design (safe to ignore downstream)'
 $phaseSkillFiles = @(
     (Join-NormalPath $workflowsDir 'plan.md'),
     (Join-NormalPath $workflowsDir 'implement.md'),
@@ -1151,7 +1174,11 @@ if (Test-Path -Path $worklogDir -PathType Container) {
         # explicit array materialization so empty archives report 0 KB cleanly.
         $archiveFiles = @(Get-ChildItem -Path $archiveDir -Recurse -File -ErrorAction SilentlyContinue)
         if ($archiveFiles.Count -gt 0) {
-            $archiveKb = [int](($archiveFiles | Measure-Object -Property Length -Sum).Sum / 1024)
+            # Floor, not [int]. awk's int() in validate.sh truncates while [int] rounds —
+            # and rounds half-to-even at that — so the twins reported different KB for the
+            # same bytes and could straddle the threshold in a ~0.5KB band (#174). Both
+            # sides now floor, which makes the figures identical rather than merely close.
+            $archiveKb = [int][math]::Floor((($archiveFiles | Measure-Object -Property Length -Sum).Sum / 1024))
         }
         else {
             $archiveKb = 0
@@ -2166,32 +2193,72 @@ print(count)
     }
 }
 
-$gitignore = Join-NormalPath $root '.gitignore'
-if (Test-Path -Path $gitignore -PathType Leaf) {
-    $gitignoreContent = Get-Content -Path $gitignore
-    $gitignoreErrors = 0
-    foreach ($mustTrack in @(
-        '.agentcortex/context/current_state.md',
-        '.agentcortex/context/archive/',
-        '.agentcortex/specs/',
-        '.agentcortex/adr/',
-        'docs/specs/',
-        'docs/adr/'
-    )) {
-        if ($gitignoreContent -contains $mustTrack) {
-            Write-Output "  .gitignore must NOT ignore persistent SSoT artifact: $mustTrack"
-            $gitignoreErrors++
-        }
+# Persistent SSoT artifacts must stay visible to git -- see the matching block in
+# validate.sh for the full rationale. The three flags carry the correctness: `-q` for
+# the verdict (`-v` exits 0 on a NEGATION match too, which means NOT ignored),
+# `--no-index` so tracked files are not skipped, `-v` for the message only.
+# The probes are representative, not exhaustive.
+# PS7 can promote a native non-zero exit to a terminating error when a caller profile
+# sets this; pin it so an ordinary "not ignored" (exit 1) cannot land in the catch and
+# turn a real verdict into SKIP. Assigning it on Windows PowerShell 5.1 is inert.
+$PSNativeCommandUseErrorActionPreference = $false
+$gitignoreProbes = @(
+    '.agentcortex/context/current_state.md',
+    '.agentcortex/context/archive/acx-ignore-probe-20260101.md',
+    '.agentcortex/specs/acx-ignore-probe.md',
+    '.agentcortex/adr/ADR-000-acx-ignore-probe.md',
+    'docs/specs/acx-ignore-probe.md',
+    'docs/adr/ADR-000-acx-ignore-probe.md'
+)
+$gitignoreErrors = 0
+$gitignoreUnknown = 0
+$gitignoreReport = @()
+foreach ($probe in $gitignoreProbes) {
+    $probeStatus = 2
+    try {
+        & git -C $root check-ignore -q --no-index -- $probe 2>$null
+        $probeStatus = $LASTEXITCODE
     }
-    if ($gitignoreErrors -gt 0) {
-        Add-Result -Level 'FAIL' -Message '.gitignore blocks persistent SSoT artifacts'
+    catch {
+        $probeStatus = 2
     }
-    else {
-        Add-Result -Level 'PASS' -Message '.gitignore preserves persistent SSoT artifacts'
+    if ($probeStatus -eq 0) {
+        $gitignoreErrors++
+        $probeSource = $null
+        try { $probeSource = & git -C $root check-ignore -v --no-index -- $probe 2>$null } catch { $probeSource = $null }
+        if ($probeSource) { $gitignoreReport += "  $probeSource" } else { $gitignoreReport += "  $probe" }
+    }
+    elseif ($probeStatus -ne 1) {
+        $gitignoreUnknown++
     }
 }
+# Re-label only, never re-decide -- see the matching block in validate.sh, including
+# why this is not `check-ignore -- .` (a blank CRLF line is the pattern "\r", which
+# git strips to empty, and the empty pattern matches `.`; every core.autocrlf clone
+# would be misreported).
+$gitignoreOuterPrefix = ''
+if ($gitignoreErrors -eq $gitignoreProbes.Count) {
+    try { $gitignoreOuterPrefix = (& git -C $root rev-parse --show-prefix 2>$null) -join '' } catch { $gitignoreOuterPrefix = '' }
+}
+if ($gitignoreErrors -gt 0) {
+    foreach ($reportLine in $gitignoreReport) { Write-Output $reportLine }
+    if ($gitignoreOuterPrefix) {
+        $gitignoreFailMessage = "persistent SSoT artifacts are untracked: every probe is ignored and this project sits at '$gitignoreOuterPrefix' inside a larger repository, so an outer rule (source:line above) is hiding the whole directory and no governance record here can be committed. Fix by running ``git init`` in this directory, or by un-ignoring this path in the outer repository -- do NOT delete that rule blindly, it is probably load-bearing there"
+    }
+    else {
+        $gitignoreTail = ''
+        if ($gitignoreUnknown -gt 0) {
+            $gitignoreTail = "; $gitignoreUnknown further probe(s) could not be resolved"
+        }
+        $gitignoreFailMessage = ".gitignore blocks persistent SSoT artifacts ($gitignoreErrors/$($gitignoreProbes.Count) probes ignored; the ignore source:line shown above is the pattern to remove$gitignoreTail)"
+    }
+    Add-Result -Level 'FAIL' -Message $gitignoreFailMessage
+}
+elseif ($gitignoreUnknown -gt 0) {
+    Add-Result -Level 'SKIP' -Message "persistent SSoT artifacts vs .gitignore -- git check-ignore could not resolve $gitignoreUnknown/$($gitignoreProbes.Count) probes here (not a git work tree, or git unavailable); the check did NOT run"
+}
 else {
-    Add-Result -Level 'PASS' -Message '.gitignore absent -- no persistent SSoT artifacts are ignored'
+    Add-Result -Level 'PASS' -Message '.gitignore preserves persistent SSoT artifacts'
 }
 
 # SSoT completeness checks — verify current_state.md indexes match disk reality
@@ -2357,7 +2424,7 @@ if (Test-Path -Path $backlogFile -PathType Leaf) {
     if ($missingCols.Count -eq 0) {
         Add-Result -Level 'PASS' -Message 'backlog schema: Kind/Labels/Priority columns present'
 
-        $pendingRows = @($backlogLines | Where-Object { $_ -match '\| Pending' })
+        $pendingRows = @($backlogLines | Where-Object { $_ -cmatch '\| Pending' })
         $totalPending = $pendingRows.Count
 
         # L-1: P0 ratio lint — warn if >20% of pending items are P0
@@ -2402,7 +2469,15 @@ if (Test-Path -Path $backlogFile -PathType Leaf) {
         }
 
         # L-2: label vocabulary drift — warn if distinct label count exceeds 15
-        $distinctLabels = @($pendingRows | ForEach-Object {
+        # Parity with validate.sh (#174): the label-vocabulary check watches ACTIVE work,
+        # which the backlog header defines as Pending / In Progress. Deliberately a
+        # separate row set from $pendingRows — L-1/L-3/L-3b are Pending-only on both
+        # sides and must stay that way.
+        # -cmatch, not -match: PowerShell's -match is case-INSENSITIVE by default while
+        # grep -E is case-sensitive, which would itself be a twin divergence (a `| pending |`
+        # row would enter this set and not sh's). Padding is tolerant on both sides.
+        $activeRows = @($backlogLines | Where-Object { $_ -cmatch '\|[ 	]*(Pending|In Progress)[ 	]*\|' })
+        $distinctLabels = @($activeRows | ForEach-Object {
             $cols = $_ -split '\|'
             if ($cols.Count -gt 4) {
                 $cols[4] -split ',' | ForEach-Object { $_.Trim() }
@@ -2651,6 +2726,11 @@ if ($specMissingFrontmatter -gt 0) {
     Add-Result -Level 'WARN' -Message "docs/specs/ files with unrecognized status value: $specBadStatus (valid: draft, frozen, shipped, cancelled, living)"
 } elseif ($specFileCount -gt 0) {
     Add-Result -Level 'PASS' -Message 'all docs/specs/ files have valid status frontmatter'
+} else {
+    # SKIP, not silence, when there are no governed specs (#174 / parity with validate.sh).
+    # Ratchet justification #7 (backlog #149) records that a check emitting NOTHING while
+    # the summary still prints "integrity check passed" IS the defect.
+    Add-Result -Level 'SKIP' -Message 'docs/specs/ status frontmatter -- no governed specs present (meta/_* and .gitkeep.md excluded)'
 }
 
 # ACX phase shim skill-existence check (parity with validate.sh)
@@ -2797,6 +2877,19 @@ if ($script:FailCount -gt 0) {
 # Labeling only — exit stays 0 (not a new gate).
 if (-not $script:PythonCommand) {
     Write-Output 'Agentic OS integrity check passed (reduced assurance: python-dependent checks skipped)'
+} elseif ($script:ToolAbsentUnexpected -gt 0) {
+    # Same failure class as the work-log family SKIP (backlog #149): checks that never ran
+    # must not be reported as an unqualified pass. Keyed on tool absence, which the
+    # python-only condition above is blind to. A deliberate source-only absence names itself
+    # via -AbsentReason and is excluded, so this never fires on a healthy downstream.
+    Write-Output "Agentic OS integrity check passed (reduced assurance: $($script:ToolAbsentUnexpected) referenced tool(s) absent -- those checks did not run)"
 } else {
     Write-Output 'Agentic OS integrity check passed'
+}
+
+}
+finally {
+    # (#175) Hand the caller's console state back exactly as found. Runs on the `exit 1`
+    # path above as well -- PowerShell executes `finally` on exit and preserves the code.
+    [Console]::OutputEncoding = $acxPreviousOutputEncoding
 }

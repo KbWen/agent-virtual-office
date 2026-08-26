@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-08-03T23:30:00+08:00
-- **Last Verified**: 2026-08-15
-- **Update Sequence**: 116
+- **Last Updated**: 2026-08-25T23:30:00+08:00
+- **Last Verified**: 2026-08-25
+- **Update Sequence**: 117
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -156,6 +156,16 @@
 
 ## Ship History
 
+### Ship-chore-upgrade-agentic-os-v1.8.24-2026-08-25 (governance brain v1.8.21 -> v1.8.24)
+
+- Vendored framework upgrade from canonical `KbWen/agentic-os.git`, tag **v1.8.24** (`a6b04a2`), resolved by `git ls-remote` before any fetch and matched against the clone HEAD. Classified `hotfix` under the Supply-Chain / Provenance Escalation rule. Deploy: `202 updated / 2 skipped / 1 new / 0 removed`; tracked change set **17 paths, zero product files**, matching the pre-deploy manifest-intersect prediction exactly. 203/205 manifest entries byte-match the source after CRLF normalization; the 2 that do not are the 2 deliberate SKIPs.
+- **The sizing method has a blind spot that was closed rather than tolerated.** A manifest-intersect cannot see a file that becomes newly *deployable*, so the deploy whitelist itself (`deploy.sh` `runtime_tools` + `deploy_manifest_golden.txt`) was diffed separately: exactly one new file, `check_audit_chain.py` (204 -> 205 entries). `--dry-run` was run and its output deliberately **not** used for sizing — it is not hash-aware and labelled all 101 enumerated files `[UPDATE]`.
+- **Running the new checker before deploying turned the standing "validator regression" risk from a hypothesis into a measurement.** Both validators invoke `check_audit_chain.py` at FAIL level, and 16 of this repo's 93 `INDEX.jsonl` entries predate the hash chain and carry no `prev_sha` — so the upgrade would have landed a permanent red. Cleared with upstream's documented one-command migration, and the rewrite is provably surgical: 93 entries, 16 changed, `prev_sha` added and nothing else, no field removed or modified, lines 17-93 byte-identical. Not migrating was never the cheaper option — it fails the same validator at the same level, permanently, with a real integrity gap behind it.
+- **One FAIL remains at ship time and is stated rather than smoothed over.** Both twins report the identical `INDEX.jsonl append-only witness` FAIL: it compares the merge-base copy against the working copy and stays red until the migration is merged. That is upstream's deliberate design — rewriting an audit log should be reviewable, not silent. It was **proved to clear, not asserted to**: a scratch clone with `origin/main` advanced to this commit runs the deployed `validate.sh` end-to-end and returns `[PASS] ... baseline is a prefix of local` with `fail=0`. Stated limitation: that clone has no gitignored work logs, so its overall tally is not comparable — it proves the witness line and nothing else.
+- **What the upgrade actually buys downstream, measured against the v1.8.21 baseline rather than read off a version number**: `audit chain integrity` moved `SKIP -- tool not present` -> `PASS`, so tamper evidence is no longer write-only here; the three bare unactionable SKIPs now carry their own reason; the permanent `token lifecycle baseline absent` WARN, which named a tool this tree does not contain, is gone; and the `.gitignore` SSoT-artifact guard now probes real files instead of matching directory strings. The first two are upstream's fix for finding **F-1 that this repo itself filed during the v1.8.21 upgrade**.
+- Both `.acx-incoming` sidecars were inspected, not assumed: the SSoT sidecar was the blank `[Describe your project in one line]` template and the `.claude/settings.json` sidecar carried **0 hooks** against this project's **8** `office-status-hook.js` entries. Deleted. `.gitignore` is merged rather than copied by deploy, so it was hand-audited instead of byte-compared — the diff is empty (EOL churn only) and it was restored rather than committed as a no-op. The gitignored `.agentcortex-src/` cache, left stale at v1.8.17 by the previous upgrade, was realigned by `checkout` (never `reset --hard`).
+- Tests: Pass — Vitest 115/115 files and 2309/2309 tests; `validate.ps1 pass=113 warn=6 fail=1 skip=5` and `validate.sh pass=112 warn=7 fail=1 skip=5` (baselines 113/6/0/5 and 112/7/0/5), the single fail being the transient above; `scan_credentials.py` exit 0; zero new network or remote-exec surface across the 241-line executable diff.
+
 ### Ship-hotfix-offfloor-sidestep-clamp-2026-08-16 (AVO-192 — an event could freeze an agent inside a desk)
 
 - Nightly `sim-soak` on `main` (`cb6a76e`) caught `[offFloorRest] ops at (89,103)` + `[sustainedStack] gate+ops dist 25, group:true`. Forensic tail: `ops` walked (115,175)->(95,108)->(89,103), all `isOnObstacle`, still in transit; a group event froze it there for the event's duration, 25px from `gate` at its HOME (100,80).
@@ -227,11 +237,6 @@
 
 - Cleared PR #204 release gates with a lockfile-only PostCSS 8.5.18 security patch and an intentional AVO-187 bundle-budget rebase to the measured 496,504-byte production bundle. No product source or dependency range changed. Commit: `cfabe93`.
 - Tests: Pass — local npm audit 0 vulnerabilities, PostCSS 8.5.18, build/bundle gate, and 2295/2295 tests; GitHub CI #451 and Security Scanning #360 passed test (22/24), pack/render/soak smoke, npm audit, Semgrep, and TruffleHog.
-
-### Ship-avo-187-temporal-doorway-claim-2026-07-31
-
-- Shipped AVO-187 on `codex/chore-upgrade-agentic-os-v1.8.17`: atomic full-route physical-door claims serialize both directions with stable FIFO tickets, journey fencing, complete lifecycle release, and rendered-truth timeout/dynamic-removal aborts. Commit: `018ef1e`.
-- Tests: Pass — Vitest 112/112 files and 2295/2295 tests; production build PASS; Agentic OS validator 112 PASS / 0 FAIL; real-server 4/4 doors over 22 batches with empty final owners/requests; 10.005-minute cold-watch with zero invariant violations.
 
 > Older entries are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.
