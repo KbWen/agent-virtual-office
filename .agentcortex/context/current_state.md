@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-08-26T11:10:00+08:00
+- **Last Updated**: 2026-08-26T11:40:00+08:00
 - **Last Verified**: 2026-08-26
-- **Update Sequence**: 119
+- **Update Sequence**: 120
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -156,6 +156,14 @@
 
 ## Ship History
 
+### Ship-chore-release-v1.6.6-2026-08-26 (nobody gets dragged away from real work) · release v1.6.6
+
+- Cuts the 10 commits merged since `v1.6.5` (2026-08-03) as **v1.6.6**. No app code in the release commit itself, mirroring the `8bc6684` shape: `package.json` 1.6.5 -> 1.6.6, **both** `package-lock.json` version fields (root + `packages[""]`), CHANGELOG narrative, Ship History.
+- **The CHANGELOG deliberately under-sells it.** Only 3 of the 10 commits are user-facing (AVO-191 event takeover, AVO-192 furniture freeze, the dependency advisories); the other 7 are governance and tooling. Those are listed under an explicit "Housekeeping / not user-facing" heading rather than dressed up as product value — a release that claims more than it shipped is the same defect class as a comment that claims a guarantee the code does not enforce, which is what this release is *about*.
+- Stale record corrected in passing: the standing note "lockfile root version is stale at 1.4.0, leave it" no longer holds — `8bc6684` fixed it at the v1.6.5 cut, so both fields were in sync and both moved together here. Verified: zero `1.6.5` strings remain in the lockfile.
+- The annotated tag and the GitHub Release are part of this task, not a follow-up — `v1.6.5` is an annotated tag object (`git cat-file -t` -> `tag`), and this repo has forgotten the tag step before.
+- Tests: Pass — vitest **116 files / 2319 tests**; build PASS; `bundle-budget PASS 495983 bytes vs baseline 496504 (-0.10%, limit +10%)`; `pack-smoke ALL ASSERTIONS PASSED`; `validate.sh pass=113 warn=6 fail=0 skip=5`.
+
 ### Ship-chore-isolated-status-dir-for-staging-2026-08-26 (visual judgement stops being taken under uncontrolled conditions)
 
 - **Every visual decision in this repo has been made from a screenshot taken under whatever the operator happened to be doing.** The dev server reads status from `~/.claude/office-status*.json` — the operator's own live Claude Code hook traffic — so any scene staged via `applyExternalStatus` is overwritten within ~2s. Measured three ways in one session: `window.__office_status__` injection, `applyExternalStatus` staging, and `sim-soak` all lost to it. Commit `c7ecbd9`.
@@ -238,12 +246,6 @@
 - **Upstream findings routed to the owner.** NEW: `validate.sh` and `validate.ps1` disagree on the same tree -- `pass=112` vs `pass=113`; `docs/specs` frontmatter check exists only in the `.ps1`; `backlog label vocabulary` reports 2 vs 1 distinct labels; `archive size` measures 1108KB vs 878KB; the Evidence-floor check covers one more classification in the `.ps1`. Not new: the phantom `-- tool not present` SKIPs are already upstream **#173** ("19 tools referenced, 7 absent, at least 4 deliberately, no allowlist separates intent from oversight"); `check_worklog_references.py` being source-only follows the **#137** precedent.
 - Review limits stated rather than implied: no fresh-context reviewer was dispatched (same-session author reviewed own work; the trust-boundary external signal was the upstream CHANGELOG cross-check plus an independent `git ls-remote` provenance check), and the 202 deployed files were NOT line-by-line audited for malicious content -- the applied control is provenance + byte-parity, which is the appropriate control for vendored framework code, not a code audit.
 - Tests: Pass -- Vitest 114/114 files and 2306/2306 tests; build PASS with the bundle unchanged at 496.50 kB; `validate.ps1` `pass=113 warn=7 fail=0 skip=5` (baseline `113/6/0/4`, fail stays 0); `validate.sh` `pass=112 warn=7 fail=0 skip=5`; 202/202 deployed files byte-match the v1.8.21 source after CRLF normalization; upgraded-tool functional smoke 9/9 including a proven stale-`expected-sha` rejection by `guard_context_write.py`.
-
-### Ship-chore-release-v1.6.5-2026-08-03 (npx project-root fix + maintenance sweep) · release v1.6.5
-
-- Release cutting the merged npx/project-root correctness work as **v1.6.5**: `package.json` 1.6.4→1.6.5 + CHANGELOG narrative ("It works where you actually run it") + Ship History. The stale `package-lock.json` root version (1.4.0, unchanged since v1.4.0) was corrected to 1.6.5 in the same commit — it is a metadata field npm regenerates, and leaving it skewed was a standing doc/description inconsistency the owner asked to clear. Git tag `v1.6.5` created + pushed by the agent (annotated, on the release commit).
-- Covers PRs #198–#205 since v1.6.4: the npx hook-filtering fix (#205), AVO-187/188/189/190 doorway reliability + Agentic OS v1.8.17 (#204), the sim-soak gate repair (#202), and SSoT/governance maintenance (#198–#200, #203).
-- Scope note: GitHub Releases still has no release page for v1.6.2–v1.6.4 (tags exist). Owner decided against backfilling; only v1.6.5 gets a release page. Recorded here so the gap is not mistaken for missing tags.
 
 > Older entries are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.
