@@ -30,7 +30,15 @@ Rotated 1 additional entry on 2026-08-26 (SSoT Update Sequence 117 -> 118).
 
 Rotated 1 additional entry on 2026-08-26 (SSoT Update Sequence 118 -> 119).
 
+Rotated 1 additional entry on 2026-08-26 (SSoT Update Sequence 119 -> 120).
+
 ---
+
+### Ship-chore-release-v1.6.5-2026-08-03 (npx project-root fix + maintenance sweep) · release v1.6.5
+
+- Release cutting the merged npx/project-root correctness work as **v1.6.5**: `package.json` 1.6.4→1.6.5 + CHANGELOG narrative ("It works where you actually run it") + Ship History. The stale `package-lock.json` root version (1.4.0, unchanged since v1.4.0) was corrected to 1.6.5 in the same commit — it is a metadata field npm regenerates, and leaving it skewed was a standing doc/description inconsistency the owner asked to clear. Git tag `v1.6.5` created + pushed by the agent (annotated, on the release commit).
+- Covers PRs #198–#205 since v1.6.4: the npx hook-filtering fix (#205), AVO-187/188/189/190 doorway reliability + Agentic OS v1.8.17 (#204), the sim-soak gate repair (#202), and SSoT/governance maintenance (#198–#200, #203).
+- Scope note: GitHub Releases still has no release page for v1.6.2–v1.6.4 (tags exist). Owner decided against backfilling; only v1.6.5 gets a release page. Recorded here so the gap is not mistaken for missing tags.
 
 ### Ship-fix-npx-project-root-2026-08-03 (PR #205 — the office was blind under the documented npx path)
 

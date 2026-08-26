@@ -5,6 +5,35 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.6 — 2026-08-26 — Nobody gets dragged away from real work
+
+An honesty release. Both fixes are the same shape: the office was doing something to an agent that
+was genuinely working, and the code claimed it wasn't.
+
+### Fixed
+
+- **An office event could take over an agent that was really working.** When fewer than two agents
+  were free, the participant picker fell back to the *entire* roster — so on a busy office a tea
+  break or a stand-up could grab someone mid-task and walk them across the room to the coffee
+  machine. `store.js` documented the opposite ("R1-safe: pickParticipants never selects tracked
+  working/blocked agents"), so the guarantee existed only as a comment. Too few genuinely-idle
+  agents now means the event simply does not happen. A fresh or demo office is unaffected: an agent
+  with no tracked status already counted as available, so the fallback only ever fired when people
+  were really busy — which is exactly when it must not. (AVO-191)
+- **An event could freeze an agent inside the furniture.** The react-in-place branch only validated
+  where a frozen participant came to rest when it happened to overlap someone else; with nobody
+  nearby it left them wherever they stood, including inside a desk, for the whole event. (AVO-192)
+- **Two dependency advisories cleared** and nine stale direct dependencies refreshed.
+
+### Housekeeping
+
+Not user-facing, listed so the release is not oversold: the vendored governance framework moved
+v1.8.17 → v1.8.24, which turned up 16 audit-log entries in this repo that predated the hash chain
+and quietly had no integrity coverage; a dead `DeskCluster` export was removed; and staged office
+screenshots became reproducible — they used to be silently overwritten by whatever the operator's
+own agents were doing at the time, which meant every past visual judgement here was made under
+uncontrolled conditions.
+
 ## v1.6.5 — 2026-08-03 — It works where you actually run it
 
 A correctness release. The headline fix is embarrassing and worth stating plainly: launched the way
