@@ -26,7 +26,14 @@ Rotated 2 additional entries on 2026-08-03 (SSoT Update Sequence 115 -> 116).
 
 Rotated 1 additional entry on 2026-08-25 (SSoT Update Sequence 116 -> 117).
 
+Rotated 1 additional entry on 2026-08-26 (SSoT Update Sequence 117 -> 118).
+
 ---
+
+### Ship-pr-204-ci-release-gates-2026-08-01
+
+- Cleared PR #204 release gates with a lockfile-only PostCSS 8.5.18 security patch and an intentional AVO-187 bundle-budget rebase to the measured 496,504-byte production bundle. No product source or dependency range changed. Commit: `cfabe93`.
+- Tests: Pass — local npm audit 0 vulnerabilities, PostCSS 8.5.18, build/bundle gate, and 2295/2295 tests; GitHub CI #451 and Security Scanning #360 passed test (22/24), pack/render/soak smoke, npm audit, Semgrep, and TruffleHog.
 
 ### Ship-avo-187-temporal-doorway-claim-2026-07-31
 

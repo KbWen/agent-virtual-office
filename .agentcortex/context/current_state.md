@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-08-25T23:30:00+08:00
-- **Last Verified**: 2026-08-25
-- **Update Sequence**: 117
+- **Last Updated**: 2026-08-26T01:00:00+08:00
+- **Last Verified**: 2026-08-26
+- **Update Sequence**: 118
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -156,6 +156,16 @@
 
 ## Ship History
 
+### Ship-fix-avo-191-pickparticipants-r1-fallback-2026-08-26 (AVO-191 — an office event could take over an agent that was really working)
+
+- `pickParticipants` excluded busy agents and then, if fewer than two survived, fell back to the **full roster** — so on a busy office an ambient or clicked event picked working and blocked agents and walked them to the coffee machine. `store.js` documented the opposite ("R1-safe: pickParticipants never selects tracked working/blocked agents"), so the guarantee existed only as a comment. Each branch now returns an **empty cast** instead: too few genuinely-idle agents means the event does not happen. Commits `447b149`, `1952f12`.
+- **Reading `isAvailable` is what settles the risk, and it inverts the obvious read.** An agent with **no** `externalStatus` entry already counts as available, so a fresh or demo office was never affected. On the 8-slot base roster the fallback needed **7 of 8** agents tracked working, blocked, or already in an event before it could fire — rare, and precisely the case where taking someone over is worst. Removing it is low-blast-radius *because* of when it fired.
+- **The removal is only half the fix.** An empty cast is now reachable at all six callers, and `activeEvent` is the global event mutex — a phantom one blocks every later event for its whole duration, a failure mode the file already carried a comment about. `fireWithCast` picks and bails before `setActiveEvent`; the five autonomous callers route through it; the user-click path reuses the existing honesty-gated-out branch. In `fireSeed` the cast is taken **before** the cooldown stamps, so an event that never fired no longer eats the anti-spam budget and silently suppresses the next real signal edge. The backlog row said the fallback appears "twice" — it is **four** sites.
+- **Chasing my own comment instead of trusting it found a second hole (AVO-194).** After correcting the R1 line to say the guarantee now holds, checking *who else* reaches that branch turned up `lunch-nap`, which never goes through `pickParticipants`: `officeLife.js:788` filters on `!inGroupEvent` alone and never reads `externalStatus`, so at 12:00 an agent that is genuinely working is shown asleep with a lunch-nap bubble. Milder — no walk across the office — but the same ADR-008 family. Filed, not folded in; what could not wait is the comment, which now states the guarantee's **scope** and names the caller that falls outside it. Shipping a blanket "R1-safe" that one caller violates is the exact defect this ship existed to fix.
+- **One pre-existing test had to change, and it is the interesting one.** `officeLife.test.js`'s "returns true for a known event id" built its store with `agents: {}` and asserted `true` — it **encoded the defect**, requiring an empty office to fire a set-piece with zero participants and take the mutex. Its guard-chain intent is preserved by giving it a real cast; the empty-office case is now asserted the other way in its own test.
+- **Also filed rather than folded in (AVO-193)**: with everyone busy, a coffee-machine click is now a silent no-op, because `fireInteractionReaction` maps only `deploy-success` and `eureka`. Strictly better than dragging a working agent across the room and nothing false is claimed (ADR-008 honest-neutral bar), but closing it needs a new reactor mapping, a locale key in en + zh-TW, and a design call about **who** reacts — content, not a bug fix.
+- Tests: Pass — **red-first**: the repro is `6 failed / 2 passed` on the unfixed tree, with a working agent measurably relocated to `(111.4, 483.3)`, and `9 passed` after (the two that pass on baseline are the regression pair, which is what makes them worth having). An exhaustive invariant sweep covers **10 ungated events x all 16 busy masks = 160 combinations**; honest limit — it was written after the fix and has not itself been run RED. Full suite **116 files / 2318 tests** (from 115 / 2309); build PASS with the bundle **down** 496.26 → 495.98 kB as five duplicated call sites collapsed into one helper; `render-smoke` 4 viewports, 0 pageerrors, 0 console errors. `sim-soak` 10 min: **0 invariant violations** across 2344 samples. The run still ERRORs on its own coverage gate (2344 vs a required 2388) and that gate is unmeetable on this machine — shortfalls of 2.3% / 2.2% / 1.8% across three runs against a 0.5% tolerance. Rig limit, measured, not an office signal. It also **cannot exercise this fix** (Work Log §Red Team F-3): `available` never drops below 6 there, and an earlier run’s `3` violations were an HMR re-mount I caused by editing mid-run — a clean re-run of the same tree reports `0`.
+
 ### Ship-chore-upgrade-agentic-os-v1.8.24-2026-08-25 (governance brain v1.8.21 -> v1.8.24)
 
 - Vendored framework upgrade from canonical `KbWen/agentic-os.git`, tag **v1.8.24** (`a6b04a2`), resolved by `git ls-remote` before any fetch and matched against the clone HEAD. Classified `hotfix` under the Supply-Chain / Provenance Escalation rule. Deploy: `202 updated / 2 skipped / 1 new / 0 removed`; tracked change set **17 paths, zero product files**, matching the pre-deploy manifest-intersect prediction exactly. 203/205 manifest entries byte-match the source after CRLF normalization; the 2 that do not are the 2 deliberate SKIPs.
@@ -232,11 +242,6 @@
 - **Two gaps beyond #201, both proven not asserted.** (a) The original patch converted only the 6 read sites; both POST handlers stamp `_cwd` themselves, so a read-only fix makes the server filter out its own `POST /api/status` / `/api/event` writes — trading the hook path for the webhook path. Simulated: the read-only variant fails `serverProjectRootE2E > reads back its own POSTed status`. (b) `server.mjs` (the `serve`/Docker path) had all 8 identical sites and was equally broken.
 - Also swept: `tests/agentInspector.test.js` mixed fixed `+08:00` ISO literals with a LOCAL-time `dayKey`, so 2 cases failed on any host outside UTC+8/UTC — the same defect this file already fixed once for CI, never swept. And doc drift: README (en+zh-TW), ARCHITECTURE, INTEGRATIONS, DEPLOYMENT env table, ADR-002 all stated the filter keys off `process.cwd()`; ADR-007 `applies_to` pointed at `src/systems/banter.js`, a file that never existed.
 - Tests: Pass — Vitest 114/114 files and 2306/2306 tests under TZ = UTC, America/Los_Angeles, Pacific/Kiritimati (UTC+14), Pacific/Midway (UTC-11), Europe/Berlin; both new test files verified RED on pre-fix source; build PASS with the bundle unchanged at 496.50 kB; validator `pass=112 warn=8 fail=0 skip=4`; CI 7/7.
-
-### Ship-pr-204-ci-release-gates-2026-08-01
-
-- Cleared PR #204 release gates with a lockfile-only PostCSS 8.5.18 security patch and an intentional AVO-187 bundle-budget rebase to the measured 496,504-byte production bundle. No product source or dependency range changed. Commit: `cfabe93`.
-- Tests: Pass — local npm audit 0 vulnerabilities, PostCSS 8.5.18, build/bundle gate, and 2295/2295 tests; GitHub CI #451 and Security Scanning #360 passed test (22/24), pack/render/soak smoke, npm audit, Semgrep, and TruffleHog.
 
 > Older entries are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.
