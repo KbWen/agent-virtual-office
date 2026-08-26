@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-08-26T01:00:00+08:00
+- **Last Updated**: 2026-08-26T11:10:00+08:00
 - **Last Verified**: 2026-08-26
-- **Update Sequence**: 118
+- **Update Sequence**: 119
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -156,6 +156,16 @@
 
 ## Ship History
 
+### Ship-chore-isolated-status-dir-for-staging-2026-08-26 (visual judgement stops being taken under uncontrolled conditions)
+
+- **Every visual decision in this repo has been made from a screenshot taken under whatever the operator happened to be doing.** The dev server reads status from `~/.claude/office-status*.json` — the operator's own live Claude Code hook traffic — so any scene staged via `applyExternalStatus` is overwritten within ~2s. Measured three ways in one session: `window.__office_status__` injection, `applyExternalStatus` staging, and `sim-soak` all lost to it. Commit `c7ecbd9`.
+- **The failure was silent, which is the worse half.** `clutter-audit-shot.mjs` produced a shot captioned "6 quiet" while claiming to stage six busy agents, and exited 0. `scripts/staged-capture.mjs` now **asserts the staging reached the RENDER** — reading the DOM, not the store it just wrote to — and exits non-zero if it did not. A shot that did not stage is a failure, not a picture.
+- **The obvious design was rejected before it was written.** A browser-side status mock would put a fabricated-status capability inside the one product that exists not to fabricate status. Reading first made a much smaller design possible: the status API is registered under `configureServer` **only**, so it never runs for a built / previewed / packaged office, and `STALENESS_TIMEOUT` is 2 min so a staged scene survives once nothing competes. `OFFICE_STATUS_DIR` therefore only re-points the dev server's status directory — **no new fabrication capability**, since `applyExternalStatus` staging already existed and is what every shot script already used.
+- R1 proven rather than asserted: after a real build, `grep -rl OFFICE_STATUS_DIR dist/` returns nothing and `configurePreviewServer` count is `0`; with the variable unset the path resolves to the identical prior hard-coded location.
+- **The tool paid for itself immediately, by refuting the proposal it was built to evaluate.** The name-pill text reduction is **REJECTED** (Work Log D-1): the `--hide-names` counterfactual shows the office collapsing into anonymous sprites, because working / planning / done **rings are not distinguishable at a glance** — the pill FILL was carrying most of the status signal, not duplicating it. My supporting argument was also wrong and is recorded: `AgentCharacter.jsx:1713` justified deleting a **third** redundant channel; reusing it to delete the **second** is a different claim. The original clutter diagnosis was likewise corrected — it came from a live shot with agents bunched mid-walk; staged at home positions, 8 pills read fine, so the driver is positional bunching (already governed by AVO-156 / AVO-165 / ADR-004), not channel count. Re-open condition: sprite art (AVO-160 / AVO-124) landing.
+- Also recorded: the harness was first named `staged-office-shot.mjs`, which `.gitignore:87` (`scripts/*-shot.mjs`) silently excludes — that pattern is the **one-off** class; durable tools are named otherwise. Renamed rather than `git add -f`-ing against the repo's own convention.
+- Tests: Pass — vitest **116 files / 2319 tests**; build PASS; `validate.sh pass=113 warn=6 fail=0 skip=5`; harness proven on both branches of its own flag (`--scenario busy` staged 8/8, render confirmed 8/8, census 8 pills + 3 bubbles = **11 text objects**, 0 console errors).
+
 ### Ship-fix-avo-191-pickparticipants-r1-fallback-2026-08-26 (AVO-191 — an office event could take over an agent that was really working)
 
 - `pickParticipants` excluded busy agents and then, if fewer than two survived, fell back to the **full roster** — so on a busy office an ambient or clicked event picked working and blocked agents and walked them to the coffee machine. `store.js` documented the opposite ("R1-safe: pickParticipants never selects tracked working/blocked agents"), so the guarantee existed only as a comment. Each branch now returns an **empty cast** instead: too few genuinely-idle agents means the event does not happen. Commits `447b149`, `1952f12`.
@@ -234,14 +244,6 @@
 - Release cutting the merged npx/project-root correctness work as **v1.6.5**: `package.json` 1.6.4→1.6.5 + CHANGELOG narrative ("It works where you actually run it") + Ship History. The stale `package-lock.json` root version (1.4.0, unchanged since v1.4.0) was corrected to 1.6.5 in the same commit — it is a metadata field npm regenerates, and leaving it skewed was a standing doc/description inconsistency the owner asked to clear. Git tag `v1.6.5` created + pushed by the agent (annotated, on the release commit).
 - Covers PRs #198–#205 since v1.6.4: the npx hook-filtering fix (#205), AVO-187/188/189/190 doorway reliability + Agentic OS v1.8.17 (#204), the sim-soak gate repair (#202), and SSoT/governance maintenance (#198–#200, #203).
 - Scope note: GitHub Releases still has no release page for v1.6.2–v1.6.4 (tags exist). Owner decided against backfilling; only v1.6.5 gets a release page. Recorded here so the gap is not mistaken for missing tags.
-
-### Ship-fix-npx-project-root-2026-08-03 (PR #205 — the office was blind under the documented npx path)
-
-- Shipped as squash `89ff577`. `bin/cli.js` spawns both servers with `cwd` set to the PACKAGE root, so under `npx` their `process.cwd()` is the npx cache dir. Session files are matched against that root while the hooks stamp `_cwd` with the real project — so **every hook-written status file was discarded as foreign** and the office fell back to file-watcher data (`source: 'file-watcher'`, `_hint: 'no-hooks'`, labels degraded to raw `.jsonl` filenames). Status visibility, the product's core value, was dead on the documented install path. Diagnosed by external contributor @whoffmandesign in PR #201.
-- `resolveProjectRoot()` now lives in `src/server/scanSessions.mjs` — the module that owns the `_cwd` matching contract and is imported by both servers, so the two cannot drift. `bin/cli.js` forwards the invoking cwd as `OFFICE_PROJECT_ROOT` on **both** spawn sites; an explicit value wins (multi-worktree).
-- **Two gaps beyond #201, both proven not asserted.** (a) The original patch converted only the 6 read sites; both POST handlers stamp `_cwd` themselves, so a read-only fix makes the server filter out its own `POST /api/status` / `/api/event` writes — trading the hook path for the webhook path. Simulated: the read-only variant fails `serverProjectRootE2E > reads back its own POSTed status`. (b) `server.mjs` (the `serve`/Docker path) had all 8 identical sites and was equally broken.
-- Also swept: `tests/agentInspector.test.js` mixed fixed `+08:00` ISO literals with a LOCAL-time `dayKey`, so 2 cases failed on any host outside UTC+8/UTC — the same defect this file already fixed once for CI, never swept. And doc drift: README (en+zh-TW), ARCHITECTURE, INTEGRATIONS, DEPLOYMENT env table, ADR-002 all stated the filter keys off `process.cwd()`; ADR-007 `applies_to` pointed at `src/systems/banter.js`, a file that never existed.
-- Tests: Pass — Vitest 114/114 files and 2306/2306 tests under TZ = UTC, America/Los_Angeles, Pacific/Kiritimati (UTC+14), Pacific/Midway (UTC-11), Europe/Berlin; both new test files verified RED on pre-fix source; build PASS with the bundle unchanged at 496.50 kB; validator `pass=112 warn=8 fail=0 skip=4`; CI 7/7.
 
 > Older entries are archived, newest-first, in
 > `.agentcortex/context/archive/ship-history-2026.md`. They are not auto-read at bootstrap.

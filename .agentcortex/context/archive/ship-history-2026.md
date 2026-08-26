@@ -28,7 +28,17 @@ Rotated 1 additional entry on 2026-08-25 (SSoT Update Sequence 116 -> 117).
 
 Rotated 1 additional entry on 2026-08-26 (SSoT Update Sequence 117 -> 118).
 
+Rotated 1 additional entry on 2026-08-26 (SSoT Update Sequence 118 -> 119).
+
 ---
+
+### Ship-fix-npx-project-root-2026-08-03 (PR #205 — the office was blind under the documented npx path)
+
+- Shipped as squash `89ff577`. `bin/cli.js` spawns both servers with `cwd` set to the PACKAGE root, so under `npx` their `process.cwd()` is the npx cache dir. Session files are matched against that root while the hooks stamp `_cwd` with the real project — so **every hook-written status file was discarded as foreign** and the office fell back to file-watcher data (`source: 'file-watcher'`, `_hint: 'no-hooks'`, labels degraded to raw `.jsonl` filenames). Status visibility, the product's core value, was dead on the documented install path. Diagnosed by external contributor @whoffmandesign in PR #201.
+- `resolveProjectRoot()` now lives in `src/server/scanSessions.mjs` — the module that owns the `_cwd` matching contract and is imported by both servers, so the two cannot drift. `bin/cli.js` forwards the invoking cwd as `OFFICE_PROJECT_ROOT` on **both** spawn sites; an explicit value wins (multi-worktree).
+- **Two gaps beyond #201, both proven not asserted.** (a) The original patch converted only the 6 read sites; both POST handlers stamp `_cwd` themselves, so a read-only fix makes the server filter out its own `POST /api/status` / `/api/event` writes — trading the hook path for the webhook path. Simulated: the read-only variant fails `serverProjectRootE2E > reads back its own POSTed status`. (b) `server.mjs` (the `serve`/Docker path) had all 8 identical sites and was equally broken.
+- Also swept: `tests/agentInspector.test.js` mixed fixed `+08:00` ISO literals with a LOCAL-time `dayKey`, so 2 cases failed on any host outside UTC+8/UTC — the same defect this file already fixed once for CI, never swept. And doc drift: README (en+zh-TW), ARCHITECTURE, INTEGRATIONS, DEPLOYMENT env table, ADR-002 all stated the filter keys off `process.cwd()`; ADR-007 `applies_to` pointed at `src/systems/banter.js`, a file that never existed.
+- Tests: Pass — Vitest 114/114 files and 2306/2306 tests under TZ = UTC, America/Los_Angeles, Pacific/Kiritimati (UTC+14), Pacific/Midway (UTC-11), Europe/Berlin; both new test files verified RED on pre-fix source; build PASS with the bundle unchanged at 496.50 kB; validator `pass=112 warn=8 fail=0 skip=4`; CI 7/7.
 
 ### Ship-pr-204-ci-release-gates-2026-08-01
 
