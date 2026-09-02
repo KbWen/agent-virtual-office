@@ -1,8 +1,8 @@
 # Agentic OS Deploy Manifest
 # DO NOT EDIT — regenerated on each deploy
-version: 1.8.24
-source_commit: a6b04a2
-deployed_at: 2026-08-25T15:09:52Z
+version: 1.8.25
+source_commit: f250db1
+deployed_at: 2026-09-02T01:24:46Z
 source_repo: https://github.com/KbWen/agentic-os.git
 ---
 core .agent/config.yaml sha256:c969559c2a2acfa7e37fda1810cd88bfdd71c6e493c4b30c7a064678afd83724
@@ -64,12 +64,12 @@ core .agent/workflows/worktree-first.md sha256:3b0959121bb6f64c292262bdb9c9078f0
 core .agent/workflows/write-plan.md sha256:199fd2dae518d7a2960a70289be3f53a33c77bed516dc818c74568c7a822bb96
 core .agentcortex/AGENTS.safety.md sha256:f9d76258a031a3a1acd7d6725b42c998d19b76a6388a2da5d130fefdef0e525d
 core .agentcortex/bin/deploy.ps1 sha256:ac79f487c6e7ea78855fc2e00d389369600cec2059b61f2e6d9f214eb7a0e07b
-core .agentcortex/bin/deploy.sh sha256:216207dfa3c372511fa43b23bd38e2da3292303b43428e247c342308d1b76e7c
+core .agentcortex/bin/deploy.sh sha256:75bc087c709da59e2efbd55d7685f1e1302e460bdc20e433cc495a08100ecd88
 core .agentcortex/bin/validate.ps1 sha256:85ee5d2764002504a096450fd3d370acb81c31865c4526b1de2ccffb4fcb6fa4
 core .agentcortex/bin/validate.sh sha256:169fdad249216cbaa97f6ff45d3b64a066373c32aa692c22508a2360503fea6f
 scaffold .agentcortex/context/current_state.md sha256:f78f1e2926f01f3a7b5fefab87e6de956086853763eae020e40ae83b78c52731
-core .agentcortex/docs/AGENT_MODEL_GUIDE.md sha256:83e6c91dec04b9b9b0ae4c5747134a24edf1f8b2d89c83d332fd687bc51501a6
-core .agentcortex/docs/AGENT_MODEL_GUIDE_zh-TW.md sha256:8625e678a7555ff950da37dd582410afe92dc4fd73a14cacba7e4c6fbb83f2b6
+core .agentcortex/docs/AGENT_MODEL_GUIDE.md sha256:a07cdc27fb9fc0fcec0e47a8e9244d36ae4bd09f7e7f9de15c4b6a8457f62a3d
+core .agentcortex/docs/AGENT_MODEL_GUIDE_zh-TW.md sha256:49ebceb365f73bea50a33cb394986aecc8fae1dd82d0fca47cd01e4697e404dd
 core .agentcortex/docs/AGENT_PHILOSOPHY.md sha256:b4296170604787fe51917d85be525c09ba88c22d6ea1e8671954f1305457a007
 core .agentcortex/docs/AGENT_PHILOSOPHY_zh-TW.md sha256:951f4c3e1772b2770f995e13e071b9810b59ffbd651c87ece3362818dd8a0435
 core .agentcortex/docs/CLAUDE_PLATFORM_GUIDE.md sha256:d2f5099f106bf9b4f9929f6e9374a7f9f80d287940e38afa047c57797e549838
@@ -82,9 +82,9 @@ core .agentcortex/docs/PROJECT_EXAMPLES.md sha256:8e186ad832a76c0385f88b4e086a3f
 core .agentcortex/docs/PROJECT_EXAMPLES_zh-TW.md sha256:76ed688e729b2144cdc459d7e5d34e648627b4ba422ff9a53c3e643a157562f7
 core .agentcortex/docs/README.md sha256:e7aaafa8e5ab500c11da17249997b19bc089e4a0a9ceacce48223777e288d899
 core .agentcortex/docs/README_zh-TW.md sha256:16ff0a2d0b7ed541bfad1bc59f3b377b0a1f9b467414e4be7fa2eedc8226d7e9
-core .agentcortex/docs/TESTING_PROTOCOL.md sha256:f5751edb4b31de43ae4e7e166084713955b1323d340626bdaeb113ecd47d4b07
-core .agentcortex/docs/TESTING_PROTOCOL_zh-TW.md sha256:d14c69fc348ec709f3ce4b332ddef50566fc4fe86fc39675f9e0a595b5a45890
-core .agentcortex/docs/guides/antigravity-v5-runtime.md sha256:3e3cebf959ea655c92438086021b126221cac168ebdc7213912e658bdf8f0ad4
+core .agentcortex/docs/TESTING_PROTOCOL.md sha256:eb6011654db59e0cb9d3c387041ec72ea600f5ea517c8b01fe33306dc7ded0b6
+core .agentcortex/docs/TESTING_PROTOCOL_zh-TW.md sha256:07c78bcf0262f208cc46531937f29aa524a961863a98ff125b75240c1d539445
+core .agentcortex/docs/guides/antigravity-v5-runtime.md sha256:af9c8b23520433eb4c4576d0eaa86fb872a31f0d7d609c349b0829cf73d700f8
 core .agentcortex/docs/guides/audit-guardrails.md sha256:ee76e7b80a4bcb7ecb964bb720269b7d3136ad098571e6756f1a5bca812eedc1
 core .agentcortex/docs/guides/audit-guardrails_zh-TW.md sha256:613851d81cded26e23cbc45416e61b053e53ccefe494c9301cf3faf0bc8be869
 core .agentcortex/docs/guides/connecting-a-knowledge-base.md sha256:e4080f9f7bffca9883c7906394deecd4975190dcbefad40c8691cf0a78bd306c

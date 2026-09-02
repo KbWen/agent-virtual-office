@@ -220,11 +220,17 @@ runtime*, not in any single function — so the repo ships its own observation t
 |---|---|
 | `npm run soak` | **The soak gate.** Runs the office headless for 5 min (`--minutes N` to change) and fails on world-invariant violations: teleports, sustained standing stacks, frozen walkers, characters standing inside furniture. Also runs nightly in CI (`sim-soak` workflow). |
 | `node scripts/overlap-recorder.mjs 12` | Stack forensics: when two characters sit fully overlapped ≥2s, dumps both agents' last ~12s state chains (positions, targets, behaviors) so the mechanism is visible. |
-| `node scripts/zone-audit.mjs` | Movement-rhythm audit: 3-min zone occupancy, room visits, and how often 0/1/2+ characters are walking at once. |
+| `node scripts/zone-audit.mjs` | Movement-rhythm audit: 3-min zone occupancy, room visits, and how often 0/1/2+ characters are walking at once. Its `--organic` flag isolates the run by **renaming your real `~/.claude/office-status*.json`** and restoring them on a clean exit — prefer `npm run rhythm` below, which isolates without touching your files. |
+| `npm run rhythm` | **Is the office ALIVE or merely BUSY?** Hermetic by construction (spawns its own dev server pointed at an empty `OFFICE_STATUS_DIR`, and refuses to report numbers if any external status arrived). Reports stillness against an exact Poisson-binomial *independent model* — the gap says whether motion **clusters** (bursts and real quiet = rhythm) or **spreads** (someone always walking = churn), which no rate metric can distinguish. Also flags stale behaviour labels (AVO-195). Reports, never gates. |
 
-All three reuse a running `npm run dev` server on :5173, or start their own. If you see a
+All of these reuse a running `npm run dev` server on :5173, or start their own. If you see a
 visual glitch, run the matching recorder *before* theorizing — every overlap/rhythm fix in
 v1.4.0 started from one of these captures.
+
+> **Reading rhythm numbers.** Quote the stillness **gap** from a single run; the stillness
+> **level** is not reproducible from one. Two 8-minute runs on identical code measured 1.4% and
+> 11.8% while the gap held at −12.3 and −10.5 points. Any claim about the level needs a paired
+> control run on the unchanged build.
 
 ---
 

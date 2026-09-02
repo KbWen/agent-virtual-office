@@ -113,16 +113,21 @@ function jitter(pos, amount = 20) {
   }
 }
 
+// AVO-194: the honesty predicate, hoisted to module scope so every caller shares ONE definition.
+// It was a closure inside pickParticipants, which is why the time-linked events below never
+// consulted externalStatus at all — the same "it was four sites, not two" shape as AVO-191.
+// Exclude agents that are externally busy (working/blocked) OR already in a group event.
+// Without the inGroupEvent guard a second concurrent event re-locks an already-locked
+// agent: pickParticipants only inspected externalStatus, so an agent locked by the first
+// event was still "available" to the second event's picker.
+export function isAgentAvailable(id, agents, externalStatus) {
+  const es = (externalStatus || {})[id]
+  return (!es || es.status === 'done' || es.status === 'idle') && !agents[id]?.inGroupEvent
+}
+
 function pickParticipants(event, agents, externalStatus) {
   const ext = externalStatus || {}
-  // Exclude agents that are externally busy (working/blocked) OR already in a group event.
-  // Without the inGroupEvent guard a second concurrent event re-locks an already-locked
-  // agent: pickParticipants only inspected externalStatus, so an agent locked by the first
-  // event was still "available" to the second event's picker.
-  const isAvailable = (id) => {
-    const es = ext[id]
-    return (!es || es.status === 'done' || es.status === 'idle') && !agents[id]?.inGroupEvent
-  }
+  const isAvailable = (id) => isAgentAvailable(id, agents, ext)
   const agentIds = Object.keys(agents)
   const available = agentIds.filter(isAvailable)
 
@@ -783,35 +788,52 @@ export function startOfficeLife(store) {
     // the daily/rare schedulers could fire between the nap's setMultipleAgentGroupEvents
     // and its 45 s release, re-picking the already-locked nappers.
     if (hour === 12) {
-      const lunchNapEvent = { id: 'lunch-nap', duration: 45000 }
-      store.getState().setActiveEvent(lunchNapEvent)
-      const nappers = agentIds.filter((id) => !state.agents[id]?.inGroupEvent && Math.random() < 0.5)
-      store.getState().setMultipleAgentGroupEvents(
-        nappers.map((id) => ({
-          id,
-          behavior: 'nap',
-          expression: 'sleepy',
-          bubble: eventBubble('lunch-nap'),
-          groupTarget: null,
-        }))
+      // AVO-194: nappers are drawn from AVAILABLE agents only. This filter used to be
+      // `!inGroupEvent && Math.random() < 0.5` — externalStatus was never read, so at 12:00 an
+      // agent that was really `working` or `blocked` was given behavior 'nap', a sleepy face and
+      // a "lunch nap" bubble. That states something false about real work, which is the ADR-008
+      // line and the same R1 hole AVO-191 closed for scheduled events.
+      const nappers = agentIds.filter(
+        (id) => isAgentAvailable(id, state.agents, state.externalStatus) && Math.random() < 0.5
       )
-      setTimeout(() => {
-        if (cancelled.value) return
-        const s = store.getState()
-        nappers.forEach((id) => {
-          if (s.agents[id]?.inGroupEvent) {
-            s.clearAgentGroupEvent(id)
-            // Pair clearBubble with clearAgentGroupEvent — setMultipleAgentGroupEvents
-            // installed an eventBubble('lunch-nap') speech bubble. Every other release
-            // path (executeEvent cleanup, releaseAllGroupEvents teardown) clears both;
-            // omitting it here strands the "lunch nap" bubble over the agent until the
-            // next doSchedule tick happens to overwrite it (up to a full behavior cycle
-            // later — longer if the next behavior defers its label until arrival).
-            s.clearBubble(id)
-          }
-        })
-        s.clearActiveEvent()
-      }, 45000)
+      // An empty cast means the nap does not happen — a NESTED guard, deliberately not an early
+      // `return`. A return would be correct only while the hour blocks below stay mutually
+      // exclusive with `hour === 12`; nesting does not depend on that invariant holding for the
+      // next person who adds an unconditional tail to this tick.
+      // One free agent IS a real cast — unlike `all` / `random-2-3`, a nap needs no group.
+      if (nappers.length > 0) {
+        // setActiveEvent sits BELOW the cast for the AVO-191 reason: activeEvent is the global
+        // event mutex, so setting it for a nap with no nappers would block every later event for
+        // the full 45s while nothing is shown.
+        const lunchNapEvent = { id: 'lunch-nap', duration: 45000 }
+        store.getState().setActiveEvent(lunchNapEvent)
+        store.getState().setMultipleAgentGroupEvents(
+          nappers.map((id) => ({
+            id,
+            behavior: 'nap',
+            expression: 'sleepy',
+            bubble: eventBubble('lunch-nap'),
+            groupTarget: null,
+          }))
+        )
+        setTimeout(() => {
+          if (cancelled.value) return
+          const s = store.getState()
+          nappers.forEach((id) => {
+            if (s.agents[id]?.inGroupEvent) {
+              s.clearAgentGroupEvent(id)
+              // Pair clearBubble with clearAgentGroupEvent — setMultipleAgentGroupEvents
+              // installed an eventBubble('lunch-nap') speech bubble. Every other release
+              // path (executeEvent cleanup, releaseAllGroupEvents teardown) clears both;
+              // omitting it here strands the "lunch nap" bubble over the agent until the
+              // next doSchedule tick happens to overwrite it (up to a full behavior cycle
+              // later — longer if the next behavior defers its label until arrival).
+              s.clearBubble(id)
+            }
+          })
+          s.clearActiveEvent()
+        }, 45000)
+      }
     }
 
     // 14:00-14:30 — Post-lunch drowsiness: everyone gets sleepy expression.
@@ -829,7 +851,12 @@ export function startOfficeLife(store) {
       const drowsyIds = []
       agentIds.forEach((id) => {
         const s = store.getState()
-        if (s.agents[id]?.inGroupEvent) return
+        // AVO-194 (third site, not recorded on the backlog row): this only guarded inGroupEvent,
+        // so a genuinely working/blocked agent was painted 'tired'. Two harms, not one — a
+        // fabricated emotional state (ADR-008), and the `null` bubble argument CLEARS whatever
+        // that agent was saying, so a blocked agent loses its voice for the 30s window. The
+        // status ring and name-pill are unaffected, which is what bounds the second harm.
+        if (!isAgentAvailable(id, s.agents, s.externalStatus)) return
         s.setAgentBehavior(id, s.agents[id]?.behavior || 'typing', 'tired', null)
         drowsyIds.push(id)
       })
