@@ -236,6 +236,9 @@ try {
             x: p.x, y: p.y,
             moving: !!a.isMoving, group: !!a.inGroupEvent,
             offFloor: !isOnFloor(p.x, p.y) || isOnObstacle(p.x, p.y),
+            // AVO-195: the displayed activity. None of the four position/flag invariants can see
+            // an agent whose label went stale minutes ago, so the label itself has to be sampled.
+            beh: a.behavior || null,
           }
         }
       }
@@ -255,6 +258,19 @@ try {
   }
   for (const e of result.warnings?.groupStack || []) {
     console.log(`sim-soak WARN [groupStack, non-failing] ${JSON.stringify(e)}`)
+  }
+  if (result.warnings?.maxStaleLabelMs != null) {
+    // Printed every run, over threshold or not: a binary verdict hides the trend, and on healthy
+    // `main` this reads 74-100s against the 254s that motivated the check.
+    console.log(`sim-soak INFO  longest unchanged behaviour label outside an event: `
+      + `${Math.round(result.warnings.maxStaleLabelMs / 1000)}s`)
+  }
+  for (const e of result.warnings?.staleLabel || []) {
+    // Non-failing on purpose: the evidence that this does not false-positive is four runs, and
+    // `groupStack` above is the precedent for promoting a warning to a violation once it has been
+    // quiet. `movedSamples > 0` means the agent was walking while the office said otherwise.
+    console.log(`sim-soak WARN [staleLabel, non-failing] ${e.id} held '${e.behavior}' for `
+      + `${Math.round(e.ms / 1000)}s outside any event (visibly moving in ${e.movedSamples} samples)`)
   }
   if (result.pass) {
     console.log(`sim-soak PASS — ${samples.length} samples over ${MINUTES} min, 0 invariant violations (teleport/stack/frozen/off-floor)`)

@@ -26,6 +26,82 @@ export const FROZEN_WALKER_MS = 90000   // store claims moving but pixels still 
 export const OFF_FLOOR_SUSTAIN_MS = 2000
 export const MAX_VIOLATIONS_PER_KIND = 20
 
+// ─── AVO-195: stale behaviour labels ─────────────────────────────────────────────────────────
+// The four invariants above all read POSITION and the `moving` flag. None reads `behavior`, so the
+// office can narrate the wrong activity for minutes and this gate cannot see it. Observed for real:
+// three agents held `eat-snack` for 254s outside any group event while walking 260-551px, with
+// `moving` FALSE throughout — so `frozenWalker`, which requires the flag to be TRUE while pixels
+// are still, could not fire by construction and the position checks saw a healthy walker.
+//
+// KNOWN LIMITATION, stated because it bounds what this signal can mean. A label that never changes
+// is NOT the same as a scheduler that never ran: `pickBehavior` can select the SAME behaviour twice
+// in a row (the anti-repeat ring guards MESSAGES, not behaviours), and the event-set behaviours
+// overlap almost entirely with the doSchedule pools — of `eat-snack` / `nap` / `stretch` / `chat`
+// only `meeting` is event-only — so the behaviour name cannot separate the two either. This is a
+// smoke signal, not a proof, which is why it warns rather than fails.
+//
+// Threshold set from that limitation rather than fitted to a sample. A behaviour lasts at most 65s
+// and a walk adds ~10-20s, so two consecutive identical picks reach ~170s. 180s therefore requires
+// THREE consecutive identical picks to fire legitimately. A first attempt at 90s was set from
+// control runs showing a 74-78s maximum and it FALSE-POSITIVED on the very first real soak, at
+// 94.9s and 100.5s — kept here as the reason the number is now derived rather than observed.
+export const STALE_LABEL_MS = 180000
+
+/**
+ * Stretches where an agent's behaviour label never changes while it is NOT in a group event
+ * (officeLife legitimately owns behaviour for an event's whole duration, so event time is excluded).
+ *
+ * Returns `null` — not `[]` — when the timeline carries no `beh` field at all, so "nothing found"
+ * and "never looked" cannot render identically.
+ */
+export function detectStaleLabels(samples, { staleMs = STALE_LABEL_MS, restPx = REST_STEP_PX, ids } = {}) {
+  if (!Array.isArray(samples) || samples.length < 2) return null
+  const agentIds = ids ?? Object.keys(samples[0].agents || {})
+  const hasBeh = samples.some((s) => agentIds.some((id) => s.agents?.[id]?.beh !== undefined))
+  if (!hasBeh) return null
+
+  const moved = (i, id) => {
+    const a = samples[i].agents?.[id]
+    const p = samples[i - 1].agents?.[id]
+    return !!(a && p && Math.hypot(a.x - p.x, a.y - p.y) > restPx)
+  }
+  const out = []
+  for (const id of agentIds) {
+    let start = null, prev = null, movedIn = 0
+    const close = (endIdx) => {
+      if (start === null) return
+      const ms = samples[endIdx].t - samples[start].t
+      // `movedSamples` is what separated "the scheduler froze" from "the label is stale" during the
+      // investigation: the frozen reading was refuted by 260-551px of movement inside the stretch.
+      if (ms >= staleMs) out.push({ id, behavior: prev, ms, movedSamples: movedIn })
+      start = null; movedIn = 0
+    }
+    for (let i = 1; i < samples.length; i++) {
+      const a = samples[i].agents?.[id]
+      if (!a) { close(i - 1); prev = null; continue }
+      if (a.beh === prev && !a.group) {
+        if (start === null) start = i - 1
+        if (moved(i, id)) movedIn++
+      } else {
+        close(i - 1)
+      }
+      prev = a.beh
+    }
+    close(samples.length - 1)
+  }
+  return out.sort((a, b) => b.ms - a.ms)
+}
+
+/**
+ * The longest unchanged-label stretch in the run, reported REGARDLESS of the threshold.
+ * A binary over/under verdict hides the trend; on healthy `main` this reads 74-100s, and the run
+ * that motivated the check read 254s. Seeing the number move is worth more than a boolean.
+ */
+export function maxStaleLabelMs(samples, opts = {}) {
+  const all = detectStaleLabels(samples, { ...opts, staleMs: 0 })
+  return all === null ? null : (all.length ? all[0].ms : 0)
+}
+
 export function evaluateSoak(samples) {
   const v = { teleport: [], sustainedStack: [], frozenWalker: [], offFloorRest: [] }
   // GROUP-tagged stacks fail again (re-tightened 2026-06-11): both arrival-geometry holes
@@ -33,7 +109,10 @@ export function evaluateSoak(samples) {
   // deconflict against EVERY claimed standing spot (bystanders included), and react-in-place
   // participants side-step when an event would freeze them mid-overlap. A group stack now
   // means a real regression in that machinery; the `group` tag remains for instant triage.
-  const warnings = { groupStack: [] }  // kept in the report shape; empty unless re-demoted
+  // AVO-195 lands as a WARNING, not a violation. The evidence that it does not false-positive is
+  // four runs; the repo's own `groupStack` shows the warn -> fail promotion path, and promoting this
+  // one should follow the same route after it has been quiet on the nightly for a while.
+  const warnings = { groupStack: [], staleLabel: detectStaleLabels(samples) ?? [], maxStaleLabelMs: maxStaleLabelMs(samples) }
   const push = (kind, entry) => { if (v[kind].length < MAX_VIOLATIONS_PER_KIND) v[kind].push(entry) }
 
   // Forensic tails: rolling last-N samples per agent, attached to every violation so a
