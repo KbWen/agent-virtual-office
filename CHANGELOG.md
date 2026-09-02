@@ -5,6 +5,53 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.7 — 2026-09-02 — Nobody is shown napping through real work
+
+Ten commits since v1.6.6. **Two of them are user-facing**, and both are the same shape as the last
+release: the office said something about an agent that was not true. The other eight are governance
+and tooling and are listed as such below rather than dressed up as product value.
+
+### Fixed
+
+- **The office could show a genuinely working agent asleep, or tired.** At 12:00 the lunch nap
+  picked its cast with a coin flip and never looked at whether an agent was really working — so a
+  tracked `working` or `blocked` agent got a nap animation, a sleepy face and a "lunch nap" speech
+  bubble. At 14:00 the post-lunch drowsiness did the same with a `tired` expression, and because of
+  how it was written it also **cleared whatever that agent was saying**. The status ring and name
+  pill were never affected, which is what kept the damage to the agent's *voice* rather than its
+  *state*. Both now draw only from agents with no real work signal, and a lunch nap with nobody free
+  simply does not happen instead of silently blocking every other office event for 45 seconds. This
+  was reported as one site; it was three. (AVO-194)
+- **A whole table of agents said the identical line.** When food arrived, every reacting agent got
+  the same "awesome! let's eat!" — not by chance, but because those lines were stored as a single
+  string while their seven sibling event lines were stored as pools. The same was true of the
+  fan-yourself reaction and, found while fixing it, of the dog-visit bark, where up to three agents
+  barked in unison. All three now have pools; the original line is still the first in each.
+
+### Housekeeping — not user-facing
+
+Nothing in this section changes what you see in the office.
+
+- Governance brain upgraded v1.8.24 → v1.8.25 (banner-only; no gate, engine or state-model change).
+- The soak stopped measuring the operator's own machine. It read `~/.claude`, where live Claude Code
+  hook traffic lands every few seconds, so runs were fed by whatever else you were doing — and an
+  invariant violation could have been caused by an unrelated editing session with nothing saying so.
+- A new `npm run rhythm` reports whether the office reads *alive* or merely *busy*, and a
+  `docs/specs/_product-backlog.md` entry (AVO-195) records that the soak cannot currently see an
+  agent whose displayed activity has gone stale.
+- One spec's status was written `Shipped` instead of `shipped`, which was the entire disagreement
+  between the two validators on this repo.
+- Ship records, work-log archival and the audit chain for the whole wave.
+
+### What this release does not claim
+
+The rhythm tool above shipped with a measurement claim that **did not survive the same day**. It
+reported that ambient motion is spread rather than clustered — "someone is always walking" — and two
+further runs did not reproduce it. The cause turned out to be the metric: the number it compared was
+bounded by the very quantity it was measured against, so runs at different motion levels were never
+comparable. It now reports a ratio instead, and the finding is recorded as **not established**. No
+behaviour was changed on the strength of it.
+
 ## v1.6.6 — 2026-08-26 — Nobody gets dragged away from real work
 
 An honesty release. Both fixes are the same shape: the office was doing something to an agent that
