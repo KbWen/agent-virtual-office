@@ -1,5 +1,5 @@
 ---
-status: Shipped
+status: shipped
 title: Co-Editing Pair Overlay (shared-file link)
 ticket: AVO-106
 classification: feature
