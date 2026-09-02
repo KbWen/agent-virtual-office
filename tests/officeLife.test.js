@@ -539,15 +539,20 @@ describe('officeLife — Fix 1: lunch-nap sets activeEvent (mutex participation)
     vi.useFakeTimers()
     // Set system time to just before 12:00 so the first tick sees hour 12.
     vi.setSystemTime(new Date('2026-01-05T11:59:30'))
-    // Pin random: ensure half-filter picks agents (< 0.5 branch), but pin schedulers far.
-    // We alternate: first call for agentIds.filter returns 0.3 (< 0.5 → include),
-    // subsequent calls return 0.999 to arm daily/rare timers far out.
+    // Pin random. The previous accounting here was WRONG and hid a real defect: it claimed
+    // "first two calls are for the agentId filter", but startOfficeLife consumes two calls
+    // arming the daily/rare schedulers BEFORE the interval ever ticks (measured). The nap
+    // filter therefore received 0.999 twice, picked NOBODY — and the test still passed,
+    // because the old code called setActiveEvent BEFORE computing the cast. It was asserting
+    // a phantom lunch-nap holding the global event mutex for 45s with nobody asleep.
+    // Correct accounting: calls 1-2 arm the schedulers (0.999 = far out), calls 3-4 are the
+    // per-agent nap filter (0.3 = include), everything after is scheduler re-arming.
     let callCount = 0
     vi.spyOn(Math, 'random').mockImplementation(() => {
       callCount++
-      // First two calls are for agentId filter in nap block (one per agent) — return < 0.5.
-      // All subsequent calls (scheduler intervals) → 0.999 to arm far out.
-      return callCount <= 2 ? 0.3 : 0.999
+      if (callCount <= 2) return 0.999
+      if (callCount <= 4) return 0.3
+      return 0.999
     })
   })
   afterEach(() => {
@@ -563,6 +568,11 @@ describe('officeLife — Fix 1: lunch-nap sets activeEvent (mutex participation)
 
     // Advance one tick to fire the timeEventInterval at hour 12.
     vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100)
+
+    // Someone must ACTUALLY be asleep. Without this the activeEvent assertion below passes
+    // on a phantom event — which is exactly how the pre-AVO-194 defect survived review.
+    const napping = Object.values(store.getState().agents).filter((a) => a.behavior === 'nap')
+    expect(napping.length).toBeGreaterThan(0)
 
     // The lunch-nap block must have set activeEvent — it now participates in the mutex.
     expect(store.getState().activeEvent).not.toBeNull()
@@ -695,5 +705,117 @@ describe('officeLife — Fix 3: coffee-spill on empty pool does not create phant
     // After 45 s the event duration elapses and clearActiveEvent fires — no phantom lock.
     vi.advanceTimersByTime(50000)
     expect(state.activeEvent).toBeNull()
+  })
+})
+
+// ─── AVO-194: time-linked events must not state something false about REAL work ──────────────
+// The two time-linked handlers below never consulted externalStatus, so at 12:00 a genuinely
+// working agent was shown asleep, and at 14:00 one was painted tired with its voice cleared.
+// Same R1/ADR-008 class AVO-191 closed for scheduled events, missed because the availability
+// predicate was a closure inside pickParticipants rather than shared.
+
+describe('officeLife — AVO-194: lunch nap never sleeps a genuinely working agent', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-05T11:59:30'))
+    // Every call arms far out. The nap filter short-circuits on availability BEFORE reaching
+    // Math.random for a busy agent, so the value here cannot rescue a broken filter.
+    vi.spyOn(Math, 'random').mockReturnValue(0.999)
+  })
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('a working agent is not given nap/sleepy/lunch-bubble at 12:00', () => {
+    const store = makeFakeStore({
+      dev: { status: 'working', changedAt: Date.now() },
+      qa: { status: 'working', changedAt: Date.now() },
+    })
+    store._setHour(12)
+    // The dice MUST say "nap" here, or this test passes on the broken code too: the old filter
+    // was `!inGroupEvent && Math.random() < 0.5`, so a 0.999 roll spared these agents for the
+    // wrong reason. Calls 1-2 arm the schedulers far out; from call 3 the roll includes.
+    // Verified by mutation: with the source fix reverted, this test goes red.
+    let callCount = 0
+    Math.random.mockImplementation(() => {
+      callCount++
+      return callCount <= 2 ? 0.999 : 0.3
+    })
+    const cleanup = startOfficeLife(store)
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100)
+
+    for (const a of Object.values(store.getState().agents)) {
+      expect(a.behavior).not.toBe('nap')
+      expect(a.expression).not.toBe('sleepy')
+      expect(a.inGroupEvent).toBe(false)
+    }
+    cleanup()
+  })
+
+  it('an all-busy office sets NO phantom activeEvent (the 45s global mutex stays free)', () => {
+    const store = makeFakeStore({
+      dev: { status: 'working', changedAt: Date.now() },
+      qa: { status: 'blocked', changedAt: Date.now() },
+    })
+    store._setHour(12)
+    const cleanup = startOfficeLife(store)
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100)
+
+    // activeEvent is the global event mutex. Setting it for a nap with an empty cast blocks
+    // every later event for 45s while nothing is on screen — the AVO-191 phantom-event hazard.
+    expect(store.getState().activeEvent).toBeNull()
+    cleanup()
+  })
+
+  it('an idle agent still naps — the guard narrows the cast, it does not disable the event', () => {
+    const store = makeFakeStore({ dev: { status: 'working', changedAt: Date.now() } })
+    store._setHour(12)
+    let callCount = 0
+    Math.random.mockImplementation(() => {
+      callCount++
+      // calls 1-2 arm the schedulers far out; the next call is the filter for the one
+      // available agent (qa, which has no externalStatus entry).
+      return callCount <= 2 ? 0.999 : 0.3
+    })
+    const cleanup = startOfficeLife(store)
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100)
+
+    expect(store.getState().agents.qa.behavior).toBe('nap')
+    expect(store.getState().agents.dev.behavior).not.toBe('nap')
+    expect(store.getState().activeEvent?.id).toBe('lunch-nap')
+    cleanup()
+  })
+})
+
+describe('officeLife — AVO-194 (third site): post-lunch drowsiness spares real work', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-05T13:59:30'))
+    vi.spyOn(Math, 'random').mockReturnValue(0.999)
+  })
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('a working agent keeps its expression AND its bubble at 14:00; an untracked one goes tired', () => {
+    const store = makeFakeStore({ dev: { status: 'working', changedAt: Date.now() } })
+    store.getState().setAgentBehavior('dev', 'typing', 'focused', 'running tests')
+    store._setHour(14)
+    const cleanup = startOfficeLife(store)
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100)
+
+    const dev = store.getState().agents.dev
+    // Two harms in one line of old code: a fabricated emotional state, and the `null` bubble
+    // argument clearing what the agent was actually saying.
+    expect(dev.expression).toBe('focused')
+    expect(dev.bubble).toBe('running tests')
+
+    // The charm beat still happens for agents with no real signal.
+    expect(store.getState().agents.qa.expression).toBe('tired')
+    cleanup()
   })
 })
