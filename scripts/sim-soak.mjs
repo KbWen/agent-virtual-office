@@ -112,7 +112,12 @@ if (!baseUrl) {
       cwd: ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: process.platform !== 'win32',
-      env: { ...process.env, OFFICE_STATUS_DIR: soakStatusDir },
+      // BOTH are needed. OFFICE_STATUS_DIR silences the operator's hook traffic; the file-watcher
+      // fallback would otherwise keep manufacturing status from edits to the project itself and
+      // write it into this very directory, so a soak run beside any editing session is still
+      // reading its own operator back. (The flag is inert until the vite.config.js change that
+      // honours it lands; setting it here is forward-compatible and never harmful.)
+      env: { ...process.env, OFFICE_STATUS_DIR: soakStatusDir, OFFICE_DISABLE_FILE_WATCHER: '1' },
     }
   )
   serverProc.stdout.on('error', () => {})

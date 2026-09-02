@@ -8,8 +8,14 @@ const STATUS = (roles) => JSON.stringify({
 })
 
 describe('assessHermeticity', () => {
-  it('a spawned server is isolated by construction', () => {
-    expect(assessHermeticity({ mode: 'spawned' })).toMatchObject({ isolated: true, mode: 'spawned' })
+  it('a spawned server is isolated by construction, and says BOTH isolations by name', () => {
+    const v = assessHermeticity({ mode: 'spawned' })
+    expect(v).toMatchObject({ isolated: true, mode: 'spawned' })
+    // Naming only OFFICE_STATUS_DIR was an overclaim: the dev server's file-watcher fallback
+    // manufactures status from edits to the project itself regardless of where the status dir
+    // points. A reader must not be able to mistake one isolation for hermeticity.
+    expect(v.reason).toMatch(/OFFICE_STATUS_DIR/)
+    expect(v.reason).toMatch(/file-watcher/)
   })
 
   it('a reused server serving no status is isolated', () => {

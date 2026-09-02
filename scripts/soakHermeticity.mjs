@@ -17,7 +17,16 @@ const STATUS_PATH = '/api/status'
 /** Pure verdict from an already-fetched status body. */
 export function assessHermeticity({ mode, statusBody, probeError = null }) {
   if (mode === 'spawned') {
-    return { mode, isolated: true, reason: 'spawned with OFFICE_STATUS_DIR pointed at a fresh empty directory' }
+    // Both isolations, not one. OFFICE_STATUS_DIR alone is NOT hermetic: vite.config.js registers
+    // a file-watcher fallback that manufactures agent status from edits to the PROJECT ITSELF and
+    // writes it into whatever status dir it was handed, isolated or not. Measured, not theorised —
+    // a run isolated by OFFICE_STATUS_DIR alone still had `dev` and `res` status arrive mid-sample
+    // because tests and docs were being edited beside it.
+    return {
+      mode,
+      isolated: true,
+      reason: 'spawned with an empty OFFICE_STATUS_DIR and the file-watcher fallback disabled',
+    }
   }
   if (probeError) {
     // Unknown is NOT isolated: an unverifiable claim must not read as a clean one.
