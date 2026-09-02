@@ -18,6 +18,7 @@
     "smoke:pack": "node scripts/pack-smoke.mjs",
     "soak": "node scripts/sim-soak.mjs",
     "soak:spawn": "node scripts/sim-soak.mjs --spawn",
+    "rhythm": "node scripts/office-rhythm.mjs",
     "test": "vitest run",
     "prepublishOnly": "npm run build && npm test"
   },
