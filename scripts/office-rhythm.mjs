@@ -159,7 +159,17 @@ try {
       samples.push({ t: Date.now() - t0, agents })
       await new Promise((r) => setTimeout(r, interval))
     }
-    return { samples, externalStatusKeys: Object.keys(store.getState().externalStatus || {}) }
+    const end = store.getState()
+    // Run context. Without it two runs are not comparable and a gap difference cannot be
+    // attributed: `mood` swings the ambient out-trip share from 26% (normal) to 35% (idle) to
+    // 40% (smooth), and getHourModifiers() injects heavy out-trip weights during 12-13 and
+    // 14-15 only. Learned the hard way -- a run reporting a near-independent gap could not be
+    // compared against two earlier runs that reported -10.5 and -12.3, because this was not recorded.
+    return {
+      samples,
+      externalStatusKeys: Object.keys(end.externalStatus || {}),
+      context: { mood: end.mood ?? null, hour: end.hour ?? null, agents: Object.keys(end.agents || {}).length },
+    }
   }, { minutes: MINUTES, interval: SAMPLE_INTERVAL_MS })
 
   // Assume-failure: a contaminated run must not be reported as a measurement of the office.
@@ -172,8 +182,14 @@ try {
 
   const report = analyzeRhythm(out.samples)
   console.log(formatRhythm(report))
+  const hourMod = (out.context.hour >= 12 && out.context.hour < 13) || (out.context.hour >= 14 && out.context.hour < 15)
+    || out.context.hour >= 20
+  console.log(`  run context      mood=${out.context.mood} hour=${out.context.hour}`
+    + `${hourMod ? ' (inside an hour-modifier window -- heavier out-trips by design)' : ''}`)
+  console.log('        Compare runs only at the SAME mood and hour regime: mood alone moves the ambient')
+  console.log('        out-trip share 26% (normal) -> 35% (idle) -> 40% (smooth).')
   if (process.env.RHYTHM_REPORT) {
-    writeFileSync(process.env.RHYTHM_REPORT, JSON.stringify({ minutes: MINUTES, ...report }, null, 1))
+    writeFileSync(process.env.RHYTHM_REPORT, JSON.stringify({ minutes: MINUTES, context: out.context, ...report }, null, 1))
     console.log(`office-rhythm: report written to ${process.env.RHYTHM_REPORT}`)
   }
 } catch (err) {

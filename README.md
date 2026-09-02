@@ -231,6 +231,13 @@ v1.4.0 started from one of these captures.
 > **level** is not reproducible from one. Two 8-minute runs on identical code measured 1.4% and
 > 11.8% while the gap held at −12.3 and −10.5 points. Any claim about the level needs a paired
 > control run on the unchanged build.
+>
+> **Compare by RATIO, not by the point gap.** The absolute gap is *bounded by* the independent
+> level — at 16.8% mean motion independent stillness is 22.3% and a −10 point gap is possible; at
+> 23.5% it is 9.2% and the same gap is arithmetically impossible. Two equally-spread offices at
+> different motion levels will report very different gaps. Use `stillnessRatio` (<1 spread, ≈1
+> independent, >1 clustered), and check the `run context mood=… hour=…` line: mood alone swings the
+> ambient out-trip share 26% (`normal`) → 35% (`idle`) → 40% (`smooth`).
 
 ---
 

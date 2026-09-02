@@ -89,6 +89,20 @@ describe('analyzeRhythm — the stillness gap is the point', () => {
     expect(formatRhythm(r)).toContain('trips CLUSTER')
   })
 
+  it('the RATIO is what survives a change in motion level, and the point gap is not', () => {
+    // The point gap is bounded by the independent level, so two equally-spread offices at
+    // different motion levels report very different gaps. This is the bug that made four real
+    // runs look contradictory when they were not comparable.
+    const light = analyzeRhythm(timeline({ a: '#...#...', b: '.#...#..' }))   // low motion
+    const heavy = analyzeRhythm(timeline({ a: '##.###.#', b: '.##.###.' }))   // high motion
+    expect(heavy.independentStillness).toBeLessThan(light.independentStillness)
+    // The heavy office CANNOT show the light office's point gap — arithmetic, not behaviour.
+    expect(Math.abs(heavy.stillnessGap)).toBeLessThanOrEqual(Math.max(heavy.independentStillness, 1 - heavy.independentStillness) + 1e-9)
+    // Both are spread, and the ratio says so for both while the gaps differ.
+    expect(light.stillnessRatio).toBeLessThan(1)
+    expect(heavy.stillnessRatio).toBeLessThan(1)
+  })
+
   it('the two cases above have IDENTICAL per-agent motion — only the distribution differs', () => {
     const spread = analyzeRhythm(timeline({ a: '#.#.#.#.', b: '.#.#.#.#' }))
     const burst = analyzeRhythm(timeline({ a: '##..##..', b: '##..##..' }))
