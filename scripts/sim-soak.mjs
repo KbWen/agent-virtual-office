@@ -24,12 +24,14 @@
  */
 import { chromium } from 'playwright'
 import { spawn } from 'node:child_process'
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { evaluateSoak } from './soakInvariants.mjs'
 import { assessSoakCoverage } from './soakCoverage.mjs'
 import { formatTargetIdentityError, inspectAvoViteTarget } from './soakTarget.mjs'
+import { assessHermeticity, probeHermeticity, formatHermeticity } from './soakHermeticity.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
@@ -83,6 +85,8 @@ let baseUrl = explicitBaseUrl
 let targetIdentity = null
 let serverProc = null
 let serverExit = null
+let soakStatusDir = null
+let hermeticity = null
 if (!baseUrl && !FORCE_SPAWN) {
   const defaultUrl = 'http://localhost:5173'
   targetIdentity = await inspectAvoViteTarget(defaultUrl, { timeoutMs: FETCH_ATTEMPT_TIMEOUT_MS })
@@ -96,10 +100,20 @@ if (!baseUrl) {
     console.error('sim-soak ERROR: Vite binary not found. Run `npm ci` first.')
     process.exit(1)
   }
+  // Point the spawned server at a fresh EMPTY status directory. Without this the dev server
+  // reads ~/.claude, where the operator's own live hook traffic lands every few seconds — the
+  // soak was measuring that traffic as well as the office, and could report violations an
+  // unrelated editing session caused. staged-capture.mjs has isolated itself this way already.
+  soakStatusDir = mkdtempSync(path.join(os.tmpdir(), 'avo-soak-status-'))
   serverProc = spawn(
     process.execPath,
     [viteBin, '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'],
-    { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' }
+    {
+      cwd: ROOT,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
+      env: { ...process.env, OFFICE_STATUS_DIR: soakStatusDir },
+    }
   )
   serverProc.stdout.on('error', () => {})
   serverProc.stderr.on('error', () => {})
@@ -151,6 +165,8 @@ async function cleanup() {
   await stopServerProcessTree()
   try { serverProc?.stdout?.destroy() } catch {}
   try { serverProc?.stderr?.destroy() } catch {}
+  // Only ever the mkdtemp directory this process created, never an operator-supplied path.
+  if (soakStatusDir) { try { rmSync(soakStatusDir, { recursive: true, force: true }) } catch {} }
   })()
   return cleanupPromise
 }
@@ -167,6 +183,14 @@ if (targetIdentity.status !== 'match') {
   failEarly(formatTargetIdentityError(baseUrl, targetIdentity))
 }
 baseUrl = targetIdentity.baseUrl
+
+// Establish whether this run is measuring the office alone. A spawned server is isolated by
+// construction; a REUSED one cannot be — its OFFICE_STATUS_DIR was fixed when it started — so ask
+// it what it is serving instead of assuming. An unverifiable answer counts as NOT isolated.
+hermeticity = serverProc
+  ? assessHermeticity({ mode: 'spawned' })
+  : await probeHermeticity(baseUrl, { timeoutMs: FETCH_ATTEMPT_TIMEOUT_MS })
+console.log(formatHermeticity(hermeticity))
 
 let exitCode = 0
 try {
@@ -219,7 +243,7 @@ try {
   const coverage = assessSoakCoverage(samples.length, MINUTES, SAMPLE_INTERVAL_MS)
   const result = evaluateSoak(samples)
   if (process.env.SOAK_REPORT) {
-    writeFileSync(process.env.SOAK_REPORT, JSON.stringify({ minutes: MINUTES, samples: samples.length, coverage, ...result }, null, 1))
+    writeFileSync(process.env.SOAK_REPORT, JSON.stringify({ minutes: MINUTES, samples: samples.length, coverage, hermeticity, ...result }, null, 1))
   }
   if (!coverage.sufficient) {
     throw new Error(`insufficient samples: got ${samples.length}, expected at least ${coverage.minSamples}; partial invariant violations: ${result.total}`)
@@ -232,6 +256,12 @@ try {
   } else {
     exitCode = 1
     process.stderr.write(`sim-soak FAIL — ${result.total} violation(s):\n`)
+    if (!hermeticity?.isolated) {
+      // Say this at the point of failure, not only in a line scrolled past 12 minutes ago: a
+      // non-isolated run has live agent status arriving mid-soak, which drives real agents into
+      // working/blocked and relocates them, so a violation below may not be the office's.
+      process.stderr.write(`  NOTE: this run was NOT isolated (${hermeticity?.reason}) — live status arriving mid-run can itself produce these violations. Re-run with --spawn before treating them as real.\n`)
+    }
     for (const [kind, list] of Object.entries(result.violations)) {
       for (const e of list) process.stderr.write(`  [${kind}] ${JSON.stringify(e)}\n`)
     }
