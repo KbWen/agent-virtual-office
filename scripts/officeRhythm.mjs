@@ -21,9 +21,15 @@
  * agents would produce: an exact Poisson-binomial over each agent's OWN measured motion share.
  *   observed >> independent  → trips CLUSTER (bursts, then real quiet — reads as rhythm)
  *   observed << independent  → trips are SPREAD (someone always walking — reads as churn)
- * Measured on this office 2026-09-02: stillness ran 10.5 and 12.3 points BELOW independence
- * across two runs, i.e. the concurrency cap defers blocked trips into the gaps that would
- * otherwise have been quiet. That gap-to-independence is the stable signal; see the caveat below.
+ * Measured on this office 2026-09-02: stillness ran 10.5 and 12.3 points BELOW independence across
+ * two runs, i.e. the concurrency cap defers blocked trips into the gaps that would otherwise have
+ * been quiet. SCOPE, learned by a fourth run that did not reproduce it: both of those runs recorded
+ * `mood: normal`. Mood swings the ambient out-trip share 26% (normal) -> 35% (idle) -> 40% (smooth),
+ * so a gap is only comparable against another run at the SAME mood — which is why the runner now
+ * records mood and hour in every report. And compare by `stillnessRatio`, not by the point gap:
+ * the gap is bounded by the independent level, so it shrinks purely because motion rose. Under a
+ * controlled re-measurement the depletion is NOT yet established as a stable property — four runs
+ * read 0.53 / 0.10 / 0.97 / 0.61 by ratio.
  *
  * ── THE CAVEAT THAT COST A CONTROL RUN TO LEARN ──────────────────────────────────────────────
  * The stillness LEVEL is not reproducible from a single run. Two 8-minute runs on identical code
@@ -167,8 +173,16 @@ export function analyzeRhythm(samples, opts = {}) {
     independentHistogram: independent,
     stillness: observed[0],
     independentStillness: independent[0],
-    // The headline. Negative = trips spread into the quiet gaps (churn); positive = they cluster.
+    // Negative = trips spread into the quiet gaps (churn); positive = they cluster.
+    // NOT comparable across different motion levels on its own -- see stillnessRatio.
     stillnessGap: observed[0] - independent[0],
+    // The comparable form. An absolute point-gap is BOUNDED BY the independent level: at mean
+    // motion 16.8% independent stillness is 22.3% and a -10 point gap is possible, at 23.5% it is
+    // 9.2% and the same gap is arithmetically impossible. Two runs at different motion levels can
+    // therefore show very different gaps while being equally "spread". The ratio removes that
+    // bound: <1 spread, ~1 independent, >1 clustered. Learned by shipping the gap alone and then
+    // failing to compare four runs with it.
+    stillnessRatio: independent[0] > 0 ? observed[0] / independent[0] : null,
     crowdShare: sumFrom(observed, 3),
     independentCrowdShare: sumFrom(independent, 3),
     deadFrameShare: dead / intervals,
@@ -185,7 +199,9 @@ export function formatRhythm(r) {
     `office-rhythm: ${r.intervals} intervals, ${r.agents} agents`,
     `  stillness        ${pct(r.stillness)}  vs independent ${pct(r.independentStillness)}`
       + `  -> gap ${r.stillnessGap >= 0 ? '+' : ''}${(100 * r.stillnessGap).toFixed(1)} pts`
-      + ` (${r.stillnessGap < -0.03 ? 'trips SPREAD into the quiet gaps' : r.stillnessGap > 0.03 ? 'trips CLUSTER' : 'near-independent'})`,
+      + `, ratio ${r.stillnessRatio === null ? 'n/a' : r.stillnessRatio.toFixed(2)}`
+      + ` (${r.stillnessRatio === null ? 'undefined' : r.stillnessRatio < 0.85 ? 'trips SPREAD into the quiet gaps' : r.stillnessRatio > 1.15 ? 'trips CLUSTER' : 'near-independent'})`,
+    '                   compare runs by RATIO, not by the point gap: the gap is bounded by the independent level',
     `  >=1 moving       ${pct(1 - r.stillness)}      >=3 moving ${pct(r.crowdShare)} vs independent ${pct(r.independentCrowdShare)}`,
     `  motion share     mean ${pct(r.meanMotionShare)}   concentration CV ${r.motionCV.toFixed(2)}`,
     `  dead frames      ${pct(r.deadFrameShare)}`,
