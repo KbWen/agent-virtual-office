@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store.js'
-import { getNextBehavior } from '../systems/behaviorEngine'
+import { getNextBehavior, isQuietWindow } from '../systems/behaviorEngine'
 import { getTargetForBehavior, pickSocialTarget, calcFacing, calculateJourney, needsLocationChange, HOME_POSITIONS, resolveClaimAwareHomePosition, resolveFocusFacing, SOCIAL_BEHAVIORS, visuallyOverlapping, avoidOverlap } from '../systems/movementSystem'
 import { eventBubble, charName, useLocale, t } from '../i18n'
 import { BlockedReasonBadge } from './blockedReasonBadge'
@@ -1312,7 +1312,12 @@ function AgentCharacter({ agent }) {
       // soft-cap concurrent out-trips and stop the "always someone walking" pile-up (a concurrency
       // effect, not a per-agent rate). Read-only; keeping an agent at its desk is honest + R1-safe.
       const outTripCount = Object.values(store.agents).filter((a) => a && a.journeyTarget).length
-      const next = getNextBehavior(id, agent.status || 'idle', new Date().getHours(), store.mood || 'normal', teamPulse, outTripCount)
+      // Ambient rhythm: during the office-wide quiet phase an ambient agent that rolls an out-trip
+      // stays at its desk, so the deferred trips surface together after the boundary instead of
+      // trickling into the gaps. TRACKED agents pass `false` — same R1 seam as teamPulse above,
+      // and an agent already walking is unaffected either way (this gates starting, not finishing).
+      const quietWindow = tracked ? false : isQuietWindow(Date.now())
+      const next = getNextBehavior(id, agent.status || 'idle', new Date().getHours(), store.mood || 'normal', teamPulse, outTripCount, quietWindow)
       // Guard the re-schedule delay: a non-finite or non-positive duration would make
       // setTimeout(doSchedule, nextDelay) fire on the next tick, spinning the behavior
       // chain in a tight CPU loop. Fall back to the 8s default if the value is unusable.

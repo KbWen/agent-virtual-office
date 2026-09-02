@@ -28,6 +28,44 @@ const baseWeights = { work: 74, daily: 8, social: 13, away: 5 }
 // AWAY — this does the opposite). Per-agent cadence + the `social` weight are untouched.
 export const MAX_CONCURRENT_OUT_TRIPS = 2
 
+// ─── Ambient rhythm: office-wide QUIET WINDOWS (experiment) ──────────────────────────────────
+// Measured 2026-09-02 on a hermetic 8-minute ambient soak, against an exact Poisson-binomial
+// "if each agent rolled independently" model built from each agent's own motion share:
+//
+//   concurrent movers   0 (still)   1       2       >=3
+//   observed            11.8%       49.3%   31.4%   7.3%
+//   independent         22.3%       37.5%   26.7%   10.6%
+//
+// MAX_CONCURRENT_OUT_TRIPS works at the top (crowd frames suppressed) but the trips it blocks are
+// DEFERRED, not cancelled: the rolled category is rewritten to `work`, the agent sits for one
+// 20-65s behavior and re-rolls — and that trip lands in a window that would otherwise have been
+// quiet. Stillness came out 10.5 points BELOW independence while the 1-mover band ran 11.8 above
+// it. The office moved from "sometimes crowded, sometimes empty" to "perpetually one or two people
+// walking", which is the shape of the owner's recurring 一直很多人在走動 rather than a fix for it.
+//
+// The lever here is NOT rate — three tunes (-28% weights, round-2, AVO-165) moved P(>=1 walking)
+// only 94% -> 88%. It is the temporal DISTRIBUTION. Same deferral primitive, opposite effect:
+// under an INSTANTANEOUS constraint deferral spreads trips into the gaps, under a GLOBAL-TEMPORAL
+// one it clusters them at the window boundary. Bursts separated by real quiet, same total motion.
+//
+// Honesty: this only ever keeps an ambient agent AT ITS DESK. It never moves, relocates or
+// re-labels anyone, never suppresses a real signal, and the caller passes `false` for every
+// TRACKED agent — the same R1 seam teamPulse already uses. An agent already walking is never
+// interrupted; the window gates STARTING a trip, not finishing one.
+export const RHYTHM_PERIOD_MS = 150000  // full cycle
+export const RHYTHM_QUIET_MS = 60000    // quiet share of the cycle (40%)
+
+/**
+ * Is the office in its quiet phase right now? Pure — the wall clock is an argument, so this is
+ * deterministic in tests and identical for every agent in the same frame (that shared phase is
+ * the whole point: a per-agent phase would just be another rate cut).
+ */
+export function isQuietWindow(nowMs, periodMs = RHYTHM_PERIOD_MS, quietMs = RHYTHM_QUIET_MS) {
+  if (!Number.isFinite(nowMs) || periodMs <= 0) return false
+  const q = Math.max(0, Math.min(quietMs, periodMs))
+  return (((nowMs % periodMs) + periodMs) % periodMs) < q
+}
+
 const statusOverrides = {
   working: { work: 82, daily: 8, social: 5, away: 5 },
   idle: { work: 68, daily: 12, social: 14, away: 6 },
@@ -229,7 +267,7 @@ export function __clearRecentPicks() { _recentPicks.clear() }
 // eviction prune). The store calls this from its multi-session reconciliation eviction site.
 export function pruneRecentPicks(agentId) { _recentPicks.delete(agentId) }
 
-export function getNextBehavior(agentId, status = 'idle', hour = new Date().getHours(), mood = 'normal', teamPulse = 0, outTripCount = 0) {
+export function getNextBehavior(agentId, status = 'idle', hour = new Date().getHours(), mood = 'normal', teamPulse = 0, outTripCount = 0, quietWindow = false) {
   // Start with status-based weights, then apply hour modifiers
   let weights = { ...(statusOverrides[status] || baseWeights) }
   const hourMod = getHourModifiers(hour)
@@ -268,6 +306,11 @@ export function getNextBehavior(agentId, status = 'idle', hour = new Date().getH
   // this cycle (reported category becomes 'work' so downstream is consistent). Trims the simultaneous
   // pile-up the owner sees, without touching per-agent cadence or the social weight.
   if ((category === 'daily' || category === 'social' || category === 'away') && outTripCount >= MAX_CONCURRENT_OUT_TRIPS) {
+    category = 'work'
+  }
+  // Quiet window: same rewrite, global-temporal instead of instantaneous. Deferred trips land
+  // after the boundary together, so the office gets real stillness and then a visible burst.
+  if (quietWindow && (category === 'daily' || category === 'social' || category === 'away')) {
     category = 'work'
   }
   const behavior = pickBehavior(agentId, category)
