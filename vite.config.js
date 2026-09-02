@@ -33,6 +33,19 @@ import { scanAndMerge, getSessionStats, resolveProjectRoot } from './src/server/
 // `configureServer` ONLY, so it does not run for `vite build` / `vite preview` / the packaged
 // serve path, and this file is Node build tooling that is never bundled into the browser payload.
 const STATUS_DIR = process.env.OFFICE_STATUS_DIR || path.join(os.homedir(), '.claude')
+
+// OFFICE_DISABLE_FILE_WATCHER=1 turns off the file-watcher fallback below. OFFICE_STATUS_DIR alone
+// does NOT make a measurement run hermetic: the watcher manufactures agent status from edits to the
+// PROJECT ITSELF and writes it into whatever STATUS_DIR is pointed at, isolated or not. So a soak or
+// rhythm run measured while anyone edits a served file is reading its own operator back. Caught for
+// real: a hermetic-by-OFFICE_STATUS_DIR rhythm run aborted with `external agent status arrived
+// (dev, res)` because tests and docs were being edited while it sampled.
+//
+// Same blast radius as OFFICE_STATUS_DIR: this file is Node build tooling that is never bundled,
+// and the watcher is registered under `configureServer` ONLY, so it cannot reach `vite build` /
+// `vite preview` / the packaged serve path. It adds no fabrication capability -- it only removes a
+// source of it.
+const FILE_WATCHER_DISABLED = process.env.OFFICE_DISABLE_FILE_WATCHER === '1'
 const STATUS_PATH = path.join(STATUS_DIR, 'office-status.json')
 
 // The project directory session files are matched against. Vite's own cwd is the package
@@ -723,6 +736,8 @@ function fileWatcherFallbackPlugin() {
   return {
     name: 'office-file-watcher-fallback',
     configureServer(server) {
+      // Measurement runs opt out entirely: see OFFICE_DISABLE_FILE_WATCHER above.
+      if (FILE_WATCHER_DISABLED) return
       // Watch project source files for changes (Vite's watcher covers src/)
       const onFallbackChange = (file) => {
         // Skip node_modules, dist, .git, and the status file itself
