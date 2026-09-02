@@ -4,6 +4,14 @@
 // Measures per-agent: zone occupancy %, room-visit events (zone change away from home
 // held >=2s), walk events (contiguous moving runs), simultaneous-walker screen share.
 // Pass --organic to shelve the live status files (untracked idle office) first.
+//
+// WARNING on --organic: it isolates the run by RENAMING the operator's real
+// ~/.claude/office-status*.json to *.za-bak and restoring them in an exit handler. A hard kill
+// (taskkill /f, a crash, a closed terminal) skips that handler and leaves the operator's office
+// status silently shelved. `npm run rhythm` (scripts/office-rhythm.mjs) isolates the SAFE way
+// instead -- it spawns its own dev server pointed at an empty OFFICE_STATUS_DIR and touches
+// nothing of yours -- and additionally reports the independent-model gap and stale-label
+// detection this script does not. Prefer it; --organic is kept only for reusing a live :5173.
 import { chromium } from 'playwright-core'
 import { readdirSync, renameSync, existsSync } from 'node:fs'
 import os from 'node:os'
@@ -12,6 +20,9 @@ import path from 'node:path'
 const ORGANIC = process.argv.includes('--organic')
 const moved = []
 if (ORGANIC) {
+  console.warn('zone-audit WARNING: --organic renames your real ~/.claude/office-status*.json and'
+    + ' restores them only on a clean exit. A hard kill leaves them shelved as *.za-bak.'
+    + ' `npm run rhythm` isolates without touching your files.')
   const claudeDir = path.join(os.homedir(), '.claude')
   for (const f of readdirSync(claudeDir)) {
     if (/^office-status(-[^.]+)?\.json$/.test(f)) {
