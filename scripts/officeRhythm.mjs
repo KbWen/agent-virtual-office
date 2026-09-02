@@ -37,18 +37,12 @@
  * So: quote the GAP from one run; never quote the LEVEL without a paired control run.
  */
 
-/** Rendered-motion threshold, shared with soakInvariants' REST_STEP_PX so both agree on "at rest". */
-export const REST_STEP_PX = 0.5
+import { REST_STEP_PX, STALE_LABEL_MS, detectStaleLabels } from './soakInvariants.mjs'
 
-/**
- * A behaviour label that never changes while the agent is NOT in a group event.
- * Bound empirically rather than guessed: on healthy `main`, event-set behaviours are overwritten
- * within 2–27s and the longest unchanged label observed across two runs was 74s and 78s —
- * consistent with the 65s behaviour-duration ceiling plus walk time. A rejected prototype produced
- * 254s. 90s therefore separates the two populations without flagging anything `main` produces.
- * Reported, never thrown: this module measures, the caller decides. (backlog AVO-195)
- */
-export const STALE_LABEL_MS = 90000
+// Re-exported so callers of this module keep a single import. The definitions live in
+// soakInvariants because that is the lower-level module: a gate should not import from a report.
+export { REST_STEP_PX, STALE_LABEL_MS }
+
 
 const clampId = (agents) => Object.keys(agents || {})
 
@@ -133,34 +127,8 @@ export function analyzeRhythm(samples, opts = {}) {
   }
 
   // ── stale labels (AVO-195): the office narrating an activity the agent left long ago ──────
-  const hasBeh = samples.some((s) => ids.some((id) => s.agents?.[id]?.beh !== undefined))
-  let staleLabels = null
-  if (hasBeh) {
-    staleLabels = []
-    for (const id of ids) {
-      let start = null, prev = null, movedIn = 0
-      const close = (endIdx) => {
-        if (start === null) return
-        const ms = samples[endIdx].t - samples[start].t
-        if (ms >= staleMs) staleLabels.push({ id, behavior: prev, ms, movedSamples: movedIn })
-        start = null; movedIn = 0
-      }
-      for (let i = 1; i < samples.length; i++) {
-        const a = samples[i].agents?.[id]
-        if (!a) { close(i - 1); prev = null; continue }
-        // A group event legitimately owns behaviour for its duration — only ambient time counts.
-        if (a.beh === prev && !a.group) {
-          if (start === null) start = i - 1
-          if (moved(i, id)) movedIn++
-        } else {
-          close(i - 1)
-        }
-        prev = a.beh
-      }
-      close(samples.length - 1)
-    }
-    staleLabels.sort((a, b) => b.ms - a.ms)
-  }
+  // Shared with the soak gate rather than reimplemented — one definition, one threshold.
+  const staleLabels = detectStaleLabels(samples, { staleMs, restPx, ids })
 
   return {
     intervals,

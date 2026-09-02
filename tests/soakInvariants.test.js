@@ -139,3 +139,57 @@ describe('planted violations are caught', () => {
     expect(sv.tailB.length).toBeGreaterThanOrEqual(8)
   })
 })
+
+// ─── AVO-195: stale behaviour labels surface as a non-failing warning ─────────────────────────
+
+describe('evaluateSoak — stale behaviour labels (AVO-195)', () => {
+  const INTERVAL = 250
+  // 600 intervals = 150s, past the 90s threshold. Position advances so the stretch also proves the
+  // agent was MOVING while its label sat still -- the distinction that refuted "the scheduler froze".
+  const line = (n, { beh, group = false, move = true }) => {
+    const out = []
+    for (let i = 0; i <= n; i++) {
+      out.push({ t: i * INTERVAL, agents: { a: { x: 100 + (move ? i * 10 : 0), y: 50, moving: false, group, offFloor: false, beh } } })
+    }
+    return out
+  }
+
+  it('warns, and does NOT fail, when a label is held past the threshold outside an event', () => {
+    const r = evaluateSoak(line(800, { beh: 'eat-snack' }))   // 200s, past the 180s threshold
+    expect(r.warnings.staleLabel).toHaveLength(1)
+    expect(r.warnings.staleLabel[0]).toMatchObject({ id: 'a', behavior: 'eat-snack' })
+    expect(r.warnings.staleLabel[0].movedSamples).toBeGreaterThan(0)
+    // Non-failing by design on first landing -- promotion follows the groupStack route.
+    expect(r.pass).toBe(true)
+    expect(r.total).toBe(0)
+  })
+
+  it('does not warn while the agent is in a group event', () => {
+    // officeLife owns behaviour for an event's whole duration; that is not a stale label.
+    expect(evaluateSoak(line(800, { beh: 'meeting', group: true })).warnings.staleLabel).toHaveLength(0)
+  })
+
+  it('does NOT warn at a duration two consecutive identical picks can legitimately produce', () => {
+    // A behaviour lasts <= 65s and a walk adds ~10-20s, so ~170s is reachable without any defect.
+    // A 90s threshold false-positived on the first real soak at 94.9s and 100.5s; this pins that
+    // the number is now derived from the ceiling rather than fitted to a sample.
+    const r = evaluateSoak(line(600, { beh: 'typing' }))       // 150s
+    expect(r.warnings.staleLabel).toHaveLength(0)
+    // ...but the duration is still REPORTED, so a trend is visible below the threshold.
+    expect(r.warnings.maxStaleLabelMs).toBe(599 * 250)   // (n-1) intervals: sample 0 establishes the label
+  })
+
+  it('reports the observed maximum every run, not just when it crosses', () => {
+    expect(evaluateSoak(line(40, { beh: 'typing' })).warnings.maxStaleLabelMs).toBe(39 * 250)
+  })
+
+  it('reports an EMPTY warning list, never a crash, when the timeline carries no beh field', () => {
+    const noBeh = [
+      { t: 0, agents: { a: { x: 100, y: 50, moving: false, group: false, offFloor: false } } },
+      { t: 250, agents: { a: { x: 101, y: 50, moving: false, group: false, offFloor: false } } },
+    ]
+    const r = evaluateSoak(noBeh)
+    expect(r.warnings.staleLabel).toEqual([])
+    expect(r.pass).toBe(true)
+  })
+})

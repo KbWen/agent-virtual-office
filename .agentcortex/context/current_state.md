@@ -14,7 +14,7 @@
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
 - **Last Updated**: 2026-09-02T14:30:00+08:00
 - **Last Verified**: 2026-09-02
-- **Update Sequence**: 122
+- **Update Sequence**: 123
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -156,6 +156,13 @@
 
 ## Ship History
 
+### Ship-feat-soak-stale-label-warning-2026-09-02 (AVO-195 detection half — the soak can finally see a stale activity label)
+
+- Feature shipped: the four soak invariants all read POSITION and the `moving` flag; none read `behavior`, so the office could narrate the wrong activity for minutes with the gate blind to it. `detectStaleLabels` now lives in `soakInvariants.mjs` and surfaces as a **non-failing** `warnings.staleLabel`, following the `groupStack` warn-then-promote precedent. The detector was MOVED out of `officeRhythm.mjs` rather than copied, and `officeRhythm` imports it — a gate should not import from a report module. A mutation proves the sharing is real: removing the group-event exemption fails a test in BOTH files.
+- **Two designs were rejected on evidence before the third shipped.** A 90s threshold, set from control runs whose worst case was 74-78s, **false-positived on the very first real soak** at 94.9s and 100.5s — a number fitted to the sample that motivated it. Restricting the check to event-set behaviours was then **refuted by measurement**: `eat-snack` / `nap` / `stretch` / `chat` are all in the `doSchedule` pools, and of the twelve behaviours the event handlers set only `meeting` is event-only, so the behaviour name cannot separate a stuck label from a repeat pick.
+- **The shipped threshold is derived from the ceiling instead of fitted.** A behaviour lasts at most 65s and a walk adds ~10-20s, and `pickBehavior` CAN select the same behaviour twice because the anti-repeat ring guards messages rather than behaviours — so two consecutive identical picks reach ~170s and **180s** requires three. The limitation is written into the module rather than papered over: an unchanged label cannot be distinguished from repeated identical picks, which is exactly why this warns instead of failing. `maxStaleLabelMs` prints every run regardless of the threshold, because a binary verdict hides the trend — healthy `main` reads 57-99s against the 254s that motivated the check.
+- Tests: vitest **2362 passed / 119 files** (+5), mutation-verified in two directions. Real runs: a 3-minute hermetic soak reports `staleLabel: []` with `maxStaleLabelMs 98.6s` and 0 violations (the rejected 90s threshold would have fired there); a 1-minute soak prints `INFO longest unchanged behaviour label outside an event: 57s` and PASSes at 236/240 samples. That 1-minute run doubles as the control ruling out the new sampled field degrading coverage. The 3-minute run exits non-zero on a **pre-existing** coverage gate (`706 < 715`) whose `allowedMisses` is a flat 5 below 1000 expected samples, so it tightens as duration grows — left alone deliberately, it is not this change's defect.
+
 ### Ship-chore-release-v1.6.7-2026-09-02 (nobody is shown napping through real work) · release v1.6.7
 
 - Cuts the 10 commits merged since `v1.6.6` (2026-08-26) as **v1.6.7**. No app code in the release commit itself: `package.json` 1.6.6 -> 1.6.7, **both** `package-lock.json` version fields (root + `packages[""]`), CHANGELOG narrative, this entry. Verified zero `1.6.6` strings remain in either file.
@@ -219,16 +226,6 @@
 - Stale record corrected in passing: the standing note "lockfile root version is stale at 1.4.0, leave it" no longer holds — `8bc6684` fixed it at the v1.6.5 cut, so both fields were in sync and both moved together here. Verified: zero `1.6.5` strings remain in the lockfile.
 - The annotated tag and the GitHub Release are part of this task, not a follow-up — `v1.6.5` is an annotated tag object (`git cat-file -t` -> `tag`), and this repo has forgotten the tag step before.
 - Tests: Pass — vitest **116 files / 2319 tests**; build PASS; `bundle-budget PASS 495983 bytes vs baseline 496504 (-0.10%, limit +10%)`; `pack-smoke ALL ASSERTIONS PASSED`; `validate.sh pass=113 warn=6 fail=0 skip=5`.
-
-### Ship-chore-isolated-status-dir-for-staging-2026-08-26 (visual judgement stops being taken under uncontrolled conditions)
-
-- **Every visual decision in this repo has been made from a screenshot taken under whatever the operator happened to be doing.** The dev server reads status from `~/.claude/office-status*.json` — the operator's own live Claude Code hook traffic — so any scene staged via `applyExternalStatus` is overwritten within ~2s. Measured three ways in one session: `window.__office_status__` injection, `applyExternalStatus` staging, and `sim-soak` all lost to it. Commit `c7ecbd9`.
-- **The failure was silent, which is the worse half.** `clutter-audit-shot.mjs` produced a shot captioned "6 quiet" while claiming to stage six busy agents, and exited 0. `scripts/staged-capture.mjs` now **asserts the staging reached the RENDER** — reading the DOM, not the store it just wrote to — and exits non-zero if it did not. A shot that did not stage is a failure, not a picture.
-- **The obvious design was rejected before it was written.** A browser-side status mock would put a fabricated-status capability inside the one product that exists not to fabricate status. Reading first made a much smaller design possible: the status API is registered under `configureServer` **only**, so it never runs for a built / previewed / packaged office, and `STALENESS_TIMEOUT` is 2 min so a staged scene survives once nothing competes. `OFFICE_STATUS_DIR` therefore only re-points the dev server's status directory — **no new fabrication capability**, since `applyExternalStatus` staging already existed and is what every shot script already used.
-- R1 proven rather than asserted: after a real build, `grep -rl OFFICE_STATUS_DIR dist/` returns nothing and `configurePreviewServer` count is `0`; with the variable unset the path resolves to the identical prior hard-coded location.
-- **The tool paid for itself immediately, by refuting the proposal it was built to evaluate.** The name-pill text reduction is **REJECTED** (Work Log D-1): the `--hide-names` counterfactual shows the office collapsing into anonymous sprites, because working / planning / done **rings are not distinguishable at a glance** — the pill FILL was carrying most of the status signal, not duplicating it. My supporting argument was also wrong and is recorded: `AgentCharacter.jsx:1713` justified deleting a **third** redundant channel; reusing it to delete the **second** is a different claim. The original clutter diagnosis was likewise corrected — it came from a live shot with agents bunched mid-walk; staged at home positions, 8 pills read fine, so the driver is positional bunching (already governed by AVO-156 / AVO-165 / ADR-004), not channel count. Re-open condition: sprite art (AVO-160 / AVO-124) landing.
-- Also recorded: the harness was first named `staged-office-shot.mjs`, which `.gitignore:87` (`scripts/*-shot.mjs`) silently excludes — that pattern is the **one-off** class; durable tools are named otherwise. Renamed rather than `git add -f`-ing against the repo's own convention.
-- Tests: Pass — vitest **116 files / 2319 tests**; build PASS; `validate.sh pass=113 warn=6 fail=0 skip=5`; harness proven on both branches of its own flag (`--scenario busy` staged 8/8, render confirmed 8/8, census 8 pills + 3 bubbles = **11 text objects**, 0 console errors).
 
 ## Spec Index Archive
 

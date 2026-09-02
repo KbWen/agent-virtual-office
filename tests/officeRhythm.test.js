@@ -125,10 +125,11 @@ describe('analyzeRhythm — motion concentration', () => {
 })
 
 describe('analyzeRhythm — stale behaviour labels (AVO-195)', () => {
-  const longPattern = '.'.repeat(600)          // 600 intervals = 150s at 250ms
+  const longPattern = '.'.repeat(800)          // 800 intervals = 200s at 250ms, past the 180s threshold
+  //  (a stretch measures (n-1) intervals: the first sample establishes the label rather than extending it)
 
   it('flags a label held past the threshold outside any group event', () => {
-    const r = analyzeRhythm(timeline({ a: longPattern }, { beh: { a: 'x'.repeat(601).split('').map(() => 'eat-snack') } }))
+    const r = analyzeRhythm(timeline({ a: longPattern }, { beh: { a: Array(801).fill('eat-snack') } }))
     expect(r.staleLabels).toHaveLength(1)
     expect(r.staleLabels[0]).toMatchObject({ id: 'a', behavior: 'eat-snack' })
     expect(r.staleLabels[0].ms).toBeGreaterThanOrEqual(STALE_LABEL_MS)
@@ -138,7 +139,7 @@ describe('analyzeRhythm — stale behaviour labels (AVO-195)', () => {
     // officeLife legitimately owns behaviour for an event's whole duration.
     const r = analyzeRhythm(timeline(
       { a: longPattern },
-      { beh: { a: Array(601).fill('meeting') }, group: { a: 'G'.repeat(600) } },
+      { beh: { a: Array(801).fill('meeting') }, group: { a: 'G'.repeat(800) } },
     ))
     expect(r.staleLabels).toHaveLength(0)
   })
@@ -155,8 +156,8 @@ describe('analyzeRhythm — stale behaviour labels (AVO-195)', () => {
   it('records how much the agent VISIBLY MOVED while the label sat still', () => {
     // This is what separated "the scheduler froze" from "the label is stale" during the
     // investigation: the frozen reading was refuted by 260-551px of movement.
-    const beh = { a: Array(601).fill('eat-snack') }
-    const r = analyzeRhythm(timeline({ a: '#'.repeat(600) }, { beh }))
+    const beh = { a: Array(801).fill('eat-snack') }
+    const r = analyzeRhythm(timeline({ a: '#'.repeat(800) }, { beh }))
     expect(r.staleLabels[0].movedSamples).toBeGreaterThan(0)
   })
 
