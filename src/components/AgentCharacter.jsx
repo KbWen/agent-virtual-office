@@ -526,6 +526,24 @@ const BehaviorIndicator = React.memo(function BehaviorIndicator({ behavior }) {
         </g>
       )
     }
+    case 'await-approval': {
+      // AVO-167: hourglass — sand falls, nothing else moves. Deliberately the calmest glyph in
+      // this switch: this agent is stopped at its desk waiting on a human permission prompt, and
+      // the slot previously rendered the 'typing' keyboard, which claimed work that was not
+      // happening. Cool cyan matches the STATUS_COLORS ring for the same state.
+      const sand = frame % 4          // 0..3 — grains that have fallen through
+      const top = 3 - sand
+      return (
+        <g transform={`translate(${ox}, ${oy})`}>
+          <rect x={1} y={0} width={5} height={0.8} fill="#1E9FD4" />
+          <rect x={1} y={8.2} width={5} height={0.8} fill="#1E9FD4" />
+          <polyline points="1.5,0.8 5.5,0.8 3.5,4.5 5.5,8.2 1.5,8.2 3.5,4.5 1.5,0.8"
+            fill="none" stroke="#1E9FD4" strokeWidth={0.6} strokeLinejoin="round" />
+          {top > 0 && <polygon points={`${3.5 - top * 0.55},${1.1} ${3.5 + top * 0.55},${1.1} 3.5,${1.1 + top * 0.7}`} fill="#7FD4EF" />}
+          {sand > 0 && <polygon points={`${3.5 - sand * 0.55},7.9 ${3.5 + sand * 0.55},7.9 3.5,${7.9 - sand * 0.7}`} fill="#7FD4EF" />}
+        </g>
+      )
+    }
     case 'magnifier': {
       // QA magnifier with checkmark
       return (

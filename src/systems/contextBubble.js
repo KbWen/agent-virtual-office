@@ -127,6 +127,17 @@ export function generateContextBubble(agentId, update, allExternalStatus) {
     if (errorBubble) return errorBubble
   }
 
+  // 1.5 Awaiting approval (AVO-167) — the agent is stopped at a human permission prompt.
+  // Without this branch it fell through to the role `-working` pool and said things like
+  // "almost... almost~" / "code first, think later!" while doing nothing at all: a work claim
+  // over a state that is the opposite of work, which is the exact failure ADR-007's honesty
+  // gate exists to stop. Placed above `done` (mutually exclusive anyway) and below the error
+  // branch so a real block still wins. Open-ended and non-conclusive per ADR-007.
+  if (status === 'awaiting-approval') {
+    const waitingBubble = fromTemplate(`${baseRole}-awaiting`, ctx) || fromTemplate('any-awaiting', ctx)
+    if (waitingBubble) return waitingBubble
+  }
+
   // 2. Done reactions
   if (status === 'done') {
     const doneBubble = fromTemplate(`${baseRole}-done`, ctx)

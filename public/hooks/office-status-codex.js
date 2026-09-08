@@ -3,9 +3,39 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 
+// ─── Transport contract MIRROR ───────────────────────────────────────────────
+// This file is a standalone CommonJS script (it is copied out of the package and run by
+// `node` with no bundler), so it CANNOT import src/utils/statusContract.mjs -- a .mjs is
+// ESM and `require` cannot load it synchronously. The contract is therefore mirrored here
+// and pinned against the canonical module by tests/codexHookContractParity.test.js, which
+// fails the moment the two drift.
+//
+// The mirror had already drifted: 'planning' (AVO-101) and 'awaiting-approval' (AVO-167)
+// were missing, so normalizeAgent() DROPPED every agent in either state, activeCount
+// under-counted them, and the reasonCode/activeFile/skill carry fields were stripped --
+// a Codex-driven blocked agent silently lost its blocked-reason badge.
 const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
-const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
+const VALID_STATUSES = ['idle', 'working', 'blocked', 'done', 'planning', 'awaiting-approval']
 const VALID_MOODS = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
+const BLOCKED_REASONS = [
+  'test-run-failed', 'build-failed', 'deps-failed', 'blocked-unknown',
+  'permission-denied', 'api-rate-limit', 'api-auth-failed',
+]
+const AGENT_CARRY_FIELDS = ['task', 'label', 'hint', 'reasonCode', 'activeFile', 'skill']
+const FIELD_SANITIZERS = {
+  task:       (v) => typeof v === 'string' ? v.slice(0, 200) : null,
+  label:      (v) => typeof v === 'string' ? v.slice(0, 200) : null,
+  hint:       (v) => typeof v === 'string' ? v.slice(0, 200) : null,
+  reasonCode: (v) => BLOCKED_REASONS.includes(v) ? v : null,
+  activeFile: (v) => typeof v === 'string' ? v.slice(0, 200) : null,
+  skill:      (v) => typeof v === 'string' ? v.slice(0, 200) : null,
+}
+
+// An agent is "active" for activeCount in exactly the states statusContract.countActive()
+// counts. 'planning' and 'awaiting-approval' are active work states, not resting ones.
+function isActiveStatus(status) {
+  return status === 'working' || status === 'blocked' || status === 'planning' || status === 'awaiting-approval'
+}
 
 // Monotonic _seq: plain integer string, matches office-status-hook.js / server.mjs.
 // Two invocations in the same ms get distinct values, so scanSessions dedup/staleness
@@ -58,13 +88,9 @@ function getSessionSlug() {
 
 function normalizeAgent(agent) {
   if (!agent || !VALID_ROLES.includes(agent.role) || !VALID_STATUSES.includes(agent.status)) return null
-  return {
-    role: agent.role,
-    task: agent.task || null,
-    status: agent.status,
-    label: agent.label || null,
-    hint: agent.hint || null,
-  }
+  const carry = {}
+  for (const f of AGENT_CARRY_FIELDS) carry[f] = FIELD_SANITIZERS[f](agent[f])
+  return { role: agent.role, status: agent.status, ...carry }
 }
 
 function normalizeCodexStatusPayload(body, now = Date.now()) {
@@ -86,7 +112,7 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
     return {
       type: 'office-status',
       agents,
-      activeCount: agents.filter((a) => a.status === 'working' || a.status === 'blocked').length,
+      activeCount: agents.filter((a) => isActiveStatus(a.status)).length,
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
       source: body.source || 'codex-cli',
@@ -99,19 +125,28 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
     const value = body[role]
     if (value == null) continue
     const isStatus = VALID_STATUSES.includes(value)
+    // Top-level carry fields apply to every shorthand role, EXCEPT activeFile: broadcasting
+    // one file to several roles would fabricate a shared-file co-edit (AVO-183b), so it is
+    // applied post-loop and only when the payload named a single role.
+    const carry = {}
+    for (const f of AGENT_CARRY_FIELDS) {
+      if (f === 'task' || f === 'activeFile') continue
+      carry[f] = FIELD_SANITIZERS[f](body[f])
+    }
     agents.push({
       role,
-      task: isStatus ? null : value,
+      task: isStatus ? null : FIELD_SANITIZERS.task(value),
       status: isStatus ? value : 'working',
-      label: body.label || null,
-      hint: body.hint || null,
+      ...carry,
     })
   }
+  const singleActiveFile = agents.length === 1 ? FIELD_SANITIZERS.activeFile(body.activeFile) : null
+  for (const a of agents) a.activeFile = singleActiveFile
 
   return {
     type: 'office-status',
     agents,
-    activeCount: agents.filter((a) => a.status === 'working' || a.status === 'blocked').length,
+    activeCount: agents.filter((a) => isActiveStatus(a.status)).length,
     workflow: body.workflow || null,
     source: body.source || 'codex-cli',
     _seq: coerceSeq(body._seq),
@@ -176,4 +211,12 @@ module.exports = {
   getSessionSlug,
   normalizeCodexStatusPayload,
   writeCodexStatusFile,
+  // Exported for tests/codexHookContractParity.test.js only: the drift guard compares these
+  // mirrored constants against src/utils/statusContract.mjs, which this CJS script cannot import.
+  VALID_ROLES,
+  VALID_STATUSES,
+  VALID_MOODS,
+  BLOCKED_REASONS,
+  AGENT_CARRY_FIELDS,
+  isActiveStatus,
 }

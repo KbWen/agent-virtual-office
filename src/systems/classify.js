@@ -490,6 +490,13 @@ export function decideBehavior({ task, role, status, workflow } = {}) {
   if (status === 'blocked')  return 'scratch-head'
   if (status === 'done')     return 'thumbs-up'
   if (status === 'planning') return 'gantt-chart'  // AVO-101: plan mode → architecting
+  // AVO-167: 'awaiting-approval' means the agent is stopped, waiting on a human permission
+  // prompt. It arrives from idleGapInfer with NO task, so before this branch it fell through
+  // to the family default and animated 'typing' — a keyboard clattering away while nothing was
+  // happening, contradicting the calm cyan ring the same state renders. 'await-approval' is
+  // desk-bound (absent from movementSystem's BEHAVIOR_LOCATIONS), so the wait never walks the
+  // agent off to the lounge the way reusing 'check-phone'/'stretch' would have.
+  if (status === 'awaiting-approval') return 'await-approval'
 
   // 2. Resolve task family (the substrate for the override tables)
   const family = classifyTask(task).family

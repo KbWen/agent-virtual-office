@@ -1,6 +1,6 @@
 {
   "_comment": "Add this 'hooks' section to your ~/.claude/settings.json or .claude/settings.json",
-  "_usage": "Update HOOK_PATH below to the actual path of office-status-hook.js",
+  "_usage": "Update HOOK_PATH below to the actual path of office-status-hook.js. PermissionDenied and StopFailure (AVO-148) are harmless on Claude Code versions that do not emit them.",
   "hooks": {
     "PreToolUse": [
       {
@@ -53,6 +53,26 @@
       }
     ],
     "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /path/to/office-status-hook.js"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /path/to/office-status-hook.js"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
       {
         "hooks": [
           {

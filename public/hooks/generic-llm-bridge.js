@@ -60,18 +60,36 @@ function fileToRole(filePath) {
 
 // ─── Labels ───────────────────────────────────────────────────────────────────
 
+// Same language resolution as office-status-hook.js: the office writes the viewer's choice to
+// ~/.claude/office-lang, and 'en' is the default because the browser-side i18n default is 'en'.
+// Before this every label this bridge produced was hard-coded Traditional Chinese, so an
+// English office showed Chinese status text with no way to change it.
+function detectHookLang() {
+  try {
+    const langFile = path.join(os.homedir(), '.claude', 'office-lang')
+    const lang = fs.readFileSync(langFile, 'utf-8').trim()
+    if (lang === 'en' || lang === 'zh-TW') return lang
+  } catch {}
+  return 'en'
+}
+
+const LANG = detectHookLang()
+
 function workingLabel(filePath) {
   const base = path.basename(filePath || '')
-  if (!base) return '✏️ 改 code 中'
+  // With a filename the label is already language-neutral (emoji + the file's own name).
+  if (!base) return LANG === 'en' ? '✏️ Editing code' : '✏️ 改 code 中'
   const role = fileToRole(filePath)
   if (role === 'qa') return `🧪 ${base}`
   if (role === 'res') return `📝 ${base}`
   return `✏️ ${base}`
 }
 
-const DONE_LABELS = ['✅ 搞定', '✅ 完成']
+const DONE_LABELS = LANG === 'en'
+  ? ['✅ Done', '✅ Complete']
+  : ['✅ 搞定', '✅ 完成']
 function doneLabel() { return DONE_LABELS[Math.floor(Math.random() * DONE_LABELS.length)] }
-const IDLE_LABEL = '☕ 等指令中'
+const IDLE_LABEL = LANG === 'en' ? '☕ Waiting for instructions' : '☕ 等指令中'
 
 // ─── POST to /api/status ──────────────────────────────────────────────────────
 

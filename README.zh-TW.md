@@ -22,6 +22,31 @@ QA 吵那到底算不算 bug。把它接上你的 Claude Code / Codex / CI sessi
 
 ---
 
+## ✨ 隨手看看
+
+<table>
+<tr>
+<td width="50%" align="center">
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-hero.png" alt="辦公室進行中：小人在座位上工作、有人卡關、對話泡泡、寵物在休息區晃" /><br>
+<sub><b>辦公室本人。</b>每個小人都是你 session 裡真實的 agent。</sub>
+</td>
+<td width="50%" align="center">
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.gif" alt="動畫：戳一下小人，他會晃一下並冒出目前狀態的對話泡泡" /><br>
+<sub><b>戳一下小人</b>，他會晃一下並冒出目前狀態。位置和狀態都不會被改動。</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/share-card.png" alt="總結當天辦公室活動的溫馨像素風明信片" height="300" /><br>
+<sub><b>下班明信片。</b>一鍵把這一天匯出成 PNG。今天很安靜，它就說今天很安靜。</sub>
+</td>
+<td width="50%" align="center">
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-zh.png" alt="以繁體中文呈現的辦公室，標籤與對話泡泡都在地化" /><br>
+<sub><b>內建繁體中文。</b>標籤、泡泡、名字全部在地化。</sub>
+</td>
+</tr>
+</table>
+
 ## 他們在幹嘛？
 
 | 小人 | 個性 | 通常會看到他… |
@@ -112,6 +137,29 @@ curl -X POST http://localhost:5174/api/event -d '{"event":"deploy-success"}'
 - **Claude Code** → `npx agent-virtual-office setup`，之後每個工具呼叫都會自己路由。搞定。
 - **Codex CLI / Codex App / Gemini CLI / GitHub Actions / 任何 CI** → 見 **[整合指南](docs/INTEGRATIONS.md)**。
 
+### `setup` 會註冊的 hook 事件
+
+| 事件 | 需要的能力 | 會看到什麼 |
+|---|---|---|
+| `PreToolUse` / `PostToolUse` | 核心 hooks | 每個工具呼叫的 working／done／blocked 狀態 |
+| `SubagentStart` / `SubagentStop` | 核心 hooks | 子代理的工作流橫幅 |
+| `UserPromptSubmit` | 核心 hooks | PM 進入 planning 模式 |
+| `Stop` | 核心 hooks | 一輪結束後的 idle 狀態 |
+| `PermissionDenied` *(AVO-148)* | Hooks v1.x+ | 權限系統擋下工具呼叫時，把該負責的 agent 標成 `blocked`，原因 `permission-denied`。你的 Claude Code 版本若不發這個事件也無妨 —— handler 單純不會被呼叫。 |
+| `StopFailure` *(AVO-148)* | Hooks v1.x+ | 一輪以 Claude API 錯誤收尾時，把當下所有 working 的 session agent 標成 `blocked`，原因 `api-rate-limit` 或 `api-auth-failed`（讀 `matcher` enum 欄位，完全不做文字解析）。沒有這個事件也無妨。 |
+
+### 選擇性開啟的事件擷取模式 *(AVO-153)*
+
+hook 可以把原始事件錄下來，用於產生 fixture 與驗證 schema：
+
+1. **開啟**：`touch ~/.claude/office-hook-capture`（Linux／macOS）或 `New-Item ~/.claude/office-hook-capture`（PowerShell）
+2. **照常使用 Claude Code** —— 每次工具呼叫都會往 `~/.claude/office-hook-capture.jsonl` 追加一行 JSON
+3. **清理**：`node scripts/sanitize-hook-capture.mjs` → 產出 `tests/fixtures/hook-events/*.json`
+4. **檢查**：commit 前確認 fixture 裡沒有殘留的敏感字串
+5. **關閉**：刪掉那個標記檔；原始擷取留在 `~/.claude`（永遠不會被 commit）
+
+擷取路徑整段包在 `try/catch` 裡 —— 開或關都不會影響 hook 的正常行為。
+
 ## 嵌入與語言
 
 ```
@@ -141,6 +189,33 @@ window.__office_config__ = {
 ```
 
 `?agents=` 只改**名字**；`window.__office_config__` 可改**名字 + 顏色**。這是改既有角色「是誰」，不是改它們的像素外觀——自訂 sprite 美術（帽子、服裝、配件）是另一條**尚未實作**的軌道（見 `docs/SPRITE_REQUIREMENTS.md`）。
+
+---
+
+## 診斷與 soak 測試
+
+視覺／湧現性的 bug（小人疊在一起、瞬移、走到一半凍住）活在**幾分鐘的執行時間裡**，
+不會出現在任何單一函式裡 —— 所以這個 repo 自己帶了觀測工具：
+
+| 指令 | 做什麼 |
+|---|---|
+| `npm run soak` | **Soak 閘門。** 無頭跑辦公室 5 分鐘（`--minutes N` 可調），違反世界不變式就失敗：瞬移、持續站位重疊、凍住的行走者、站在家具裡面。CI 也會每晚跑（`sim-soak` workflow）。 |
+| `node scripts/overlap-recorder.mjs 12` | 重疊鑑識：兩個小人完全重疊 ≥2 秒時，把雙方最近約 12 秒的狀態鏈（位置、目標、行為）倒出來，讓機制看得見。 |
+| `node scripts/zone-audit.mjs` | 移動節奏稽核：3 分鐘的區域佔用、房間造訪次數，以及同時有 0／1／2+ 人在走動的比例。它的 `--organic` 旗標會**改名你真正的 `~/.claude/office-status*.json`** 來隔離，正常結束才還原 —— 建議改用下面的 `npm run rhythm`，它不用碰你的檔案就能隔離。 |
+| `npm run rhythm` | **辦公室是「活著」還是只是「很忙」？** 天生封閉（自己起一台 dev server 指向空的 `OFFICE_STATUS_DIR`，一旦有外部狀態進來就拒絕報數字）。它用精確的 Poisson-binomial **獨立模型**來對照靜止率 —— 這個落差說的是移動有沒有**成團**（有爆發也有真安靜 = 節奏）還是**攤平**（永遠有人在走 = 雜訊），這是任何速率指標都分不出來的。也會標出過期的行為標籤（AVO-195）。只報告，不當閘門。 |
+
+以上全部都會重用執行中的 `npm run dev`（:5173），沒有就自己起一台。看到視覺異常時，
+**先跑**對應的錄製器再談理論 —— v1.4.0 裡每一個重疊／節奏修正都是從這些捕捉開始的。
+
+> **怎麼讀節奏數字。** 只引用單次執行的靜止**落差**；靜止**水位**單跑一次不可重現。
+> 同一份程式碼跑兩次 8 分鐘，水位是 1.4% 和 11.8%，但落差穩定在 −12.3 與 −10.5 點。
+> 任何關於水位的說法都需要在未改動的版本上做一次配對對照。
+>
+> **要比「比值」，不是比點數落差。** 絕對落差**受限於**獨立水位 —— 平均移動 16.8% 時獨立靜止是
+> 22.3%，−10 點的落差有可能；到了 23.5% 獨立靜止只剩 9.2%，同樣的落差在算術上就不可能發生。
+> 兩個一樣「攤平」但移動量不同的辦公室，會報出天差地遠的落差。請看 `stillnessRatio`
+> （<1 攤平、≈1 獨立、>1 成團），並確認 `run context mood=… hour=…` 這行：光是 mood 就會讓
+> ambient 出門比例從 26%（`normal`）→ 35%（`idle`）→ 40%（`smooth`）。
 
 ---
 

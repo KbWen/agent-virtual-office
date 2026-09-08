@@ -65,7 +65,20 @@ if (!fs.existsSync(path.join(dist, 'index.html'))) {
 }
 
 // ─── Shared paths ────────────────────────────────────────────────────────────
-const STATUS_PATH = path.join(os.homedir(), '.claude', 'office-status.json')
+// OFFICE_STATUS_DIR overrides the directory the office reads/writes status in, matching
+// `vite.config.js` (the dev server) so the two transports resolve the same path from the
+// same input. Without it the only way to relocate the status directory here was to spoof
+// HOME/USERPROFILE for the whole process, which is what the E2E tests had to do and what a
+// deployment on a read-only rootfs or a service account with an unusual home was left with.
+//
+// This is NOT a status-fabrication surface: it only re-points the file the existing
+// /api/status writer already owns. The known hazard is the operator-forgetfulness one
+// recorded when the dev-server flag shipped -- a stale/empty office being read as if it
+// were live -- so an override is announced in the startup banner below rather than being
+// silent. `path.dirname(STATUS_PATH)` is also what scanAndMerge/getSessionStats scan, so
+// session discovery follows the override with no second knob.
+const STATUS_DIR = process.env.OFFICE_STATUS_DIR || path.join(os.homedir(), '.claude')
+const STATUS_PATH = path.join(STATUS_DIR, 'office-status.json')
 
 // The project directory session files are matched against. This process is spawned with its
 // cwd set to the package root by bin/cli.js (and therefore by npx), so process.cwd() cannot
@@ -516,6 +529,13 @@ server.listen(port, bindHost, () => {
 
   Use Ctrl+C to stop.
   `)
+
+  // Announce a redirected status directory: a forgotten OFFICE_STATUS_DIR would otherwise
+  // present an empty/stale office as if it were live, with nothing on screen saying why.
+  if (process.env.OFFICE_STATUS_DIR) {
+    console.log(`  Status directory overridden by OFFICE_STATUS_DIR: ${STATUS_DIR}
+`)
+  }
 
   if (bindHost === '0.0.0.0' && !apiToken) {
     console.warn('  WARNING: --host is set but OFFICE_API_TOKEN is not.')
