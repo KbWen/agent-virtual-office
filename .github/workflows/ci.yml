@@ -57,3 +57,45 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run smoke:pack
+
+  # The Dockerfile shipped a runner stage that omitted server.mjs's import closure, so every
+  # container exited on startup with ERR_MODULE_NOT_FOUND -- while the build, the full test
+  # suite and all three smoke gates stayed green. Nothing we ran could see it, because nothing
+  # we ran was the image. tests/dockerRuntimeClosure.test.js catches the static half (an import
+  # reaching outside what the runner copies); this job catches everything else -- a bad CMD, a
+  # missing dist/index.html, a HEALTHCHECK pointed at the wrong path -- by actually running it.
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t agent-virtual-office:ci .
+      - name: Boot the container and wait for its own HEALTHCHECK to report healthy
+        run: |
+          set -euo pipefail
+          # No port publishing: the healthcheck runs INSIDE the container, which is what a real
+          # deployment relies on, and nothing needs to be exposed to the runner to observe it.
+          docker run -d --name avo-ci -e OFFICE_API_TOKEN=ci-smoke agent-virtual-office:ci
+          for i in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' avo-ci 2>/dev/null || echo missing)
+            state=$(docker inspect -f '{{.State.Status}}' avo-ci 2>/dev/null || echo missing)
+            echo "attempt $i: state=$state health=$status"
+            if [ "$status" = healthy ]; then echo "container is healthy"; exit 0; fi
+            # Fail fast rather than burning the full timeout on a container that already died.
+            if [ "$state" != running ]; then
+              echo "::error::container is not running (state=$state) -- startup crash:"
+              docker logs avo-ci
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "::error::container never reported healthy within 60s"
+          docker logs avo-ci
+          exit 1
+      - name: Container logs
+        if: always()
+        run: docker logs avo-ci || true
+      - name: Stop
+        if: always()
+        run: docker rm -f avo-ci || true
