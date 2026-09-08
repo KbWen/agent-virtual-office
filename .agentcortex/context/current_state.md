@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-02T14:30:00+08:00
-- **Last Verified**: 2026-09-02
-- **Update Sequence**: 123
+- **Last Updated**: 2026-09-08T12:30:00+08:00
+- **Last Verified**: 2026-09-08
+- **Update Sequence**: 124
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -155,6 +155,17 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-audit-2026-09-08-2026-09-08 (an external audit, re-derived — the container never started and a waiting agent looked busy)
+
+- Works an external audit handoff (`docs/reviews/2026-09-08-audit-handoff.md`, 12 findings) as **untrusted input**: every finding was re-derived from source before anything was touched. All 12 reproduce, but **three of its file/line references were wrong** and **one of its suggested fixes would have introduced a bug** — mapping `awaiting-approval` to `check-phone`/`stretch` would have WALKED the waiting agent to the lounge, because both are lounge destinations in `movementSystem.js`'s `BEHAVIOR_LOCATIONS`. Position is state in this product.
+- **The P0 was invisible to every gate we own.** `server.mjs` imports `src/server/scanSessions.mjs` and `src/utils/normalizePost.mjs`; the Dockerfile runner stage copied neither, so every container exited on `ERR_MODULE_NOT_FOUND` while the build, 2362 tests and three smoke gates stayed green. Fixed by copying the exact runtime closure (56 KB, not all 1.1 MB of `src/`) and pairing it with `tests/dockerRuntimeClosure.test.js`, which walks the import graph so a future import cannot silently re-break the image. Docker is not installed here, so the proof is a **replica of the runner image's filesystem** — pre-fix it reproduces the exact `ERR_MODULE_NOT_FOUND`, post-fix the server boots — not a real `docker run`; a reviewer with Docker should confirm.
+- **An agent waiting on YOUR permission prompt was animating a clattering keyboard and saying "almost... almost~".** `awaiting-approval` arrives from `idleGapInfer` with a status and nothing else, so both `decideBehavior` and `generateContextBubble` fell through to their task-family/`-working` defaults — a work claim over the exact absence of work, under the calm cyan ring that was supposed to mean the opposite. It now has a desk-bound hourglass and its own bubble pool in both locales. Verified in a real browser against an isolated dev server, asserting the **rendered DOM**: hourglass present, keyboard glyph absent, control agent still typing.
+- **Three silent contract mirrors had drifted.** `office-status-codex.js` was still on the pre-AVO-101 four-status list, so it DROPPED every `planning`/`awaiting-approval` agent, under-counted `activeCount`, and stripped the `reasonCode`/`activeFile`/`skill` carry fields — a Codex-driven blocked agent lost its reason badge. `bridge.js` treated any non-whitelisted value as a task NAME, turning `{ dev: 'planning' }` into a "working" agent labelled "planning". `bridge-ui.js` disagreed with the office's identity colours on 7 of 8 roles. All three are now pinned by drift-guard tests; the codex carry fields also gained the canonical sanitizers, which is a **net tightening** (`task`/`label`/`hint` were previously uncapped and `reasonCode` unvalidated).
+- **F-09 was worse than reported.** The audit saw a macOS symptom; the unit was wrong on GNU date too. `_seq` is a millisecond epoch everywhere — `scanSessions` dedups inside a 2s window and expires `done` against `Date.now()` — and the shell hook was emitting nanoseconds. Both platforms measured.
+- Docs closed at their source, not by editing prose: `bin/cli.js` registers 8 hook events while `INTEGRATIONS.md` said 6 and `hooks-config.json` (the file the docs tell you to paste) omitted `PermissionDenied`/`StopFailure` — the two events that make a denied tool call an honest `blocked`. Now pinned to `bin/cli.js`. `README.zh-TW.md` regained four sections; `ARCHITECTURE.md`'s room diagram was missing the Designer desk and the Gate station.
+- **F-11 is only partly closed, deliberately.** The deprecated Rollup option is fixed (output byte-identical, verified both ways). `MIXED_EXPORTS` and the `configLoader: native` warnings need `vite.config.js` renamed to `.mjs`, which touches every test that imports it — out of scope for a defect sweep, recorded with a written rationale rather than left looking done.
+- Tests: **125 files / 2408 passed** (+6 files, +46, all new guards; each proven to FAIL on the un-fixed input first). Build clean, bundle budget +0.20% against a +10% limit, all three smoke gates green, `validate.sh` pass=114 warn=5 fail=0.
 
 ### Ship-feat-soak-stale-label-warning-2026-09-02 (AVO-195 detection half — the soak can finally see a stale activity label)
 

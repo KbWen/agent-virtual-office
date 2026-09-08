@@ -4,8 +4,31 @@ title: Project Review and Audit Handoff for Claude
 date: 2026-09-08
 baseline_sha: 438da3b
 scope: verified defects, contract drifts, and documentation discrepancies; no runtime changes
-status: open — handoff for Claude Code triage & execution
+status: resolved — triaged and remediated on `fix/audit-2026-09-08`
+resolved_by: fix/audit-2026-09-08 (2026-09-08)
 ---
+
+> [!NOTE]
+> **Resolution (2026-09-08, `fix/audit-2026-09-08`).** All 12 findings were independently
+> re-derived from source before any edit; all 12 reproduce. 11 are fully remediated and F-11 is
+> partially remediated with a written rationale. This document is preserved **as written**, including
+> its errors, because they are part of the record — do not edit the findings below. Corrections found
+> during triage:
+>
+> - **F-05** cites `src/utils/classify.js` and `src/utils/contextBubble.js`; the real paths are
+>   `src/systems/`.
+> - **F-05's suggested fix was rejected.** Mapping `awaiting-approval` to an idle behavior such as
+>   `check-phone`/`stretch` would have relocated the agent: both are lounge destinations in
+>   `movementSystem.js`'s `BEHAVIOR_LOCATIONS`. A dedicated desk-bound behavior shipped instead.
+> - **F-06** is also present in `public/hooks/hooks-config.json`, which this document does not list.
+> - **F-09** is understated: `date +%s%N` is wrong on GNU date too (nanoseconds, not milliseconds),
+>   not only on BSD.
+> - **F-11's** line reference `vite.config.js:145` is wrong; `inlineDynamicImports` is at line 762.
+> - The “bundle budget at -0.02% margin” reading in §1 is a misread: -0.02% was the delta against
+>   the baseline, and the gate's actual allowance is +10%.
+>
+> Full evidence: `.agentcortex/context/archive/fix-audit-2026-09-08-20260908.md`; summary in
+> `.agentcortex/context/current_state.md` §Ship History.
 
 # Project Review and Audit Handoff for Claude
 
