@@ -20,7 +20,27 @@ TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
 AGENT_TYPE=$(echo "$INPUT" | jq -r '.agent_type // empty')
 
 STATUS_FILE="$HOME/.claude/office-status.json"
-SEQ=$(date +%s%N)
+
+# `_seq` is a MILLISECOND epoch clock, and every consumer treats it as one: scanSessions.mjs
+# dedups a bare status file against a slugged one inside a 2s window and expires `done` against
+# Date.now(), and the client keeps a numeric high-water mark to drop stale cross-channel
+# deliveries. `date +%s%N` satisfied neither platform:
+#   - GNU date returns NANOseconds (19 digits) -- 1,000,000x too large, so the 2s dedup never
+#     matched and a `done` written by this hook never aged out.
+#   - BSD/macOS date has no %N at all and echoes the format character back ("1757318400N"),
+#     which fails the client's /^\d+$/ numeric-seq guard outright.
+# Emit milliseconds when nanoseconds are available, and fall back to whole-second precision
+# (still a valid ms value) when they are not.
+seq_ms() {
+  local ns
+  ns=$(date +%s%N 2>/dev/null) || ns=''
+  case "$ns" in
+    ''|*[!0-9]*) ;;                                       # BSD literal "N", or date failed
+    *) if [ ${#ns} -ge 16 ]; then echo $(( ns / 1000000 )); return; fi ;;
+  esac
+  echo "$(date +%s)000"
+}
+SEQ=$(seq_ms)
 
 # Map tool names to office roles
 tool_to_role() {

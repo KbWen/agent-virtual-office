@@ -332,6 +332,10 @@ const STATUS_BEHAVIOR_MAP = {
   blocked:  { behavior: 'scratch-head', expression: 'confused' },
   done:     { behavior: 'thumbs-up', expression: 'happy' },
   planning: { behavior: 'gantt-chart', expression: 'focused' },  // AVO-101: plan mode
+  // AVO-167: waiting on a human is neither focused work nor the 'confused' of a real block —
+  // the honest expression is neutral. decideBehavior supplies the behavior ('await-approval');
+  // this entry exists so the expression does not stay frozen on whatever preceded the wait.
+  'awaiting-approval': { behavior: 'await-approval', expression: 'normal' },
 }
 const ROLE_GROWTH_ITEMS = {
   pm: 'sticky', arch: 'books', dev: 'coffee',

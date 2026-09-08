@@ -1,11 +1,16 @@
+// Identity colors MIRROR src/config/characters.json (the `agentcortex` pack) -- this page is
+// plain static HTML with no bundler, so it cannot import the JSON. Only `designer` used to
+// match; every other role showed a different colour here than the office itself did, so the
+// same agent read as two people across the two views. tests/bridgeUiRoleColors.test.js pins
+// the mirror to the canonical file.
 const AGENTS = [
-  { id: 'pm', name: 'PM', color: '#5B8CFF' },
-  { id: 'arch', name: 'Architect', color: '#8B5CF6' },
-  { id: 'dev', name: 'Developer', color: '#F97316' },
-  { id: 'qa', name: 'QA', color: '#22C55E' },
-  { id: 'ops', name: 'DevOps', color: '#EC4899' },
-  { id: 'res', name: 'Researcher', color: '#06B6D4' },
-  { id: 'gate', name: 'Gatekeeper', color: '#EAB308' },
+  { id: 'pm', name: 'PM', color: '#378ADD' },
+  { id: 'arch', name: 'Architect', color: '#7F77DD' },
+  { id: 'dev', name: 'Developer', color: '#1D9E75' },
+  { id: 'qa', name: 'QA', color: '#BA7517' },
+  { id: 'ops', name: 'DevOps', color: '#D85A30' },
+  { id: 'res', name: 'Researcher', color: '#5DCAA5' },
+  { id: 'gate', name: 'Gatekeeper', color: '#E24B4A' },
   { id: 'designer', name: 'Designer', color: '#E8688A' },
 ]
 

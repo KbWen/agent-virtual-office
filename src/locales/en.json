@@ -36,6 +36,7 @@
     "nap": "Napping",
     "phone-call": "Phone call",
     "scratch-head": "Scratching head",
+    "await-approval": "Waiting on you",
     "sigh": "Sighing",
     "desk-slam": "Desk slam",
     "idle": "Idle",
@@ -210,6 +211,7 @@
 
     "any-done": ["done!", "OK finished~", "next one!", "nice~"],
     "any-error": ["uh oh...", "something broke", "what now...", "not good..."],
+    "any-awaiting": ["waiting on your OK...", "there's a prompt for you", "paused — your call", "not moving till you say"],
 
     "react-colleague-blocked": ["someone's stuck...need help?", "who's calling for help?", "another blocker over there", "let me see what's wrong"],
     "react-colleague-done": ["oh nice~", "good pace~", "someone's on a roll~", "hm, interesting~"],

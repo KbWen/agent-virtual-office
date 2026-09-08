@@ -759,7 +759,12 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      output: { inlineDynamicImports: true }
+      // One self-contained bundle: the office is embedded as a single <script>, so a
+      // code-split chunk graph would just add fetches. `inlineDynamicImports` was the old
+      // spelling of this and Rollup now warns that it is deprecated in favour of
+      // `codeSplitting: false`; the emitted output is identical (verified: same single
+      // dist/assets/index-*.js, same byte count).
+      output: { codeSplitting: false }
     }
   }
 })

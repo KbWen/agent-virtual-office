@@ -35,7 +35,7 @@ curl -X POST http://localhost:5174/api/status \
 ```
 
 **Supported roles:** `pm` · `arch` · `dev` · `qa` · `ops` · `res` · `gate` · `designer`
-**Supported statuses:** `idle` · `working` · `blocked` · `done` · `planning`
+**Supported statuses:** `idle` · `working` · `blocked` · `done` · `planning` · `awaiting-approval`
 
 ---
 
@@ -91,7 +91,7 @@ Set `OFFICE_URL` (e.g. `http://office.internal:5174`) as a repository variable a
 
 ## Claude Code Hook
 
-The one-click setup copies the hook to `~/.claude/office-status-hook.js` and registers it in `~/.claude/settings.json` for all 6 events automatically (idempotent — safe to re-run):
+The one-click setup copies the hook to `~/.claude/office-status-hook.js` and registers it in `~/.claude/settings.json` for all 8 events automatically (idempotent — safe to re-run):
 
 ```bash
 # If you cloned the repo:
@@ -123,10 +123,18 @@ Register it in `~/.claude/settings.json` (the hook reads events from stdin, no a
     "SubagentStart":    [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
     "SubagentStop":     [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
     "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
-    "Stop":             [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }]
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "PermissionDenied": [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "StopFailure":      [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }]
   }
 }
 ```
+
+`PermissionDenied` and `StopFailure` (AVO-148) are what turn a denied tool call or a
+Claude-API failure into an honest `blocked` state instead of an agent that just stops moving.
+They are harmless on Claude Code versions that do not emit them — the handler simply never
+runs — so register them unconditionally. See the event table in the
+[README](../README.md#hook-events-registered-by-setup) for what each one shows.
 
 The hook auto-detects the current git branch slug, writes `~/.claude/office-status-{slug}.json`, and the office filters by the directory it was launched in so sessions from other projects never appear. Set `OFFICE_PROJECT_ROOT` to match against a different project root (e.g. a multi-worktree setup).
 

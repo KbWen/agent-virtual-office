@@ -32,11 +32,19 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-# server.mjs is pure ESM and uses only Node built-ins, but package.json
-# is kept so tooling can resolve the package metadata / "type" field.
+# server.mjs uses only Node built-ins for I/O, but it is NOT self-contained: it
+# imports src/server/scanSessions.mjs and src/utils/normalizePost.mjs (which in turn
+# imports src/utils/statusContract.mjs). Those two directories are the ENTIRE runtime
+# import closure -- omitting them made the container exit on startup with
+# ERR_MODULE_NOT_FOUND. tests/dockerRuntimeClosure.test.js walks server.mjs's import
+# graph and fails if anything resolves outside the directories copied here, so a future
+# import cannot silently re-break the image. package.json is kept so tooling can resolve
+# the package metadata / "type" field.
 COPY --chown=node:node --from=builder /app/dist ./dist
 COPY --chown=node:node --from=builder /app/server.mjs ./server.mjs
 COPY --chown=node:node --from=builder /app/package.json ./package.json
+COPY --chown=node:node --from=builder /app/src/server ./src/server
+COPY --chown=node:node --from=builder /app/src/utils ./src/utils
 
 # Drop root for the runtime process.
 USER node

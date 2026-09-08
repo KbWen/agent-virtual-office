@@ -27,7 +27,12 @@
 
   const CHANNEL_NAME = 'agent-office'
   const VALID_ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
-  const VALID_STATUSES = ['idle', 'working', 'blocked', 'done']
+  // Must stay in step with src/utils/statusContract.mjs. This list is not just a filter:
+  // parseShorthand() below treats any value that is NOT in it as a TASK NAME, so a missing
+  // status silently becomes `{ status: 'working', task: 'planning' }` -- the office then
+  // showed a planning or awaiting-approval agent as busily working, with the real state
+  // demoted to a label. 'planning' is AVO-101, 'awaiting-approval' is AVO-167.
+  const VALID_STATUSES = ['idle', 'working', 'blocked', 'done', 'planning', 'awaiting-approval']
   const DEFAULT_SOURCE = detectDefaultSource()
 
   let bc = null
