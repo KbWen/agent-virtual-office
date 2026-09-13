@@ -11,6 +11,7 @@ import { startWorkflowHandoffs } from '../inference/workflowHandoff'
 import { juiceForEvent } from '../systems/eventJuice'
 import { gateWaiting, GATE_SHEET_CAP } from '../systems/reviewGate'
 import { themeOverlay, cappedThemeOpacity } from '../systems/theme'
+import { SCENE, SIGNS } from '../systems/officePalette'
 import { eventName, charName, t, useLocale } from '../i18n'
 import AgentCharacter from './AgentCharacter'
 import PairLinkOverlay from './PairLink'
@@ -1021,32 +1022,32 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       </defs>
 
       {/* ═══ BACKGROUND ═══ */}
-      <rect width="800" height="560" fill="#3a3028" />
+      <rect width="800" height="560" fill={SCENE.background} />
 
       {/* ═══ ZONE FLOORS ═══ */}
       {/* Entrance + Hallway (top, one continuous space) */}
-      <rect x="10" y="10" width="588" height="128" fill="#D0C0A0" rx="2" />
-      {/* Main Office */}
-      <rect x="10" y="163" width="588" height="236" fill="#C8A878" />
+      <rect x="10" y="10" width="588" height="128" fill={SCENE.floors.hallway} rx="2" />
+      {/* Main Office — floor colour from src/systems/officePalette.js (SCENE.floors.mainOffice). */}
+      <rect x="10" y="163" width="588" height="236" fill={SCENE.floors.mainOffice} />
       {/* Meeting Room */}
-      <rect x="623" y="10" width="167" height="408" fill="#9898B0" />
+      <rect x="623" y="10" width="167" height="408" fill={SCENE.floors.meeting} />
       {/* Lounge */}
-      <rect x="10" y="419" width="446" height="131" fill="#A8B898" />
+      <rect x="10" y="419" width="446" height="131" fill={SCENE.floors.lounge} />
       {/* Research */}
-      <rect x="464" y="419" width="326" height="131" fill="#9898B0" />
+      <rect x="464" y="419" width="326" height="131" fill={SCENE.floors.research} />
 
       {/* ═══ THICK WALLS (with depth for windows/clock) ═══ */}
       {/* North wall (entrance/hallway ↔ main office, 25px thick) */}
-      <rect x="10" y="138" width="588" height="25" fill="#5a4a3a" />
-      <rect x="10" y="160" width="588" height="3" fill="#4a3a2a" opacity="0.5" />
+      <rect x="10" y="138" width="588" height="25" fill={SCENE.wallFace} />
+      <rect x="10" y="160" width="588" height="3" fill={SCENE.wallEdge} opacity={SCENE.wallEdgeOpacity} />
       {/* South wall (main office ↔ lounge/research, 20px thick) */}
-      <rect x="10" y="399" width="588" height="20" fill="#5a4a3a" />
-      <rect x="10" y="399" width="588" height="3" fill="#4a3a2a" opacity="0.5" />
+      <rect x="10" y="399" width="588" height="20" fill={SCENE.wallFace} />
+      <rect x="10" y="399" width="588" height="3" fill={SCENE.wallEdge} opacity={SCENE.wallEdgeOpacity} />
       {/* East wall (main office ↔ meeting room, 25px thick) */}
-      <rect x="598" y="10" width="25" height="408" fill="#5a4a3a" />
-      <rect x="598" y="10" width="3" height="408" fill="#4a3a2a" opacity="0.5" />
+      <rect x="598" y="10" width="25" height="408" fill={SCENE.wallFace} />
+      <rect x="598" y="10" width="3" height="408" fill={SCENE.wallEdge} opacity={SCENE.wallEdgeOpacity} />
       {/* Lounge ↔ Research divider */}
-      <rect x="456" y="419" width="8" height="131" fill="#5a4a3a" />
+      <rect x="456" y="419" width="8" height="131" fill={SCENE.wallFace} />
 
       {/* ═══ NORTH WALL (interior partition: hallway ↔ main office) ═══ */}
       {/* No sky-windows here — this is an INTERIOR wall (the hallway is on the other side, NOT the
@@ -1062,39 +1063,39 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* ═══ DOOR OPENINGS (cut through thick walls) ═══ */}
       {/* Entrance → Main Office (north wall) */}
-      <rect x="88" y="138" width="52" height="25" fill="#C8A878" />
-      <rect x="86" y="138" width="3" height="25" fill="#7a6a5a" />
-      <rect x="139" y="138" width="3" height="25" fill="#7a6a5a" />
+      <rect x="88" y="138" width="52" height="25" fill={SCENE.floors.mainOffice} />
+      <rect x="86" y="138" width="3" height="25" fill={SCENE.doorPost} />
+      <rect x="139" y="138" width="3" height="25" fill={SCENE.doorPost} />
       {/* Main Office → Lounge (south wall, centered at x≈240) */}
-      <rect x="213" y="399" width="55" height="20" fill="#A8B898" />
-      <rect x="211" y="399" width="3" height="20" fill="#7a6a5a" />
-      <rect x="267" y="399" width="3" height="20" fill="#7a6a5a" />
+      <rect x="213" y="399" width="55" height="20" fill={SCENE.floors.lounge} />
+      <rect x="211" y="399" width="3" height="20" fill={SCENE.doorPost} />
+      <rect x="267" y="399" width="3" height="20" fill={SCENE.doorPost} />
       {/* Main Office → Research (south wall, centered at x≈535) */}
-      <rect x="508" y="399" width="55" height="20" fill="#9898B0" />
-      <rect x="506" y="399" width="3" height="20" fill="#7a6a5a" />
-      <rect x="562" y="399" width="3" height="20" fill="#7a6a5a" />
+      <rect x="508" y="399" width="55" height="20" fill={SCENE.floors.research} />
+      <rect x="506" y="399" width="3" height="20" fill={SCENE.doorPost} />
+      <rect x="562" y="399" width="3" height="20" fill={SCENE.doorPost} />
       {/* Main Office → Meeting Room (east wall) */}
-      <rect x="598" y="185" width="25" height="50" fill="#9898B0" />
-      <rect x="598" y="183" width="25" height="3" fill="#7a6a5a" />
-      <rect x="598" y="234" width="25" height="3" fill="#7a6a5a" />
+      <rect x="598" y="185" width="25" height="50" fill={SCENE.floors.meeting} />
+      <rect x="598" y="183" width="25" height="3" fill={SCENE.doorPost} />
+      <rect x="598" y="234" width="25" height="3" fill={SCENE.doorPost} />
 
       {/* ═══ WALKING CORRIDORS ═══ */}
-      <g opacity="0.05">
-        <rect x="10" y="280" width="588" height="16" fill="#8a7a5a" />
-        <rect x="68" y="163" width="20" height="236" fill="#8a7a5a" />
-        <rect x="540" y="163" width="20" height="236" fill="#8a7a5a" />
+      <g opacity={SCENE.corridorOpacity}>
+        <rect x="10" y="280" width="588" height="16" fill={SCENE.corridorTint} />
+        <rect x="68" y="163" width="20" height="236" fill={SCENE.corridorTint} />
+        <rect x="540" y="163" width="20" height="236" fill={SCENE.corridorTint} />
       </g>
 
       {/* Floor grid (static, pre-built outside component) */}
-      <g opacity="0.03">
+      <g opacity={SCENE.floorGridOpacity}>
         {GRID_LINES}
       </g>
 
       {/* Outer walls */}
-      <rect x="0" y="0" width="800" height="10" fill="#2a2018" />
-      <rect x="0" y="550" width="800" height="10" fill="#2a2018" />
-      <rect x="0" y="0" width="10" height="560" fill="#2a2018" />
-      <rect x="790" y="0" width="10" height="560" fill="#2a2018" />
+      <rect x="0" y="0" width="800" height="10" fill={SCENE.outerFrame} />
+      <rect x="0" y="550" width="800" height="10" fill={SCENE.outerFrame} />
+      <rect x="0" y="0" width="10" height="560" fill={SCENE.outerFrame} />
+      <rect x="790" y="0" width="10" height="560" fill={SCENE.outerFrame} />
 
       {/* ═══ ENTRANCE ═══ */}
       <WallWindow x={18} y={14} w={44} h={28} hour={hour} weather={weather} reducedMotion={weatherReduced} />
@@ -1145,10 +1146,16 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* Team area labels — faint opacity-0.4 BACKGROUND text that sits among the desks. Left at
           native size (NOT counter-scaled): enlarging them collides with the desk nameplates in the
-          dense desk cluster (跑版). The desk nameplates below carry the readable "who sits here". */}
-      <text x={200} y={200} textAnchor="middle" fontSize="7" fill="#378ADD" fontFamily="monospace" opacity="0.4">PLANNING</text>
-      <text x={460} y={200} textAnchor="middle" fontSize="7" fill="#BA7517" fontFamily="monospace" opacity="0.4">REVIEW</text>
-      <text x={400} y={310} textAnchor="middle" fontSize="7" fill="#1D9E75" fontFamily="monospace" opacity="0.4">ENGINEERING</text>
+          dense desk cluster (跑版). The desk nameplates below carry the readable "who sits here".
+          Calm stationery pass: one ink colour for all three; ENGINEERING alone carries the short
+          accent rule and a readable opacity (the room's single visual signature). PLANNING/REVIEW
+          stay at their faint 0.4: PLANNING sits ON the sprint board and REVIEW beside the
+          Researcher tag, so making them readable prints over both. No letter-spacing on
+          ENGINEERING either — tracking widened it under the Developer name tag. Anchors unchanged. */}
+      <text x={200} y={200} textAnchor="middle" fontSize="7" fill={SIGNS.ink} fontFamily="monospace" opacity={SIGNS.faintOpacity}>PLANNING</text>
+      <text x={460} y={200} textAnchor="middle" fontSize="7" fill={SIGNS.ink} fontFamily="monospace" opacity={SIGNS.faintOpacity}>REVIEW</text>
+      <text x={400} y={310} textAnchor="middle" fontSize="7" fill={SIGNS.ink} fontFamily={SIGNS.font} fontWeight="600" opacity={SIGNS.signatureOpacity}>ENGINEERING</text>
+      <path d="M392 314.5h16" stroke={SIGNS.accent} strokeWidth="1.5" opacity={SIGNS.signatureOpacity} />
 
       {/* Personalized desks */}
       {DESK_DATA.map((d) => (
