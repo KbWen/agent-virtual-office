@@ -700,6 +700,17 @@ function getAgentOrderSignature(agents) {
   })
 }
 
+// Calm stationery palette, owner-selected "warm oak" blend (docs/specs/calm-stationery-palette.md).
+// Static presentation fills only — no coordinate, status colour or role colour depends on these.
+// The floor is lighter than the old #C8A878 so every status ring gains contrast; the wall stays a warm
+// walnut (the paler stationery greige measured 1.03:1 against the Research/Meeting floors).
+const MAIN_FLOOR = '#D6C29C'
+const WALL_FACE = '#806E5A'
+const SIGN_INK = '#303C37'
+const SIGN_ACCENT = '#345D50'
+const SIGN_FONT = "'Segoe UI', system-ui, sans-serif"
+const SIGN_OPACITY = 0.75
+
 // Static SVG grid lines — pre-built once to avoid re-creating 103 elements per render
 const GRID_LINES = (() => {
   const lines = []
@@ -1026,8 +1037,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       {/* ═══ ZONE FLOORS ═══ */}
       {/* Entrance + Hallway (top, one continuous space) */}
       <rect x="10" y="10" width="588" height="128" fill="#D0C0A0" rx="2" />
-      {/* Main Office */}
-      <rect x="10" y="163" width="588" height="236" fill="#C8A878" />
+      {/* Main Office — warm oak floor (docs/specs/calm-stationery-palette.md). Lighter than the
+          old #C8A878 so the room recedes and every status ring GAINS contrast against it. */}
+      <rect x="10" y="163" width="588" height="236" fill={MAIN_FLOOR} />
       {/* Meeting Room */}
       <rect x="623" y="10" width="167" height="408" fill="#9898B0" />
       {/* Lounge */}
@@ -1037,16 +1049,16 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* ═══ THICK WALLS (with depth for windows/clock) ═══ */}
       {/* North wall (entrance/hallway ↔ main office, 25px thick) */}
-      <rect x="10" y="138" width="588" height="25" fill="#5a4a3a" />
+      <rect x="10" y="138" width="588" height="25" fill={WALL_FACE} />
       <rect x="10" y="160" width="588" height="3" fill="#4a3a2a" opacity="0.5" />
       {/* South wall (main office ↔ lounge/research, 20px thick) */}
-      <rect x="10" y="399" width="588" height="20" fill="#5a4a3a" />
+      <rect x="10" y="399" width="588" height="20" fill={WALL_FACE} />
       <rect x="10" y="399" width="588" height="3" fill="#4a3a2a" opacity="0.5" />
       {/* East wall (main office ↔ meeting room, 25px thick) */}
-      <rect x="598" y="10" width="25" height="408" fill="#5a4a3a" />
+      <rect x="598" y="10" width="25" height="408" fill={WALL_FACE} />
       <rect x="598" y="10" width="3" height="408" fill="#4a3a2a" opacity="0.5" />
       {/* Lounge ↔ Research divider */}
-      <rect x="456" y="419" width="8" height="131" fill="#5a4a3a" />
+      <rect x="456" y="419" width="8" height="131" fill={WALL_FACE} />
 
       {/* ═══ NORTH WALL (interior partition: hallway ↔ main office) ═══ */}
       {/* No sky-windows here — this is an INTERIOR wall (the hallway is on the other side, NOT the
@@ -1062,7 +1074,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* ═══ DOOR OPENINGS (cut through thick walls) ═══ */}
       {/* Entrance → Main Office (north wall) */}
-      <rect x="88" y="138" width="52" height="25" fill="#C8A878" />
+      <rect x="88" y="138" width="52" height="25" fill={MAIN_FLOOR} />
       <rect x="86" y="138" width="3" height="25" fill="#7a6a5a" />
       <rect x="139" y="138" width="3" height="25" fill="#7a6a5a" />
       {/* Main Office → Lounge (south wall, centered at x≈240) */}
@@ -1086,7 +1098,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       </g>
 
       {/* Floor grid (static, pre-built outside component) */}
-      <g opacity="0.03">
+      <g opacity="0.02">
         {GRID_LINES}
       </g>
 
@@ -1145,10 +1157,16 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
 
       {/* Team area labels — faint opacity-0.4 BACKGROUND text that sits among the desks. Left at
           native size (NOT counter-scaled): enlarging them collides with the desk nameplates in the
-          dense desk cluster (跑版). The desk nameplates below carry the readable "who sits here". */}
-      <text x={200} y={200} textAnchor="middle" fontSize="7" fill="#378ADD" fontFamily="monospace" opacity="0.4">PLANNING</text>
-      <text x={460} y={200} textAnchor="middle" fontSize="7" fill="#BA7517" fontFamily="monospace" opacity="0.4">REVIEW</text>
-      <text x={400} y={310} textAnchor="middle" fontSize="7" fill="#1D9E75" fontFamily="monospace" opacity="0.4">ENGINEERING</text>
+          dense desk cluster (跑版). The desk nameplates below carry the readable "who sits here".
+          Calm stationery pass: one ink colour for all three; ENGINEERING alone carries the short
+          accent rule and a readable opacity (the room's single visual signature). PLANNING/REVIEW
+          stay at their faint 0.4: PLANNING sits ON the sprint board and REVIEW beside the
+          Researcher tag, so making them readable prints over both. No letter-spacing on
+          ENGINEERING either — tracking widened it under the Developer name tag. Anchors unchanged. */}
+      <text x={200} y={200} textAnchor="middle" fontSize="7" fill={SIGN_INK} fontFamily="monospace" opacity="0.4">PLANNING</text>
+      <text x={460} y={200} textAnchor="middle" fontSize="7" fill={SIGN_INK} fontFamily="monospace" opacity="0.4">REVIEW</text>
+      <text x={400} y={310} textAnchor="middle" fontSize="7" fill={SIGN_INK} fontFamily={SIGN_FONT} fontWeight="600" opacity={SIGN_OPACITY}>ENGINEERING</text>
+      <path d="M392 314.5h16" stroke={SIGN_ACCENT} strokeWidth="1.5" opacity={SIGN_OPACITY} />
 
       {/* Personalized desks */}
       {DESK_DATA.map((d) => (
