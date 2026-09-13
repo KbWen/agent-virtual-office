@@ -60,3 +60,11 @@ cross-ref: See [hook-integration][2026-09-08][fix/audit-2026-09-08 (audit remedi
 
 - [DECISION] `awaiting-approval` gets its own desk-bound behavior (`await-approval`, hourglass glyph) instead of reusing an idle one. `check-phone` and `stretch` are lounge DESTINATIONS in `movementSystem.js`'s `BEHAVIOR_LOCATIONS`, so mapping a status signal to either would have WALKED the agent to the sofa -- position is state in this product. Reusing `scratch-head` was also rejected: it is `blocked`'s, and AVO-167 deliberately separates the alarm-fast block ring from the calm cyan wait ring.
 - [CONSTRAINT] A status that arrives with NO task (everything `idleGapInfer` produces) needs an explicit branch in BOTH `decideBehavior` and `generateContextBubble`. Without one it falls through to the task-family default and the role `-working` bubble pool -- an agent waiting on a human permission prompt animated a typing keyboard and said "almost... almost~", a work claim over the exact absence of work (ADR-007 honesty gate).
+
+### [ui-rendering][2026-09-13][feat/calm-stationery-palette]
+source_spec: docs/specs/calm-stationery-palette.md
+source_sha: 0cbe3c1
+
+- [DECISION] Status colour is a graphic channel, never a text colour: in the inspector it lives on the status dot and the scene ring, and all text is ink/muted ink, because no `STATUS_COLORS` value reaches 4.5:1 as text.
+- [DECISION] Scene palette changes are static fills beneath the agent layer only; room readability (walls vs neighbouring floors) and ring contrast are measured before a token is accepted.
+- [DECISION] Taste calls on how the office looks are made by the owner from same-state rendered candidates, not delegated through a design packet.

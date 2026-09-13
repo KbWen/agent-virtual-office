@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-08T12:30:00+08:00
+- **Last Updated**: 2026-09-13T11:52:00+08:00
 - **Last Verified**: 2026-09-08
-- **Update Sequence**: 124
+- **Update Sequence**: 125
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -62,7 +62,6 @@
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
-  - [real-ai-behavior] docs/specs/skill-activation-badge.md [Shipped]  *(AVO-104 / #30 — transient skill bubble on SubagentStart via existing bubble cap (working-tier); panel Option B, honest no-over-head-element)*
   - [game-feel] docs/specs/event-juice-pass.md [Shipped]  *(AVO-136 / #117 — rare-event juice: deploy confetti + eureka sparkle + desk-slam local shake; pure juiceForEvent resolver, reduced-motion-safe, never occludes status)*
   - [multi-agent] docs/specs/review-gate-waiting.md [Shipped]  *(AVO-107 / #112 — honest reframe: gate-desk "waiting" in-tray driven by awaiting-approval only; no queue/type fabrication; complements AVO-105 arrows; panel-decided)*
   - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
@@ -88,6 +87,7 @@
   - [game-feel] docs/specs/cozy-micro-interactions.md [Shipped]  *(AVO-125 / chill-fun wave — night desk-lamp halos beneath the status layer; status-tinted monitor glow DROPPED on honesty (desk-fixed glow vs walking agents))*
   - [game-feel] docs/specs/ambient-soundscape.md [Shipped]  *(AVO-122 / chill-fun wave — off-by-default 0-KB procedural Web Audio; clatter∝teamPulse (silent@0) + double-gated rain; coffee gurgle DROPPED on honesty (tea-break is a clock event))*
   - [ui-rendering] docs/specs/dialogue-interaction-layer.md [Frozen]  *(dialogue layer — ADR-007 channel separation + open-ended content + honesty gate; S1/S1b reduction commits, S2–5 killable hypotheses; red-team + expert/PM hardened)*
+  - [ui-rendering] docs/specs/calm-stationery-palette.md [Shipped]  *(warm-oak floor/walls + paper inspector with role-tint header, owner-chosen from rendered candidates; all shell/sign/card colours are tokens in `src/systems/officePalette.js` with enforced legibility rules R1–R5)*
   - When reading specs: only open files tagged with the current task's module.
   - Older `[Shipped]` index lines are in `## Spec Index Archive` at the bottom of this file. Spec bodies stay in `docs/specs/` — only index lines rotate.
 - **Canonical Commands**:
@@ -156,6 +156,14 @@
 
 ## Ship History
 
+### Ship-feat-calm-stationery-palette-2026-09-13 (a warmer, calmer office, and a palette anyone can change without breaking legibility)
+
+- Feature shipped: a local design handoff (`scratch/design-handoff/`) proposed a "warm stationery studio" look for the main floor, walls, team signs and agent inspector. It was treated as input, not authority. The proposed wall `#A39C89` measured **1.03:1** against the Research/Meeting floors, and **no `STATUS_COLORS` value reaches 4.5:1 as text, even on white** (working amber 2.17). That second finding is why inspector status text is ink and the status colour lives on the dot.
+- **The owner chose the look from rendered candidates, not the packet.** The packet said no visual review was needed; mid-implement the owner asked to see screens first ("怕改了更醜"). Pure stationery, two warm blends and two card treatments were rendered as DOM overrides with no source change. The owner picked "warm oak" (floor `#D6C29C`, wall `#806E5A`) plus a 16% role-tint card header, and the code is pixel-matched to that render.
+- **Then the design stopped being hard-coded** (owner: "開源repo，要讓大家好看、好修改、且有規則"). `src/systems/officePalette.js` holds the room shell, signs and card; the components hold no palette hex, and door openings share their room's floor token. `tests/officePalette.test.js` enforces R1–R5, and each rule is proven to fail on a real past mistake (old floor, rejected wall, the pre-palette status line, the pre-palette door literal). The move was pixel-identical, verified with diff maps. This scope arrived after "commit + PR" but before the ship commit, so the task was **reclassified quick-win -> feature** and an uncommitted ship closure was **withdrawn** rather than shipped under the old scope.
+- **A fresh-context reviewer caught the rules overclaiming**, verdict NOT READY. R4/R5 were not yet shown to bite. R1 measured the SOLID status colour while rings render below full opacity (working amber 1.25 solid, ~1.13 at the ring's 50%). R1 is now stated as a floor guard, not a certificate, rather than fitting a threshold to today's numbers. The close icon sat at 3.96-4.38 on the tint and is now ruled an icon (3:1). All fixed; re-review PASS. Accepted and seen by the owner: ENGINEERING sits ~3px under the Developer tag (tag on top). Pre-existing on `main`: in panel mode the inspector can overflow its cropped viewBox.
+- Tests: vitest **2422 passed / 126 files** (+14 rules tests); build PASS; `bundle-budget` +0.48%; render-smoke and panel smoke PASS; hermetic `sim-soak` 1 min ×2 PASS, 0 invariant violations; 18-state hermetic BEFORE/AFTER capture (1280×720, 1440×900, panel, night, zh-TW) with Escape/Enter close asserted from the DOM; `validate.sh` fail=0. PR #234.
+
 ### Ship-fix-audit-2026-09-08-2026-09-08 (an external audit, re-derived — the container never started and a waiting agent looked busy)
 
 - Works an external audit handoff (`docs/reviews/2026-09-08-audit-handoff.md`, 12 findings) as **untrusted input**: every finding was re-derived from source before anything was touched. All 12 reproduce, but **three of its file/line references were wrong** and **one of its suggested fixes would have introduced a bug** — mapping `awaiting-approval` to `check-phone`/`stretch` would have WALKED the waiting agent to the lounge, because both are lounge destinations in `movementSystem.js`'s `BEHAVIOR_LOCATIONS`. Position is state in this product.
@@ -223,21 +231,6 @@
 - Filed from measured evidence rather than a hunch: a rejected prototype produced agents holding `eat-snack` for **254s** outside any group event while walking 260–551px, with `isMoving` false for 100% of those samples — so `frozenWalker`, which requires the flag to be TRUE while pixels are still, could not fire *by construction*, and the position checks saw a healthy walker. The gate was not wrong; it was blind to this axis.
 - **The row carries the threshold rather than leaving it to be re-derived.** Two control runs on `main` bound the healthy range: event-set behaviours clear in 2–27s and the longest unchanged label is 74–78s, consistent with the 65s duration ceiling plus walk time. A limit near 90s separates the populations without touching anything `main` produces. Stated plainly in the row: this is a **detection gap, not a live `main` defect**. On-mission because status legibility is the product's core value; framed as "more soak metrics" it would be off-mission under ADR-006, framed as a legibility guard it is not.
 
-### Ship-fix-spec-status-case-parity-2026-09-02 (the two validators stopped disagreeing about this repo)
-
-- Feature shipped: `docs/specs/pair-programming-huddle.md` declared `status: Shipped` with a capital S. `validate.sh` compares the value case-sensitively and WARNed; `validate.ps1` does not and PASSed. That one character was the **entire** 1-pass/1-warn divergence between the two validator twins on this repo. Not a state change — the spec was and remains shipped.
-- The house convention was checked rather than assumed: every other spec writes the value lowercase, and a re-scan after the edit found no remaining file outside the valid set, so this was the only outlier.
-- Found while accounting for the twin delta during the v1.8.25 brain upgrade and **deliberately kept out of that PR** — `docs/specs/` is a tiny-fix exclusion under `AGENTS.md`, so it got its own unit of work rather than riding along in a governance-upgrade diff.
-- Tests: `validate.sh` `pass=113 warn=6` → **`pass=114 warn=5 fail=0 skip=5`**, `validate.ps1` unchanged at the same tallies. The twins now agree exactly, both printing an unqualified `Agentic OS integrity check passed`.
-
-### Ship-chore-release-v1.6.6-2026-08-26 (nobody gets dragged away from real work) · release v1.6.6
-
-- Cuts the 10 commits merged since `v1.6.5` (2026-08-03) as **v1.6.6**. No app code in the release commit itself, mirroring the `8bc6684` shape: `package.json` 1.6.5 -> 1.6.6, **both** `package-lock.json` version fields (root + `packages[""]`), CHANGELOG narrative, Ship History.
-- **The CHANGELOG deliberately under-sells it.** Only 3 of the 10 commits are user-facing (AVO-191 event takeover, AVO-192 furniture freeze, the dependency advisories); the other 7 are governance and tooling. Those are listed under an explicit "Housekeeping / not user-facing" heading rather than dressed up as product value — a release that claims more than it shipped is the same defect class as a comment that claims a guarantee the code does not enforce, which is what this release is *about*.
-- Stale record corrected in passing: the standing note "lockfile root version is stale at 1.4.0, leave it" no longer holds — `8bc6684` fixed it at the v1.6.5 cut, so both fields were in sync and both moved together here. Verified: zero `1.6.5` strings remain in the lockfile.
-- The annotated tag and the GitHub Release are part of this task, not a follow-up — `v1.6.5` is an annotated tag object (`git cat-file -t` -> `tag`), and this repo has forgotten the tag step before.
-- Tests: Pass — vitest **116 files / 2319 tests**; build PASS; `bundle-budget PASS 495983 bytes vs baseline 496504 (-0.10%, limit +10%)`; `pack-smoke ALL ASSERTIONS PASSED`; `validate.sh pass=113 warn=6 fail=0 skip=5`.
-
 ## Spec Index Archive
 
 > Rotated out of the live **Spec Index** on 2026-08-16 to satisfy the `check_ssot_caps.py`
@@ -263,3 +256,4 @@
   - [v1.1.0 compatibility] docs/specs/csp-compatibility.md [Shipped]  *(#27)*
   - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Shipped]  *(AVO-126/127/128/129/131/132 — MERGED to main via squash PR #44, v1.2.0, 2026-06-05)*
   - [living-office] docs/specs/living-office-events.md [Shipped]  *(AVO-140 — MERGED to main via squash PR #44, v1.2.0, 2026-06-05)*
+  - [real-ai-behavior] docs/specs/skill-activation-badge.md [Shipped]  *(AVO-104 / #30 — transient skill bubble on SubagentStart via existing bubble cap (working-tier); panel Option B, honest no-over-head-element)*

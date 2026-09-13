@@ -1,6 +1,6 @@
 ---
 title: Calm Stationery Palette (main floor, walls, team signs, inspector)
-status: frozen
+status: shipped
 classification: feature
 primary_domain: ui-rendering
 ---
