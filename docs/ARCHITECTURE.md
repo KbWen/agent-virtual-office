@@ -735,3 +735,21 @@ An honest in-place "it noticed you" reaction layered onto the existing agent cli
 ### Per-feature specs (cont.)
 
 - [[shareable-daily-card]] · [[poke-acknowledge]] · ADR-005 (user drag rejected → poke redirect)
+
+## Office palette — change the look without breaking legibility
+
+Every colour of the room shell (floors, walls, door openings, outer frame), the team signs and the agent inspector card lives in one pure module, **`src/systems/officePalette.js`** (`SCENE`, `SIGNS`, `CARD`). Components reference the tokens instead of repeating the hex, and the room-shell rects carry no literal fill at all, so a door opening follows the floor token of the room it opens into. Furniture art, sprites, speech bubbles and the day/night + theme overlays keep their own homes (`TopDownFurniture.jsx`, `AgentCharacter.jsx`, `BehaviorBubble.jsx`, `lighting.js`, `theme.js`).
+
+A pretty palette is not allowed to hurt the product's first job — reading agent status at a glance — so `tests/officePalette.test.js` enforces five rules. Each failure says what to change:
+
+| Rule | What it protects | Threshold |
+|---|---|---|
+| R1 | The main floor never camouflages a status hue (solid `STATUS_COLORS` vs floor) | ≥ 1.2:1 |
+| R2 | Walls still separate every room they border | ≥ 1.5:1 |
+| R3 | Inspector text on paper and the name over each role's header tint (all roles in `src/config/characters.json`); the close ✕ icon over that tint | text ≥ 4.5:1 (WCAG AA), icon ≥ 3:1 |
+| R4 | `STATUS_COLORS` appears in the inspector only on the status dot, never as text (aliases included) | source check |
+| R5 | No palette hex repeated as a literal; no literal `fill` on any room-shell rect | source check |
+
+`STATUS_COLORS` (`src/systems/constants.js`) is deliberately **not** a palette token: status colours carry meaning, so a restyle adapts the floor to them, never the reverse. R1 is honest about its limit: rings are drawn below full opacity and pulse (50% peak at base effort, up to 100% at max effort), so what you see on screen is usually lower than the solid number (working amber is 1.25:1 solid and about 1.13:1 at 50%). It keeps a floor from camouflaging a status hue; the name pill still carries status at full strength. Every rule is also tested against a real past mistake so it provably fails when it should: the old `#C8A878` floor (working amber 1.04:1), a rejected `#A39C89` wall (1.03:1 against research), the pre-palette status line coloured with `STATUS_COLORS`, and the pre-palette door literal `fill="#9898B0"`.
+
+To try a new look: edit the tokens, run `npx vitest run tests/officePalette.test.js`, then take a real screenshot with `node scripts/staged-capture.mjs`, which runs against an isolated status directory so your own live agent traffic cannot repaint the scene. Spec: [[calm-stationery-palette]].
