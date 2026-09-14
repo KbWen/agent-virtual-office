@@ -5,6 +5,75 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.8 — 2026-09-14 — A calmer office, and waiting finally looks like waiting
+
+Five commits since v1.6.7. **Two of them are user-facing**: a new, calmer look for the office, and
+an audit sweep whose headline fixes are a container that never started and a waiting agent that
+looked busy. The other three are tooling and governance and are listed as such below.
+
+### Changed
+
+- **A warmer, calmer office.** The main floor is a lighter warm oak and the walls a softer walnut,
+  so every status colour stands out more against the floor while rooms stay clearly separated. The
+  ENGINEERING sign is now readable. The agent inspector is a paper card with a light tint of the
+  agent's role colour behind the name, readable ink text and sans type. The status colour moved from
+  the text to the dot, because no status colour is readable as text — not even on white. The look was
+  chosen from rendered candidates before any code was written. Positions, sprites, status and role
+  colours, movement and translations are unchanged. (#234)
+- **The office palette is now tokens with rules.** Floors, walls, doors, signs and the inspector card
+  live in `src/systems/officePalette.js`, and `tests/officePalette.test.js` checks five legibility
+  rules (status vs floor, wall vs room, card text contrast, status colour only on the dot, no stray
+  palette literals). Each failure message says what to fix. Contributor notes are in
+  `docs/ARCHITECTURE.md` §Office palette. (#234)
+
+### Fixed
+
+- **A container built from this repo exited immediately.** The Docker image did not copy two modules
+  the server imports, so `docker run` died on `ERR_MODULE_NOT_FOUND` while the build, tests and smoke
+  gates all stayed green. The image now copies exactly what the server needs, a test walks the import
+  graph so a new import cannot silently break it again, and CI now builds and runs the image and
+  waits on its own health check. (#232)
+- **An agent waiting on your permission prompt looked busy.** It sat at its desk typing and saying
+  "almost... almost~" — a work claim over the exact absence of work. It now shows an hourglass at its
+  desk and has its own lines in both languages. It does not walk anywhere, because in this office
+  position means state. (#232)
+- **Codex-driven agents could vanish or lose their reason badge.** The Codex hook was still on an
+  old four-status list, so it dropped `planning` and `awaiting-approval` agents, under-counted active
+  agents, and stripped the fields that carry a blocked agent's reason. (#232)
+- **`setOfficeStatus({ dev: 'planning' })` produced a "working" agent labelled "planning"** in the
+  browser bridge. Status values are now recognised as statuses. (#232)
+- **The shell hook's sequence number was in the wrong unit on Linux and invalid on macOS**, which the
+  office uses to de-duplicate and expire updates. It is now milliseconds everywhere. (#232)
+- **`hooks-config.json` — the file the docs tell you to paste — was missing `PermissionDenied` and
+  `StopFailure`,** the two events that turn a denied tool call or an API failure into an honest
+  `blocked`. The docs said six events; the CLI registers eight. Both are now pinned to the CLI. (#232)
+- Smaller parity fixes: `bridge-ui.js` used different role colours than the office for 7 of 8 roles;
+  the generic LLM bridge ignored the language setting; `server.mjs` now honours `OFFICE_STATUS_DIR`
+  like the dev server does and prints it at startup; `README.zh-TW.md` caught up on four sections and
+  `ARCHITECTURE.md` gained the missing Designer desk and Gate station. (#232)
+
+### Housekeeping — not user-facing
+
+Nothing in this section changes what you see in the office.
+
+- The soak can now see an agent whose displayed activity has gone stale (AVO-195). It **warns, it
+  does not fail**: an unchanged label cannot be told apart from the same activity picked again, so a
+  hard gate would be claiming more than it can measure. (#231)
+- An old June work log that kept a validator warning lit for months was archived as-is. (#233)
+- Ship records and the audit chain for the v1.6.7 cut. (#230)
+
+### What this release does not claim
+
+- The palette's floor rule compares each status colour **at full strength**, while status rings
+  render slightly transparent. It guards the floor from camouflaging a status; it does not certify
+  every ring's contrast.
+- One audit finding is only partly closed: a deprecated Rollup option is fixed, but two build
+  warnings remain because clearing them means renaming `vite.config.js`, which is out of scope for
+  a defect sweep.
+- Known and accepted: the ENGINEERING sign sits about 3px under the Developer name tag (the tag draws
+  on top). In panel mode the inspector can overflow its cropped view — that was already true in
+  v1.6.7.
+
 ## v1.6.7 — 2026-09-02 — Nobody is shown napping through real work
 
 Ten commits since v1.6.6. **Two of them are user-facing**, and both are the same shape as the last

@@ -34,7 +34,15 @@ Rotated 1 additional entry on 2026-08-26 (SSoT Update Sequence 119 -> 120).
 
 Rotated 2 additional entries on 2026-09-13 (SSoT Update Sequence 124 -> 125).
 
+Rotated 1 additional entry on 2026-09-14 (SSoT Update Sequence 125 -> 126).
+
 ---
+
+### Ship-chore-backlog-avo195-stale-label-invariant-2026-09-02 (the soak cannot see a stale behaviour label)
+
+- Feature shipped: backlog row AVO-195. The four shipped `sim-soak` invariants — `teleport`, `sustainedStack`, `frozenWalker`, `offFloorRest` — all read POSITION and the `isMoving` flag; **none reads `behavior`**. So the office can narrate the wrong activity for minutes and the gate cannot see it.
+- Filed from measured evidence rather than a hunch: a rejected prototype produced agents holding `eat-snack` for **254s** outside any group event while walking 260–551px, with `isMoving` false for 100% of those samples — so `frozenWalker`, which requires the flag to be TRUE while pixels are still, could not fire *by construction*, and the position checks saw a healthy walker. The gate was not wrong; it was blind to this axis.
+- **The row carries the threshold rather than leaving it to be re-derived.** Two control runs on `main` bound the healthy range: event-set behaviours clear in 2–27s and the longest unchanged label is 74–78s, consistent with the 65s duration ceiling plus walk time. A limit near 90s separates the populations without touching anything `main` produces. Stated plainly in the row: this is a **detection gap, not a live `main` defect**. On-mission because status legibility is the product's core value; framed as "more soak metrics" it would be off-mission under ADR-006, framed as a legibility guard it is not.
 
 ### Ship-fix-spec-status-case-parity-2026-09-02 (the two validators stopped disagreeing about this repo)
 
