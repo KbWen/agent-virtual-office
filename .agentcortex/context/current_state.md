@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-13T11:52:00+08:00
+- **Last Updated**: 2026-09-14T12:00:00+08:00
 - **Last Verified**: 2026-09-08
-- **Update Sequence**: 125
+- **Update Sequence**: 126
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -156,6 +156,13 @@
 
 ## Ship History
 
+### Ship-chore-release-v1.6.8-2026-09-14 (a calmer office, and waiting finally looks like waiting) · release v1.6.8
+
+- Cuts the 5 commits merged since `v1.6.7` (2026-09-02) — #230 through #234 — as **v1.6.8**. No app code in the release commit itself: `package.json` 1.6.7 -> 1.6.8, **both** `package-lock.json` version fields (root + `packages[""]`), CHANGELOG narrative, this entry. Verified zero `"version": "1.6.7"` strings remain in either file.
+- **Two of the five are user-facing**: the calm palette with its legibility rules (#234) and the external-audit sweep (#232 — the container that never started, the waiting agent that looked busy, the Codex hook that dropped agents, the pasted hook config missing the two events that make a denial an honest `blocked`). The soak stale-label warning (#231), the June work-log archive (#233) and the v1.6.7 chain record (#230) sit under "Housekeeping — not user-facing".
+- **The notes state what the palette rules do not certify.** R1 compares each status colour at full strength while rings render below full opacity, so it guards the floor rather than certifying ring contrast — written into "What this release does not claim" alongside the partly-closed F-11 and the two owner-accepted layout quirks, rather than letting "legibility rules" read as a guarantee.
+- Tests at the cut: vitest **2422 passed / 126 files**; build PASS; `bundle-budget` PASS at 498871 vs baseline 496504 (**+0.48%**, limit +10%); `pack-smoke` PASS. The oldest entry (AVO-195 backlog row) rotated verbatim into `archive/ship-history-2026.md` to hold the cap of 10. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.8` tag + `gh release create --latest`.
+
 ### Ship-feat-calm-stationery-palette-2026-09-13 (a warmer, calmer office, and a palette anyone can change without breaking legibility)
 
 - Feature shipped: a local design handoff (`scratch/design-handoff/`) proposed a "warm stationery studio" look for the main floor, walls, team signs and agent inspector. It was treated as input, not authority. The proposed wall `#A39C89` measured **1.03:1** against the Research/Meeting floors, and **no `STATUS_COLORS` value reaches 4.5:1 as text, even on white** (working amber 2.17). That second finding is why inspector status text is ink and the status colour lives on the dot.
@@ -224,12 +231,6 @@
 - **The guard written to prevent regressions found a third site nobody had reported**: `dog-woof`, applied to `participants.slice(0, 3).forEach`, meaning up to three agents barked an identical `woof!`. It DERIVES the fan-out key set from `officeLife.js` rather than hard-coding it, so a new key at a fan-out call site is covered without anyone remembering the test exists.
 - **A tuned constant was rejected in favour of a principled rule.** The naive "any `.forEach(`/`.map(` in the preceding 10 lines" heuristic false-positived on `pm-meeting-lead`, a single-agent `setAgentGroupEvent('pm', …)` sitting eight lines under an unrelated `otherIds.map(`. Window widths 4/5/6/8/10 were each measured (4 misses `dog-woof`; 8 and 10 false-positive) and rather than freeze the width that happened to work, the exclusion became: a `setAgent*('` call with a quoted literal id targets one agent by construction.
 - Three further traps the tests are shaped against: a derivation that silently stops matching would make every per-key assertion vacuous (count + named keys asserted); a pool in `en` with a string still in `zh-TW` would reintroduce the defect for half the users unnoticed (shape parity asserted across ALL keys); and a pool nothing reads is still one line on screen (40 draws through the real i18n module must yield more than one value). A first attempt rewrote the locales with `json.dumps` and reformatted **1504 lines** — reverted and redone per-line, shipping a **6-line** locale diff. Tests: vitest **2325 passed** (+6), mutation-verified — 3 of 6 assertions fail with the pools reverted.
-
-### Ship-chore-backlog-avo195-stale-label-invariant-2026-09-02 (the soak cannot see a stale behaviour label)
-
-- Feature shipped: backlog row AVO-195. The four shipped `sim-soak` invariants — `teleport`, `sustainedStack`, `frozenWalker`, `offFloorRest` — all read POSITION and the `isMoving` flag; **none reads `behavior`**. So the office can narrate the wrong activity for minutes and the gate cannot see it.
-- Filed from measured evidence rather than a hunch: a rejected prototype produced agents holding `eat-snack` for **254s** outside any group event while walking 260–551px, with `isMoving` false for 100% of those samples — so `frozenWalker`, which requires the flag to be TRUE while pixels are still, could not fire *by construction*, and the position checks saw a healthy walker. The gate was not wrong; it was blind to this axis.
-- **The row carries the threshold rather than leaving it to be re-derived.** Two control runs on `main` bound the healthy range: event-set behaviours clear in 2–27s and the longest unchanged label is 74–78s, consistent with the 65s duration ceiling plus walk time. A limit near 90s separates the populations without touching anything `main` produces. Stated plainly in the row: this is a **detection gap, not a live `main` defect**. On-mission because status legibility is the product's core value; framed as "more soak metrics" it would be off-mission under ADR-006, framed as a legibility guard it is not.
 
 ## Spec Index Archive
 
