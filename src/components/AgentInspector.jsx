@@ -3,6 +3,7 @@ import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { charName, behaviorLabel, t, useLocale } from '../i18n'
 import { formatTimeAgo } from '../utils/formatTime'
 import { buildAgentInspectorMeta, inspectorTaskLabel, stateDurationLabel } from './agentInspectorModel'
+import { CARD } from '../systems/officePalette'
 
 // POINT 2 follow-up: the inspector counter-scales so its small detail fonts (8–9px) stay readable
 // at ANY office scale. Only ONE inspector is ever open and it is clamped inside the viewBox, so it
@@ -11,6 +12,10 @@ import { buildAgentInspectorMeta, inspectorTaskLabel, stateDurationLabel } from 
 // (net = sceneScale × s = INSPECTOR_READ_TARGET), capped (×3) so the scaled panel still fits 800×560.
 const INSPECTOR_READ_TARGET = 1.6
 const INSPECTOR_SCALE_MAX = 3
+
+// Look & type come from the office palette (src/systems/officePalette.js → CARD), whose rules test
+// keeps the text readable. Status text is ink on purpose (palette rule R4): no STATUS_COLORS value
+// reaches 4.5:1 as text, so the status colour stays on the dot (and the scene ring).
 
 const statusEmoji = {
   idle: '💤',
@@ -76,18 +81,15 @@ export default function AgentInspector() {
     {
       label: t('inspector.doneToday', 'Done today'),
       value: String(inspectorMeta.doneToday),
-      valueFill: '#2E7D32',
     },
     {
       label: t('inspector.mood', 'Mood'),
       value: t(`moodLabels.${inspectorMeta.mood}`, inspectorMeta.mood),
-      valueFill: '#6A4C93',
     },
     inspectorMeta.activeWorkflow
       ? {
           label: t('inspector.activeWorkflow', 'Workflow'),
           value: inspectorMeta.activeWorkflow,
-          valueFill: '#1565C0',
         }
       : null,
   ].filter(Boolean)
@@ -114,6 +116,9 @@ export default function AgentInspector() {
   // Clamp using the SCALED footprint (Ws×Hs) so the enlarged panel still fits the 800×560 viewBox.
   const s = Math.min(INSPECTOR_SCALE_MAX, Math.max(1, INSPECTOR_READ_TARGET / (sceneScale > 0 ? sceneScale : 1)))
   const Ws = W * s, Hs = H * s
+  // Local units per CSS pixel, for the corner radius (the outline uses a non-scaling stroke instead).
+  const netScale = s * (sceneScale > 0 ? sceneScale : 1)
+  const cornerR = CARD.cornerCssPx / netScale
   // Position scaled panel above the agent, clamped to viewport (SVG 800x560)
   let px = pos.x - Ws / 2
   let py = pos.y - Hs - 56 * s
@@ -137,42 +142,44 @@ export default function AgentInspector() {
       {/* POINT 2: whole popover scaled by `s` — content authored in local 0..W / 0..H coords so the
           text grows with the panel and stays readable as the office shrinks. */}
       <g transform={`translate(${px}, ${py}) scale(${s})`}>
-        {/* Panel background */}
-        <rect x={0} y={0} width={W} height={H} rx={8}
-          fill="white" stroke={color} strokeWidth="1.5"
+        {/* Panel background — paper card, 1 CSS-px outline, ~6 CSS-px corners. The existing subtle
+            shared shadow is kept (paper vs floor is only 1.33:1); nothing is added. */}
+        <rect x={0} y={0} width={W} height={H} rx={cornerR}
+          fill={CARD.paper} stroke={CARD.line} strokeWidth="1" vectorEffect="non-scaling-stroke"
           filter="url(#bubble-shadow)" />
 
-        {/* Header bar */}
-        <rect x={0} y={0} width={W} height={28} rx={8} fill={color} />
-        <rect x={0} y={20} width={W} height={8} fill={color} />
-
-        {/* Name + close button */}
-        <text x={10} y={18} fontSize="12" fontFamily="monospace" fontWeight="bold" fill="white">
+        {/* Header: a light role-colour tint instead of the saturated surface — role identity kept,
+            name in readable ink. Rounded top corners follow the card radius. */}
+        <path d={`M0 ${CARD.headerHeight} V${cornerR} A${cornerR} ${cornerR} 0 0 1 ${cornerR} 0 H${W - cornerR} A${cornerR} ${cornerR} 0 0 1 ${W} ${cornerR} V${CARD.headerHeight} Z`}
+          fill={color} opacity={CARD.headerTintOpacity} />
+        <text x={10} y={18} fontSize={CARD.type.name} fontFamily={CARD.font} fontWeight="600" fill={CARD.ink}>
           {name}
         </text>
         <g role="button" tabIndex={0} aria-label={t('aria.close', 'Close inspector')}
           onClick={clearSelectedAgent}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); clearSelectedAgent() } }}
           style={{ cursor: 'pointer' }}>
-          <text x={W - 14} y={18} fontSize="12" fontFamily="monospace" fill="white">
+          <rect x={W - 9.5 - CARD.closeHitSize / 2} y={14.5 - CARD.closeHitSize / 2}
+            width={CARD.closeHitSize} height={CARD.closeHitSize} fill="transparent" />
+          <text x={W - 14} y={18} fontSize={CARD.type.close} fontFamily={CARD.font} fill={CARD.mutedInk}>
             ✕
           </text>
         </g>
 
-        {/* Status badge */}
+        {/* Status badge — status colour on the dot, readable ink on the text */}
         <circle cx={12} cy={42} r={5} fill={STATUS_COLORS[status] || color || '#888'} />
-        <text x={22} y={45} fontSize="10" fontFamily="monospace" fill={STATUS_COLORS[status] || color || '#888'} fontWeight="bold">
+        <text x={22} y={45} fontSize={CARD.type.status} fontFamily={CARD.font} fill={CARD.ink} fontWeight="600">
           {statusEmoji[status]} {statusLabel}{stateSince ? ` · ${stateSince}` : ''}
         </text>
 
         {/* Current behavior */}
-        <text x={10} y={62} fontSize="9" fontFamily="monospace" fill="#666">
+        <text x={10} y={62} fontSize={CARD.type.body} fontFamily={CARD.font} fill={CARD.mutedInk}>
           {currentBehavior}
         </text>
 
         {/* External task label (if any) */}
         {task && (
-          <text x={10} y={78} fontSize="9" fontFamily="'Segoe UI', system-ui, sans-serif" fill="#378ADD">
+          <text x={10} y={78} fontSize={CARD.type.body} fontFamily={CARD.font} fill={CARD.ink}>
             {truncate(task, 30)}
           </text>
         )}
@@ -184,10 +191,10 @@ export default function AgentInspector() {
               const rowY = detailsStartY + i * 14
               return (
                 <g key={row.label}>
-                  <text x={10} y={rowY} fontSize="8" fontFamily="monospace" fill="#888">
+                  <text x={10} y={rowY} fontSize={CARD.type.row} fontFamily={CARD.font} fill={CARD.mutedInk}>
                     {row.label}
                   </text>
-                  <text x={W - 10} y={rowY} fontSize="8" fontFamily="'Segoe UI', system-ui, sans-serif" fill={row.valueFill}
+                  <text x={W - 10} y={rowY} fontSize={CARD.type.row} fontFamily={CARD.font} fill={CARD.ink}
                     textAnchor="end">
                     {truncate(row.value, 18)}
                   </text>
@@ -201,16 +208,16 @@ export default function AgentInspector() {
         {recentActivities.length > 0 && (
           <g>
             <line x1={10} y1={activityDividerY} x2={W - 10} y2={activityDividerY}
-              stroke="#eee" strokeWidth="0.5" />
+              stroke={CARD.line} strokeWidth="1" vectorEffect="non-scaling-stroke" />
             {recentActivities.slice(0, 3).map((a, i) => {
               const baseY = activityStartY + i * 13
               const ago = formatTimeAgo(a.timestamp, { compact: true })
               return (
                 <g key={a.id}>
-                  <text x={10} y={baseY} fontSize="8" fontFamily="monospace" fill="#999">
+                  <text x={10} y={baseY} fontSize={CARD.type.history} fontFamily={CARD.font} fill={CARD.mutedInk}>
                     {ago}
                   </text>
-                  <text x={50} y={baseY} fontSize="8" fontFamily="'Segoe UI', system-ui, sans-serif" fill="#555">
+                  <text x={50} y={baseY} fontSize={CARD.type.history} fontFamily={CARD.font} fill={CARD.mutedInk}>
                     {truncate(a.message, 22)}
                   </text>
                 </g>

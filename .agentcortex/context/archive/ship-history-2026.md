@@ -32,7 +32,24 @@ Rotated 1 additional entry on 2026-08-26 (SSoT Update Sequence 118 -> 119).
 
 Rotated 1 additional entry on 2026-08-26 (SSoT Update Sequence 119 -> 120).
 
+Rotated 2 additional entries on 2026-09-13 (SSoT Update Sequence 124 -> 125).
+
 ---
+
+### Ship-fix-spec-status-case-parity-2026-09-02 (the two validators stopped disagreeing about this repo)
+
+- Feature shipped: `docs/specs/pair-programming-huddle.md` declared `status: Shipped` with a capital S. `validate.sh` compares the value case-sensitively and WARNed; `validate.ps1` does not and PASSed. That one character was the **entire** 1-pass/1-warn divergence between the two validator twins on this repo. Not a state change — the spec was and remains shipped.
+- The house convention was checked rather than assumed: every other spec writes the value lowercase, and a re-scan after the edit found no remaining file outside the valid set, so this was the only outlier.
+- Found while accounting for the twin delta during the v1.8.25 brain upgrade and **deliberately kept out of that PR** — `docs/specs/` is a tiny-fix exclusion under `AGENTS.md`, so it got its own unit of work rather than riding along in a governance-upgrade diff.
+- Tests: `validate.sh` `pass=113 warn=6` → **`pass=114 warn=5 fail=0 skip=5`**, `validate.ps1` unchanged at the same tallies. The twins now agree exactly, both printing an unqualified `Agentic OS integrity check passed`.
+
+### Ship-chore-release-v1.6.6-2026-08-26 (nobody gets dragged away from real work) · release v1.6.6
+
+- Cuts the 10 commits merged since `v1.6.5` (2026-08-03) as **v1.6.6**. No app code in the release commit itself, mirroring the `8bc6684` shape: `package.json` 1.6.5 -> 1.6.6, **both** `package-lock.json` version fields (root + `packages[""]`), CHANGELOG narrative, Ship History.
+- **The CHANGELOG deliberately under-sells it.** Only 3 of the 10 commits are user-facing (AVO-191 event takeover, AVO-192 furniture freeze, the dependency advisories); the other 7 are governance and tooling. Those are listed under an explicit "Housekeeping / not user-facing" heading rather than dressed up as product value — a release that claims more than it shipped is the same defect class as a comment that claims a guarantee the code does not enforce, which is what this release is *about*.
+- Stale record corrected in passing: the standing note "lockfile root version is stale at 1.4.0, leave it" no longer holds — `8bc6684` fixed it at the v1.6.5 cut, so both fields were in sync and both moved together here. Verified: zero `1.6.5` strings remain in the lockfile.
+- The annotated tag and the GitHub Release are part of this task, not a follow-up — `v1.6.5` is an annotated tag object (`git cat-file -t` -> `tag`), and this repo has forgotten the tag step before.
+- Tests: Pass — vitest **116 files / 2319 tests**; build PASS; `bundle-budget PASS 495983 bytes vs baseline 496504 (-0.10%, limit +10%)`; `pack-smoke ALL ASSERTIONS PASSED`; `validate.sh pass=113 warn=6 fail=0 skip=5`.
 
 ### Ship-chore-isolated-status-dir-for-staging-2026-08-26 (visual judgement stops being taken under uncontrolled conditions)
 
