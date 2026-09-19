@@ -76,13 +76,17 @@ export function buildAgentInspectorMeta(activityLog, agentId, mood, activeWorkfl
 // header and close button above the crop. `scale` is the readable counter-scale the component asks
 // for; it is lowered only when the scaled card would not fit the bounds at all, because a card that
 // clips its close button is worse than smaller text. For the full office this equals the previous
-// inline clamp (10 / 790 / 10 / 550) whenever the card fits.
-export function placeInspector({ anchor, W, H, scale, bounds, pad = 10 }) {
+// inline clamp (10 / 790 / 10 / 550) whenever the card fits. Bounds too small to hold any card
+// (unreachable from PixelOffice's crops) keep a small positive scale instead of mirroring the card.
+const FULL_SCENE = { minX: 0, minY: 0, w: 800, h: 560 }
+const MIN_CARD_SCALE = 0.25
+
+export function placeInspector({ anchor, W, H, scale, bounds = FULL_SCENE, pad = 10 }) {
   const left = bounds.minX + pad
   const right = bounds.minX + bounds.w - pad
   const top = bounds.minY + pad
   const bottom = bounds.minY + bounds.h - pad
-  const s = Math.min(scale, (right - left) / W, (bottom - top) / H)
+  const s = Math.max(MIN_CARD_SCALE, Math.min(scale, (right - left) / W, (bottom - top) / H))
   const Ws = W * s, Hs = H * s
   const px = Math.max(left, Math.min(anchor.x - Ws / 2, right - Ws))
   const py = Math.max(top, Math.min(anchor.y - Hs - 56 * s, bottom - Hs))

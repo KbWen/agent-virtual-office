@@ -26,8 +26,16 @@ function sourceFiles(dir) {
   return out
 }
 
-// Reads of the page title, or DOM lookups of the <title> element (the MutationObserver target).
-const TITLE_READ = /document\s*\.\s*title|querySelector(All)?\(\s*['"`]title['"`]\s*\)|getElementsByTagName\(\s*['"`]title['"`]\s*\)/
+// READS of the page title (dot or bracket access, or destructuring), or DOM lookups whose selector
+// ends in the <title> element (the MutationObserver target). A plain assignment is a write, not a
+// status source, so it is deliberately not flagged.
+const TITLE_READ = new RegExp([
+  String.raw`document\s*\.\s*title(?!\s*=(?!=))`,
+  String.raw`document\s*\[\s*['"\x60]title['"\x60]\s*\](?!\s*=(?!=))`,
+  String.raw`\{[^}]*\btitle\b[^}]*\}\s*=\s*document\b`,
+  String.raw`querySelector(All)?\(\s*['"\x60](?:[^'"\x60]*[\s>+~])?title['"\x60]\s*\)`,
+  String.raw`getElementsByTagName\(\s*['"\x60]title['"\x60]\s*\)`,
+].join('|'))
 
 describe('no status channel reads the page title (REV-03)', () => {
   it('no file under src/ reads document.title or looks up the <title> element', () => {
@@ -39,13 +47,24 @@ describe('no status channel reads the page title (REV-03)', () => {
     expect(offenders).toEqual([])
   })
 
-  it('the pattern really matches the deleted observer (test-the-test)', () => {
+  it('the pattern really matches the deleted observer and other read shapes (test-the-test)', () => {
     // Verbatim shapes from the removed listenTitleChanges.
     expect(TITLE_READ.test('let lastTitle = document.title')).toBe(true)
     expect(TITLE_READ.test("const titleEl = document.querySelector('title')")).toBe(true)
-    // …and does not trip on unrelated uses of the word.
+    // Other ways to read it (review round 1, L4).
+    expect(TITLE_READ.test("const t = document['title']")).toBe(true)
+    expect(TITLE_READ.test('const { title } = document')).toBe(true)
+    expect(TITLE_READ.test("document.querySelector('head > title')")).toBe(true)
+    expect(TITLE_READ.test("document.getElementsByTagName('title')")).toBe(true)
+    expect(TITLE_READ.test("if (document.title === 'x') {}")).toBe(true) // a comparison is a read
+  })
+
+  it('does not trip on writes or on unrelated uses of the word', () => {
+    expect(TITLE_READ.test("document.title = 'Agent Office'")).toBe(false)
+    expect(TITLE_READ.test("document['title'] = 'Agent Office'")).toBe(false)
     expect(TITLE_READ.test('<title>{label}</title>')).toBe(false)
     expect(TITLE_READ.test("t('activityFeed.expand', 'Activity Feed') // title=")).toBe(false)
+    expect(TITLE_READ.test("el.querySelector('[title]')")).toBe(false) // attribute selector, not the element
   })
 
   it('inferStatus no longer exports the title classifier', async () => {

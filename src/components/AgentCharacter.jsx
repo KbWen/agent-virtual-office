@@ -1748,7 +1748,7 @@ function AgentCharacter({ agent }) {
             crop's top — REV-02) we anchor it just below the agent (+6) and flip the tail up so the
             whole bubble stays inside the scene. Rule + orphan guard: shouldFlipBubbleBelow. */}
         {(() => {
-          const below = shouldFlipBubbleBelow({ posY: pos.y, labelScale, sceneMinY })
+          const below = shouldFlipBubbleBelow({ posX: pos.x, posY: pos.y, labelScale, sceneMinX, sceneMinY, sceneW })
           // AVO-158: a live poke quip momentarily PREEMPTS the ambient bubble (reuses the same
           // slot → no overlap, inherits edge-clamping). When a quip is showing, mark the group
           // as a polite live region so the acknowledge is announced once (reaction bob is

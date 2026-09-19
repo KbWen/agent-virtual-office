@@ -40,7 +40,9 @@ full 800×560 office, and relative-time labels stop lying by omission when nothi
   anchor, the unscaled card size, the desired counter-scale and the scene bounds. The card's
   scaled footprint lies inside `[minX+10, minX+w−10] × [minY+10, minY+h−10]` for every anchor —
   including anchors outside the bounds — for each panel viewBox `PixelOffice` can produce
-  (`80 110 440 440`, `40 120 580 380`, `40 135 580 300`) and for the full office.
+  (`80 110 440 440`, `40 120 580 380`, `40 135 580 300`, and the pre-measure initial `60 155 540 260`)
+  and for the full office. Degenerate bounds (narrower than 2×pad) or missing bounds never produce a
+  mirrored (non-positive-scale) card or a throw.
 - **AC-3** — The counter-scale is reduced only when the scaled card would not fit the bounds; otherwise
   it is the existing `min(3, max(1, 1.6 / sceneScale))`. For the full office `{0,0,800,560}` placement is
   numerically identical to the pre-change code for every case where the card fits (the pre-change
@@ -54,8 +56,12 @@ full 800×560 office, and relative-time labels stop lying by omission when nothi
 
 - **AC-5** — The bubble flips below the agent when its projected top is above the visible top,
   `pos.y − 68 − 34·labelScale < minY + 6`.
-- **AC-6** — Orphan guard: the bubble does NOT flip below when the agent anchor itself is above the
-  visible top (`pos.y < minY`); a flip there would pull the bubble into view with no visible speaker.
+- **AC-6** — Orphan guard, both axes: the bubble does NOT flip below when the agent anchor itself is
+  outside the visible crop — above its top (`pos.y < minY`) or beyond its left/right edge
+  (`pos.x < minX` or `pos.x > minX + w`); and the horizontal edge clamp does NOT shift a bubble
+  sideways into view for a speaker whose anchor is outside the crop's x-range. Either move would put
+  speech on screen with no visible speaker (e.g. meeting-room chairs at x 645–765 lie right of every
+  panel crop, and the group-meeting set-piece gives them bubbles).
 - **AC-7** — For the full office (`minY = 0`) the flip decision is identical to the pre-change code for
   every agent position (the anchor is never negative).
 

@@ -90,13 +90,16 @@ describe('NarrowRoster — "since" advances with the tick, not with store churn'
 
   it('same store, now +60s → +120s: the row label and the feed label both move', () => {
     fakeState = state()
+    // The row's "since" and the feed row's "ago" are separate spans; assert each one on its own so a
+    // label still reading Date.now() (the system clock sits 6h away) cannot hide behind the other.
+    const rowSince = (html) => html.match(/text-xs text-gray-400 shrink-0 tabular-nums">([^<]+)</)?.[1]
+    const feedAgo = (html) => html.match(/text-\[9px\] text-gray-400 shrink-0 tabular-nums">([^<]+)</)?.[1]
     mockNow = T0 + 60_000
     const at60 = renderToStaticMarkup(<NarrowRoster />)
     mockNow = T0 + 120_000
     const at120 = renderToStaticMarkup(<NarrowRoster />)
-    expect(at60).toMatch(/tabular-nums">1m</)
-    expect(at120).toMatch(/tabular-nums">2m</)
-    expect(at120).not.toMatch(/tabular-nums">1m</)
+    expect([rowSince(at60), feedAgo(at60)]).toEqual(['1m', '1m'])
+    expect([rowSince(at120), feedAgo(at120)]).toEqual(['2m', '2m'])
   })
 
   it('subscribes to the 10s tick while mounted', () => {

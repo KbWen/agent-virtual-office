@@ -143,16 +143,23 @@ function computeBubbleLayout(currentMsg) {
 // posY − 68 − 34·labelScale (scene units). When that crosses the VISIBLE top (+6px) the parent anchors
 // the bubble just below the agent instead. `sceneMinY` is 0 in the default office and the crop's top
 // in panel mode (e.g. 135) — testing against a literal 6 let top-aisle agents (y≈176–180) draw their
-// whole bubble above a panel crop. Orphan guard: an agent whose anchor is itself above the visible
-// top is not on screen, and flipping would pull its speech into view with no visible speaker
-// (ADR-007: the bubble is that agent's voice), so it keeps the default placement.
-export function shouldFlipBubbleBelow({ posY, labelScale = 1, sceneMinY = 0 }) {
+// whole bubble above a panel crop. Orphan guard (both axes): an agent whose anchor is itself outside
+// the visible crop — above its top, or beyond its left/right edge (meeting-room chairs at x 645–765
+// lie right of every panel crop) — is not on screen, and flipping would pull its speech into view
+// with no visible speaker (ADR-007: the bubble is that agent's voice), so it keeps the default placement.
+export function shouldFlipBubbleBelow({ posX, posY, labelScale = 1, sceneMinX = 0, sceneMinY = 0, sceneW = 800 }) {
+  if (!isInsideX(posX, sceneMinX, sceneW) || !(posY >= sceneMinY)) return false
   const bubbleTopAbove = posY - 68 - 34 * labelScale
-  return bubbleTopAbove < sceneMinY + 6 && posY >= sceneMinY
+  return bubbleTopAbove < sceneMinY + 6
 }
+
+const isInsideX = (x, sceneMinX, sceneW) => Number.isFinite(x) && x >= sceneMinX && x <= sceneMinX + sceneW
 
 export function computeEdgeShift({ boxW, absX, scale = 1, sceneMinX = 0, sceneW = 800, edgePad = 4 }) {
   if (absX == null || !Number.isFinite(absX) || !Number.isFinite(scale) || scale <= 0) return 0
+  // Same orphan guard as the flip: a speaker outside the crop's x-range is off screen, so its bubble
+  // is not dragged sideways into view (2026-09-19 review, round 1 / H1).
+  if (!isInsideX(absX, sceneMinX, sceneW)) return 0
   const half = boxW / 2
   const minEdge = sceneMinX + edgePad           // left visible edge (+pad); 0-based in default mode
   const maxEdge = sceneMinX + sceneW - edgePad  // right visible edge (−pad)
