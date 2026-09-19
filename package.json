@@ -58,7 +58,7 @@
     "public/",
     "src/",
     "index.html",
-    "vite.config.js",
+    "vite.config.mjs",
     "server.mjs",
     "package.json",
     "Dockerfile",

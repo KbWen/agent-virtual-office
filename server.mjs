@@ -66,7 +66,7 @@ if (!fs.existsSync(path.join(dist, 'index.html'))) {
 
 // ─── Shared paths ────────────────────────────────────────────────────────────
 // OFFICE_STATUS_DIR overrides the directory the office reads/writes status in, matching
-// `vite.config.js` (the dev server) so the two transports resolve the same path from the
+// `vite.config.mjs` (the dev server) so the two transports resolve the same path from the
 // same input. Without it the only way to relocate the status directory here was to spoof
 // HOME/USERPROFILE for the whole process, which is what the E2E tests had to do and what a
 // deployment on a read-only rootfs or a service account with an unusual home was left with.

@@ -5,7 +5,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { normalizePost, VALID_ROLES, VALID_STATUSES } from './src/utils/normalizePost.js'
+import { normalizePost, VALID_ROLES, VALID_STATUSES } from './src/utils/statusContract.mjs'
 import { scanAndMerge, getSessionStats, resolveProjectRoot } from './src/server/scanSessions.mjs'
 
 // Middleware: Universal status API

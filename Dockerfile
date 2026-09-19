@@ -16,7 +16,7 @@ RUN npm ci --prefer-offline --no-audit --no-fund
 COPY src ./src
 COPY public ./public
 COPY index.html .
-COPY vite.config.js .
+COPY vite.config.mjs .
 RUN npm run build
 
 # server.mjs is copied last (it is not a Vite input) so the runner

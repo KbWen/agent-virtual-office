@@ -40,7 +40,16 @@ Rotated 1 additional entry on 2026-09-19 (SSoT Update Sequence 126 -> 127).
 
 Rotated 1 additional entry on 2026-09-19 (SSoT Update Sequence 127 -> 128).
 
+Rotated 1 additional entry on 2026-09-20 (SSoT Update Sequence 128 -> 129).
+
 ---
+
+### Ship-chore-upgrade-agentic-os-v1.8.25-2026-09-02 (governance brain v1.8.24 -> v1.8.25)
+
+- Feature shipped: banner-only upgrade. Upstream v1.8.25's substance is a release-version-consistency pytest guard that lives upstream and does not deploy; the one downstream-visible thing it fixes is that the v1.8.24 package shipped `antigravity-v5-runtime.md` with a stale **v1.8.23** banner, which was in our tree and is corrected here. Nothing under `.agent/rules/`, `.agent/workflows/`, `AGENTS.md` or `.agentcortex/templates/` is touched — **no gate, no engine, no state-model change.**
+- **Delta sized by two methods before deploying**, because a manifest-intersect is blind to files that become newly *deployable*: the upstream diff is 16 files of which **6** intersect the manifest once the `docs/` ← upstream-root remap is applied, and the deploy whitelist itself changed **1 insertion / 1 deletion** (the `ACX_VERSION` literal), so no file entered or left the deployable set. Predicted exactly 6 core files, 0 new, 0 removed; observed exactly that.
+- Provenance proven rather than asserted: the cache was peeled to the annotated tag with `git checkout` (not `reset --hard`) and all 6 deployed files byte-compared with `cmp` against the v1.8.25 source, both remapped paths included — **6/6 identical**. `.gitignore` showed as modified with an EMPTY content diff and an identical byte count (3230 == 3230), CRLF/LF working-tree noise from deploy's merge-not-copy handling, reverted rather than committed as churn.
+- Tests: `validate.ps1` `pass=114 warn=5 fail=0 skip=5`, identical to the pre-deploy baseline captured outside the repo; `validate.sh` `pass=113 warn=6 fail=0 skip=5`, identical to the figure recorded in the v1.6.6 release commit. Both twins provably unchanged — one against an in-session baseline, one against a baseline already in git history. The 1-pass/1-warn twin delta was accounted for rather than waved off and fixed separately as its own unit of work.
 
 ### Ship-fix-office-honesty-nap-drowsy-2026-09-02 (AVO-194 — the office said a working agent was asleep, at three sites)
 

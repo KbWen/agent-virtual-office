@@ -31,7 +31,7 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 
-// Monotonic _seq: plain integer, matches server.mjs / vite.config.js canonical form.
+// Monotonic _seq: plain integer, matches server.mjs / vite.config.mjs canonical form.
 // Monotonic within a process run; two runs in the same ms can produce equal values,
 // which is acceptable — staleness is checked against a 300s window, not 1ms precision.
 let _seqLast = 0

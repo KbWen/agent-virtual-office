@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-19T23:33:44+08:00
+- **Last Updated**: 2026-09-20T00:06:34+08:00
 - **Last Verified**: 2026-09-19
-- **Update Sequence**: 128
+- **Update Sequence**: 129
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -62,7 +62,6 @@
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
-  - [multi-agent] docs/specs/review-gate-waiting.md [Shipped]  *(AVO-107 / #112 — honest reframe: gate-desk "waiting" in-tray driven by awaiting-approval only; no queue/type fabrication; complements AVO-105 arrows; panel-decided)*
   - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [ci-infra] docs/specs/avo-190-soak-target-identity.md [Shipped]  *(AVO-190 — fail-closed AVO identity preflight for soak and overlap recorder targets)*
@@ -88,6 +87,7 @@
   - [ui-rendering] docs/specs/dialogue-interaction-layer.md [Frozen]  *(dialogue layer — ADR-007 channel separation + open-ended content + honesty gate; S1/S1b reduction commits, S2–5 killable hypotheses; red-team + expert/PM hardened)*
   - [ui-rendering] docs/specs/calm-stationery-palette.md [Shipped]  *(warm-oak floor/walls + paper inspector with role-tint header, owner-chosen from rendered candidates; all shell/sign/card colours are tokens in `src/systems/officePalette.js` with enforced legibility rules R1–R5)*
   - [ui-rendering] docs/specs/review-2026-09-19-remediation.md [Shipped]  *(2026-09-19 external review, wave 1 — REV-01/02/03/08/09: panel-mode overlays clamp to the live viewBox; no speech is moved into view for an off-crop speaker (both axes + the #47 clamp); dead page-title status channel deleted; relative times tick every 10 s; PR #236)*
+  - [hook-integration] docs/specs/vite-config-esm.md [Shipped]  *(REV-05 — dev-server config renamed to native ESM `vite.config.mjs`; three Vite config-loader warnings gone; Dockerfile/package.json path-drift guard; PR #238; closes F-11 of 2026-09-08)*
   - When reading specs: only open files tagged with the current task's module.
   - Older `[Shipped]` index lines are in `## Spec Index Archive` at the bottom of this file. Spec bodies stay in `docs/specs/` — only index lines rotate.
 - **Canonical Commands**:
@@ -155,6 +155,12 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-chore-vite-config-esm-2026-09-20 (the dev-server config becomes native ESM; three warnings gone) · REV-05
+
+- Feature shipped: REV-05, the last open item of the 2026-09-19 review. It also closes the half of F-11 (2026-09-08) that was deferred. Every `vite`/`vitest`/`vite build` run printed MIXED_EXPORTS and two "ESM syntax in a file loaded as CommonJS" warnings. The cause was re-derived: Vite 8 bundles an ESM config inside a `"type": "commonjs"` package, and the review's claim that Node 22 was responsible is wrong. The tool's own warning says the native loader is planned as a future default, which would stop this config loading. `vite.config.js` is now `vite.config.mjs` (R099 rename) and imports `statusContract.mjs` directly. Every functional reference follows; historical records are untouched.
+- **A new guard makes path drift loud.** `tests/buildManifestPaths.test.js` checks that every Dockerfile COPY/ADD source and every package.json `files` entry exists. Both consumers drop a missing path silently: CI never builds the image, and `npm pack` skips a missing entry. After a bare rename the guard went red on exactly the two stale references. A fresh-context review (Sonnet) came back NOT READY in round 1: one live comment, plus guard-parser gaps for continuation lines, JSON-array COPY and ADD. Both were fixed and round 2 was READY. The reviewer also confirmed that `[...]` in Docker (Go filepath.Match) and npm (minimatch) globs is a character class, so the guard keeps it as one. Accepted: a future heredoc COPY would make the guard fail loudly rather than silently.
+- Tests: vitest **2486 passed / 131 files**, 0 warning lines. A live dev server booted from the new file: POST/GET /api/status and OFFICE_STATUS_DIR work. `npm pack` ships the file and pack-smoke passes. Bundle budget (app bundle byte-identical), render smoke and panel smoke PASS. Commit hygiene: the spec commit first swallowed the staged `git mv`. It was soft-reset before push, and a memory was added. PR #238.
 
 ### Ship-fix-bubble-truncation-width-2026-09-19 (speech bubbles fit by width, so English stops getting cut mid-word) · REV-07
 
@@ -224,13 +230,6 @@
 - **Self-corrected before merge.** The claim this branch opened with — "ISOLATED: spawned with `OFFICE_STATUS_DIR` pointed at a fresh empty directory" — was an overclaim, caught by the tooling built on top of it (#225). The spawn now also sets `OFFICE_DISABLE_FILE_WATCHER=1` and the verdict string names both isolations, with a test asserting it mentions each so a reader cannot mistake one isolation for hermeticity.
 - Tests: vitest **2329 passed / 117 files** (+10). Both branches exercised against real servers, because mocked tests pin the verdict and only a real run pins the wiring: `--spawn` → `ISOLATED — spawned with an empty OFFICE_STATUS_DIR and the file-watcher fallback disabled`, PASS 236 samples; a server deliberately fed `dev:working` / `qa:blocked` through the real API → `NOT ISOLATED — reused server is serving live agent status (dev, qa)`.
 
-### Ship-chore-upgrade-agentic-os-v1.8.25-2026-09-02 (governance brain v1.8.24 -> v1.8.25)
-
-- Feature shipped: banner-only upgrade. Upstream v1.8.25's substance is a release-version-consistency pytest guard that lives upstream and does not deploy; the one downstream-visible thing it fixes is that the v1.8.24 package shipped `antigravity-v5-runtime.md` with a stale **v1.8.23** banner, which was in our tree and is corrected here. Nothing under `.agent/rules/`, `.agent/workflows/`, `AGENTS.md` or `.agentcortex/templates/` is touched — **no gate, no engine, no state-model change.**
-- **Delta sized by two methods before deploying**, because a manifest-intersect is blind to files that become newly *deployable*: the upstream diff is 16 files of which **6** intersect the manifest once the `docs/` ← upstream-root remap is applied, and the deploy whitelist itself changed **1 insertion / 1 deletion** (the `ACX_VERSION` literal), so no file entered or left the deployable set. Predicted exactly 6 core files, 0 new, 0 removed; observed exactly that.
-- Provenance proven rather than asserted: the cache was peeled to the annotated tag with `git checkout` (not `reset --hard`) and all 6 deployed files byte-compared with `cmp` against the v1.8.25 source, both remapped paths included — **6/6 identical**. `.gitignore` showed as modified with an EMPTY content diff and an identical byte count (3230 == 3230), CRLF/LF working-tree noise from deploy's merge-not-copy handling, reverted rather than committed as churn.
-- Tests: `validate.ps1` `pass=114 warn=5 fail=0 skip=5`, identical to the pre-deploy baseline captured outside the repo; `validate.sh` `pass=113 warn=6 fail=0 skip=5`, identical to the figure recorded in the v1.6.6 release commit. Both twins provably unchanged — one against an in-session baseline, one against a baseline already in git history. The 1-pass/1-warn twin delta was accounted for rather than waved off and fixed separately as its own unit of work.
-
 ## Spec Index Archive
 
 > Rotated out of the live **Spec Index** on 2026-08-16 to satisfy the `check_ssot_caps.py`
@@ -258,3 +257,4 @@
   - [living-office] docs/specs/living-office-events.md [Shipped]  *(AVO-140 — MERGED to main via squash PR #44, v1.2.0, 2026-06-05)*
   - [real-ai-behavior] docs/specs/skill-activation-badge.md [Shipped]  *(AVO-104 / #30 — transient skill bubble on SubagentStart via existing bubble cap (working-tier); panel Option B, honest no-over-head-element)*
   - [game-feel] docs/specs/event-juice-pass.md [Shipped]  *(AVO-136 / #117 — rare-event juice: deploy confetti + eureka sparkle + desk-slam local shake; pure juiceForEvent resolver, reduced-motion-safe, never occludes status)*
+  - [multi-agent] docs/specs/review-gate-waiting.md [Shipped]  *(AVO-107 / #112 — honest reframe: gate-desk "waiting" in-tray driven by awaiting-approval only; no queue/type fabrication; complements AVO-105 arrows; panel-decided)*

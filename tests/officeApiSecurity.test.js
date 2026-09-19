@@ -4,7 +4,7 @@ import {
   getAllowedOriginHeader,
   isAllowedOrigin,
   isAuthorizedOfficeRequest,
-} from '../vite.config.js'
+} from '../vite.config.mjs'
 
 // ---------------------------------------------------------------------------
 // Pathname guard (reproduces the vite middleware routing logic inline)

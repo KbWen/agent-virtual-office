@@ -1,5 +1,5 @@
 /**
- * Shared session scan/dedup/merge pipeline for vite.config.js and server.mjs.
+ * Shared session scan/dedup/merge pipeline for vite.config.mjs and server.mjs.
  *
  * Single source of truth for GET /api/status logic.
  *

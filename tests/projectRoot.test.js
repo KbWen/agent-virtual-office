@@ -12,7 +12,7 @@
  *   - The read path honours the override (the reported bug).
  *   - The WRITE path uses the same root — a server that stamps `_cwd` with its own cwd
  *     while reading against the override filters out its own POSTs (the gap left by the
- *     original patch: vite.config.js/server.mjs stamp `_cwd` in the POST handlers too).
+ *     original patch: vite.config.mjs/server.mjs stamp `_cwd` in the POST handlers too).
  *
  * The real-server end-to-end proof lives in tests/serverProjectRootE2E.test.js.
  */
