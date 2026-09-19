@@ -5,6 +5,67 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.9 — 2026-09-20 — Nothing gets cut off in the small window, and English gets whole sentences
+
+Three pull requests since v1.6.8, all answering an external review that was worked as untrusted
+input: every finding was re-checked against the code before anything changed, and two of its ten
+were rejected on evidence. **Two of the three are user-facing.** The third is build hygiene and is
+listed as such.
+
+### Fixed
+
+- **The compact panel (`?mode=panel`) no longer cuts off the agent inspector.** Clicking a desk
+  agent put the card's name and close button above the visible window — 155px in a wide panel — and
+  in a tall panel the right-hand values were cut off too. The card now stays inside whatever the
+  panel shows. The full office is unchanged, measured to the pixel. (#236)
+- **An agent speaking in the top aisle or doorway is heard in the panel.** Its speech bubble used to
+  render above the panel's view; it now flips below the agent. (#236)
+- **No speech bubble without a visible speaker.** Agents in the meeting room sit outside every panel
+  crop, yet their bubbles were being pulled sideways into view — already true in v1.6.8, and made
+  worse by the first version of this fix before a review caught it. A bubble is now never moved into
+  view for an agent you cannot see. (#236)
+- **"Waiting · 3m" keeps counting.** Times like "3m" only updated when something unrelated happened
+  to change, so when every agent was waiting on you — exactly when the number matters — they froze.
+  The roster, the inspector and the activity feed now refresh every 10 seconds. (#236)
+- **English speech bubbles stopped getting cut mid-word.** Every bubble was cut at 16 characters,
+  and 16 English characters are only about 60% as wide as 16 Chinese ones, so nearly half of the
+  English lines read like "forgot a semicol…". Bubbles now fit by measured width and prefer to
+  break between words: whole English lines went from 52% to 85% (Chinese 92% to 95%), and the
+  average bubble got narrower in both languages, because the old per-character estimate overstated
+  English width — real English text measures about 22% narrower than it assumed. (#237)
+
+### Removed
+
+- **A status channel that guessed "working" from the page title.** It could only ever read the
+  office's own tab title, which the office never changes, so it had never fired in normal use. Its
+  only reachable effect was a trap: any future "status in the tab title" feature would have fed back
+  into fake work. (#236)
+
+### Housekeeping — not user-facing
+
+Nothing in this section changes what you see in the office.
+
+- **Every `vite` / `vitest` run stopped printing three config warnings.** The dev-server config is
+  now native ESM (`vite.config.mjs`); Vite's own warning says the old form would stop loading in a
+  future major version. A new test fails if the Dockerfile or the npm package list names a file that
+  does not exist — both used to drop a missing file silently. This finishes the part of the
+  September 8 audit that v1.6.8 left open. (#238)
+- Two stale comments still said the doorway stacking bug was "known, unfixed"; it was fixed in
+  August. (#236)
+
+### What this release does not claim
+
+- In the compact panel the inspector card, now fully visible, can cover the agent you clicked — the
+  full office already did this; changing it needs a placement design.
+- A speaker just **below** the panel's view (in the lounge) still shows its bubble inside the panel.
+  That predates this release and is tracked as AVO-196, because hiding it would silence an agent's
+  real speech.
+- When an agent crosses the north door in the panel, its bubble can appear below it while only its
+  feet are in view, for about a second.
+- The bubble width is measured in the font your browser actually uses, so line breaks can differ
+  slightly between Windows and macOS — by design, since the old fixed estimate was only right for
+  one font.
+
 ## v1.6.8 — 2026-09-14 — A calmer office, and waiting finally looks like waiting
 
 Five commits since v1.6.7. **Two of them are user-facing**: a new, calmer look for the office, and

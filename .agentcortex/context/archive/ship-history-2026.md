@@ -42,7 +42,16 @@ Rotated 1 additional entry on 2026-09-19 (SSoT Update Sequence 127 -> 128).
 
 Rotated 1 additional entry on 2026-09-20 (SSoT Update Sequence 128 -> 129).
 
+Rotated 1 additional entry on 2026-09-20 (SSoT Update Sequence 129 -> 130).
+
 ---
+
+### Ship-chore-soak-hermetic-status-dir-2026-09-02 (the soak stops measuring the operator's own hook traffic)
+
+- Feature shipped: `sim-soak` spawned its dev server with **no `OFFICE_STATUS_DIR`**, so it read `~/.claude` — where the operator's own live Claude Code hook traffic lands every few seconds. Every run was measuring that traffic as well as the office, and an invariant violation may have been caused by an unrelated editing session with nothing saying so. `staged-capture.mjs` had already solved this and `vite.config.js` documents the variable for exactly this purpose; the soak simply never adopted it. The spawn now uses a fresh `mkdtemp` directory, and cleanup removes only that directory — `soakStatusDir` is null on the reuse path, so an operator-supplied path is never a deletion target.
+- **The reuse path cannot be isolated, so it asks instead of assuming.** A reused server's status source was fixed when it started; the soak now queries `GET /api/status` and reports what is actually being served, naming the roles. The design decision that matters: an **unverifiable answer counts as NOT isolated** — a probe that times out, 500s or returns an unparseable body reports "not isolated", because the whole point is to stop a run claiming a provenance it never established. The verdict is printed at start, carried in `SOAK_REPORT` JSON, and repeated **inside the FAIL output**, since a caveat printed twelve minutes before a failure is one nobody reads.
+- **Self-corrected before merge.** The claim this branch opened with — "ISOLATED: spawned with `OFFICE_STATUS_DIR` pointed at a fresh empty directory" — was an overclaim, caught by the tooling built on top of it (#225). The spawn now also sets `OFFICE_DISABLE_FILE_WATCHER=1` and the verdict string names both isolations, with a test asserting it mentions each so a reader cannot mistake one isolation for hermeticity.
+- Tests: vitest **2329 passed / 117 files** (+10). Both branches exercised against real servers, because mocked tests pin the verdict and only a real run pins the wiring: `--spawn` → `ISOLATED — spawned with an empty OFFICE_STATUS_DIR and the file-watcher fallback disabled`, PASS 236 samples; a server deliberately fed `dev:working` / `qa:blocked` through the real API → `NOT ISOLATED — reused server is serving live agent status (dev, qa)`.
 
 ### Ship-chore-upgrade-agentic-os-v1.8.25-2026-09-02 (governance brain v1.8.24 -> v1.8.25)
 
