@@ -36,7 +36,16 @@ Rotated 2 additional entries on 2026-09-13 (SSoT Update Sequence 124 -> 125).
 
 Rotated 1 additional entry on 2026-09-14 (SSoT Update Sequence 125 -> 126).
 
+Rotated 1 additional entry on 2026-09-19 (SSoT Update Sequence 126 -> 127).
+
 ---
+
+### Ship-fix-office-multi-agent-reaction-lines-2026-09-02 (a whole table of agents stopped saying the identical line)
+
+- Feature shipped: a Food Delivery screenshot showed two side-by-side bubbles reading `awesome! let's e…`. Not a collision — `eventBubble(key)` returns the value as-is when the locale holds a string, and `food-delivery` applies it via `participants.slice(1).forEach`, so **every** reacting agent got the same line **100% of the time**. Seven sibling keys already carried 3–6 line pools; the singles were an inconsistency, not a design choice. `food-react` and `ac-fan` now hold pools, each keeping the ORIGINAL line as entry one.
+- **The guard written to prevent regressions found a third site nobody had reported**: `dog-woof`, applied to `participants.slice(0, 3).forEach`, meaning up to three agents barked an identical `woof!`. It DERIVES the fan-out key set from `officeLife.js` rather than hard-coding it, so a new key at a fan-out call site is covered without anyone remembering the test exists.
+- **A tuned constant was rejected in favour of a principled rule.** The naive "any `.forEach(`/`.map(` in the preceding 10 lines" heuristic false-positived on `pm-meeting-lead`, a single-agent `setAgentGroupEvent('pm', …)` sitting eight lines under an unrelated `otherIds.map(`. Window widths 4/5/6/8/10 were each measured (4 misses `dog-woof`; 8 and 10 false-positive) and rather than freeze the width that happened to work, the exclusion became: a `setAgent*('` call with a quoted literal id targets one agent by construction.
+- Three further traps the tests are shaped against: a derivation that silently stops matching would make every per-key assertion vacuous (count + named keys asserted); a pool in `en` with a string still in `zh-TW` would reintroduce the defect for half the users unnoticed (shape parity asserted across ALL keys); and a pool nothing reads is still one line on screen (40 draws through the real i18n module must yield more than one value). A first attempt rewrote the locales with `json.dumps` and reformatted **1504 lines** — reverted and redone per-line, shipping a **6-line** locale diff. Tests: vitest **2325 passed** (+6), mutation-verified — 3 of 6 assertions fail with the pools reverted.
 
 ### Ship-chore-backlog-avo195-stale-label-invariant-2026-09-02 (the soak cannot see a stale behaviour label)
 

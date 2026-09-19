@@ -8,7 +8,7 @@ import { recurringInfo } from '../systems/recurringFailure'
 import { selectVisibleBubbles, BUBBLE_VISIBLE_CAP } from '../systems/bubbleVisibility.js'
 import { stepWalkFrame } from '../systems/walkFrame.js'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog } from '../systems/constants.js'
-import BehaviorBubble from './BehaviorBubble'
+import BehaviorBubble, { shouldFlipBubbleBelow } from './BehaviorBubble'
 import { shouldShakeDesk } from '../systems/eventJuice.js'
 import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
 
@@ -757,6 +757,8 @@ function AgentCharacter({ agent }) {
   // 0..800 OR the panel crop). Primitive subscriptions → re-render only on a real bounds change.
   const sceneMinX = useOfficeStore((s) => s.sceneBounds.minX)
   const sceneW = useOfficeStore((s) => s.sceneBounds.w)
+  // REV-02: the visible top, so the bubble flips below against the panel crop, not y=0.
+  const sceneMinY = useOfficeStore((s) => s.sceneBounds.minY)
   // L3 reluctant-participant tell (transient expiry ts). Pure overlay — never affects behavior.
   const reluctantUntil = useOfficeStore((s) => s.reluctant?.[id])
   // AVO-110: hook-stamped blocked-reason token (primitive subscription → re-render only on change).
@@ -1741,12 +1743,12 @@ function AgentCharacter({ agent }) {
         {/* Bubble grows in place too (anchored at its -68 origin). At labelScale 1 this is
             identical to the prior `<BehaviorBubble x={0} y={-68}/>` directly under scale(1/1.35).
             FLIP-BELOW: an agent near the office top (e.g. the Gatekeeper at the top wall) would draw
-            its above-the-head bubble past the SVG's y=0 edge and get clipped. The bubble's projected
-            top is pos.y − 68 − 34·labelScale; when that crosses the top edge we anchor it just below
-            the agent (+6) and flip the tail up so the whole bubble stays inside the scene. */}
+            its above-the-head bubble past the SVG's top edge and get clipped. The bubble's projected
+            top is pos.y − 68 − 34·labelScale; when that crosses the VISIBLE top (y=0, or the panel
+            crop's top — REV-02) we anchor it just below the agent (+6) and flip the tail up so the
+            whole bubble stays inside the scene. Rule + orphan guard: shouldFlipBubbleBelow. */}
         {(() => {
-          const bubbleTopAbove = pos.y - 68 - 34 * labelScale
-          const below = bubbleTopAbove < 6
+          const below = shouldFlipBubbleBelow({ posX: pos.x, posY: pos.y, labelScale, sceneMinX, sceneMinY, sceneW })
           // AVO-158: a live poke quip momentarily PREEMPTS the ambient bubble (reuses the same
           // slot → no overlap, inherits edge-clamping). When a quip is showing, mark the group
           // as a polite live region so the acknowledge is announced once (reaction bob is

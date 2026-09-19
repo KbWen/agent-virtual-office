@@ -2,7 +2,8 @@ import React, { useEffect, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { charName, behaviorLabel, t, useLocale } from '../i18n'
 import { formatTimeAgo } from '../utils/formatTime'
-import { buildAgentInspectorMeta, inspectorTaskLabel, stateDurationLabel } from './agentInspectorModel'
+import { useNowTick, NOW_TICK_MS } from '../utils/useNowTick'
+import { buildAgentInspectorMeta, inspectorTaskLabel, placeInspector, stateDurationLabel } from './agentInspectorModel'
 import { CARD } from '../systems/officePalette'
 
 // POINT 2 follow-up: the inspector counter-scales so its small detail fonts (8–9px) stay readable
@@ -44,6 +45,12 @@ export default function AgentInspector() {
   const clearSelectedAgent = useOfficeStore((s) => s.clearSelectedAgent)
   // POINT 2: counter-scale factor so the popover holds a readable on-screen size as the office shrinks.
   const sceneScale = useOfficeStore((s) => s.sceneScale)
+  // REV-01: the live viewBox (full office or panel crop) the card is clamped inside. The store keeps
+  // the object's identity when unchanged, so this re-renders only on a real bounds change.
+  const sceneBounds = useOfficeStore((s) => s.sceneBounds)
+  // REV-08: while open, re-render every 10s so "waiting · 3m" and the activity times keep counting
+  // when nothing else changes (every agent waiting on you). Off while closed — nothing to show.
+  const now = useNowTick(NOW_TICK_MS, Boolean(selectedAgent))
 
   // Close on Escape
   useEffect(() => {
@@ -73,7 +80,7 @@ export default function AgentInspector() {
   const status = agent.status || 'idle'
   const statusLabel = t(`statusLabels.${status}`, status)
   // AVO-169: inline "how long" for the actionable waiting states (honest, real changedAt, ≥30s only).
-  const stateSince = stateDurationLabel(status, ext?.changedAt)
+  const stateSince = stateDurationLabel(status, ext?.changedAt, now)
   const currentBehavior = behaviorLabel(agent.behavior)
   const task = inspectorTaskLabel(ext)
   const color = agent.color || '#888'
@@ -113,19 +120,14 @@ export default function AgentInspector() {
   // Panel dimensions — expand for metadata and activity rows
   const W = 200, H = contentBottomY + 16
   // POINT 2: scale the whole popover by `s` so its text stays readable when the office is small.
-  // Clamp using the SCALED footprint (Ws×Hs) so the enlarged panel still fits the 800×560 viewBox.
-  const s = Math.min(INSPECTOR_SCALE_MAX, Math.max(1, INSPECTOR_READ_TARGET / (sceneScale > 0 ? sceneScale : 1)))
-  const Ws = W * s, Hs = H * s
+  // REV-01: placed above the agent and clamped (SCALED footprint) inside the live viewBox — the full
+  // 800×560 office or a panel crop — shrinking `s` only if the card could not fit there at all.
+  const readScale = Math.min(INSPECTOR_SCALE_MAX, Math.max(1, INSPECTOR_READ_TARGET / (sceneScale > 0 ? sceneScale : 1)))
+  const { px, py, s } = placeInspector({ anchor: pos, W, H, scale: readScale, bounds: sceneBounds })
+  const Hs = H * s
   // Local units per CSS pixel, for the corner radius (the outline uses a non-scaling stroke instead).
   const netScale = s * (sceneScale > 0 ? sceneScale : 1)
   const cornerR = CARD.cornerCssPx / netScale
-  // Position scaled panel above the agent, clamped to viewport (SVG 800x560)
-  let px = pos.x - Ws / 2
-  let py = pos.y - Hs - 56 * s
-  if (px < 10) px = 10
-  if (px + Ws > 790) px = 790 - Ws
-  if (py < 10) py = 10
-  if (py + Hs > 550) py = 550 - Hs
 
   return (
     <g
@@ -211,7 +213,7 @@ export default function AgentInspector() {
               stroke={CARD.line} strokeWidth="1" vectorEffect="non-scaling-stroke" />
             {recentActivities.slice(0, 3).map((a, i) => {
               const baseY = activityStartY + i * 13
-              const ago = formatTimeAgo(a.timestamp, { compact: true })
+              const ago = formatTimeAgo(a.timestamp, { compact: true, now })
               return (
                 <g key={a.id}>
                   <text x={10} y={baseY} fontSize={CARD.type.history} fontFamily={CARD.font} fill={CARD.mutedInk}>

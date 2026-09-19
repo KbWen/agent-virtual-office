@@ -68,3 +68,13 @@ source_sha: 0cbe3c1
 - [DECISION] Status colour is a graphic channel, never a text colour: in the inspector it lives on the status dot and the scene ring, and all text is ink/muted ink, because no `STATUS_COLORS` value reaches 4.5:1 as text.
 - [DECISION] Scene palette changes are static fills beneath the agent layer only; room readability (walls vs neighbouring floors) and ring contrast are measured before a token is accepted.
 - [DECISION] Taste calls on how the office looks are made by the owner from same-state rendered candidates, not delegated through a design packet.
+
+### [ui-rendering][2026-09-19][fix/review-2026-09-19]
+source_spec: docs/specs/review-2026-09-19-remediation.md
+source_sha: 94e3d5a
+
+- [DECISION] Overlays that must stay on-screen (inspector card, speech bubble) clamp against the LIVE viewBox bounds published in `store.sceneBounds`, never against literal 800×560 numbers — panel mode crops the scene, so a literal is a clip waiting to happen.
+- [CONSTRAINT] A bubble may be moved to stay visible, but never into view for a speaker who is not visible (orphan guard). Relocating speech without its speaker would detach the voice channel (ADR-007) from its source.
+- [TRADEOFF] The inspector's counter-scale is sacrificed before visibility: when the card cannot fit at its readable size it shrinks to fit rather than clipping. Smaller text beats a missing close button.
+- [DECISION] The document-title status channel is deleted, not flag-gated: a page can only see its own title, the office never sets it, so the channel is dead code whose only reachable behaviour is self-feedback into a fabricated `working`.
+- [CONSTRAINT] A relative-time label must not outlive its truth by more than one tick (10 s); a component that renders "ago"/"since" text owns a clock tick instead of relying on unrelated store churn to re-render it.

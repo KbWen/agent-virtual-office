@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-14T12:00:00+08:00
-- **Last Verified**: 2026-09-08
-- **Update Sequence**: 126
+- **Last Updated**: 2026-09-19T22:12:00+08:00
+- **Last Verified**: 2026-09-19
+- **Update Sequence**: 127
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -62,7 +62,6 @@
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
-  - [game-feel] docs/specs/event-juice-pass.md [Shipped]  *(AVO-136 / #117 — rare-event juice: deploy confetti + eureka sparkle + desk-slam local shake; pure juiceForEvent resolver, reduced-motion-safe, never occludes status)*
   - [multi-agent] docs/specs/review-gate-waiting.md [Shipped]  *(AVO-107 / #112 — honest reframe: gate-desk "waiting" in-tray driven by awaiting-approval only; no queue/type fabrication; complements AVO-105 arrows; panel-decided)*
   - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
@@ -88,6 +87,7 @@
   - [game-feel] docs/specs/ambient-soundscape.md [Shipped]  *(AVO-122 / chill-fun wave — off-by-default 0-KB procedural Web Audio; clatter∝teamPulse (silent@0) + double-gated rain; coffee gurgle DROPPED on honesty (tea-break is a clock event))*
   - [ui-rendering] docs/specs/dialogue-interaction-layer.md [Frozen]  *(dialogue layer — ADR-007 channel separation + open-ended content + honesty gate; S1/S1b reduction commits, S2–5 killable hypotheses; red-team + expert/PM hardened)*
   - [ui-rendering] docs/specs/calm-stationery-palette.md [Shipped]  *(warm-oak floor/walls + paper inspector with role-tint header, owner-chosen from rendered candidates; all shell/sign/card colours are tokens in `src/systems/officePalette.js` with enforced legibility rules R1–R5)*
+  - [ui-rendering] docs/specs/review-2026-09-19-remediation.md [Shipped]  *(2026-09-19 external review, wave 1 — REV-01/02/03/08/09: panel-mode overlays clamp to the live viewBox; no speech is moved into view for an off-crop speaker (both axes + the #47 clamp); dead page-title status channel deleted; relative times tick every 10 s; PR #236)*
   - When reading specs: only open files tagged with the current task's module.
   - Older `[Shipped]` index lines are in `## Spec Index Archive` at the bottom of this file. Spec bodies stay in `docs/specs/` — only index lines rotate.
 - **Canonical Commands**:
@@ -155,6 +155,14 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-fix-review-2026-09-19-2026-09-19 (an external review, re-derived — panel mode stops clipping and losing speech; waiting times keep counting)
+
+- Feature shipped: the Gemini handoff review (`docs/reviews/2026-09-19-handoff-review.md`, 10 findings against v1.6.8) was worked as **untrusted input**. Five are fixed (REV-01/02/03/08/09). REV-04 and REV-06 are rejected on evidence: an above-head bubble cannot be covered by a later-painted agent, and the extraction map the review cites says "not a refactor request". REV-10 is AVO-193, and REV-07/REV-05 get their own PRs. Two premises were wrong: the title channel could never see other tabs, and REV-05's warnings come from Vite 8 and Rolldown, not Node 22. Two findings were under-scoped: three surfaces froze their relative times, not one, and two comment sites were stale, not one.
+- **Panel mode clamps overlays to the live viewBox.** `store.sceneBounds` now carries `minY`/`h`. `placeInspector` keeps the card inside every crop (clipped 155px/20px before, 0 after, measured in a browser); in the full office it is numerically the old clamp, and the boxes measured identical. The bubble now flips against the crop's top.
+- **A fresh-context reviewer caught the first cut putting speech on screen with no speaker.** Meeting chairs (x 645–765) sit right of every panel crop. The new flip and the old #47 edge clamp together dragged their bubbles into view, and no capture had staged a meeting. It was then measured: `main` already leaked ~2.5 such bubbles into the tall panel. Now 0, because the orphan guard covers both axes and the clamp. Speakers just BELOW a crop are still shown; that is AVO-196 and a design decision under ADR-007.
+- **Relative times tick.** A local 10 s `useNowTick` drives the roster, the inspector's AVO-169 duration and the activity feed. In a real-browser A/B after a 22 s wait, `main` was 14–20 s stale and the branch was current. The dead `document.title` channel is deleted, and a src-wide guard test keeps it out.
+- Tests: vitest **2468 passed / 129 files** (+46 tests, +3 files net). 9 wiring mutations each fail a test. Build, bundle-budget +0.48%, render/panel/pack smoke all PASS. Two independent fresh reviews: round 1 NOT READY, round 2 READY. **Disclosed:** spec AC-2/6/11 were amended under the owner's standing delegation without the §4.2 draft→frozen flip. PR #236.
 
 ### Ship-chore-release-v1.6.8-2026-09-14 (a calmer office, and waiting finally looks like waiting) · release v1.6.8
 
@@ -225,13 +233,6 @@
 - **The existing test was asserting a phantom event, and failing it was correct.** Instrumenting rather than guessing showed `startOfficeLife` consumes the first two `Math.random` calls arming its schedulers, so the nap filter got `0.999` twice and picked nobody — yet the test passed, because the old code armed `activeEvent` before computing the cast. Corrected, and it now also asserts somebody is actually napping.
 - Tests: vitest **2323 passed / 116 files** (+4), mutation-verified — with the fix stashed all 4 new tests fail. Run twice: the first attempt had one test that did NOT go red and was fixed before its green was trusted. Live in a real browser against a hermetic server with two agents staged working: hour-14 drowsiness fired for the six untracked agents with `trackedTired: []` and `dev` keeping expression `normal` AND bubble `"code first, think later!"`; hour-12 nap fired for `[ops]` with `dev` still `focused` and no phantom `activeEvent`. Five earlier live runs were vacuous and an assume-failure guard kept each from being read as success — the cause was a rig race (`timeInterval` calls `updateTime()` and is registered before `timeEventInterval` at the same 60s period), not a production defect.
 
-### Ship-fix-office-multi-agent-reaction-lines-2026-09-02 (a whole table of agents stopped saying the identical line)
-
-- Feature shipped: a Food Delivery screenshot showed two side-by-side bubbles reading `awesome! let's e…`. Not a collision — `eventBubble(key)` returns the value as-is when the locale holds a string, and `food-delivery` applies it via `participants.slice(1).forEach`, so **every** reacting agent got the same line **100% of the time**. Seven sibling keys already carried 3–6 line pools; the singles were an inconsistency, not a design choice. `food-react` and `ac-fan` now hold pools, each keeping the ORIGINAL line as entry one.
-- **The guard written to prevent regressions found a third site nobody had reported**: `dog-woof`, applied to `participants.slice(0, 3).forEach`, meaning up to three agents barked an identical `woof!`. It DERIVES the fan-out key set from `officeLife.js` rather than hard-coding it, so a new key at a fan-out call site is covered without anyone remembering the test exists.
-- **A tuned constant was rejected in favour of a principled rule.** The naive "any `.forEach(`/`.map(` in the preceding 10 lines" heuristic false-positived on `pm-meeting-lead`, a single-agent `setAgentGroupEvent('pm', …)` sitting eight lines under an unrelated `otherIds.map(`. Window widths 4/5/6/8/10 were each measured (4 misses `dog-woof`; 8 and 10 false-positive) and rather than freeze the width that happened to work, the exclusion became: a `setAgent*('` call with a quoted literal id targets one agent by construction.
-- Three further traps the tests are shaped against: a derivation that silently stops matching would make every per-key assertion vacuous (count + named keys asserted); a pool in `en` with a string still in `zh-TW` would reintroduce the defect for half the users unnoticed (shape parity asserted across ALL keys); and a pool nothing reads is still one line on screen (40 draws through the real i18n module must yield more than one value). A first attempt rewrote the locales with `json.dumps` and reformatted **1504 lines** — reverted and redone per-line, shipping a **6-line** locale diff. Tests: vitest **2325 passed** (+6), mutation-verified — 3 of 6 assertions fail with the pools reverted.
-
 ## Spec Index Archive
 
 > Rotated out of the live **Spec Index** on 2026-08-16 to satisfy the `check_ssot_caps.py`
@@ -258,3 +259,4 @@
   - [vibe-rebalance] docs/specs/ux-vibe-rebalance.md [Shipped]  *(AVO-126/127/128/129/131/132 — MERGED to main via squash PR #44, v1.2.0, 2026-06-05)*
   - [living-office] docs/specs/living-office-events.md [Shipped]  *(AVO-140 — MERGED to main via squash PR #44, v1.2.0, 2026-06-05)*
   - [real-ai-behavior] docs/specs/skill-activation-badge.md [Shipped]  *(AVO-104 / #30 — transient skill bubble on SubagentStart via existing bubble cap (working-tier); panel Option B, honest no-over-head-element)*
+  - [game-feel] docs/specs/event-juice-pass.md [Shipped]  *(AVO-136 / #117 — rare-event juice: deploy confetti + eureka sparkle + desk-slam local shake; pure juiceForEvent resolver, reduced-motion-safe, never occludes status)*

@@ -968,14 +968,15 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   }, [isPanel, rosterMode, setSceneScale])
 
   const viewBox = isPanel ? panelViewBox : '0 0 800 560'
-  // #47: publish the active viewBox x-bounds (minX, width) so BehaviorBubble clamps speech bubbles
-  // to the VISIBLE edges in BOTH default (0..800) and panel (cropped) modes — a hardcoded 0..800
-  // clamp would target the wrong edges in panel mode and let bubbles clip the crop.
+  // #47: publish the active viewBox (minX, minY, width, height) so overlays stay inside the VISIBLE
+  // scene in BOTH default (0 0 800 560) and panel (cropped) modes — a hardcoded 800×560 clamp would
+  // target the wrong edges in panel mode: bubbles clip the crop's sides, and the inspector card and
+  // the bubble flip use the crop's top (2026-09-19 review, REV-01/02).
   const setSceneBounds = useOfficeStore((s) => s.setSceneBounds)
   useEffect(() => {
     const parts = viewBox.split(/\s+/).map(Number)
-    if (parts.length === 4 && Number.isFinite(parts[0]) && Number.isFinite(parts[2])) {
-      setSceneBounds(parts[0], parts[2])
+    if (parts.length === 4 && parts.every(Number.isFinite)) {
+      setSceneBounds(parts[0], parts[1], parts[2], parts[3])
     }
   }, [viewBox, setSceneBounds])
   // Full-office mode must fit the whole authored 800x560 scene inside the available pane.
