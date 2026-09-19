@@ -25,7 +25,7 @@ export function stateDurationLabel(status, changedAt, now = Date.now()) {
   if (!BLOCKED_FAMILY.has(status)) return null
   if (!Number.isFinite(changedAt)) return null
   if (now - changedAt < STATE_DURATION_MIN_MS) return null
-  return formatTimeAgo(changedAt, { compact: true })
+  return formatTimeAgo(changedAt, { compact: true, now })
 }
 
 export function countAgentDoneToday(activityLog, agentId, now = Date.now()) {

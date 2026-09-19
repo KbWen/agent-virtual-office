@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore } from '../systems/store'
 import { charName, eventName, useLocale, t } from '../i18n'
 import { formatTimeAgo } from '../utils/formatTime'
+import { useNowTick, NOW_TICK_MS } from '../utils/useNowTick'
 import { activityFeedMessage } from '../utils/activityFeedLabel'
 
 const typeIcons = {
@@ -27,15 +28,20 @@ export default function ActivityFeed({ mode = 'full' }) {
   const rosterMode = useOfficeStore((s) => s.rosterMode)
 
   const entries = useMemo(() => useOfficeStore.getState().eventFeed.slice(0, 20), [eventFeedSig])
+  // `rosterMode` (reactive) re-renders on toggle; getState() is the authoritative current value (SSR-safe).
+  const hidden = mode === 'panel' || rosterMode || useOfficeStore.getState().rosterMode
+  // REV-08: re-render every 10s while the widget shows, so the "ago" labels keep counting and the
+  // <30s unread badge clears when an event ages out, even if no new event arrives. Called before the
+  // early returns below (rules of hooks) and switched off whenever the widget is hidden.
+  const now = useNowTick(NOW_TICK_MS, !hidden)
 
   if (mode === 'panel') return null  // too compact for panel mode
   // AVO-141 dedup: in roster mode the inline presence-rail feed already shows these real events, so the
   // floating widget is redundant — self-hide (mirrors the mode==='panel' guard). Office mode keeps it.
-  // `rosterMode` (reactive) re-renders on toggle; getState() is the authoritative current value (SSR-safe).
-  if (rosterMode || useOfficeStore.getState().rosterMode) return null
+  if (hidden) return null
 
   const hasEntries = entries.length > 0
-  const unreadCount = entries.filter(e => Date.now() - e.timestamp < 30000).length
+  const unreadCount = entries.filter(e => now - e.timestamp < 30000).length
 
   return (
     <div className={`fixed top-3 right-3 z-50 select-none transition-all duration-200 ${collapsed ? 'w-10' : 'w-72 max-w-[calc(100vw-1.5rem)]'}`}>
@@ -74,7 +80,7 @@ export default function ActivityFeed({ mode = 'full' }) {
               </div>
             ) : (
               entries.map((entry) => (
-                <ActivityEntry key={entry.id} entry={entry} />
+                <ActivityEntry key={entry.id} entry={entry} now={now} />
               ))
             )}
           </div>
@@ -84,13 +90,13 @@ export default function ActivityFeed({ mode = 'full' }) {
   )
 }
 
-function ActivityEntry({ entry }) {
+function ActivityEntry({ entry, now }) {
   // Use hook selectors instead of getState() to stay reactive
   const agentColor = useOfficeStore((s) => entry.agentId ? s.agents[entry.agentId]?.color : null)
-  const isRecent = Date.now() - entry.timestamp < 30000
+  const isRecent = now - entry.timestamp < 30000
   const icon = typeIcons[entry.type] || '📝'
   const name = entry.agentId ? charName(entry.agentId) : null
-  const ago = formatTimeAgo(entry.timestamp)
+  const ago = formatTimeAgo(entry.timestamp, { now })
   const message = activityFeedMessage(entry, { t, eventName })
 
   return (

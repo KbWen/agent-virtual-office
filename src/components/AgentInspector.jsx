@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { charName, behaviorLabel, t, useLocale } from '../i18n'
 import { formatTimeAgo } from '../utils/formatTime'
+import { useNowTick, NOW_TICK_MS } from '../utils/useNowTick'
 import { buildAgentInspectorMeta, inspectorTaskLabel, placeInspector, stateDurationLabel } from './agentInspectorModel'
 import { CARD } from '../systems/officePalette'
 
@@ -47,6 +48,9 @@ export default function AgentInspector() {
   // REV-01: the live viewBox (full office or panel crop) the card is clamped inside. The store keeps
   // the object's identity when unchanged, so this re-renders only on a real bounds change.
   const sceneBounds = useOfficeStore((s) => s.sceneBounds)
+  // REV-08: while open, re-render every 10s so "waiting · 3m" and the activity times keep counting
+  // when nothing else changes (every agent waiting on you). Off while closed — nothing to show.
+  const now = useNowTick(NOW_TICK_MS, Boolean(selectedAgent))
 
   // Close on Escape
   useEffect(() => {
@@ -76,7 +80,7 @@ export default function AgentInspector() {
   const status = agent.status || 'idle'
   const statusLabel = t(`statusLabels.${status}`, status)
   // AVO-169: inline "how long" for the actionable waiting states (honest, real changedAt, ≥30s only).
-  const stateSince = stateDurationLabel(status, ext?.changedAt)
+  const stateSince = stateDurationLabel(status, ext?.changedAt, now)
   const currentBehavior = behaviorLabel(agent.behavior)
   const task = inspectorTaskLabel(ext)
   const color = agent.color || '#888'
@@ -209,7 +213,7 @@ export default function AgentInspector() {
               stroke={CARD.line} strokeWidth="1" vectorEffect="non-scaling-stroke" />
             {recentActivities.slice(0, 3).map((a, i) => {
               const baseY = activityStartY + i * 13
-              const ago = formatTimeAgo(a.timestamp, { compact: true })
+              const ago = formatTimeAgo(a.timestamp, { compact: true, now })
               return (
                 <g key={a.id}>
                   <text x={10} y={baseY} fontSize={CARD.type.history} fontFamily={CARD.font} fill={CARD.mutedInk}>

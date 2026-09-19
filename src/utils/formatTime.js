@@ -1,11 +1,13 @@
 // Shared time formatting utility
 // compact: "5s", "3m", "1h"
 // descriptive: "now", "5s ago", "3m ago"
+// `now`: the clock to measure against — components pass the one value useNowTick returns for the
+// render so every label in it agrees; defaults to the system clock.
 import { t } from '../i18n'
 
-export function formatTimeAgo(ts, { compact = false } = {}) {
+export function formatTimeAgo(ts, { compact = false, now = Date.now() } = {}) {
   if (!ts || !Number.isFinite(ts)) return compact ? '0s' : t('time.now', 'now')
-  const diff = Math.floor((Date.now() - ts) / 1000)
+  const diff = Math.floor((now - ts) / 1000)
   if (diff < 0) return compact ? '0s' : t('time.now', 'now')
   if (!compact && diff < 5) return t('time.now', 'now')
   if (diff < 60) return compact ? `${diff}s` : t('time.secondsAgo', '{0}s ago').replace('{0}', diff)

@@ -5,6 +5,7 @@ import { charName, behaviorLabel, t, useLocale, eventName } from '../i18n'
 import { CharacterPixelSprite } from './AgentCharacter'
 import { agentLineLabel, taskChipLabel, formatTokens } from './ControlPanel'
 import { formatTimeAgo } from '../utils/formatTime'
+import { useNowTick, NOW_TICK_MS } from '../utils/useNowTick'
 import { activityFeedMessage } from '../utils/activityFeedLabel'
 import { comparePresence, isIdleStatus, teamStatus } from '../systems/rosterModel'
 
@@ -50,15 +51,16 @@ function DetailChip({ icon, label, value }) {
   )
 }
 
-function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expanded, onToggle, reducedMotion, dimmed }) {
+function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expanded, onToggle, reducedMotion, dimmed, now }) {
   const name = charName(agent.id)
   const color = presenceColor(status)
   const blocked = status === 'blocked'
   const busy = isBusy(status)
   // "since last change" — hidden when <10s (too fresh to be meaningful; avoids the "0s" noise) or
   // when the agent has no real status yet. Shows real elapsed time once stamped (e.g. "3m", "12m").
+  // `now` is the roster's 10s tick (REV-08), so the label keeps counting when nothing else changes.
   const changedAt = lastChangedAt(ext)
-  const since = changedAt && Date.now() - changedAt >= 10000 ? formatTimeAgo(changedAt, { compact: true }) : null
+  const since = changedAt && now - changedAt >= 10000 ? formatTimeAgo(changedAt, { compact: true, now }) : null
   const message = agent.bubble || (ext ? agentLineLabel(ext, t) : null) || behaviorLabel(agent.behavior)
   const tool = taskChipLabel(ext?.task) || (ext ? agentLineLabel(ext, t) : null) || '—'
 
@@ -117,9 +119,9 @@ function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expa
 // ─── Activity feed row (Phase 2) — one real event: status change, handoff, or team event ───────
 // Sourced from the store's activityLog, already filtered to non-organic origins. Time-decayed
 // opacity (older = quieter) gives the "journal that's been written in" resting feel (calm-tech).
-function FeedRow({ entry, color, ageMs, reducedMotion }) {
+function FeedRow({ entry, color, ageMs, now, reducedMotion }) {
   // "剛剛/now" for fresh events instead of a bare "0s".
-  const ago = ageMs != null && ageMs < 10000 ? t('chat.justNow', 'now') : formatTimeAgo(entry.timestamp, { compact: true })
+  const ago = ageMs != null && ageMs < 10000 ? t('chat.justNow', 'now') : formatTimeAgo(entry.timestamp, { compact: true, now })
   // decay: full opacity when fresh, easing toward 0.45 over ~20 min — never invisible.
   const opacity = Math.max(0.45, 1 - (ageMs || 0) / (20 * 60 * 1000))
   // Phase 3: a single gentle fade+rise on MOUNT only (new key → React remounts → runs once).
@@ -158,6 +160,9 @@ const HEALTH_DOT = { online: '#1D9E75', degraded: '#E8A317', offline: '#E24B4A',
 
 export default function NarrowRoster() {
   useLocale() // re-render on language switch
+  // REV-08: presenceSig below deliberately ignores the clock, so without this tick every "since"/"ago"
+  // label froze whenever no status changed. One `now` per render, shared by the rows and the feed.
+  const now = useNowTick(NOW_TICK_MS, true)
   // Salience-relevant SIGNATURE only — id|status|behavior|bubble|task|expiresAt per agent. It
   // deliberately EXCLUDES position, so the ~30fps movement ticks that replace agent objects do NOT
   // re-render or re-sort the rail (the systems-review thrash fix). useShallow compares the string
@@ -234,7 +239,6 @@ export default function NarrowRoster() {
       : eventFeed
     return scoped.slice(0, 18)
   }, [eventFeed, expandedId])
-  const now = Date.now()
 
   // Memoized subagent counts (was an O(rows·helpers) reduce called per row in the render map).
   const subagentCountById = useMemo(() => {
@@ -321,6 +325,7 @@ export default function NarrowRoster() {
           expanded={expandedId === r.id}
           onToggle={() => setExpandedId((cur) => (cur === r.id ? null : r.id))}
           reducedMotion={reducedMotion}
+          now={now}
         />
       ))}
 
@@ -335,7 +340,7 @@ export default function NarrowRoster() {
           </div>
           <div className="flex flex-col gap-1 overflow-y-auto">
             {feed.map((e) => (
-              <FeedRow key={e.id} entry={e} color={colorById[e.agentId] || colorById[e.from] || '#888'} ageMs={now - e.timestamp} reducedMotion={reducedMotion} />
+              <FeedRow key={e.id} entry={e} color={colorById[e.agentId] || colorById[e.from] || '#888'} ageMs={now - e.timestamp} now={now} reducedMotion={reducedMotion} />
             ))}
           </div>
         </div>
