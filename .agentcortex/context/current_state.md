@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-19T22:12:00+08:00
+- **Last Updated**: 2026-09-19T23:33:44+08:00
 - **Last Verified**: 2026-09-19
-- **Update Sequence**: 127
+- **Update Sequence**: 128
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -156,6 +156,12 @@
 
 ## Ship History
 
+### Ship-fix-bubble-truncation-width-2026-09-19 (speech bubbles fit by width, so English stops getting cut mid-word) · REV-07
+
+- Quick-win shipped: REV-07 of the 2026-09-19 external review, held back from #236 because it changes how the office looks. Bubbles were cut at 16 CHARACTERS, and 16 CJK characters are ~1.7× as wide as 16 Latin ones, so 46% of English lines were cut mid-word ("forgot a semicol…") against 5% of zh-TW. The review under-stated this; it reads as an occasional cut.
+- Bubbles now fit a **width budget** (140). The width is measured with canvas `measureText` in the bubble's own font (one shared constant with the `<text>`), grapheme-safe, with a Latin word back-off and a trailing-punctuation trim. The budget was chosen by simulating five budgets against every locale line in a real browser. It shows more text with less clutter, because the old per-char estimate over-padded English by ~22%: whole lines en 52%→85%, zh 92%→95%; mean bubble narrower in both (108→101, 90→86); widest bubble in the office 187→158. The owner approved same-state en + zh-TW captures before commit.
+- Tests: vitest **2481 passed / 130 files** (+13). 4 mutations killed; one survived the first test set (its only case cut exactly at a space), and a mid-word case was added until it failed. Build, bundle-budget +0.63%, render + panel smoke PASS. PR #237.
+
 ### Ship-fix-review-2026-09-19-2026-09-19 (an external review, re-derived — panel mode stops clipping and losing speech; waiting times keep counting)
 
 - Feature shipped: the Gemini handoff review (`docs/reviews/2026-09-19-handoff-review.md`, 10 findings against v1.6.8) was worked as **untrusted input**. Five are fixed (REV-01/02/03/08/09). REV-04 and REV-06 are rejected on evidence: an above-head bubble cannot be covered by a later-painted agent, and the extraction map the review cites says "not a refactor request". REV-10 is AVO-193, and REV-07/REV-05 get their own PRs. Two premises were wrong: the title channel could never see other tabs, and REV-05's warnings come from Vite 8 and Rolldown, not Node 22. Two findings were under-scoped: three surfaces froze their relative times, not one, and two comment sites were stale, not one.
@@ -224,14 +230,6 @@
 - **Delta sized by two methods before deploying**, because a manifest-intersect is blind to files that become newly *deployable*: the upstream diff is 16 files of which **6** intersect the manifest once the `docs/` ← upstream-root remap is applied, and the deploy whitelist itself changed **1 insertion / 1 deletion** (the `ACX_VERSION` literal), so no file entered or left the deployable set. Predicted exactly 6 core files, 0 new, 0 removed; observed exactly that.
 - Provenance proven rather than asserted: the cache was peeled to the annotated tag with `git checkout` (not `reset --hard`) and all 6 deployed files byte-compared with `cmp` against the v1.8.25 source, both remapped paths included — **6/6 identical**. `.gitignore` showed as modified with an EMPTY content diff and an identical byte count (3230 == 3230), CRLF/LF working-tree noise from deploy's merge-not-copy handling, reverted rather than committed as churn.
 - Tests: `validate.ps1` `pass=114 warn=5 fail=0 skip=5`, identical to the pre-deploy baseline captured outside the repo; `validate.sh` `pass=113 warn=6 fail=0 skip=5`, identical to the figure recorded in the v1.6.6 release commit. Both twins provably unchanged — one against an in-session baseline, one against a baseline already in git history. The 1-pass/1-warn twin delta was accounted for rather than waved off and fixed separately as its own unit of work.
-
-### Ship-fix-office-honesty-nap-drowsy-2026-09-02 (AVO-194 — the office said a working agent was asleep, at three sites)
-
-- Feature shipped: two time-linked `officeLife` handlers never read `externalStatus`. **The root cause is reachability, not forgetfulness** — the availability rule lived as a closure INSIDE `pickParticipants`, so no time-linked handler could apply it even in principle. It is now a module-scope `isAgentAvailable(id, agents, externalStatus)` all three callers share, `pickParticipants` delegating unchanged. Same "it turned out to be four sites, not two" shape as AVO-191.
-- **12:00 lunch nap** (the row AVO-194 records) picked with `!inGroupEvent && Math.random() < 0.5`, so a genuinely working or blocked agent got `behavior: 'nap'`, a sleepy face and a lunch bubble. `setActiveEvent` also moved BELOW the cast: it is the global event mutex, and arming it for a nap with nobody in it blocks every later event for 45s with nothing on screen. The empty-cast check is a nested guard rather than an early `return` on purpose — a return is correct only while the hour blocks stay mutually exclusive with `hour === 12`, which is not an invariant the next person should have to know.
-- **14:00 post-lunch drowsiness is a THIRD site the backlog row does not record**, found by reading rather than trusting the row. It guarded only `inGroupEvent`, so it painted every tracked working agent `tired` — a fabricated emotional state (ADR-008), and its `null` bubble argument CLEARS what the agent was saying. The ring and name-pill come from `externalStatus`, which is what bounds that harm to voice rather than state.
-- **The existing test was asserting a phantom event, and failing it was correct.** Instrumenting rather than guessing showed `startOfficeLife` consumes the first two `Math.random` calls arming its schedulers, so the nap filter got `0.999` twice and picked nobody — yet the test passed, because the old code armed `activeEvent` before computing the cast. Corrected, and it now also asserts somebody is actually napping.
-- Tests: vitest **2323 passed / 116 files** (+4), mutation-verified — with the fix stashed all 4 new tests fail. Run twice: the first attempt had one test that did NOT go red and was fixed before its green was trusted. Live in a real browser against a hermetic server with two agents staged working: hour-14 drowsiness fired for the six untracked agents with `trackedTired: []` and `dev` keeping expression `normal` AND bubble `"code first, think later!"`; hour-12 nap fired for `[ops]` with `dev` still `focused` and no phantom `activeEvent`. Five earlier live runs were vacuous and an assume-failure guard kept each from being read as success — the cause was a rig race (`timeInterval` calls `updateTime()` and is registered before `timeEventInterval` at the same 60s period), not a production defect.
 
 ## Spec Index Archive
 

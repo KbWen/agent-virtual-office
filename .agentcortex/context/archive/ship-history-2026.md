@@ -38,7 +38,17 @@ Rotated 1 additional entry on 2026-09-14 (SSoT Update Sequence 125 -> 126).
 
 Rotated 1 additional entry on 2026-09-19 (SSoT Update Sequence 126 -> 127).
 
+Rotated 1 additional entry on 2026-09-19 (SSoT Update Sequence 127 -> 128).
+
 ---
+
+### Ship-fix-office-honesty-nap-drowsy-2026-09-02 (AVO-194 — the office said a working agent was asleep, at three sites)
+
+- Feature shipped: two time-linked `officeLife` handlers never read `externalStatus`. **The root cause is reachability, not forgetfulness** — the availability rule lived as a closure INSIDE `pickParticipants`, so no time-linked handler could apply it even in principle. It is now a module-scope `isAgentAvailable(id, agents, externalStatus)` all three callers share, `pickParticipants` delegating unchanged. Same "it turned out to be four sites, not two" shape as AVO-191.
+- **12:00 lunch nap** (the row AVO-194 records) picked with `!inGroupEvent && Math.random() < 0.5`, so a genuinely working or blocked agent got `behavior: 'nap'`, a sleepy face and a lunch bubble. `setActiveEvent` also moved BELOW the cast: it is the global event mutex, and arming it for a nap with nobody in it blocks every later event for 45s with nothing on screen. The empty-cast check is a nested guard rather than an early `return` on purpose — a return is correct only while the hour blocks stay mutually exclusive with `hour === 12`, which is not an invariant the next person should have to know.
+- **14:00 post-lunch drowsiness is a THIRD site the backlog row does not record**, found by reading rather than trusting the row. It guarded only `inGroupEvent`, so it painted every tracked working agent `tired` — a fabricated emotional state (ADR-008), and its `null` bubble argument CLEARS what the agent was saying. The ring and name-pill come from `externalStatus`, which is what bounds that harm to voice rather than state.
+- **The existing test was asserting a phantom event, and failing it was correct.** Instrumenting rather than guessing showed `startOfficeLife` consumes the first two `Math.random` calls arming its schedulers, so the nap filter got `0.999` twice and picked nobody — yet the test passed, because the old code armed `activeEvent` before computing the cast. Corrected, and it now also asserts somebody is actually napping.
+- Tests: vitest **2323 passed / 116 files** (+4), mutation-verified — with the fix stashed all 4 new tests fail. Run twice: the first attempt had one test that did NOT go red and was fixed before its green was trusted. Live in a real browser against a hermetic server with two agents staged working: hour-14 drowsiness fired for the six untracked agents with `trackedTired: []` and `dev` keeping expression `normal` AND bubble `"code first, think later!"`; hour-12 nap fired for `[ops]` with `dev` still `focused` and no phantom `activeEvent`. Five earlier live runs were vacuous and an assume-failure guard kept each from being read as success — the cause was a rig race (`timeInterval` calls `updateTime()` and is registered before `timeEventInterval` at the same 60s period), not a production defect.
 
 ### Ship-fix-office-multi-agent-reaction-lines-2026-09-02 (a whole table of agents stopped saying the identical line)
 
