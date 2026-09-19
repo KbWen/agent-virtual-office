@@ -19,7 +19,7 @@ function BehaviorBubble({ x, y, message, below = false, absX = null, scale = 1, 
   }, [message])
 
   // Derive display text + box width ONCE per message. Without this memo the three
-  // surrogate-cleaning regexes, the Array.from split, and the per-char width loop
+  // surrogate-cleaning regexes and the width fitting (a few canvas measureText calls)
   // re-ran on every render — and BehaviorBubble re-renders on every x/y change while
   // its parent AgentCharacter walks (~30fps). The result depends only on currentMsg,
   // which changes a few times per minute, so x/y movement must not retrigger it.
@@ -88,9 +88,9 @@ function BehaviorBubble({ x, y, message, below = false, absX = null, scale = 1, 
         y={by + boxH / 2 + 1}
         textAnchor="middle"
         dominantBaseline="middle"
-        fontSize="11"
-        fontFamily="'Segoe UI', system-ui, sans-serif"
-        fontWeight="500"
+        fontSize={BUBBLE_FONT_SIZE}
+        fontFamily={BUBBLE_FONT_FAMILY}
+        fontWeight={BUBBLE_FONT_WEIGHT}
         fill="#333"
       >
         {displayMsg}
@@ -107,9 +107,71 @@ function BehaviorBubble({ x, y, message, below = false, absX = null, scale = 1, 
 // React.memo additionally elides the component invocation itself.
 export default React.memo(BehaviorBubble)
 
-// Pure layout derivation — extracted so the memo body stays small and the regex /
-// char-width work is unambiguously a function of the message string alone.
-function computeBubbleLayout(currentMsg) {
+// ─── Bubble text fitting (2026-09-19 review, REV-07) ─────────────────────────────────────────────
+// The bubble used to cut every message at 16 CHARACTERS. Sixteen CJK characters are ~1.7× as wide as
+// sixteen Latin ones, so 46% of English lines were cut mid-word ("forgot a semicol…") against 5% of
+// zh-TW lines, and the box width came from a fixed per-character estimate that over-padded English by
+// ~22%. The cut is now a WIDTH budget, measured in the bubble's own font, and the box is sized from the
+// same measurement. Chosen by simulating five budgets over every locale line in a real browser: at 140
+// both languages show more whole lines (en 52%→85%, zh 92%→95%) while the average bubble gets
+// narrower in both and the widest one in the office shrinks (187→158).
+export const BUBBLE_FONT_SIZE = 11
+export const BUBBLE_FONT_FAMILY = "'Segoe UI', system-ui, sans-serif"
+export const BUBBLE_FONT_WEIGHT = 500
+// The canvas font string for exactly the <text> above — one source, so the measurement cannot drift.
+export const BUBBLE_FONT = `${BUBBLE_FONT_WEIGHT} ${BUBBLE_FONT_SIZE}px ${BUBBLE_FONT_FAMILY}`
+export const BUBBLE_TEXT_BUDGET = 140
+const BOX_PADDING = 18
+const BOX_MIN = 48
+
+// Fallback when there is no DOM (tests, SSR): the previous fixed estimate — CJK ~11 units, other ~6.5.
+function estimateBubbleText(s) {
+  let w = 0
+  for (const ch of s) w += ch.codePointAt(0) > 0x2E7F ? 11 : 6.5
+  return w
+}
+
+// Real width in the bubble's font via canvas measureText (correct on every platform's fonts).
+let measureCtx = null
+function measureBubbleText(s) {
+  if (typeof document === 'undefined') return estimateBubbleText(s)
+  if (measureCtx === null) {
+    measureCtx = document.createElement('canvas').getContext('2d') || false
+    if (measureCtx) measureCtx.font = BUBBLE_FONT
+  }
+  return measureCtx ? measureCtx.measureText(s).width : estimateBubbleText(s)
+}
+
+const segmenter = typeof Intl !== 'undefined' && Intl.Segmenter
+  ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+  : null
+// User-perceived characters, so a cut never splits a ZWJ emoji, a flag or a skin-tone sequence.
+const graphemes = (s) => (segmenter ? Array.from(segmenter.segment(s), (x) => x.segment) : Array.from(s))
+
+// Longest prefix that fits `budget` with its ellipsis. When the cut would split a Latin word, it backs
+// off to the previous space if that keeps most of the text; CJK has no spaces to back off to and is cut
+// by width. Trailing spaces/punctuation are dropped before the ellipsis ("App.jsx,…" → "App.jsx…").
+export function fitBubbleText(text, budget = BUBBLE_TEXT_BUDGET, measure = measureBubbleText) {
+  if (!text || measure(text) <= budget) return text
+  const g = graphemes(text)
+  let k = 0
+  while (k < g.length && measure(g.slice(0, k + 1).join('') + '…') <= budget) k++
+  let kept = g.slice(0, k).join('')
+  const next = g[k]
+  if (next !== undefined && !/\s/u.test(next)) {
+    const sp = kept.lastIndexOf(' ')
+    const partialWord = kept.slice(sp + 1)
+    if (sp > 0 && sp >= kept.length * 0.65 && /^[\p{Script=Latin}\p{N}'’.-]*$/u.test(partialWord)) {
+      kept = kept.slice(0, sp)
+    }
+  }
+  kept = kept.replace(/[\s,，、;；:：—–-]+$/u, '')
+  return kept + '…'
+}
+
+// Pure layout derivation — extracted so the memo body stays small and the text-fitting work is
+// unambiguously a function of the message string alone.
+export function computeBubbleLayout(currentMsg, measure = measureBubbleText) {
   // Clean garbled characters: U+FFFD and unpaired surrogates only.
   // Full surrogate range strip destroyed non-BMP emoji (\uD83D\uDE80 etc.) \u2014 keep paired surrogates.
   const cleanMsg = currentMsg
@@ -117,17 +179,8 @@ function computeBubbleLayout(currentMsg) {
     .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')   // lone high surrogate
     .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')  // lone low surrogate
 
-  // Unicode-safe truncation using Array.from (handles surrogate pairs)
-  const chars = Array.from(cleanMsg)
-  const maxLen = 16
-  const displayMsg = chars.length > maxLen ? chars.slice(0, maxLen).join('') + '…' : cleanMsg
-
-  // Width: CJK chars (~11 units) vs ASCII (~6.5 units) at fontSize 11
-  let estWidth = 0
-  for (const ch of displayMsg) {
-    estWidth += ch.codePointAt(0) > 0x2E7F ? 11 : 6.5
-  }
-  return { displayMsg, boxW: Math.max(Math.ceil(estWidth) + 18, 48) }
+  const displayMsg = fitBubbleText(cleanMsg, BUBBLE_TEXT_BUDGET, measure)
+  return { displayMsg, boxW: Math.max(Math.ceil(measure(displayMsg)) + BOX_PADDING, BOX_MIN) }
 }
 
 // #47 — pure horizontal-edge shift (local units) so a bubble centered on an agent at absolute scene

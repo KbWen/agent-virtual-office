@@ -78,3 +78,8 @@ source_sha: 94e3d5a
 - [TRADEOFF] The inspector's counter-scale is sacrificed before visibility: when the card cannot fit at its readable size it shrinks to fit rather than clipping. Smaller text beats a missing close button.
 - [DECISION] The document-title status channel is deleted, not flag-gated: a page can only see its own title, the office never sets it, so the channel is dead code whose only reachable behaviour is self-feedback into a fabricated `working`.
 - [CONSTRAINT] A relative-time label must not outlive its truth by more than one tick (10 s); a component that renders "ago"/"since" text owns a clock tick instead of relying on unrelated store churn to re-render it.
+
+### [ui-rendering][2026-09-19][fix/bubble-truncation-width]
+source: PR #237 (quick-win, REV-07)
+
+- [CONSTRAINT] Speech-bubble text is fitted by WIDTH (budget 140, `BUBBLE_TEXT_BUDGET`), measured with canvas `measureText` in the exact font the `<text>` renders (one shared constant, pinned by a test) — never by character count. Character caps are script-biased: 16 CJK ≈ 1.7× the width of 16 Latin. Change the budget only from a re-run of the per-line simulation (whole-line % and mean/max box per locale), not by feel.
