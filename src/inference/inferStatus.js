@@ -199,8 +199,8 @@ export function normalizeStatusMessage(raw) {
 // unit-tested without an EventSource/window mocking harness.
 
 // Only hook-origin sources share a clock (both produced by Date.now() on the same
-// machine). External sources (postMessage, BroadcastChannel, window global, hash/
-// title) have independent clocks and must not poison the stale-drop high-water mark.
+// machine). External sources (postMessage, BroadcastChannel, window global, URL
+// hash) have independent clocks and must not poison the stale-drop high-water mark.
 const HOOK_ORIGIN = new Set(['claude-cli', 'codex-cli', 'multi-session', 'file-watcher'])
 
 export function isHookOrigin(source) {
@@ -652,57 +652,9 @@ function listenHashChanges(callback) {
   return () => window.removeEventListener('hashchange', handler)
 }
 
-// ─── Document title inference (heuristic) ──────────────────────────────
-// Some platforms put task info in the title. We look for patterns like:
-// "Implementing auth..." or "Testing: unit tests" or "[building] feature X"
-
-// AVO-174: heuristic role-hint patterns ONLY. The conclusive/alarming `blocked` and `done` mappings
-// were REMOVED — a weak page-title match (a browser tab titled "build failed" or "all done") must
-// never fabricate the most-alarming (blocked) or a completion (done) state; those require a real hook
-// signal, not a title heuristic. The title channel can only HINT that a role is working.
-const TITLE_PATTERNS = [
-  { pattern: /implement|coding|writing code|building/i, role: 'dev', status: 'working' },
-  { pattern: /testing|reviewing|linting/i, role: 'qa', status: 'working' },
-  { pattern: /planning|spec|bootstrap/i, role: 'pm', status: 'working' },
-  { pattern: /deploy|shipping|release/i, role: 'ops', status: 'working' },
-  { pattern: /research|analyzing|exploring/i, role: 'res', status: 'working' },
-  { pattern: /design|architect|brainstorm/i, role: 'arch', status: 'working' },
-]
-
-// Exported for testing. Returns a heuristic { role, status } hint for a document title, or null.
-// By construction it can only ever return status: 'working' (AVO-174 honesty floor).
-export function classifyTitle(title) {
-  if (typeof title !== 'string') return null
-  for (const { pattern, role, status } of TITLE_PATTERNS) {
-    if (pattern.test(title)) return { role: role || 'dev', status }
-  }
-  return null
-}
-
-function listenTitleChanges(callback) {
-  let lastTitle = document.title
-
-  const observer = new MutationObserver(() => {
-    const title = document.title
-    if (title === lastTitle) return
-    lastTitle = title
-
-    const hint = classifyTitle(title)
-    if (!hint) return
-    const msg = normalizeStatusMessage({
-      type: 'office-status',
-      agents: [{ role: hint.role, task: title, status: hint.status, label: null }],
-      source: 'title',
-    })
-    if (msg) callback(msg)
-  })
-
-  const titleEl = document.querySelector('title')
-  if (titleEl) {
-    observer.observe(titleEl, { childList: true, characterData: true, subtree: true })
-  }
-  return () => observer.disconnect()
-}
+// There is deliberately NO page-title channel (removed 2026-09-19, review REV-03): a page sees only
+// its own title, which the office never sets, so the only reachable effect was self-feedback into a
+// fabricated `working`. Guarded by tests/noTitleStatusChannel.test.js.
 
 // ─── Master integration orchestrator ───────────────────────────────────
 
@@ -844,7 +796,7 @@ export function startStatusIntegration(store) {
     // heartbeat body (lower seq) clobber a fresher SSE push already in the debounce slot,
     // because lastAppliedSeq hasn't been updated until applyMessage actually runs.
     // Stale-drop only applies to hook-origin messages — they share the same clock.
-    // External channels (postMessage, BroadcastChannel, window global, hash/title) have
+    // External channels (postMessage, BroadcastChannel, window global, URL hash) have
     // independent clocks and must not be stale-dropped against or used to stale-drop hooks.
     const hookOriginMsg = isHookOrigin(msg.source)
     if (isNumericSeq(msg._seq) && hookOriginMsg) {
@@ -878,7 +830,7 @@ export function startStatusIntegration(store) {
       if (pendingMsg && isHookOrigin(pendingMsg.source) && isNumericSeq(pendingMsg._seq) && Number(msg._seq) < Number(pendingMsg._seq) && !isAuthoritativeSnapshotSource(msg.source)) return
     }
     // Passive/non-hook-origin messages must not evict a queued hook-origin message from the
-    // debounce slot: a hash-change or title-change within the 150ms window would otherwise
+    // debounce slot: a hash-change within the 150ms window would otherwise
     // discard a fresher SSE/file-poll delivery whose seq comparison block was skipped.
     if (!hookOriginMsg && pendingMsg && isHookOrigin(pendingMsg.source) && isNumericSeq(pendingMsg._seq)) return
     pendingMsg = msg
@@ -987,7 +939,6 @@ export function startStatusIntegration(store) {
     listenBroadcastChannel(handleIncoming),           // cross-tab (CLI opens browser)
     startPolling(handleIncoming),                     // window global (CLI injection)
     listenHashChanges(handleIncoming),                // URL hash (passive, any platform)
-    listenTitleChanges(handleIncoming),               // title monitoring (heuristic)
     () => { if (polling.cleanup) polling.cleanup() }, // /api/status fallback
     ...(sseCleanup ? [sseCleanup] : []),              // SSE push channel
   ]
