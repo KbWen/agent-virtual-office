@@ -29,11 +29,12 @@ function sourceFiles(dir) {
 // READS of the page title (dot or bracket access, or destructuring), or DOM lookups whose selector
 // ends in the <title> element (the MutationObserver target). A plain assignment is a write, not a
 // status source, so it is deliberately not flagged.
+// A regex cannot follow aliasing (`const d = document; d.title`) — that stays a code-review matter.
 const TITLE_READ = new RegExp([
-  String.raw`document\s*\.\s*title(?!\s*=(?!=))`,
-  String.raw`document\s*\[\s*['"\x60]title['"\x60]\s*\](?!\s*=(?!=))`,
-  String.raw`\{[^}]*\btitle\b[^}]*\}\s*=\s*document\b`,
-  String.raw`querySelector(All)?\(\s*['"\x60](?:[^'"\x60]*[\s>+~])?title['"\x60]\s*\)`,
+  String.raw`document\s*\??\.\s*title(?!\s*=(?!=))`,
+  String.raw`document\s*(?:\?\.)?\s*\[\s*['"\x60]title['"\x60]\s*\](?!\s*=(?!=))`,
+  String.raw`\{[^}]*\btitle\b[^}]*\}\s*=\s*(?:(?:window|globalThis|self)\s*\??\.\s*)?document\b`,
+  String.raw`querySelector(All)?\(\s*['"\x60](?:[^'"\x60]*[\s>+~])?title(?::[\w-]+(?:\([^)]*\))?)*['"\x60]\s*\)`,
   String.raw`getElementsByTagName\(\s*['"\x60]title['"\x60]\s*\)`,
 ].join('|'))
 
@@ -57,6 +58,11 @@ describe('no status channel reads the page title (REV-03)', () => {
     expect(TITLE_READ.test("document.querySelector('head > title')")).toBe(true)
     expect(TITLE_READ.test("document.getElementsByTagName('title')")).toBe(true)
     expect(TITLE_READ.test("if (document.title === 'x') {}")).toBe(true) // a comparison is a read
+    // Review round 2, NEW-3.
+    expect(TITLE_READ.test('const t = document?.title')).toBe(true)
+    expect(TITLE_READ.test('const { title } = window.document')).toBe(true)
+    expect(TITLE_READ.test('const { title: t } = globalThis?.document')).toBe(true)
+    expect(TITLE_READ.test("document.querySelector('title:first-of-type')")).toBe(true)
   })
 
   it('does not trip on writes or on unrelated uses of the word', () => {

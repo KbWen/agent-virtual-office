@@ -299,4 +299,33 @@ describe('AgentCharacter render — the bubble flip reads the live sceneBounds (
     fakeState = speaker(700, 120, PANEL_CROPS.tall)
     expect(bubbleOffset(render())).toBe(-68)
   })
+
+  it('a speaker just inside the crop\'s right edge still flips (the call passes the crop\'s x-origin, not 0)', () => {
+    // Review round 2, NEW-1: at the meeting-room door (610,210) in the wide crop (x 40..620). Were the
+    // call site to drop `sceneMinX`, the x-range would read 0..580 and this visible speaker's bubble
+    // would stay above the crop, out of sight.
+    fakeState = speaker(610, 210, PANEL_CROPS.wide)
+    expect(bubbleOffset(render())).toBe(6)
+  })
+})
+
+describe('orphan guard — adversarial anchors (test phase)', () => {
+  const b = PANEL_CROPS.wide
+  it('non-finite anchors never flip and never shift', () => {
+    for (const bad of [NaN, undefined, null, Infinity, -Infinity]) {
+      expect(shouldFlipBubbleBelow({ posX: bad, posY: 180, sceneMinX: b.minX, sceneMinY: b.minY, sceneW: b.w }), `posX=${bad}`).toBe(false)
+      expect(shouldFlipBubbleBelow({ posX: 300, posY: bad, sceneMinX: b.minX, sceneMinY: b.minY, sceneW: b.w }), `posY=${bad}`).toBe(false)
+      expect(computeEdgeShift({ boxW: 150, absX: bad, sceneMinX: b.minX, sceneW: b.w }), `absX=${bad}`).toBe(0)
+    }
+  })
+
+  it('an anchor exactly on either crop edge counts as visible (flips and clamps)', () => {
+    expect(flip(b.minX, 180, b)).toBe(true)
+    expect(flip(b.minX + b.w, 180, b)).toBe(true)
+    expect(computeEdgeShift({ boxW: 150, absX: b.minX, sceneMinX: b.minX, sceneW: b.w })).toBeGreaterThan(0)
+    expect(computeEdgeShift({ boxW: 150, absX: b.minX + b.w, sceneMinX: b.minX, sceneW: b.w })).toBeLessThan(0)
+    // One unit outside: neither.
+    expect(flip(b.minX + b.w + 1, 180, b)).toBe(false)
+    expect(computeEdgeShift({ boxW: 150, absX: b.minX + b.w + 1, sceneMinX: b.minX, sceneW: b.w })).toBe(0)
+  })
 })
