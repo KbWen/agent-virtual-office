@@ -167,7 +167,7 @@ function writeCodexStatusFile(payload, cwd = process.cwd()) {
   // tmp name = pid + random suffix: a bare pid collides when two codex hook
   // invocations share a parent pid and run concurrently — one's writeFileSync
   // would clobber the other mid-write and the shared-path unlinkSync would
-  // delete the sibling's tmp. Matches office-status-hook.js / vite.config.js.
+  // delete the sibling's tmp. Matches office-status-hook.js / vite.config.mjs.
   const tmpFile = `${statusFile}.tmp.${process.pid}.` +
     (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
   const json = JSON.stringify(output, null, 2)
