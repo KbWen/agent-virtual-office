@@ -50,3 +50,10 @@ cross_ref: docs/architecture/ui-rendering.log.md
 - [CONSTRAINT] Hand-wiring instructions are part of the contract. `bin/cli.js` registers 8 hook events; `docs/INTEGRATIONS.md` said 6 and `public/hooks/hooks-config.json` -- the file the docs tell you to paste -- omitted `PermissionDenied` and `StopFailure`, which are exactly what turn a denied tool call or a Claude-API failure into an honest `blocked` state. A hand-wired install silently lost that. Pinned to `bin/cli.js` by `tests/hookEventRegistrationParity.test.js`.
 - [CONSTRAINT] Hook-authored labels must resolve language through `detectHookLang()` (`~/.claude/office-lang`, default `en`). `generic-llm-bridge.js` had hard-coded Traditional Chinese, so an English office showed Chinese status text with no way to change it.
 - [TRADEOFF] The Docker runner copies `src/server` + `src/utils` (56 KB) rather than all of `src/` (1.1 MB). The narrower copy keeps app source out of the runtime image but can be outgrown by a future import -- which is why it ships paired with the import-graph guard rather than on its own.
+
+### [hook-integration][2026-09-20][chore/vite-config-esm]
+source_spec: docs/specs/vite-config-esm.md
+source_sha: f49a69c
+
+- [DECISION] The dev-server config is a native ES module (`vite.config.mjs`) importing the transport contract from `statusContract.mjs` directly; the package stays `"type": "commonjs"` so bin/ and the hooks are untouched.
+- [CONSTRAINT] Build/packaging manifests that name repo paths (Dockerfile `COPY`, package.json `files`) are guarded by a test that every named path exists — both consumers drop a missing path silently, so a rename can otherwise ship a broken image or tarball with every gate green.

@@ -1,6 +1,6 @@
 ---
 title: Dev-server config as native ESM (REV-05)
-status: frozen
+status: shipped
 classification: feature
 primary_domain: hook-integration
 created: 2026-09-19

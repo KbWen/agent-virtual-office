@@ -29,7 +29,8 @@ resolved_by: fix/review-2026-09-19 (2026-09-19)
 > - **REV-05's cause is misattributed:** the warnings come from Vite 8's config loader and Rolldown, not Node 22.
 > - **REV-06 rejected:** `monolith-extraction-map.md`, which it cites, says it is "not a refactor request".
 > - **REV-07 is understated:** 218 of 469 English bubble lines are truncated (5% in zh-TW), not an occasional one.
-> - **REV-07 shipped** in PR #237 (width-budget fitting; owner-approved captures). REV-05 remains.
+> - **REV-07 shipped** in PR #237 (width-budget fitting; owner-approved captures).
+> - **REV-05 shipped** in PR #238 (`vite.config.mjs`; the cause was Vite 8's config loader, not Node 22). All ten findings now have a disposition.
 > - **REV-08 and REV-09 are under-scoped:** the inspector's AVO-169 duration and the activity feed froze the
 >   same way; the stale "KNOWN, UNFIXED" framing was also in `tests/doorCrossingSeparation.test.js`.
 > - **Line references:** REV-01's `PixelOffice.jsx:978` and REV-03's `inferStatus.js:682-705` were accurate.
