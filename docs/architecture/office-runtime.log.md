@@ -81,3 +81,6 @@ source_sha: 018ef1ef2225c4ebb53cf9aee05c3eae1bb5e1b2
 - [CONSTRAINT] Timeout recovery must abort the owner at rendered truth before release; clock expiry alone can never transfer a live claim.
 - [CONSTRAINT] StrictMode/live teardown is not removal and cannot release door ownership.
 - [TRADEOFF] Full-route claims reduce throughput versus next-door claims; accept this bounded cost for the first version and reopen only with measured wait or owner game-feel evidence.
+
+### [office-runtime][2026-09-19][fix/review-2026-09-19]
+cross-ref: See [ui-rendering][2026-09-19][fix/review-2026-09-19] in docs/architecture/ui-rendering.log.md

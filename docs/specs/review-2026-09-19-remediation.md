@@ -1,6 +1,6 @@
 ---
 title: 2026-09-19 Review Remediation — Wave 1
-status: frozen
+status: shipped
 classification: feature
 primary_domain: ui-rendering
 secondary_domains: [office-runtime]

@@ -1,12 +1,37 @@
 ---
-doc_state: living
+doc_state: snapshot
 title: Project Review & Implementation Handoff for Claude
 date: 2026-09-19
 baseline_sha: 1.6.8-head
 scope: Comprehensive Review covering Technical Debt, Visual/Rendering Defects, and Architectural Design Issues
 target_implementer: Claude Code
-status: open — ready for triage and implementation
+status: resolved — triaged and remediated on `fix/review-2026-09-19` (PR #236)
+resolved_by: fix/review-2026-09-19 (2026-09-19)
 ---
+
+> [!NOTE]
+> **Resolution (2026-09-19, `fix/review-2026-09-19`, PR #236).** Every finding was independently
+> re-derived from source before any edit. This document is preserved **as written**, including its
+> errors, because they are part of the record — do not edit the findings below. Outcome and corrections:
+>
+> - **Fixed:** REV-01, REV-02, REV-03, REV-08, REV-09. **Rejected:** REV-04, REV-06. **Backlog:** REV-10 is
+>   AVO-193. **Own PRs:** REV-07, REV-05. Spec: `docs/specs/review-2026-09-19-remediation.md`.
+> - **REV-02** is narrower than stated: desk agents (y ≥ 244) were never clipped; the top aisle and the north
+>   doorway (y ≈ 176–180) were. Its suggested fix, applied as written, pulled off-crop meeting-room speakers'
+>   bubbles into view (caught by a fresh-context review); the shipped rule guards both axes and the #47 clamp.
+> - **REV-01's backdrop suggestion was rejected:** with `preserveAspectRatio="xMidYMid meet"` the visible area
+>   can exceed the viewBox, so a bounds-sized backdrop shrinks the close target.
+> - **REV-03's premise is wrong:** a page cannot observe another tab's title; the office never sets its own,
+>   so the channel was dead code. It was deleted rather than put behind `OFFICE_ENABLE_TITLE_INFER`, which a
+>   browser bundle cannot read.
+> - **REV-04 rejected:** an above-head bubble cannot be covered by a later-painted (lower) agent; the remaining
+>   cases are rare and the fix restructures a protected per-frame render path.
+> - **REV-05's cause is misattributed:** the warnings come from Vite 8's config loader and Rolldown, not Node 22.
+> - **REV-06 rejected:** `monolith-extraction-map.md`, which it cites, says it is "not a refactor request".
+> - **REV-07 is understated:** 218 of 469 English bubble lines are truncated (5% in zh-TW), not an occasional one.
+> - **REV-08 and REV-09 are under-scoped:** the inspector's AVO-169 duration and the activity feed froze the
+>   same way; the stale "KNOWN, UNFIXED" framing was also in `tests/doorCrossingSeparation.test.js`.
+> - **Line references:** REV-01's `PixelOffice.jsx:978` and REV-03's `inferStatus.js:682-705` were accurate.
 
 # Project Review & Implementation Handoff for Claude
 
