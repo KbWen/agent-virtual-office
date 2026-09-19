@@ -210,25 +210,33 @@ describe('store — recordWatchdogRestart', () => {
   })
 })
 
-// #47 — sceneBounds publishes the active viewBox x-range so BehaviorBubble clamps speech bubbles to
-// the VISIBLE edges (default 0..800 OR the panel crop). Default office bounds = {minX:0, w:800}.
-describe('store — sceneBounds (#47 bubble edge clamp bounds)', () => {
+// #47 — sceneBounds publishes the active viewBox so overlays stay inside the VISIBLE scene (default
+// 0..800 × 0..560 OR the panel crop). The x-range clamps speech bubbles horizontally; the y-range
+// (added for the 2026-09-19 review, REV-01/02) keeps the inspector card and the bubble flip inside a
+// panel crop that starts well below y=0. Default office bounds = {minX:0, minY:0, w:800, h:560}.
+describe('store — sceneBounds (#47 bubble edge clamp bounds + REV-01/02 vertical bounds)', () => {
   beforeEach(() => {
-    useOfficeStore.setState({ sceneBounds: { minX: 0, w: 800 } })
+    useOfficeStore.setState({ sceneBounds: { minX: 0, minY: 0, w: 800, h: 560 } })
   })
 
-  it('defaults to the full default-office viewBox {minX:0, w:800}', () => {
-    expect(useOfficeStore.getState().sceneBounds).toEqual({ minX: 0, w: 800 })
+  it('defaults to the full default-office viewBox {minX:0, minY:0, w:800, h:560}', () => {
+    expect(useOfficeStore.getInitialState().sceneBounds).toEqual({ minX: 0, minY: 0, w: 800, h: 560 })
   })
 
-  it('setSceneBounds updates to the panel crop bounds', () => {
-    useOfficeStore.getState().setSceneBounds(80, 440)
-    expect(useOfficeStore.getState().sceneBounds).toEqual({ minX: 80, w: 440 })
+  it('setSceneBounds stores all four numbers of a panel crop', () => {
+    useOfficeStore.getState().setSceneBounds(40, 135, 580, 300)
+    expect(useOfficeStore.getState().sceneBounds).toEqual({ minX: 40, minY: 135, w: 580, h: 300 })
+  })
+
+  it('a change to ONLY the vertical bounds is still published (the crop shapes share an x-range)', () => {
+    useOfficeStore.getState().setSceneBounds(40, 120, 580, 380)
+    useOfficeStore.getState().setSceneBounds(40, 135, 580, 300)
+    expect(useOfficeStore.getState().sceneBounds).toEqual({ minX: 40, minY: 135, w: 580, h: 300 })
   })
 
   it('setSceneBounds preserves object identity when unchanged (no needless re-render)', () => {
     const before = useOfficeStore.getState().sceneBounds
-    useOfficeStore.getState().setSceneBounds(0, 800) // same values
+    useOfficeStore.getState().setSceneBounds(0, 0, 800, 560) // same values
     expect(useOfficeStore.getState().sceneBounds).toBe(before) // same reference
   })
 })

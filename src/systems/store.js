@@ -545,12 +545,13 @@ export const useOfficeStore = create((set) => ({
   // labels so glance-text stays readable while the office shrinks. Transient — never persisted
   // (savePersistedState whitelists fields and this is not one), same as watchdogRestarts.
   sceneScale: 1,
-  // #47: the ACTIVE office svg viewBox x-bounds in scene units, so BehaviorBubble can clamp speech
-  // bubbles to the *visible* edges. Default office = `0 0 800 560` → {minX:0, w:800}; PANEL mode
-  // crops to a sub-window (e.g. `80 110 440 440` → {minX:80, w:440}), where a 0..800 clamp would
-  // target the wrong edges and let bubbles clip the panel crop. PixelOffice publishes the live
-  // bounds; AgentCharacter reads + forwards them. Transient — never persisted.
-  sceneBounds: { minX: 0, w: 800 },
+  // #47: the ACTIVE office svg viewBox in scene units, so overlays stay inside the *visible* scene.
+  // Default office = `0 0 800 560` → {minX:0, minY:0, w:800, h:560}; PANEL mode crops to a
+  // sub-window (e.g. `40 135 580 300`), where a literal 0..800 × 0..560 clamp targets the wrong
+  // edges: BehaviorBubble reads the x-range for its edge clamp, the bubble flip and AgentInspector
+  // read the y-range (2026-09-19 review, REV-01/02). PixelOffice publishes the live bounds.
+  // Transient — never persisted.
+  sceneBounds: { minX: 0, minY: 0, w: 800, h: 560 },
 
   setAgentBehavior: (id, behavior, expression, bubble) =>
     set((s) => {
@@ -675,10 +676,14 @@ export const useOfficeStore = create((set) => ({
   // POINT 2: store the measured office `meet` scale. No-op when unchanged so resize ticks that
   // re-measure the same value don't wake subscribers (AgentCharacter) for nothing.
   setSceneScale: (scale) => set((s) => (s.sceneScale === scale ? s : { sceneScale: scale })),
-  // #47: publish the active viewBox x-bounds; no-op (preserve object identity) when unchanged so
+  // #47: publish the active viewBox; no-op (preserve object identity) when unchanged so
   // subscribers don't re-render on every poll.
-  setSceneBounds: (minX, w) => set((s) =>
-    (s.sceneBounds.minX === minX && s.sceneBounds.w === w) ? s : { sceneBounds: { minX, w } }),
+  setSceneBounds: (minX, minY, w, h) => set((s) => {
+    const b = s.sceneBounds
+    return (b.minX === minX && b.minY === minY && b.w === w && b.h === h)
+      ? s
+      : { sceneBounds: { minX, minY, w, h } }
+  }),
 
   // ─── Subagent helper-huddle ───
   // HELPER_TTL = 60s safety window: a missed SubagentStop self-heals via pruneHelpers, so a

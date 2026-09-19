@@ -66,6 +66,8 @@ async function renderInspectorWithMocks(overrides = {}) {
       mood: 'smooth',
       activeWorkflow: 'Review',
       clearSelectedAgent: () => {},
+      // REV-01: the inspector clamps inside the live viewBox; full office here.
+      sceneBounds: { minX: 0, minY: 0, w: 800, h: 560 },
       ...overrides,
     }
 
@@ -559,6 +561,7 @@ describe('AgentInspector — planning status', () => {
         mood: 'normal',
         activeWorkflow: null,
         clearSelectedAgent: () => {},
+        sceneBounds: { minX: 0, minY: 0, w: 800, h: 560 },
       }
       return {
         // Intentionally omit 'unknown_future_status' from STATUS_COLORS to test fallback

@@ -139,6 +139,18 @@ function computeBubbleLayout(currentMsg) {
 //   box scene span = absX + (localX ± boxW/2 + shift)·scale, with localX = 0 (bubble is centered on
 //   the agent). Solve each edge for shift, then pick the value closest to 0 (no shift) that satisfies
 //   both — pushing right when it would clip the left edge, left when it would clip the right.
+// FLIP-BELOW (2026-09-19 review, REV-02): the above-the-head bubble's projected top is
+// posY − 68 − 34·labelScale (scene units). When that crosses the VISIBLE top (+6px) the parent anchors
+// the bubble just below the agent instead. `sceneMinY` is 0 in the default office and the crop's top
+// in panel mode (e.g. 135) — testing against a literal 6 let top-aisle agents (y≈176–180) draw their
+// whole bubble above a panel crop. Orphan guard: an agent whose anchor is itself above the visible
+// top is not on screen, and flipping would pull its speech into view with no visible speaker
+// (ADR-007: the bubble is that agent's voice), so it keeps the default placement.
+export function shouldFlipBubbleBelow({ posY, labelScale = 1, sceneMinY = 0 }) {
+  const bubbleTopAbove = posY - 68 - 34 * labelScale
+  return bubbleTopAbove < sceneMinY + 6 && posY >= sceneMinY
+}
+
 export function computeEdgeShift({ boxW, absX, scale = 1, sceneMinX = 0, sceneW = 800, edgePad = 4 }) {
   if (absX == null || !Number.isFinite(absX) || !Number.isFinite(scale) || scale <= 0) return 0
   const half = boxW / 2

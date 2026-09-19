@@ -69,3 +69,22 @@ export function buildAgentInspectorMeta(activityLog, agentId, mood, activeWorkfl
     activeWorkflow: activeWorkflow || null,
   }
 }
+
+// 2026-09-19 review, REV-01: where the inspector card goes, in scene units. It sits above the agent
+// and is clamped inside the LIVE viewBox (`bounds` = store.sceneBounds) minus `pad`, NOT a literal
+// 800×560 — panel mode crops the scene (e.g. `40 135 580 300`), and a literal clamp put the card's
+// header and close button above the crop. `scale` is the readable counter-scale the component asks
+// for; it is lowered only when the scaled card would not fit the bounds at all, because a card that
+// clips its close button is worse than smaller text. For the full office this equals the previous
+// inline clamp (10 / 790 / 10 / 550) whenever the card fits.
+export function placeInspector({ anchor, W, H, scale, bounds, pad = 10 }) {
+  const left = bounds.minX + pad
+  const right = bounds.minX + bounds.w - pad
+  const top = bounds.minY + pad
+  const bottom = bounds.minY + bounds.h - pad
+  const s = Math.min(scale, (right - left) / W, (bottom - top) / H)
+  const Ws = W * s, Hs = H * s
+  const px = Math.max(left, Math.min(anchor.x - Ws / 2, right - Ws))
+  const py = Math.max(top, Math.min(anchor.y - Hs - 56 * s, bottom - Hs))
+  return { px, py, s }
+}
