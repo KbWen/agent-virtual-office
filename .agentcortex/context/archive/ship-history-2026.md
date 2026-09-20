@@ -46,7 +46,16 @@ Rotated 1 additional entry on 2026-09-20 (SSoT Update Sequence 129 -> 130).
 
 Rotated 1 additional entry on 2026-09-20 (SSoT Update Sequence 130 -> 131).
 
+Rotated 1 additional entry on 2026-09-20 (SSoT Update Sequence 131 -> 132).
+
 ---
+
+### Ship-chore-release-v1.6.7-2026-09-02 (nobody is shown napping through real work) · release v1.6.7
+
+- Cuts the 10 commits merged since `v1.6.6` (2026-08-26) as **v1.6.7**. No app code in the release commit itself: `package.json` 1.6.6 -> 1.6.7, **both** `package-lock.json` version fields (root + `packages[""]`), CHANGELOG narrative, this entry. Verified zero `1.6.6` strings remain in either file.
+- **The CHANGELOG under-sells it, deliberately.** Only **2 of the 10** commits are user-facing — the AVO-194 nap/drowsiness honesty fix (three sites, not the one the backlog row recorded) and the multi-agent reaction lines (three keys, the third found by the guard written for the first two). The other eight are governance and tooling and sit under an explicit "Housekeeping — not user-facing" heading.
+- **The release notes also record a claim that did not survive.** `npm run rhythm` shipped in this wave with a measurement saying ambient motion is spread rather than clustered; two later runs did not reproduce it, and the cause was the metric itself — an absolute point-gap is bounded by the independent level it is compared against, so runs at different motion levels were never comparable. It now reports a ratio, and the finding is recorded as **not established**. A release that claims more than it measured is the same defect class as the office claiming a working agent is asleep, which is what this release is *about*.
+- Tests at the cut: vitest **2357 passed / 119 files**; build PASS; `bundle-budget` PASS at 496392 vs baseline 496504 (**-0.02%**); `render-smoke` PASS across 4 viewports with 0 page errors; both validators `pass=114 warn=5 fail=0 skip=5` and in exact agreement; `check_audit_chain` intact; `check_ssot_caps` 10/10 and 30/30. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.7` tag + `gh release create --latest` — NOT done by the PR merge, and this repo has forgotten it twice.
 
 ### Ship-feat-office-rhythm-measurement-2026-09-02 (the measurement base stops being disposable, and its hermeticity becomes real)
 

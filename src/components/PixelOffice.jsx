@@ -742,6 +742,41 @@ function ScaledText({ x, y, scale, children, ...rest }) {
   )
 }
 
+// How long the machine's BUSY reply stays up. Covers the longest steam wisp (1.6s + 0.3s delay).
+const COFFEE_BUSY_MS = 2000
+
+// AVO-193: a tea-break click that cannot be served used to do nothing at all — `pickParticipants`
+// finds no honest cast (AVO-191), and unlike the deploy button and the whiteboard, `tea-break` has
+// no INTERACTION_REACTOR entry, so not even a bubble fired. The machine now answers for itself.
+// This does NOT alter the refusal: the feedback hangs off the falsy return, so no agent is moved,
+// no status is written and no activeEvent is invented — the machine just says it cannot serve you.
+function CoffeeCorner() {
+  const reducedMotion = useOfficeStore((s) => s.reducedMotion)
+  // One counter does both jobs: >0 means "showing", and the change remounts the steam so a second
+  // click restarts the animation instead of watching the first one finish.
+  const [busyKey, setBusyKey] = useState(0)
+
+  useEffect(() => {
+    if (!busyKey) return undefined
+    const timer = setTimeout(() => setBusyKey(0), COFFEE_BUSY_MS)
+    return () => clearTimeout(timer)
+  }, [busyKey])
+
+  const onClick = useCallback(() => {
+    if (triggerInteractiveEvent(useOfficeStore, 'tea-break')) {
+      setBusyKey(0) // a real break started — the set-piece is the feedback
+      return
+    }
+    setBusyKey((k) => k + 1)
+  }, [])
+
+  return (
+    <g style={{ cursor: 'pointer' }} onClick={onClick}>
+      <CoffeeMachine x={20} y={445} busy={busyKey > 0} busyKey={busyKey} reducedMotion={reducedMotion} />
+    </g>
+  )
+}
+
 // Small wall-mounted framed picture — pure decor (Slice 2 hallway gallery). Zero status signal.
 function FramedArt({ x, y, w = 24, h = 16, hue = '#8888AA', o = 1 }) {
   return (
@@ -1216,9 +1251,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <Rug x={50} y={440} w={180} h={95} color="#507050" />
       <Couch x={55} y={450} width={90} color="#B97A4E" />
       <RoundTable x={175} y={490} r={22} />
-      <g style={{ cursor: 'pointer' }} onClick={() => triggerInteractiveEvent(useOfficeStore, 'tea-break')}>
-        <CoffeeMachine x={20} y={445} />
-      </g>
+      <CoffeeCorner />
       <WaterCooler x={48} y={448} />
       {/* Bookshelf (single, away from WC and doors) */}
       <Bookshelf x={280} y={520} width={60} rows={1} />
