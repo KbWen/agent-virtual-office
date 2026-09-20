@@ -42,6 +42,7 @@ docs/context/private/
 # App Build
 node_modules/
 dist/
+dist-single/
 
 
 # AgentCortex Template - Downstream Ignore Defaults
