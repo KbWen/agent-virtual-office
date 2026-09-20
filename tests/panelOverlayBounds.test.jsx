@@ -32,7 +32,7 @@ vi.mock('../src/systems/store', async (importOriginal) => {
 })
 
 const { placeInspector } = await import('../src/components/agentInspectorModel.js')
-const { shouldFlipBubbleBelow, computeEdgeShift } = await import('../src/components/BehaviorBubble.jsx')
+const { shouldFlipBubbleBelow, computeEdgeShift, isSpeakerOnScreen } = await import('../src/components/BehaviorBubble.jsx')
 const { MEETING_CHAIRS } = await import('../src/systems/movementSystem.js')
 const storeModule = await import('../src/systems/store')
 const { default: AgentInspector } = await import('../src/components/AgentInspector.jsx')
@@ -266,6 +266,50 @@ describe('AgentInspector render — reads the live sceneBounds (REV-01)', () => 
 
 // Review round 1, M1: prove the WIRING, not just the helper — AgentCharacter must pass its live
 // sceneBounds into the flip. A mutation to `sceneMinY: 0` at the call site kept every suite green.
+// AVO-196: a speaker whose body is entirely outside the crop keeps its speech off screen too. A
+// lounge agent below the wide crop used to render its bubble fully inside it with nobody visible
+// saying it. `blocked` / `awaiting-approval` are exempt — ADR-007 D1 licenses blocked to seize the
+// bubble, and the panel's control bar surfaces it as well.
+describe('isSpeakerOnScreen — is the speaker itself visible? (AVO-196)', () => {
+  const wide = PANEL_CROPS.wide // x 40..620, y 135..435
+  const on = (posX, posY, b = wide) => isSpeakerOnScreen({ posX, posY, sceneMinX: b.minX, sceneMinY: b.minY, sceneW: b.w, sceneH: b.h })
+
+  it('a desk agent inside the crop is on screen', () => {
+    expect(on(140, 264)).toBe(true)
+    expect(on(520, 244)).toBe(true)
+  })
+
+  it('the lounge and research spots below the crop are off screen (the AVO-196 case)', () => {
+    expect(on(180, 490)).toBe(false) // lounge `stretch`
+    expect(on(80, 475)).toBe(false)  // `coffee`
+    expect(on(535, 500)).toBe(false)
+  })
+
+  it('the anchor decides: standing one unit below the crop is off screen, even if the head still shows', () => {
+    // Same rule as the other three sides (the #236 orphan guard): where the agent STANDS must be
+    // inside the crop. A head poking in above the edge is not enough to own a bubble.
+    expect(on(300, wide.minY + wide.h)).toBe(true)
+    expect(on(300, wide.minY + wide.h + 1)).toBe(false)
+  })
+
+  it('off to the left, right or above also counts as off screen', () => {
+    expect(on(700, 205)).toBe(false) // meeting chair, right of every crop
+    expect(on(20, 264)).toBe(false)
+    expect(on(300, 100)).toBe(false)
+  })
+
+  it('the full office keeps every real agent position on screen (nothing changes there)', () => {
+    for (const [x, y] of [[140, 264], [700, 205], [180, 490], [80, 475], [100, 80], [535, 500]]) {
+      expect(isSpeakerOnScreen({ posX: x, posY: y, sceneMinX: 0, sceneMinY: 0, sceneW: 800, sceneH: 560 }), `(${x},${y})`).toBe(true)
+    }
+  })
+
+  it('non-finite anchors are treated as off screen', () => {
+    expect(on(NaN, 264)).toBe(false)
+    expect(on(140, undefined)).toBe(false)
+  })
+})
+
 describe('AgentCharacter render — the bubble flip reads the live sceneBounds (REV-02 wiring)', () => {
   const speaker = (x, y, bounds) => {
     const base = baseState()
@@ -284,6 +328,7 @@ describe('AgentCharacter render — the bubble flip reads the live sceneBounds (
     return Number(m[1])
   }
   const render = () => renderToStaticMarkup(<svg><AgentCharacter agent={{ id: 'qa', color: '#BA7517' }} /></svg>)
+  const renderedBubble = (html) => (html.includes('class="speech-bubble"') ? html.match(/<g class="speech-bubble"[^>]*>/)[0] : null)
 
   it('top-aisle speaker in the wide panel crop renders its bubble below', () => {
     fakeState = speaker(300, 180, PANEL_CROPS.wide)
@@ -295,9 +340,28 @@ describe('AgentCharacter render — the bubble flip reads the live sceneBounds (
     expect(bubbleOffset(render())).toBe(-68)
   })
 
-  it('a meeting-chair speaker right of the crop does not get its bubble flipped in', () => {
+  it('a meeting-chair speaker right of the crop says nothing on screen at all (AVO-196 supersedes the flip)', () => {
+    // Before AVO-196 this rendered unflipped (bubble above the head, off screen). Now the bubble is
+    // not rendered at all; the flip/clamp geometry for off-crop anchors stays pinned by the pure tests.
     fakeState = speaker(700, 120, PANEL_CROPS.tall)
-    expect(bubbleOffset(render())).toBe(-68)
+    expect(renderedBubble(render())).toBe(null)
+  })
+
+  it('a speaker entirely below the crop says nothing on screen (AVO-196)', () => {
+    fakeState = speaker(180, 490, PANEL_CROPS.wide) // lounge stretch spot, idle
+    expect(renderedBubble(render())).toBe(null)
+  })
+
+  it('...but a BLOCKED speaker below the crop keeps its bubble (ADR-007 D1 licensed exception)', () => {
+    const st = speaker(180, 490, PANEL_CROPS.wide)
+    st.agents.qa = { ...st.agents.qa, status: 'blocked' }
+    fakeState = st
+    expect(renderedBubble(render())).not.toBe(null)
+  })
+
+  it('the same speaker in the full office keeps its bubble', () => {
+    fakeState = speaker(180, 490, FULL)
+    expect(renderedBubble(render())).not.toBe(null)
   })
 
   it('a speaker just inside the crop\'s right edge still flips (the call passes the crop\'s x-origin, not 0)', () => {
