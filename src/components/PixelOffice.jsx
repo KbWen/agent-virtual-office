@@ -19,6 +19,7 @@ import HelperHuddles from './HelperHuddle'
 import OfficePet from './OfficePet'
 import NarrowRoster from './NarrowRoster'
 import AgentInspector from './AgentInspector'
+import OneShotSmil from './OneShotSmil.jsx'
 import {
   Bookshelf, Plant, Couch, RoundTable, MeetingTable,
   CoffeeMachine, WaterCooler, GateBooth, WallWindow, Whiteboard,
@@ -1413,7 +1414,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
             stroke={activeWorkflow ? '#4CAF50' : '#F5C842'}
             strokeWidth="1.5" opacity="0.95"
           >
-            <animate attributeName="opacity" values="0;0.95" dur="0.4s" fill="freeze" />
+            <OneShotSmil>
+              <animate attributeName="opacity" values="0;0.95" dur="0.4s" fill="freeze" />
+            </OneShotSmil>
           </rect>
           <circle cx={268} cy={15} r={4} fill={activeWorkflow ? '#4CAF50' : '#F5C842'}>
             <animate attributeName="r" values="3;5;3" dur="1.5s" repeatCount="indefinite" />

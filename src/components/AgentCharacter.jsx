@@ -9,6 +9,7 @@ import { selectVisibleBubbles, BUBBLE_VISIBLE_CAP } from '../systems/bubbleVisib
 import { stepWalkFrame } from '../systems/walkFrame.js'
 import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog, BLOCKED_FAMILY } from '../systems/constants.js'
 import BehaviorBubble, { shouldFlipBubbleBelow, isSpeakerOnScreen } from './BehaviorBubble'
+import OneShotSmil from './OneShotSmil.jsx'
 import { shouldShakeDesk } from '../systems/eventJuice.js'
 import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
 
@@ -1593,22 +1594,26 @@ function AgentCharacter({ agent }) {
           translate/scale. key={seq} remounts per poke so each click replays. Reduced-motion
           drops the motion (the quip bubble still acknowledges the poke). Decorative → aria-hidden. */}
       {!reducedMotion && pokeBob && (
-        <animateTransform key={`poke-${pokeBob.seq}`} attributeName="transform" type="translate" additive="sum"
-          values={pokeBob.intensity === 'turnaway' ? '0 0;-3 0;3 0;-2 0;0 0'
-            : pokeBob.intensity === 'long' ? '0 0;0 -5;0 -2;0 -5;0 0'
-            : '0 0;0 -4;0 0'}
-          keyTimes={pokeBob.intensity === 'normal' ? '0;0.5;1' : '0;0.25;0.5;0.75;1'}
-          dur={pokeBob.intensity === 'normal' ? '0.32s' : pokeBob.intensity === 'long' ? '0.6s' : '0.5s'}
-          repeatCount="1" fill="freeze" aria-hidden="true" />
+        <OneShotSmil key={`poke-${pokeBob.seq}`}>
+          <animateTransform attributeName="transform" type="translate" additive="sum"
+            values={pokeBob.intensity === 'turnaway' ? '0 0;-3 0;3 0;-2 0;0 0'
+              : pokeBob.intensity === 'long' ? '0 0;0 -5;0 -2;0 -5;0 0'
+              : '0 0;0 -4;0 0'}
+            keyTimes={pokeBob.intensity === 'normal' ? '0;0.5;1' : '0;0.25;0.5;0.75;1'}
+            dur={pokeBob.intensity === 'normal' ? '0.32s' : pokeBob.intensity === 'long' ? '0.6s' : '0.5s'}
+            repeatCount="1" fill="freeze" aria-hidden="true" />
+        </OneShotSmil>
       )}
       {/* AVO-136: desk-slam → a brief LOCAL jitter on this agent only. `additive="sum"` composes the
           shake ON TOP of the base translate/scale (a CSS transform would override positioning). One
           play; mounts only while in desk-slam, so it fires once on onset (anti-nag). Gated off under
           reduced-motion — the desk-slam posture + confused expression remain the semantic tell. */}
       {shouldShakeDesk(state.behavior, reducedMotion) && (
-        <animateTransform attributeName="transform" type="translate" additive="sum"
-          values="0 0;-1.6 0;1.6 0;-1 0;1 0;0 0" keyTimes="0;0.2;0.4;0.6;0.8;1"
-          dur="0.42s" repeatCount="1" fill="freeze" />
+        <OneShotSmil>
+          <animateTransform attributeName="transform" type="translate" additive="sum"
+            values="0 0;-1.6 0;1.6 0;-1 0;1 0;0 0" keyTimes="0;0.2;0.4;0.6;0.8;1"
+            dur="0.42s" repeatCount="1" fill="freeze" />
+        </OneShotSmil>
       )}
       {/* AVO-132: single working/planning glow ring; effort (high/xhigh/max) intensifies it
           (peak opacity + stroke width) instead of stacking a second concentric aura.
@@ -1656,8 +1661,10 @@ function AgentCharacter({ agent }) {
           the ✓ status icon + green name carry the done state after. reducedMotion → no flash. */}
       {state.status === 'done' && !reducedMotion && (
         <circle cx={0} cy={-18} r={16} fill="none" stroke={glowColor} strokeWidth="2.5" opacity="0.6">
-          <animate attributeName="r" values="16;30" dur="0.7s" repeatCount="1" fill="freeze" />
-          <animate attributeName="opacity" values="0.6;0" dur="0.7s" repeatCount="1" fill="freeze" />
+          <OneShotSmil>
+            <animate attributeName="r" values="16;30" dur="0.7s" repeatCount="1" fill="freeze" />
+            <animate attributeName="opacity" values="0.6;0" dur="0.7s" repeatCount="1" fill="freeze" />
+          </OneShotSmil>
         </circle>
       )}
 
@@ -1680,8 +1687,10 @@ function AgentCharacter({ agent }) {
         state.status === 'blocked' ? (
           <g key={`reason-${reasonCode || 'unknown'}`}>
             {!reducedMotion && (
-              <animateTransform attributeName="transform" type="scale"
-                values="0.6 0.6;1.1 1.1;1 1" keyTimes="0;0.6;1" dur="0.35s" repeatCount="1" fill="freeze" />
+              <OneShotSmil>
+                <animateTransform attributeName="transform" type="scale"
+                  values="0.6 0.6;1.1 1.1;1 1" keyTimes="0;0.6;1" dur="0.35s" repeatCount="1" fill="freeze" />
+              </OneShotSmil>
             )}
             <BlockedReasonBadge
               reasonCode={reasonCode}
@@ -1692,8 +1701,10 @@ function AgentCharacter({ agent }) {
         ) : (
           <g key={state.behavior}>
             {!reducedMotion && (
-              <animateTransform attributeName="transform" type="scale"
-                values="0 0;1.15 0.9;1 1" keyTimes="0;0.6;1" dur="0.3s" repeatCount="1" fill="freeze" />
+              <OneShotSmil>
+                <animateTransform attributeName="transform" type="scale"
+                  values="0 0;1.15 0.9;1 1" keyTimes="0;0.6;1" dur="0.3s" repeatCount="1" fill="freeze" />
+              </OneShotSmil>
             )}
             <BehaviorIndicator behavior={state.behavior} />
           </g>
