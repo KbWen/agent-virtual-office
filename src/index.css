@@ -97,3 +97,12 @@ html, body, #root {
 }
 /* (desk-slam jitter is done in SVG via <animateTransform additive="sum"> in AgentCharacter — it must
    COMPOSE with the sprite's translate/scale, which a CSS transform animation would override.) */
+
+/* AVO-193: the coffee machine's reply to a click it cannot serve. Keyframes live here, not in a
+   SMIL <animate>, because an <animate begin="0s"> mounted after page load counts from document
+   start and is already at its end state (measured) — and CSP forbids an inline <style> (#27). */
+@keyframes coffee-steam {
+  0% { opacity: 0; transform: translateY(0); }
+  35% { opacity: 0.9; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
