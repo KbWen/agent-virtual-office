@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-20T09:07:50+08:00
+- **Last Updated**: 2026-09-20T13:42:06+08:00
 - **Last Verified**: 2026-09-19
-- **Update Sequence**: 132
+- **Update Sequence**: 133
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -156,6 +156,14 @@
 
 ## Ship History
 
+### Ship-fix-avo-197-oneshot-animations-2026-09-20 (the one-shot animations actually play now) · AVO-197
+
+- Quick-win shipped: SIX one-shot SMIL animations in the office were dead. SMIL resolves `begin="0s"` against the DOCUMENT timeline, so an element mounted on a status change, a behaviour change or a poke is already past its active duration and snaps to its end value — no error, no warning, correct-looking markup, which is how it survived five features shipping. AVO-135's "one-shot celebratory flash" was mounted for 60 frames and visible on exactly 1. Found while building AVO-193 (whose steam uses CSS and was never affected).
+- **Fixed with `begin="indefinite"` + `beginElement()` on mount, deliberately NOT a CSS rewrite**, even though AVO-193 used CSS and CSS is easier to unit-test. AVO-136/158 are `additive="sum"` transforms on a root `<g>` already carrying `translate(x,y) scale(CHAR_SCALE)`: a CSS `transform` REPLACES that base transform, and the CSS `translate` property composes but applies OUTSIDE it, silently changing how far an agent bobs. Both CSS routes were measured working before being rejected on those grounds. No duration, curve or `values` list changed — a repair, not a re-tune.
+- Verified in a real browser, same instrument on both sides, counting distinct animated values (a snap gives 1-2; a real animation at 60fps gives tens): done flash 2→43, poke bob 2→21, desk-slam jitter 1→26, behaviour pop 2→19, reason pop 2→22, banner fade 1→24. The done flash went from **1 visible frame to 39**.
+- **Three of my own measurements were wrong first** and each would have produced a false claim: sampling `document.querySelector` while triggering a different agent; reading `getScreenCTM()`, which does not reflect SMIL transform animation at all; and a deterministic "DEAD" for the behaviour `thinking`, which has no case in `BehaviorIndicator` and renders null, so the instrument was measuring an empty box. All three were caught before any conclusion, each by re-validating against a known-playing control.
+- Tests: vitest **2512 passed / 133 files** (+10). The unit tests deliberately do NOT assert that the animations play — believing markup was the original mistake — they hold the wrapper contract plus a regression guard (with its own can-it-fail self-test) against any future unwrapped one-shot. Build, single-file build, render-smoke and panel smoke PASS. Owner approved the before/after frame strips before merge. PR #244.
+
 ### Ship-feat-avo-193-coffee-busy-feedback-2026-09-20 (the coffee machine says BUSY when it cannot serve you) · AVO-193
 
 - Quick-win shipped: clicking the coffee machine while every agent is genuinely working did nothing at all. The silence was CORRECT — AVO-191 refuses to drag a working agent to the machine — but it reads as a broken click, and unlike the deploy button and the whiteboard, `tea-break` has no `INTERACTION_REACTOR` entry, so `fireInteractionReaction` returned on its first line. The machine now answers for itself: screen `CAFE` → `BUSY` plus three wisps of steam for 2s. Owner chose this from rendered candidates before any repo edit.
@@ -221,13 +229,6 @@
 - Docs closed at their source, not by editing prose: `bin/cli.js` registers 8 hook events while `INTEGRATIONS.md` said 6 and `hooks-config.json` (the file the docs tell you to paste) omitted `PermissionDenied`/`StopFailure` — the two events that make a denied tool call an honest `blocked`. Now pinned to `bin/cli.js`. `README.zh-TW.md` regained four sections; `ARCHITECTURE.md`'s room diagram was missing the Designer desk and the Gate station.
 - **F-11 is only partly closed, deliberately.** The deprecated Rollup option is fixed (output byte-identical, verified both ways). `MIXED_EXPORTS` and the `configLoader: native` warnings need `vite.config.js` renamed to `.mjs`, which touches every test that imports it — out of scope for a defect sweep, recorded with a written rationale rather than left looking done.
 - Tests: **125 files / 2408 passed** (+6 files, +46, all new guards; each proven to FAIL on the un-fixed input first). Build clean, bundle budget +0.20% against a +10% limit, all three smoke gates green, `validate.sh` pass=114 warn=5 fail=0.
-
-### Ship-feat-soak-stale-label-warning-2026-09-02 (AVO-195 detection half — the soak can finally see a stale activity label)
-
-- Feature shipped: the four soak invariants all read POSITION and the `moving` flag; none read `behavior`, so the office could narrate the wrong activity for minutes with the gate blind to it. `detectStaleLabels` now lives in `soakInvariants.mjs` and surfaces as a **non-failing** `warnings.staleLabel`, following the `groupStack` warn-then-promote precedent. The detector was MOVED out of `officeRhythm.mjs` rather than copied, and `officeRhythm` imports it — a gate should not import from a report module. A mutation proves the sharing is real: removing the group-event exemption fails a test in BOTH files.
-- **Two designs were rejected on evidence before the third shipped.** A 90s threshold, set from control runs whose worst case was 74-78s, **false-positived on the very first real soak** at 94.9s and 100.5s — a number fitted to the sample that motivated it. Restricting the check to event-set behaviours was then **refuted by measurement**: `eat-snack` / `nap` / `stretch` / `chat` are all in the `doSchedule` pools, and of the twelve behaviours the event handlers set only `meeting` is event-only, so the behaviour name cannot separate a stuck label from a repeat pick.
-- **The shipped threshold is derived from the ceiling instead of fitted.** A behaviour lasts at most 65s and a walk adds ~10-20s, and `pickBehavior` CAN select the same behaviour twice because the anti-repeat ring guards messages rather than behaviours — so two consecutive identical picks reach ~170s and **180s** requires three. The limitation is written into the module rather than papered over: an unchanged label cannot be distinguished from repeated identical picks, which is exactly why this warns instead of failing. `maxStaleLabelMs` prints every run regardless of the threshold, because a binary verdict hides the trend — healthy `main` reads 57-99s against the 254s that motivated the check.
-- Tests: vitest **2362 passed / 119 files** (+5), mutation-verified in two directions. Real runs: a 3-minute hermetic soak reports `staleLabel: []` with `maxStaleLabelMs 98.6s` and 0 violations (the rejected 90s threshold would have fired there); a 1-minute soak prints `INFO longest unchanged behaviour label outside an event: 57s` and PASSes at 236/240 samples. That 1-minute run doubles as the control ruling out the new sampled field degrading coverage. The 3-minute run exits non-zero on a **pre-existing** coverage gate (`706 < 715`) whose `allowedMisses` is a flat 5 below 1000 expected samples, so it tightens as duration grows — left alone deliberately, it is not this change's defect.
 
 ## Spec Index Archive
 

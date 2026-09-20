@@ -48,7 +48,16 @@ Rotated 1 additional entry on 2026-09-20 (SSoT Update Sequence 130 -> 131).
 
 Rotated 1 additional entry on 2026-09-20 (SSoT Update Sequence 131 -> 132).
 
+Rotated 1 additional entry on 2026-09-20 (SSoT Update Sequence 132 -> 133).
+
 ---
+
+### Ship-feat-soak-stale-label-warning-2026-09-02 (AVO-195 detection half — the soak can finally see a stale activity label)
+
+- Feature shipped: the four soak invariants all read POSITION and the `moving` flag; none read `behavior`, so the office could narrate the wrong activity for minutes with the gate blind to it. `detectStaleLabels` now lives in `soakInvariants.mjs` and surfaces as a **non-failing** `warnings.staleLabel`, following the `groupStack` warn-then-promote precedent. The detector was MOVED out of `officeRhythm.mjs` rather than copied, and `officeRhythm` imports it — a gate should not import from a report module. A mutation proves the sharing is real: removing the group-event exemption fails a test in BOTH files.
+- **Two designs were rejected on evidence before the third shipped.** A 90s threshold, set from control runs whose worst case was 74-78s, **false-positived on the very first real soak** at 94.9s and 100.5s — a number fitted to the sample that motivated it. Restricting the check to event-set behaviours was then **refuted by measurement**: `eat-snack` / `nap` / `stretch` / `chat` are all in the `doSchedule` pools, and of the twelve behaviours the event handlers set only `meeting` is event-only, so the behaviour name cannot separate a stuck label from a repeat pick.
+- **The shipped threshold is derived from the ceiling instead of fitted.** A behaviour lasts at most 65s and a walk adds ~10-20s, and `pickBehavior` CAN select the same behaviour twice because the anti-repeat ring guards messages rather than behaviours — so two consecutive identical picks reach ~170s and **180s** requires three. The limitation is written into the module rather than papered over: an unchanged label cannot be distinguished from repeated identical picks, which is exactly why this warns instead of failing. `maxStaleLabelMs` prints every run regardless of the threshold, because a binary verdict hides the trend — healthy `main` reads 57-99s against the 254s that motivated the check.
+- Tests: vitest **2362 passed / 119 files** (+5), mutation-verified in two directions. Real runs: a 3-minute hermetic soak reports `staleLabel: []` with `maxStaleLabelMs 98.6s` and 0 violations (the rejected 90s threshold would have fired there); a 1-minute soak prints `INFO longest unchanged behaviour label outside an event: 57s` and PASSes at 236/240 samples. That 1-minute run doubles as the control ruling out the new sampled field degrading coverage. The 3-minute run exits non-zero on a **pre-existing** coverage gate (`706 < 715`) whose `allowedMisses` is a flat 5 below 1000 expected samples, so it tightens as duration grows — left alone deliberately, it is not this change's defect.
 
 ### Ship-chore-release-v1.6.7-2026-09-02 (nobody is shown napping through real work) · release v1.6.7
 
