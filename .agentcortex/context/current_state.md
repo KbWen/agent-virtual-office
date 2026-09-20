@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-20T08:52:29+08:00
+- **Last Updated**: 2026-09-20T09:07:50+08:00
 - **Last Verified**: 2026-09-19
-- **Update Sequence**: 131
+- **Update Sequence**: 132
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -156,6 +156,13 @@
 
 ## Ship History
 
+### Ship-feat-avo-193-coffee-busy-feedback-2026-09-20 (the coffee machine says BUSY when it cannot serve you) · AVO-193
+
+- Quick-win shipped: clicking the coffee machine while every agent is genuinely working did nothing at all. The silence was CORRECT — AVO-191 refuses to drag a working agent to the machine — but it reads as a broken click, and unlike the deploy button and the whiteboard, `tea-break` has no `INTERACTION_REACTOR` entry, so `fireInteractionReaction` returned on its first line. The machine now answers for itself: screen `CAFE` → `BUSY` plus three wisps of steam for 2s. Owner chose this from rendered candidates before any repo edit.
+- **The refusal is untouched, and that is the whole design.** The feedback hangs off the FALSY return of `triggerInteractiveEvent`; adding `tea-break` to `INTERACTION_REACTOR` would have been the tempting one-liner and is exactly what AVO-191 removed. Measured in a real browser with every agent `working`: positions identical, statuses identical, full id→bubble-text map identical before and after, `activeEvent` null throughout — compared as maps, not counted, since 8 agents already had ambient bubbles.
+- The steam is a CSS `@keyframes`, NOT SMIL: an `<animate begin="0s">` mounted after page load counts from DOCUMENT start and renders already-finished, which is how the first prototype got invisible steam. Proof it plays: the three wisps read opacity 0.83 / 0.62 / 0.33 mid-run. Reduced motion keeps both signals and drops the movement (`animated: 0`, static opacity), like the pet-pop site.
+- Tests: vitest **2502 passed / 132 files** (+7, new `tests/coffeeBusyFeedback.test.jsx`, red first on 5 of 7). Four mutations killed, incl. showing the feedback without consulting the honesty gate. Build, single-file build, render-smoke and panel smoke PASS. PR #241. Closes the last open finding of the 2026-09-19 handoff review (REV-10).
+
 ### Ship-fix-avo-196-offscreen-speaker-bubbles-2026-09-20 (no speech bubble for a speaker you cannot see) · AVO-196
 
 - Quick-win shipped: in the compact panel an agent standing below the visible crop (the lounge `stretch` (180,490) and `coffee` (80,475) spots) still rendered its bubble INSIDE the crop with nobody visible saying it. PR #236 closed the same defect above and to the sides and deliberately left this one as a design call. The owner chose the rule from rendered candidates (prototype in a scratch worktree, no repo edit before approval): hide the bubble when the speaker's ANCHOR is outside the crop, EXCEPT `blocked`/`awaiting-approval`.
@@ -221,13 +228,6 @@
 - **Two designs were rejected on evidence before the third shipped.** A 90s threshold, set from control runs whose worst case was 74-78s, **false-positived on the very first real soak** at 94.9s and 100.5s — a number fitted to the sample that motivated it. Restricting the check to event-set behaviours was then **refuted by measurement**: `eat-snack` / `nap` / `stretch` / `chat` are all in the `doSchedule` pools, and of the twelve behaviours the event handlers set only `meeting` is event-only, so the behaviour name cannot separate a stuck label from a repeat pick.
 - **The shipped threshold is derived from the ceiling instead of fitted.** A behaviour lasts at most 65s and a walk adds ~10-20s, and `pickBehavior` CAN select the same behaviour twice because the anti-repeat ring guards messages rather than behaviours — so two consecutive identical picks reach ~170s and **180s** requires three. The limitation is written into the module rather than papered over: an unchanged label cannot be distinguished from repeated identical picks, which is exactly why this warns instead of failing. `maxStaleLabelMs` prints every run regardless of the threshold, because a binary verdict hides the trend — healthy `main` reads 57-99s against the 254s that motivated the check.
 - Tests: vitest **2362 passed / 119 files** (+5), mutation-verified in two directions. Real runs: a 3-minute hermetic soak reports `staleLabel: []` with `maxStaleLabelMs 98.6s` and 0 violations (the rejected 90s threshold would have fired there); a 1-minute soak prints `INFO longest unchanged behaviour label outside an event: 57s` and PASSes at 236/240 samples. That 1-minute run doubles as the control ruling out the new sampled field degrading coverage. The 3-minute run exits non-zero on a **pre-existing** coverage gate (`706 < 715`) whose `allowedMisses` is a flat 5 below 1000 expected samples, so it tightens as duration grows — left alone deliberately, it is not this change's defect.
-
-### Ship-chore-release-v1.6.7-2026-09-02 (nobody is shown napping through real work) · release v1.6.7
-
-- Cuts the 10 commits merged since `v1.6.6` (2026-08-26) as **v1.6.7**. No app code in the release commit itself: `package.json` 1.6.6 -> 1.6.7, **both** `package-lock.json` version fields (root + `packages[""]`), CHANGELOG narrative, this entry. Verified zero `1.6.6` strings remain in either file.
-- **The CHANGELOG under-sells it, deliberately.** Only **2 of the 10** commits are user-facing — the AVO-194 nap/drowsiness honesty fix (three sites, not the one the backlog row recorded) and the multi-agent reaction lines (three keys, the third found by the guard written for the first two). The other eight are governance and tooling and sit under an explicit "Housekeeping — not user-facing" heading.
-- **The release notes also record a claim that did not survive.** `npm run rhythm` shipped in this wave with a measurement saying ambient motion is spread rather than clustered; two later runs did not reproduce it, and the cause was the metric itself — an absolute point-gap is bounded by the independent level it is compared against, so runs at different motion levels were never comparable. It now reports a ratio, and the finding is recorded as **not established**. A release that claims more than it measured is the same defect class as the office claiming a working agent is asleep, which is what this release is *about*.
-- Tests at the cut: vitest **2357 passed / 119 files**; build PASS; `bundle-budget` PASS at 496392 vs baseline 496504 (**-0.02%**); `render-smoke` PASS across 4 viewports with 0 page errors; both validators `pass=114 warn=5 fail=0 skip=5` and in exact agreement; `check_audit_chain` intact; `check_ssot_caps` 10/10 and 30/30. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.7` tag + `gh release create --latest` — NOT done by the PR merge, and this repo has forgotten it twice.
 
 ## Spec Index Archive
 
