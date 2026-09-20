@@ -208,6 +208,16 @@ export function shouldFlipBubbleBelow({ posX, posY, labelScale = 1, sceneMinX = 
 
 const isInsideX = (x, sceneMinX, sceneW) => Number.isFinite(x) && x >= sceneMinX && x <= sceneMinX + sceneW
 
+// AVO-196: is the SPEAKER itself on screen? The test is its ANCHOR - where the agent stands - inside
+// the visible crop, the same rule the flip and the edge clamp already use for the other three sides.
+// An agent standing outside it (the lounge below a panel view) would otherwise render speech inside
+// the crop with nobody visible saying it, so the caller hides the bubble. The caller exempts the
+// blocked family (ADR-007 D1 licenses blocked to seize the bubble as the message worth interrupting).
+export function isSpeakerOnScreen({ posX, posY, sceneMinX = 0, sceneMinY = 0, sceneW = 800, sceneH = 560 }) {
+  if (!isInsideX(posX, sceneMinX, sceneW) || !Number.isFinite(posY)) return false
+  return posY >= sceneMinY && posY <= sceneMinY + sceneH
+}
+
 export function computeEdgeShift({ boxW, absX, scale = 1, sceneMinX = 0, sceneW = 800, edgePad = 4 }) {
   if (absX == null || !Number.isFinite(absX) || !Number.isFinite(scale) || scale <= 0) return 0
   // Same orphan guard as the flip: a speaker outside the crop's x-range is off screen, so its bubble

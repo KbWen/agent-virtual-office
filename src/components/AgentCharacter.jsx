@@ -7,8 +7,8 @@ import { BlockedReasonBadge } from './blockedReasonBadge'
 import { recurringInfo } from '../systems/recurringFailure'
 import { selectVisibleBubbles, BUBBLE_VISIBLE_CAP } from '../systems/bubbleVisibility.js'
 import { stepWalkFrame } from '../systems/walkFrame.js'
-import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog } from '../systems/constants.js'
-import BehaviorBubble, { shouldFlipBubbleBelow } from './BehaviorBubble'
+import { WALK_SPEED, WALK_FRAME_INTERVAL, BEHAVIOR_STUCK_RETRIES, BEHAVIOR_STUCK_RETRY_MS, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT, shouldSkipBehaviorWatchdog, BLOCKED_FAMILY } from '../systems/constants.js'
+import BehaviorBubble, { shouldFlipBubbleBelow, isSpeakerOnScreen } from './BehaviorBubble'
 import { shouldShakeDesk } from '../systems/eventJuice.js'
 import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
 
@@ -759,6 +759,7 @@ function AgentCharacter({ agent }) {
   const sceneW = useOfficeStore((s) => s.sceneBounds.w)
   // REV-02: the visible top, so the bubble flips below against the panel crop, not y=0.
   const sceneMinY = useOfficeStore((s) => s.sceneBounds.minY)
+  const sceneH = useOfficeStore((s) => s.sceneBounds.h)
   // L3 reluctant-participant tell (transient expiry ts). Pure overlay — never affects behavior.
   const reluctantUntil = useOfficeStore((s) => s.reluctant?.[id])
   // AVO-110: hook-stamped blocked-reason token (primitive subscription → re-render only on change).
@@ -1753,7 +1754,14 @@ function AgentCharacter({ agent }) {
           // slot → no overlap, inherits edge-clamping). When a quip is showing, mark the group
           // as a polite live region so the acknowledge is announced once (reaction bob is
           // aria-hidden separately). aria-atomic so the whole short quip reads as one unit.
-          const bubbleMsg = pokeQuip || (bubbleVisible ? state.bubble : null)
+          // AVO-196: an agent whose body is entirely outside the crop (the lounge, below a panel
+          // view) would otherwise render speech inside it with nobody visible saying it. Hidden,
+          // EXCEPT the blocked family, which ADR-007 D1 licenses as the message worth interrupting
+          // for and which the panel's control bar surfaces too. Hides TEXT only; ring/pill are
+          // off-screen anyway (the same honest-suppression rule as the bubble cap).
+          const offScreenSpeaker = !isSpeakerOnScreen({ posX: pos.x, posY: pos.y, sceneMinX, sceneMinY, sceneW, sceneH })
+            && !BLOCKED_FAMILY.has(state.status)
+          const bubbleMsg = offScreenSpeaker ? null : (pokeQuip || (bubbleVisible ? state.bubble : null))
           return (
             <g transform={`translate(0, ${below ? 6 : -68}) scale(${labelScale})`}
               role={pokeQuip ? 'status' : undefined}
