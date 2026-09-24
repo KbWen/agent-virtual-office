@@ -52,7 +52,17 @@ Rotated 1 additional entry on 2026-09-20 (SSoT Update Sequence 132 -> 133).
 
 Rotated 1 additional entry on 2026-09-24 (SSoT Update Sequence 133 -> 134).
 
+Rotated 1 additional entry on 2026-09-25 (SSoT Update Sequence 134 -> 135).
+
 ---
+
+### Ship-feat-calm-stationery-palette-2026-09-13 (a warmer, calmer office, and a palette anyone can change without breaking legibility)
+
+- Feature shipped: a local design handoff (`scratch/design-handoff/`) proposed a "warm stationery studio" look for the main floor, walls, team signs and agent inspector. It was treated as input, not authority. The proposed wall `#A39C89` measured **1.03:1** against the Research/Meeting floors, and **no `STATUS_COLORS` value reaches 4.5:1 as text, even on white** (working amber 2.17). That second finding is why inspector status text is ink and the status colour lives on the dot.
+- **The owner chose the look from rendered candidates, not the packet.** The packet said no visual review was needed; mid-implement the owner asked to see screens first ("怕改了更醜"). Pure stationery, two warm blends and two card treatments were rendered as DOM overrides with no source change. The owner picked "warm oak" (floor `#D6C29C`, wall `#806E5A`) plus a 16% role-tint card header, and the code is pixel-matched to that render.
+- **Then the design stopped being hard-coded** (owner: "開源repo，要讓大家好看、好修改、且有規則"). `src/systems/officePalette.js` holds the room shell, signs and card; the components hold no palette hex, and door openings share their room's floor token. `tests/officePalette.test.js` enforces R1–R5, and each rule is proven to fail on a real past mistake (old floor, rejected wall, the pre-palette status line, the pre-palette door literal). The move was pixel-identical, verified with diff maps. This scope arrived after "commit + PR" but before the ship commit, so the task was **reclassified quick-win -> feature** and an uncommitted ship closure was **withdrawn** rather than shipped under the old scope.
+- **A fresh-context reviewer caught the rules overclaiming**, verdict NOT READY. R4/R5 were not yet shown to bite. R1 measured the SOLID status colour while rings render below full opacity (working amber 1.25 solid, ~1.13 at the ring's 50%). R1 is now stated as a floor guard, not a certificate, rather than fitting a threshold to today's numbers. The close icon sat at 3.96-4.38 on the tint and is now ruled an icon (3:1). All fixed; re-review PASS. Accepted and seen by the owner: ENGINEERING sits ~3px under the Developer tag (tag on top). Pre-existing on `main`: in panel mode the inspector can overflow its cropped viewBox.
+- Tests: vitest **2422 passed / 126 files** (+14 rules tests); build PASS; `bundle-budget` +0.48%; render-smoke and panel smoke PASS; hermetic `sim-soak` 1 min ×2 PASS, 0 invariant violations; 18-state hermetic BEFORE/AFTER capture (1280×720, 1440×900, panel, night, zh-TW) with Escape/Enter close asserted from the DOM; `validate.sh` fail=0. PR #234.
 
 ### Ship-fix-audit-2026-09-08-2026-09-08 (an external audit, re-derived — the container never started and a waiting agent looked busy)
 

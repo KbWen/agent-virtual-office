@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-24T11:16:00+08:00
-- **Last Verified**: 2026-09-24
-- **Update Sequence**: 134
+- **Last Updated**: 2026-09-25T00:06:00+08:00
+- **Last Verified**: 2026-09-25
+- **Update Sequence**: 135
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -156,6 +156,11 @@
 
 ## Ship History
 
+### Ship-fix-bridge-ui-status-toggle-regex-2026-09-25 (support kebab-case status classes in active button toggle regex)
+
+- Quick-win shipped: fixed regex `replace(/active-[\w-]+/g, '')` in `public/bridge-ui.js` to match kebab-case status names without leaving trailing `-approval` fragments; added URL param parsing support for `planning` and `awaiting-approval`.
+- Tests: 132 test files passed (2513 passed, 3 skipped); render-smoke and panel-smoke PASS. Branch fix/bridge-ui-status-toggle-regex merged into main (35cbfd5).
+
 ### Ship-fix-audit-remediation-2026-09-24-2026-09-24 (dev server monotonic clock parity and bridge UI controls)
 
 - Quick-win shipped: remediated high-confidence findings F-01 (dev server clock parity) and F-05 (bridge UI interactive controls) from 2026-09-24 audit.
@@ -217,14 +222,6 @@
 - **Two of the five are user-facing**: the calm palette with its legibility rules (#234) and the external-audit sweep (#232 — the container that never started, the waiting agent that looked busy, the Codex hook that dropped agents, the pasted hook config missing the two events that make a denial an honest `blocked`). The soak stale-label warning (#231), the June work-log archive (#233) and the v1.6.7 chain record (#230) sit under "Housekeeping — not user-facing".
 - **The notes state what the palette rules do not certify.** R1 compares each status colour at full strength while rings render below full opacity, so it guards the floor rather than certifying ring contrast — written into "What this release does not claim" alongside the partly-closed F-11 and the two owner-accepted layout quirks, rather than letting "legibility rules" read as a guarantee.
 - Tests at the cut: vitest **2422 passed / 126 files**; build PASS; `bundle-budget` PASS at 498871 vs baseline 496504 (**+0.48%**, limit +10%); `pack-smoke` PASS. The oldest entry (AVO-195 backlog row) rotated verbatim into `archive/ship-history-2026.md` to hold the cap of 10. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.8` tag + `gh release create --latest`.
-
-### Ship-feat-calm-stationery-palette-2026-09-13 (a warmer, calmer office, and a palette anyone can change without breaking legibility)
-
-- Feature shipped: a local design handoff (`scratch/design-handoff/`) proposed a "warm stationery studio" look for the main floor, walls, team signs and agent inspector. It was treated as input, not authority. The proposed wall `#A39C89` measured **1.03:1** against the Research/Meeting floors, and **no `STATUS_COLORS` value reaches 4.5:1 as text, even on white** (working amber 2.17). That second finding is why inspector status text is ink and the status colour lives on the dot.
-- **The owner chose the look from rendered candidates, not the packet.** The packet said no visual review was needed; mid-implement the owner asked to see screens first ("怕改了更醜"). Pure stationery, two warm blends and two card treatments were rendered as DOM overrides with no source change. The owner picked "warm oak" (floor `#D6C29C`, wall `#806E5A`) plus a 16% role-tint card header, and the code is pixel-matched to that render.
-- **Then the design stopped being hard-coded** (owner: "開源repo，要讓大家好看、好修改、且有規則"). `src/systems/officePalette.js` holds the room shell, signs and card; the components hold no palette hex, and door openings share their room's floor token. `tests/officePalette.test.js` enforces R1–R5, and each rule is proven to fail on a real past mistake (old floor, rejected wall, the pre-palette status line, the pre-palette door literal). The move was pixel-identical, verified with diff maps. This scope arrived after "commit + PR" but before the ship commit, so the task was **reclassified quick-win -> feature** and an uncommitted ship closure was **withdrawn** rather than shipped under the old scope.
-- **A fresh-context reviewer caught the rules overclaiming**, verdict NOT READY. R4/R5 were not yet shown to bite. R1 measured the SOLID status colour while rings render below full opacity (working amber 1.25 solid, ~1.13 at the ring's 50%). R1 is now stated as a floor guard, not a certificate, rather than fitting a threshold to today's numbers. The close icon sat at 3.96-4.38 on the tint and is now ruled an icon (3:1). All fixed; re-review PASS. Accepted and seen by the owner: ENGINEERING sits ~3px under the Developer tag (tag on top). Pre-existing on `main`: in panel mode the inspector can overflow its cropped viewBox.
-- Tests: vitest **2422 passed / 126 files** (+14 rules tests); build PASS; `bundle-budget` +0.48%; render-smoke and panel smoke PASS; hermetic `sim-soak` 1 min ×2 PASS, 0 invariant violations; 18-state hermetic BEFORE/AFTER capture (1280×720, 1440×900, panel, night, zh-TW) with Escape/Enter close asserted from the DOM; `validate.sh` fail=0. PR #234.
 
 ## Spec Index Archive
 
