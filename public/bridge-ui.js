@@ -35,12 +35,19 @@ function createAgentCard(agent) {
 
   const buttons = document.createElement('div')
   buttons.className = 'agent-btns'
-  for (const status of ['working', 'blocked', 'done']) {
+  const labels = {
+    working: 'work',
+    blocked: 'block',
+    done: 'done',
+    planning: 'plan',
+    'awaiting-approval': 'wait',
+  }
+  for (const status of ['working', 'blocked', 'done', 'planning', 'awaiting-approval']) {
     const btn = document.createElement('button')
     btn.dataset.agent = agent.id
     btn.dataset.status = status
     btn.type = 'button'
-    btn.textContent = status === 'working' ? 'work' : status === 'blocked' ? 'block' : 'done'
+    btn.textContent = labels[status] || status
     btn.addEventListener('click', () => toggle(agent.id, status, btn))
     buttons.appendChild(btn)
   }

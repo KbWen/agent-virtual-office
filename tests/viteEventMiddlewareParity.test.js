@@ -9,4 +9,12 @@ describe('vite /api/event middleware parity guard', () => {
     expect(src).toContain("workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : null")
     expect(src).not.toContain("workflow: typeof parsed.workflow === 'string' ? parsed.workflow.slice(0, 200) : eventName")
   })
+
+  it('imports monotonic clock nextSeq from statusContract and avoids duplicate local definition', () => {
+    const src = fs.readFileSync('vite.config.mjs', 'utf8')
+
+    expect(src).toMatch(/import\s*\{[^}]*nextSeq[^}]*\}\s*from\s*['"]\.\/src\/utils\/statusContract\.mjs['"]/)
+    expect(src).not.toMatch(/let\s+_seqLast\s*=/)
+    expect(src).not.toMatch(/function\s+nextSeq\s*\(\)\s*\{/)
+  })
 })

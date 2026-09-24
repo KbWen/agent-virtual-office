@@ -5,7 +5,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { normalizePost, VALID_ROLES, VALID_STATUSES } from './src/utils/statusContract.mjs'
+import { normalizePost, nextSeq, VALID_ROLES, VALID_STATUSES } from './src/utils/statusContract.mjs'
 import { scanAndMerge, getSessionStats, resolveProjectRoot } from './src/server/scanSessions.mjs'
 
 // Middleware: Universal status API
@@ -73,14 +73,9 @@ function getServerIPs() {
 
 const SERVER_IPS = getServerIPs()
 
-// Monotonic _seq: plain integer string, identical implementation as server.mjs.
-// Number(_seq) and parseInt(_seq,10) both work identically; no suffix to truncate.
-let _seqLast = 0
-function nextSeq() {
-  const now = Date.now()
-  _seqLast = now > _seqLast ? now : _seqLast + 1
-  return String(_seqLast)
-}
+// Monotonic _seq: shared SINGLE counter imported from statusContract.mjs above.
+// /api/status (inside normalizePost) and /api/event (nextSeq) write the same status file and
+// must ride one clock, matching server.mjs.
 
 // Constant-time token comparison — prevents timing oracle attacks.
 function safeEqual(a, b) {

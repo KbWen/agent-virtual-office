@@ -17,4 +17,11 @@ describe('bridge.html dynamic rendering safety', () => {
     expect(bridgeUiJs).toContain('document.createTextNode(` ${agents}`)')
     expect(bridgeUiJs).toContain('document.createTextNode(` | ${msg.workflow}`)')
   })
+
+  it('provides buttons for working, blocked, done, planning, and awaiting-approval', () => {
+    for (const status of ['working', 'blocked', 'done', 'planning', 'awaiting-approval']) {
+      expect(bridgeUiJs).toContain(`'${status}'`)
+      expect(bridgeHtml).toContain(`.active-${status}`)
+    }
+  })
 })
