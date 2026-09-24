@@ -19,7 +19,7 @@ AGENTS.forEach(a => { state[a.id] = null })
 
 function clearActiveButtons() {
   document.querySelectorAll('.agent-btns button').forEach(b => {
-    b.className = b.className.replace(/active-\w+/, '').trim()
+    b.className = b.className.replace(/active-[\w-]+/g, '').trim()
   })
 }
 
@@ -59,11 +59,11 @@ function createAgentCard(agent) {
 function toggle(agentId, status, btn) {
   if (state[agentId] === status) {
     state[agentId] = null
-    btn.className = btn.className.replace(/active-\w+/, '').trim()
+    btn.className = btn.className.replace(/active-[\w-]+/g, '').trim()
   } else {
     state[agentId] = status
     btn.parentElement.querySelectorAll('button').forEach(b => {
-      b.className = b.className.replace(/active-\w+/, '').trim()
+      b.className = b.className.replace(/active-[\w-]+/g, '').trim()
     })
     btn.classList.add('active-' + status)
   }
@@ -141,7 +141,7 @@ function applyUrlParams() {
   for (const [k, v] of params.entries()) {
     if (AGENTS.find(a => a.id === k)) {
       state[k] = v
-      const isStatus = ['working', 'blocked', 'done'].includes(v)
+      const isStatus = ['working', 'blocked', 'done', 'planning', 'awaiting-approval'].includes(v)
       const btn = document.querySelector(`button[data-agent="${k}"][data-status="${isStatus ? v : 'working'}"]`)
       if (btn) btn.classList.add('active-' + (isStatus ? v : 'working'))
     }
