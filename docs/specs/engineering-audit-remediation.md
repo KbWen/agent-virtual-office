@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 classification: feature
 source: internal
 primary_domain: office-runtime
@@ -66,3 +66,11 @@ Routed from `docs/reviews/2026-06-05-audit.md` (read-only audit → `都處理` 
 - **F6 — ADR lifecycle.** Added YAML frontmatter + `lifecycle:` block (owner/cadence/trigger/supersedes/superseded_by) to ADR-001/002/003 — clears the grandfathered validator WARNs.
 - F2/F3 (domain decision logs) and F7 (backlog baseline note) routed to their own canonical targets; see the audit snapshot.
 - **F7 — branch hygiene (corrected in /review):** the ux-vibe-rebalance wave is ALREADY merged to `main` via squash PR #44 (`012d0f2`, v1.2.0). Git-verified: `main`↔`feat/ux-vibe-rebalance` `src/` byte-identical, `main` 3 commits ahead. The original "unmerged baseline divergence" claim was a stale-SSoT propagation error caught by an adversarial documentation-accuracy reviewer. No merge needed; `feat/ux-vibe-rebalance` is superseded dev history and has already been pruned from origin (2026-06-05 drift sweep — origin has only `main`).
+
+## 2026-09-24 Audit Remediation Wave
+
+Routed from `docs/reviews/2026-09-24-audit.md` (read-only audit findings). Focus on concurrency clock integrity and debug tooling parity without unauthorized refactoring:
+
+- **F-01 (Monotonic Clock Parity)**: In `vite.config.mjs`, import `nextSeq` from `./src/utils/statusContract.mjs` and remove local duplicate counter. Guard with test in `tests/viteEventMiddlewareParity.test.js`.
+- **F-05 (Bridge UI Parity)**: Add `planning` and `awaiting-approval` status toggle buttons to `public/bridge-ui.js` matching `statusContract.mjs` valid statuses.
+- **F-04 (Spec Drift)**: Document wave closure and maintain living traceability.

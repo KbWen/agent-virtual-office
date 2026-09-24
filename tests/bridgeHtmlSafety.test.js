@@ -17,4 +17,37 @@ describe('bridge.html dynamic rendering safety', () => {
     expect(bridgeUiJs).toContain('document.createTextNode(` ${agents}`)')
     expect(bridgeUiJs).toContain('document.createTextNode(` | ${msg.workflow}`)')
   })
+
+  it('provides buttons for working, blocked, done, planning, and awaiting-approval', () => {
+    for (const status of ['working', 'blocked', 'done', 'planning', 'awaiting-approval']) {
+      expect(bridgeUiJs).toContain(`'${status}'`)
+      expect(bridgeHtml).toContain(`.active-${status}`)
+    }
+  })
+
+  it('cleans kebab-case active status classes without leaving trailing fragments', () => {
+    // Regression test for 10th-man finding: \w does not match hyphen in awaiting-approval
+    expect(bridgeUiJs).not.toMatch(/replace\(\/active-\\w\+\//)
+    expect(bridgeUiJs).toMatch(/replace\(\/active-\[\\w-\]\+\/g/)
+
+    // Simulate class clearing on all statuses including kebab-case awaiting-approval
+    const regex = /active-[\w-]+/g
+    const testCases = [
+      'active-working',
+      'active-blocked',
+      'active-done',
+      'active-planning',
+      'active-awaiting-approval',
+      'btn active-awaiting-approval primary',
+    ]
+    for (const cls of testCases) {
+      const cleaned = cls.replace(regex, '').trim()
+      expect(cleaned).not.toContain('-approval')
+      expect(cleaned).not.toContain('active-')
+    }
+  })
+
+  it('supports planning and awaiting-approval in applyUrlParams isStatus check', () => {
+    expect(bridgeUiJs).toContain("['working', 'blocked', 'done', 'planning', 'awaiting-approval'].includes(v)")
+  })
 })
