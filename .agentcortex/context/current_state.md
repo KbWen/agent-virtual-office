@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-20T13:42:06+08:00
-- **Last Verified**: 2026-09-19
-- **Update Sequence**: 133
+- **Last Updated**: 2026-09-24T11:16:00+08:00
+- **Last Verified**: 2026-09-24
+- **Update Sequence**: 134
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -60,7 +60,7 @@
     - **Session closure** — final retro at `docs/reviews/2026-05-29-session-retro.md` (snapshot, not authoritative). 27 commits ahead of `origin/main`, 0 behind. `main` branch is the canonical state; `_product-backlog.md` lean (14 items: AVO-101..AVO-115 minus done + #20 deferred); `_shipped-log.md` holds 73 prior shipped rows; vitest 960/960; build 887ms clean. All work-log archives in place + INDEX.jsonl up to date. Push to origin pending human confirmation.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
-  - [maintenance] docs/specs/engineering-audit-remediation.md [Draft]
+  - [maintenance] docs/specs/engineering-audit-remediation.md [Shipped]  *(2026-09-24 audit remediation: dev server monotonic clock parity F-01, bridge UI planning/awaiting-approval toggles F-05)*
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
   - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
@@ -156,6 +156,13 @@
 
 ## Ship History
 
+### Ship-fix-audit-remediation-2026-09-24-2026-09-24 (dev server monotonic clock parity and bridge UI controls)
+
+- Quick-win shipped: remediated high-confidence findings F-01 (dev server clock parity) and F-05 (bridge UI interactive controls) from 2026-09-24 audit.
+- vite.config.mjs now imports canonical nextSeq from statusContract.mjs to maintain single-clock invariant under concurrent dev traffic.
+- public/bridge-ui.js & public/bridge.html updated with planning and awaiting-approval buttons and styles.
+- Tests: 132 test files passed (2511 passed, 1 skipped); render smoke PASS; panel smoke PASS; pack smoke PASS; bundle budget PASS. Branch fix/audit-remediation-2026-09-24.
+
 ### Ship-fix-avo-197-oneshot-animations-2026-09-20 (the one-shot animations actually play now) · AVO-197
 
 - Quick-win shipped: SIX one-shot SMIL animations in the office were dead. SMIL resolves `begin="0s"` against the DOCUMENT timeline, so an element mounted on a status change, a behaviour change or a poke is already past its active duration and snaps to its end value — no error, no warning, correct-looking markup, which is how it survived five features shipping. AVO-135's "one-shot celebratory flash" was mounted for 60 frames and visible on exactly 1. Found while building AVO-193 (whose steam uses CSS and was never affected).
@@ -218,17 +225,6 @@
 - **Then the design stopped being hard-coded** (owner: "開源repo，要讓大家好看、好修改、且有規則"). `src/systems/officePalette.js` holds the room shell, signs and card; the components hold no palette hex, and door openings share their room's floor token. `tests/officePalette.test.js` enforces R1–R5, and each rule is proven to fail on a real past mistake (old floor, rejected wall, the pre-palette status line, the pre-palette door literal). The move was pixel-identical, verified with diff maps. This scope arrived after "commit + PR" but before the ship commit, so the task was **reclassified quick-win -> feature** and an uncommitted ship closure was **withdrawn** rather than shipped under the old scope.
 - **A fresh-context reviewer caught the rules overclaiming**, verdict NOT READY. R4/R5 were not yet shown to bite. R1 measured the SOLID status colour while rings render below full opacity (working amber 1.25 solid, ~1.13 at the ring's 50%). R1 is now stated as a floor guard, not a certificate, rather than fitting a threshold to today's numbers. The close icon sat at 3.96-4.38 on the tint and is now ruled an icon (3:1). All fixed; re-review PASS. Accepted and seen by the owner: ENGINEERING sits ~3px under the Developer tag (tag on top). Pre-existing on `main`: in panel mode the inspector can overflow its cropped viewBox.
 - Tests: vitest **2422 passed / 126 files** (+14 rules tests); build PASS; `bundle-budget` +0.48%; render-smoke and panel smoke PASS; hermetic `sim-soak` 1 min ×2 PASS, 0 invariant violations; 18-state hermetic BEFORE/AFTER capture (1280×720, 1440×900, panel, night, zh-TW) with Escape/Enter close asserted from the DOM; `validate.sh` fail=0. PR #234.
-
-### Ship-fix-audit-2026-09-08-2026-09-08 (an external audit, re-derived — the container never started and a waiting agent looked busy)
-
-- Works an external audit handoff (`docs/reviews/2026-09-08-audit-handoff.md`, 12 findings) as **untrusted input**: every finding was re-derived from source before anything was touched. All 12 reproduce, but **three of its file/line references were wrong** and **one of its suggested fixes would have introduced a bug** — mapping `awaiting-approval` to `check-phone`/`stretch` would have WALKED the waiting agent to the lounge, because both are lounge destinations in `movementSystem.js`'s `BEHAVIOR_LOCATIONS`. Position is state in this product.
-- **The P0 was invisible to every gate we own.** `server.mjs` imports `src/server/scanSessions.mjs` and `src/utils/normalizePost.mjs`; the Dockerfile runner stage copied neither, so every container exited on `ERR_MODULE_NOT_FOUND` while the build, 2362 tests and three smoke gates stayed green. Fixed by copying the exact runtime closure (56 KB, not all 1.1 MB of `src/`) and pairing it with `tests/dockerRuntimeClosure.test.js`, which walks the import graph so a future import cannot silently re-break the image. Docker is not installed here, so the proof is a **replica of the runner image's filesystem** — pre-fix it reproduces the exact `ERR_MODULE_NOT_FOUND`, post-fix the server boots — not a real `docker run`; a reviewer with Docker should confirm.
-- **An agent waiting on YOUR permission prompt was animating a clattering keyboard and saying "almost... almost~".** `awaiting-approval` arrives from `idleGapInfer` with a status and nothing else, so both `decideBehavior` and `generateContextBubble` fell through to their task-family/`-working` defaults — a work claim over the exact absence of work, under the calm cyan ring that was supposed to mean the opposite. It now has a desk-bound hourglass and its own bubble pool in both locales. Verified in a real browser against an isolated dev server, asserting the **rendered DOM**: hourglass present, keyboard glyph absent, control agent still typing.
-- **Three silent contract mirrors had drifted.** `office-status-codex.js` was still on the pre-AVO-101 four-status list, so it DROPPED every `planning`/`awaiting-approval` agent, under-counted `activeCount`, and stripped the `reasonCode`/`activeFile`/`skill` carry fields — a Codex-driven blocked agent lost its reason badge. `bridge.js` treated any non-whitelisted value as a task NAME, turning `{ dev: 'planning' }` into a "working" agent labelled "planning". `bridge-ui.js` disagreed with the office's identity colours on 7 of 8 roles. All three are now pinned by drift-guard tests; the codex carry fields also gained the canonical sanitizers, which is a **net tightening** (`task`/`label`/`hint` were previously uncapped and `reasonCode` unvalidated).
-- **F-09 was worse than reported.** The audit saw a macOS symptom; the unit was wrong on GNU date too. `_seq` is a millisecond epoch everywhere — `scanSessions` dedups inside a 2s window and expires `done` against `Date.now()` — and the shell hook was emitting nanoseconds. Both platforms measured.
-- Docs closed at their source, not by editing prose: `bin/cli.js` registers 8 hook events while `INTEGRATIONS.md` said 6 and `hooks-config.json` (the file the docs tell you to paste) omitted `PermissionDenied`/`StopFailure` — the two events that make a denied tool call an honest `blocked`. Now pinned to `bin/cli.js`. `README.zh-TW.md` regained four sections; `ARCHITECTURE.md`'s room diagram was missing the Designer desk and the Gate station.
-- **F-11 is only partly closed, deliberately.** The deprecated Rollup option is fixed (output byte-identical, verified both ways). `MIXED_EXPORTS` and the `configLoader: native` warnings need `vite.config.js` renamed to `.mjs`, which touches every test that imports it — out of scope for a defect sweep, recorded with a written rationale rather than left looking done.
-- Tests: **125 files / 2408 passed** (+6 files, +46, all new guards; each proven to FAIL on the un-fixed input first). Build clean, bundle budget +0.20% against a +10% limit, all three smoke gates green, `validate.sh` pass=114 warn=5 fail=0.
 
 ## Spec Index Archive
 

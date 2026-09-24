@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 classification: feature
 source: internal
 primary_domain: office-runtime
