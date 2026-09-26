@@ -18,7 +18,7 @@
  */
 
 import { chromium } from 'playwright'
-import { spawn } from 'node:child_process'
+import { execSync, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -64,17 +64,30 @@ serverProc.on('error', err => {
 })
 
 // ── Cleanup guard (always kill child) ─────────────────────────────────────────
+// server.mjs runs its own graceful-shutdown drain on SIGTERM/SIGINT with a hard cap of
+// up to 10s (see server.mjs's gracefulShutdown) before it force-exits. `.killed` flips
+// true the instant kill() successfully SENDS the signal — not when the process actually
+// exits — so checking it here would never escalate to SIGKILL. Wait for the real 'exit'
+// event (bounded) and check exitCode/signalCode, not `.killed`.
 let browser = null
 let cleanedUp = false
 async function cleanup() {
   if (cleanedUp) return
   cleanedUp = true
   try { browser?.close() } catch {}
+  if (serverProc.exitCode !== null || serverProc.signalCode !== null) return
   try {
+    const exited = new Promise(resolve => serverProc.once('exit', resolve))
     serverProc.kill('SIGTERM')
-    // Give it 3s then force
-    await new Promise(resolve => setTimeout(resolve, 3000))
-    if (!serverProc.killed) serverProc.kill('SIGKILL')
+    const deadline = new Promise(resolve => setTimeout(() => resolve('timeout'), 11_000))
+    const outcome = await Promise.race([exited.then(() => 'exited'), deadline])
+    if (outcome === 'timeout' && serverProc.exitCode === null && serverProc.signalCode === null) {
+      if (process.platform === 'win32') {
+        try { execSync(`taskkill /pid ${serverProc.pid} /T /F`, { stdio: 'ignore' }) } catch {}
+      } else {
+        serverProc.kill('SIGKILL')
+      }
+    }
   } catch {}
 }
 process.on('exit', () => { if (!cleanedUp) { try { serverProc.kill('SIGKILL') } catch {} } })

@@ -83,16 +83,76 @@ async function poll(fn, deadlineMs, intervalMs = 500) {
   return false
 }
 
-/** Kill a process tree (Windows: taskkill /T /F; POSIX: SIGTERM then SIGKILL). */
+/** Kill a process tree by PID (Windows: taskkill /T /F; POSIX: SIGTERM then SIGKILL). */
+async function killPidTree(pid) {
+  if (process.platform === 'win32') {
+    try { execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' }) } catch {}
+  } else {
+    try { process.kill(pid, 'SIGTERM') } catch { return }
+    await new Promise(r => setTimeout(r, 2000))
+    try { process.kill(pid, 'SIGKILL') } catch {}
+  }
+}
+
+/** Kill a process tree rooted at a live child handle. */
 async function killTree(child) {
   if (!child || child.exitCode !== null) return
+  await killPidTree(child.pid)
+}
+
+/** True if a process with this pid is currently alive (best-effort, cross-platform). */
+function isPidAlive(pid) {
+  if (!pid) return false
   if (process.platform === 'win32') {
-    try { execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: 'ignore' }) } catch {}
-  } else {
-    try { child.kill('SIGTERM') } catch {}
-    await new Promise(r => setTimeout(r, 2000))
-    try { if (child.exitCode === null) child.kill('SIGKILL') } catch {}
+    try {
+      const out = execSync(`tasklist /fi "PID eq ${pid}" /fo csv /nh`, { encoding: 'utf-8' })
+      return out.includes(String(pid))
+    } catch {
+      return false
+    }
   }
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// ── Cross-run stale-child marker ────────────────────────────────────────────────
+// The dev server this harness boots (Assertion 4) is spawned through a wrapper:
+// pack-smoke.mjs -> bin/cli.js -> vite. killTree()/killPidTree() reliably kills that
+// whole subtree from INSIDE this script (taskkill /T on win32; cli.js itself forwards
+// SIGTERM to vite on POSIX). But if this script's own node process is killed from
+// OUTSIDE (a harness/CI timeout, an operator force-kill) before it reaches cleanup(),
+// no JS in this process ever runs again — finally/exit/signal handlers included — and
+// the cli.js+vite subtree is orphaned with no self-timeout of its own, potentially for
+// hours. MARKER_PATH persists the dev-server child's pid across runs so the NEXT
+// invocation can reap a leftover subtree from a previously-killed run instead of
+// leaving it to accumulate indefinitely.
+const MARKER_PATH = path.join(os.tmpdir(), 'avo-pack-smoke-devchild.pid')
+
+async function reapStaleMarker() {
+  if (!existsSync(MARKER_PATH)) return
+  const raw = (() => { try { return readFileSync(MARKER_PATH, 'utf-8').trim() } catch { return '' } })()
+  const stalePid = Number(raw)
+  if (Number.isInteger(stalePid) && stalePid > 0 && isPidAlive(stalePid)) {
+    console.log(`[pack-smoke] Reaping stale dev-server subtree from a previous run (pid ${stalePid})...`)
+    await killPidTree(stalePid)
+  }
+  try { rmSync(MARKER_PATH) } catch {}
+}
+
+function writeChildMarker(pid) {
+  try { writeFileSync(MARKER_PATH, String(pid)) } catch {}
+}
+
+function clearChildMarker() {
+  try {
+    if (existsSync(MARKER_PATH) && readFileSync(MARKER_PATH, 'utf-8').trim() === String(devChild?.pid)) {
+      rmSync(MARKER_PATH)
+    }
+  } catch {}
 }
 
 // ── State ──────────────────────────────────────────────────────────────────────
@@ -102,6 +162,7 @@ let devChild = null
 
 async function cleanup() {
   await killTree(devChild)
+  clearChildMarker()
   if (tarballPath && existsSync(tarballPath)) {
     try { rmSync(tarballPath) } catch {}
   }
@@ -119,12 +180,29 @@ process.on('exit', () => {
     } else {
       try { devChild.kill('SIGKILL') } catch {}
     }
+    clearChildMarker()
   }
   if (tarballPath && existsSync(tarballPath)) { try { rmSync(tarballPath) } catch {} }
   if (tmpDir && existsSync(tmpDir)) { try { rmSync(tmpDir, { recursive: true, force: true }) } catch {} }
 })
 
+// Catchable signals: run full async cleanup (kills the dev-server subtree, clears the
+// marker, removes temp files) before exiting, instead of relying solely on the sync
+// best-effort 'exit' handler above.
+let _signalHandled = false
+async function handleSignal(signal, code) {
+  if (_signalHandled) return
+  _signalHandled = true
+  console.log(`\n[pack-smoke] ${signal} received — cleaning up...`)
+  await cleanup()
+  process.exit(code)
+}
+process.on('SIGINT', () => handleSignal('SIGINT', 130))
+process.on('SIGTERM', () => handleSignal('SIGTERM', 143))
+
 // ── Main ───────────────────────────────────────────────────────────────────────
+
+await reapStaleMarker()
 
 let port
 try {
@@ -346,6 +424,7 @@ try {
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+  writeChildMarker(devChild.pid)
 
   let devStdout = ''
   let devStderr = ''
