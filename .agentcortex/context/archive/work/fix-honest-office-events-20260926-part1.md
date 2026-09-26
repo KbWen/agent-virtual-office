@@ -157,3 +157,61 @@ Decisions. AC-14 test gap (M5, advisory not blocking) not addressed this round �
 ## Security Findings (moved — R4, verbatim)
 
 - R4 `/review` (same scope, delta `b088b9e`): 0 findings.
+
+## Task Description (moved — r7 /test compaction, verbatim)
+
+Remediate audited honesty defects in office-life set-pieces (ADR-007/008: an office event must
+never misrepresent real agent status). Each round's own fix introduced the next round's finding:
+R1 phantom events/idle-gap corruption/group-pose release → R2 abandonment-clear gaps → R3 (N1/N2)
+abandonment-clear raced on shared `EVENT_BY_ID` identity → R4 (F1-F4) epoch fix itself had a HIGH
+regression + gaps → R5 (G1/G2/F3/F4 follow-ups) the regression fix had a non-discriminating test
+(G1) and silently killed Friday's group-meeting cadence (G2). Full detail per round: Review
+Feedback (active + archived) and spec Round 1-5 sections.
+
+## Phase Summary (moved — r3/r4 recap, verbatim)
+
+- review(r3) NOT READY (F1 HIGH/F2 MEDIUM/F4 LOW) → implement(r4) fixed all incl. mutation-verified
+  M3/M4, 138/2546 green → review(r4) NOT READY (G1/G2 MEDIUM, 0 security). Full detail: Review
+  Feedback R4 (R3 archived).
+
+## Review Feedback (moved — R5, verbatim, r7 compaction)
+
+**R5** `/review` 17:35Z, HEAD `e3c81f5` (fresh `review-r5`): PASS. G1/G2/F3-token mutants each red; Fri15→meeting 20/20, Thu/Mon15+Fri10→tea 20/20; 30-min Fri/Thu churn 0 orphan, 0 busy-posed; 0 security. LOW, fix pre-ship:
+stale "No change to event cadence" (spec:43, living-office-events.md:371); "counter...exported" false (spec:321); Files AC-12→replaced test; M5 + text-check drop survive suite (probes kill both) — commit as tests.
+
+**R5 resolution (r6)**: all 4 LOW items fixed — spec/living-spec cadence wording, spec:321 export
+scope, Files AC-12 mapping, M5 + identity-check mutants now killed by committed tests (Evidence).
+
+## Red Team Findings (moved — R5, verbatim, r7 compaction)
+
+- R5: 0 CRITICAL/HIGH/MEDIUM. AC-14 (M5) test gap closed in r6 (Evidence) — no longer open.
+
+## Security Findings (moved — R5, verbatim, r7 compaction)
+
+- R5 `/review`: 0 findings.
+
+## Drift Log (moved — r5/r6 compaction records, verbatim, r7 compaction)
+
+- Compacted: 2026-09-26 (r5 implement), archive:
+  `.agentcortex/context/archive/work/fix-honest-office-events-20260926-part1.md`. Moved VERBATIM:
+  round 1-3 Review Feedback/Red Team/Security Findings + superseded Phase Summary/Known Risk
+  detail. Protected sections (Gate Evidence/Skill Notes/Conflict Resolution/Evidence/Resume/
+  Session Info) stayed, untouched, per `handoff.md §6`.
+- Compacted (r6): appended R4's now-resolved Review Feedback/Red Team/Security Findings VERBATIM
+  to the archive's r6 addendum (active log was over budget); left one-line pointers only.
+
+## Phase Summary (moved — r5 implement detail, verbatim, r7 compaction)
+
+- implement (r5): G1 fixed (`fireWithCast` exported; direct test uses two DISJOINT-cast events,
+  proves refusal + intact first epoch/cast, mutation-verified). G2 fixed (Friday 15:00 now fires
+  `group-meeting` instead of `tea-break`; tea-break keeps 10:00 daily + 15:00 non-Friday; spec
+  corrected + Domain Decision added; test: Fri→meeting, Thu→tea). F3 follow-up: bubble clear now
+  also checks a per-paint token, not just text (pool phrases can coincidentally repeat). F4
+  follow-up: added the missing ADR-010 row to External References. Work Log compacted per
+  `handoff.md §6` (verbatim move — see Drift Log).
+
+## Phase Summary (moved — r6 implement detail, verbatim, r7 compaction)
+
+- implement (r6, pre-test/handoff): fixed r5's 4 LOW items — spec:43 + living-spec:371 cadence
+  wording, spec:321 export scope, Files AC-12 remap. Added 2 tests (M5; stale-clear-vs-real-bubble),
+  mutation-verified red→green. 138/2551 green.
