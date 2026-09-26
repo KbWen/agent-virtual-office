@@ -60,3 +60,13 @@ events.
   commit; raw .jsonl stays in ~/.claude (never in the repo); .gitignore the capture filename
   defensively.
 - **Rollback**: capture block is ~10 lines in the hook; fixtures/tests are additive files.
+
+## Addendum: 2026-09-26 — Codex helper filename isolation + stdin fix
+
+A post-ship audit found that the Codex helper (`public/hooks/office-status-codex.js`) shared
+this hook's exact filename scheme with no provenance tag, and separately that its `main()`
+blocked reading stdin to EOF before checking `argv[2]`, hanging its documented single-argument
+usage. Both were fixed touching this hook file only in `cleanupGhostAliases` (now additionally
+requires `source === 'claude-cli'` before deleting a sibling) — the fixture/contract-test design
+above is unchanged. Canonical writeup, full findings list, and test evidence:
+`docs/specs/codex-status-parity-and-done-count.md` Addendum.

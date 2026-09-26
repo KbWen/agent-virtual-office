@@ -156,7 +156,13 @@ function cleanupGhostAliases() {
       const full = path.join(dir, f)
       try {
         const parsed = JSON.parse(fs.readFileSync(full, 'utf-8'))
-        if (parsed && parsed._cwd === cwd) fs.unlinkSync(full)
+        // AVO audit remediation (2026-09-26, finding #1): _cwd match alone used to be treated
+        // as proof of "our own pre-switch alias" — but a Codex-written file (or any other
+        // future producer) can legitimately share both the cwd-hash suffix AND the exact same
+        // _cwd (same checkout, same machine). Only `source === 'claude-cli'` proves the hook
+        // itself wrote the sibling; every other/missing source is foreign — leave it alone
+        // (honest-narrow: unknown provenance never authorizes a delete).
+        if (parsed && parsed._cwd === cwd && parsed.source === 'claude-cli') fs.unlinkSync(full)
       } catch {}  // unreadable/foreign sibling → leave it; staleness window handles it
     }
   } catch {}
@@ -1458,5 +1464,8 @@ if (typeof module !== 'undefined') {
     toolResultText,
     // Branch-hop ghost cleanup (exported for unit testing)
     cleanupGhostAliases,
+    // AVO audit remediation (2026-09-26): exported for unit testing slug parity against
+    // office-status-codex.js. Behavior unchanged — this is a test-visibility-only export.
+    getSessionSlug,
   }
 }

@@ -56,7 +56,17 @@ Rotated 1 additional entry on 2026-09-25 (SSoT Update Sequence 134 -> 135).
 
 Rotated 1 additional entry on 2026-09-26 (SSoT Update Sequence 135 -> 136).
 
+Rotated 1 additional entry on 2026-09-26 (SSoT Update Sequence 136 -> 137).
+
 ---
+
+### Ship-fix-review-2026-09-19-2026-09-19 (an external review, re-derived — panel mode stops clipping and losing speech; waiting times keep counting)
+
+- Feature shipped: the Gemini handoff review (`docs/reviews/2026-09-19-handoff-review.md`, 10 findings against v1.6.8) was worked as **untrusted input**. Five are fixed (REV-01/02/03/08/09). REV-04 and REV-06 are rejected on evidence: an above-head bubble cannot be covered by a later-painted agent, and the extraction map the review cites says "not a refactor request". REV-10 is AVO-193, and REV-07/REV-05 get their own PRs. Two premises were wrong: the title channel could never see other tabs, and REV-05's warnings come from Vite 8 and Rolldown, not Node 22. Two findings were under-scoped: three surfaces froze their relative times, not one, and two comment sites were stale, not one.
+- **Panel mode clamps overlays to the live viewBox.** `store.sceneBounds` now carries `minY`/`h`. `placeInspector` keeps the card inside every crop (clipped 155px/20px before, 0 after, measured in a browser); in the full office it is numerically the old clamp, and the boxes measured identical. The bubble now flips against the crop's top.
+- **A fresh-context reviewer caught the first cut putting speech on screen with no speaker.** Meeting chairs (x 645–765) sit right of every panel crop. The new flip and the old #47 edge clamp together dragged their bubbles into view, and no capture had staged a meeting. It was then measured: `main` already leaked ~2.5 such bubbles into the tall panel. Now 0, because the orphan guard covers both axes and the clamp. Speakers just BELOW a crop are still shown; that is AVO-196 and a design decision under ADR-007.
+- **Relative times tick.** A local 10 s `useNowTick` drives the roster, the inspector's AVO-169 duration and the activity feed. In a real-browser A/B after a 22 s wait, `main` was 14–20 s stale and the branch was current. The dead `document.title` channel is deleted, and a src-wide guard test keeps it out.
+- Tests: vitest **2468 passed / 129 files** (+46 tests, +3 files net). 9 wiring mutations each fail a test. Build, bundle-budget +0.48%, render/panel/pack smoke all PASS. Two independent fresh reviews: round 1 NOT READY, round 2 READY. **Disclosed:** spec AC-2/6/11 were amended under the owner's standing delegation without the §4.2 draft→frozen flip. PR #236.
 
 ### Ship-chore-release-v1.6.8-2026-09-14 (a calmer office, and waiting finally looks like waiting) · release v1.6.8
 
