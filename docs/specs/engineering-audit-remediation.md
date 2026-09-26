@@ -106,3 +106,80 @@ Round 2's fixer verified round-1's items as bypass-free, bounded, and leak-free,
 - **LOW-6 (doc accuracy)**: corrected three overstatements — unbracketed IPv6 in `Host` is deliberately **rejected** (RFC 3986/7230 require brackets; not a bug, now stated as a choice, not an omission); the rejected-Host log is a **50-entry lifetime cap per process**, not a rate limit; Nginx's `$host` forwards the **client's** Host header (which for a legitimate request equals whichever `server_name` alias was used — every alias needs listing if there's more than one), not a literal copy of `server_name` itself. Also stated explicitly that an **empty** `Host:` header (not just a missing one) is allowed through.
 - **LOW-7 (tests)**: added suffix-boundary-rejection tests (`evilsuffix.example` / `suffix.example.evil.com` vs `.suffix.example`) and a log-cap test (60 distinct rejected hosts → ≤50 log lines, server stays alive).
 - **LOW-8 (accepted, out of scope)**: SSE writes ignore backpressure — a slow/zero-window reader can make `broadcastSSE` buffer indefinitely per client even with the connection count capped (LOW-4). Recorded as a known, accepted limitation; not fixed here (would need a `res.writableLength` bound and a drop/close policy, which is a larger behavioral change than this hotfix's scope).
+
+## 2026-09-26 Dev-Server Parity Wave
+
+Routed from a follow-up audit that re-derived the remaining dev-only (`vite.config.mjs`) divergences
+from `server.mjs` (production) after the 2026-09-24 wave fixed the shared `_seq` clock. Branch
+`fix/dev-server-parity`; behavioral tests in `tests/viteDevServerParity.test.js` (real
+`vite.createServer()` harness) and `tests/cliDevLanWarning.test.js`; scope limited to
+`vite.config.mjs`, the dev-start warning lines in `bin/cli.js`, and a one-line `STALE_MS` export
+from `src/server/scanSessions.mjs` (no `server.mjs` or `bin/cli.js` setup/uninstall changes —
+those belong to sibling remediation branches).
+
+- **F-1 (file-watcher fallback scope leak)**: `officeStatusPlugin`'s `server.watcher.add(watchDir)`
+  extends the SAME shared chokidar watcher to also cover `OFFICE_STATUS_DIR`, but
+  `fileWatcherFallbackPlugin`'s `'change'` handler had no project-root check — any write under the
+  status dir (a Claude Code transcript `projects/**/<uuid>.jsonl`, a `debug/*.txt` log, etc.) was
+  misread as a project source edit and fabricated a fake, `_cwd`-less agent status that then showed
+  up in *any* project's office. Fixed: the fallback now resolves `server.config.root` and ignores
+  any file outside it, plus explicitly ignores the status dir itself (even when nested inside the
+  project root) and `.claude/` (Claude Code state / nested worktrees). **Round-2 correction**: the
+  `.claude`/`node_modules`/`dist`/`.git` exclusion first shipped as a substring regex tested
+  against the ABSOLUTE file path — which silenced the fallback for every project rooted under a
+  `.claude` segment (every `.claude/worktrees/**` agent worktree, including this repo's own
+  convention) and could false-match a real file like `distance.js`. Fixed: matched as exact path
+  SEGMENTS of the path relative to `server.config.root` instead.
+  **Disclosure**: under `bin/cli.js`/npx, Vite's cwd — and therefore `server.config.root` — is the
+  *installed package directory* (`bin/cli.js` resolves `root` from its own location and spawns Vite
+  with `cwd: root`), not the end user's project (`OFFICE_PROJECT_ROOT` only affects `_cwd` stamping,
+  a separate mechanism). So after this fix, the zero-config file-watcher fallback can only fire on
+  edits inside the installed package — which CLI/npx users never touch — making it effectively inert
+  for that install path. Before this fix it appeared to "work" for CLI users only via the very
+  `OFFICE_STATUS_DIR` leak this fix closes (any of their own hook/transcript activity under
+  `~/.claude` was being misread as a source edit). The fallback remains fully functional for in-repo
+  `npm run dev`, where `server.config.root` is the real project. No further change made here —
+  correct root-scoping honesty over a feature that only ever worked by relying on the bug.
+- **F-2 (fallback overwrite window too short)**: the fallback's guard against overwriting a
+  webhook/API-set **bare-file** status used a hardcoded 10s window; production (`server.mjs`) has
+  no fallback at all, so a `blocked`/API-set status there simply persists until the real
+  ~5-minute stale window. Fixed: that specific guard's window is now `FALLBACK_PROTECT_MS`, which
+  imports `STALE_MS` from `src/server/scanSessions.mjs` (now exported — an in-scope import, since
+  `vite.config.mjs` already imports other symbols from that module).
+  **R-1 regression (caught in review) and fix**: the FIRST implementation of this finding also
+  widened the SEPARATE "don't write while a hook is actively running" guard (which scans every
+  slugged hook file in the shared status dir with no `_cwd` filter) from 10s to the same 5-minute
+  window — since `~/.claude` is shared across every project, any OTHER project's hook file
+  (written on every tool call, from a session that could sit idle for minutes) then silenced
+  THIS project's fallback almost permanently. That guard did not need widening (the fallback
+  never writes hook files, so F-2's overwrite scenario never applied to it) and is now a
+  distinct, still-short `HOOK_ACTIVE_MS = 10_000` constant, unaffected by the `STALE_MS` import.
+  Regression test: `tests/viteDevServerParity.test.js` "R-1 hook-file guard does not silence the
+  fallback for a foreign project" — a 30s-old foreign-`_cwd` hook file must not suppress this
+  project's own fallback write.
+- **F-3 (watcher missed add/unlink)**: `officeStatusPlugin`'s SSE-push watcher only bound `'change'`;
+  a brand-new or deleted session file waited for the next poll instead of an immediate push.
+  Production's `fs.watch` fires on rename too. Fixed: also bind `'add'` and `'unlink'` to the same
+  debounced handler.
+- **F-4 (dev CORS preflight divergence)**: Vite registers its own permissive-loopback
+  `server.cors` middleware *before* plugin middlewares, so it always answers OPTIONS itself and
+  unconditionally adds `Access-Control-Allow-Origin` for loopback GETs — bypassing this file's own
+  `isAllowedOrigin`/`OFFICE_API_ALLOWED_ORIGINS` logic entirely. An explicit non-loopback allowed
+  origin failed preflight in dev (worked in prod); a loopback origin excluded by an explicit
+  allowlist was still let through in dev (rejected in prod). Fixed: `server.cors: false`, so the
+  plugin's own logic is the sole authority in dev too. Verified `npm run smoke` / `npm run
+  smoke:panel` still pass (HMR/dev asset serving is same-origin, no preflight involved).
+- **F-5 (unguarded `scanAndMerge` call sites)**: the `/api/status/stream` initial-snapshot read and
+  the watcher-debounce broadcast callback called `scanAndMerge` with no try/catch, unlike every
+  other call site in this file and in `server.mjs`. Fixed defensively (matches the existing
+  pattern elsewhere in this file) — no forced-throw regression test was written since
+  `scanAndMerge`/`readSessionFileCached` already guard per-file parse errors internally; the added
+  tests instead confirm a corrupt session file does not crash the dev server end-to-end.
+- **F-6 (no LAN-exposure warning in dev)**: `bin/cli.js` binds the dev server to `--host` (LAN,
+  0.0.0.0) by default with no `OFFICE_API_TOKEN` warning, unlike `server.mjs`'s production
+  warning. Fixed: the same warning now prints from the dev-start path under the same condition
+  (LAN-bound, no token).
+- Considered out of scope: dev never sweeps stale session files the way `server.mjs`'s 10-minute
+  interval does. Not implemented — would need its own design (sweep cadence, dev-only lifecycle)
+  rather than a copy-paste, and no correctness bug was found from its absence (stale files are
+  already excluded from `scanAndMerge` by `_seq` age, they just aren't deleted from disk).
