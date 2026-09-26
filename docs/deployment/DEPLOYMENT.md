@@ -33,6 +33,20 @@ Edit `server_name` in the config to match your domain. The block proxies to
 `listen` directive to `443 ssl` and add your certificates (commented hints
 are in `nginx.conf`).
 
+**Required**: `server.mjs` validates the `Host` header on every request (a DNS-rebinding
+guard — see [Environment variables](#environment-variables) below), and Nginx forwards its
+own `server_name` verbatim via `proxy_set_header Host $host`. Without telling `server.mjs`
+to trust that hostname, every proxied request — page, API, and the SSE stream — gets `403
+Forbidden`. Set `OFFICE_ALLOWED_HOSTS` to the same value as `server_name` before starting
+`server.mjs`, e.g.:
+
+```bash
+OFFICE_ALLOWED_HOSTS=office.example.com node server.mjs --no-open
+```
+
+(For PM2 or systemd, set it in the process manager's env block / env file — see those
+sections below.)
+
 ## TLS certificates (Let's Encrypt)
 
 After setting up Nginx on port 80, obtain a free certificate:
@@ -168,7 +182,8 @@ docker compose up -d --build             # rebuild image and recreate container
 | --- | --- | --- |
 | `OFFICE_API_TOKEN` | No | If set, all API **write** endpoints (POST) require this token via the `X-Office-Token` header or `Authorization: Bearer <token>`. GET `/api/status` is always readable (status data only, no secrets). Leave unset for trusted local networks. |
 | `OFFICE_API_ALLOWED_ORIGINS` | No | Comma-separated list of allowed CORS origins (e.g. `https://office.example.com`). If unset, only loopback and the server's own IPs are accepted. |
-| `OFFICE_ALLOWED_HOSTS` | No | Comma-separated list of extra hostnames allowed in the request `Host` header (e.g. `mypc.local`). Every request is rejected with 403 unless its `Host` is `localhost`, `*.localhost`, an IP literal, one of the server's own IPs, or in this list — this is a DNS-rebinding guard, so a colleague reaching the office via a LAN **hostname** (not an IP) needs this set; reaching it by IP or `--host` LAN IP already works without it. |
+| `OFFICE_ALLOWED_HOSTS` | **Required behind Nginx/PM2/systemd with a hostname** | Comma-separated list of extra hostnames allowed in the request `Host` header (e.g. `office.example.com`). Every request is rejected with 403 unless its `Host` is `localhost`/`*.localhost`, an IP literal, one of the server's own IPs, or in this list — a DNS-rebinding guard modeled on (not identical to) Vite's `allowedHosts`. **A colleague reaching the office via a LAN hostname needs this set** (reaching it by IP or `--host` LAN IP already works without it) — **and so does the documented Nginx reverse-proxy setup**, since `nginx.conf` forwards its `server_name` verbatim as `Host` (see the Nginx section above). A request missing the `Host` header entirely is allowed through (it cannot be part of a rebinding attack — no browser omits `Host`). An entry may start with `.` for a suffix match (`.example.com` matches `example.com` and any subdomain); a trailing `:port` on an entry is stripped, so `mypc.local:5174` behaves the same as `mypc.local`. Rejected hosts are logged once per distinct hostname (capped) so a misconfigured proxy is visible in the server's own log output, not just a silent wall of 403s. |
+| `OFFICE_MAX_SSE_CLIENTS` | No | Maximum concurrent `/api/status/stream` connections before new ones get `503`. Defaults to `500`. The per-connection idle-socket timeout is intentionally disabled for SSE (streams are long-lived by design), so this is the backstop against unbounded socket growth — raise it only if you have many simultaneous viewers. |
 | `OFFICE_PROJECT_ROOT` | No | Project directory that session files are matched against (each file carries the `_cwd` the hook ran in). Defaults to the directory the office was launched from — `bin/cli.js` forwards it, since both servers are spawned with their cwd set to the package directory. Set it explicitly to watch a different project root, e.g. a shared worktree. |
 
 ## Hook integration note

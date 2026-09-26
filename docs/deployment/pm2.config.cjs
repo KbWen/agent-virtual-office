@@ -46,9 +46,14 @@ module.exports = {
       merge_logs: true,
       env: {
         NODE_ENV: 'production',
+        // REQUIRED behind the Nginx reverse proxy (docs/deployment/nginx.conf forwards its
+        // server_name verbatim as Host) — match it here or every proxied request gets 403.
+        // Uncomment and set to your domain; see docs/deployment/DEPLOYMENT.md#environment-variables.
+        // OFFICE_ALLOWED_HOSTS: 'office.example.com',
       },
       env_production: {
         NODE_ENV: 'production',
+        // OFFICE_ALLOWED_HOSTS: 'office.example.com',
       },
     },
   ],
