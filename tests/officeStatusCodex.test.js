@@ -45,6 +45,16 @@ describe('normalizeCodexStatusPayload', () => {
   // nextSeq(), matching statusContract.mjs normalizePost (:137, :167), which never honors a
   // caller _seq either.
   it('ignores a caller-supplied _seq entirely and always stamps a fresh monotonic value', () => {
+    // A GENUINELY future _seq (well within the server's 5-min FUTURE_MS tolerance) is the
+    // one a naive "reject only obviously-stale/malformed" fix would still let through —
+    // this is the exact shape that poisons the client's high-water mark and freezes the
+    // office (review round 2, R-1). '1700000000000' below (2023, long past) does NOT catch
+    // that class of bug on its own; keep both.
+    const nearFuture = String(Date.now() + 240_000)
+    const withNearFutureSeq = normalizeCodexStatusPayload({ type: 'office-status', agents: [], _seq: nearFuture })
+    expect(withNearFutureSeq._seq).not.toBe(nearFuture)
+    expect(withNearFutureSeq._seq).toMatch(/^\d+$/)
+
     const withFutureSeq = normalizeCodexStatusPayload({ type: 'office-status', agents: [], _seq: '1700000000000' })
     expect(withFutureSeq._seq).not.toBe('1700000000000')
     expect(withFutureSeq._seq).toMatch(/^\d+$/)

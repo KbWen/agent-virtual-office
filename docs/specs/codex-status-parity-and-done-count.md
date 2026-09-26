@@ -112,5 +112,5 @@ silently clobber the Claude hook's read-modify-write state, and the Claude hook'
   that would require teaching `scanSessions.mjs` to merge more than one agent per session file,
   out of scope here.
 
-See `docs/specs/hook-runtime-contract.md` Addendum for the fixture/contract-test angle on the
-same change.
+This is the canonical writeup for this remediation (`docs/specs/hook-runtime-contract.md`
+points here — one-directional, not circular).
