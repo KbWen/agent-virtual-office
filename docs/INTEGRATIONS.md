@@ -67,7 +67,7 @@ Add a step to any workflow to light up the office on CI events:
 # .github/workflows/deploy.yml
 - name: Notify office — deploy started
   run: |
-    curl -s -X POST ${{ vars.OFFICE_URL }}/api/event \
+    curl -fsS -X POST ${{ vars.OFFICE_URL }}/api/event \
       -H "Content-Type: application/json" \
       -H "X-Office-Token: ${{ secrets.OFFICE_API_TOKEN }}" \
       -d '{"event":"deploy-start"}'
@@ -79,13 +79,15 @@ Add a step to any workflow to light up the office on CI events:
   if: always()
   run: |
     EVENT=$([[ "${{ job.status }}" == "success" ]] && echo "deploy-success" || echo "deploy-failed")
-    curl -s -X POST ${{ vars.OFFICE_URL }}/api/event \
+    curl -fsS -X POST ${{ vars.OFFICE_URL }}/api/event \
       -H "Content-Type: application/json" \
       -H "X-Office-Token: ${{ secrets.OFFICE_API_TOKEN }}" \
       -d "{\"event\":\"$EVENT\"}"
 ```
 
-Set `OFFICE_URL` (e.g. `http://office.internal:5174`) as a repository variable and `OFFICE_API_TOKEN` as a secret. For self-hosted runners on the same LAN the server is reachable without any extra tunneling.
+Set `OFFICE_URL` (e.g. `http://office.internal:5174`) as a repository variable and `OFFICE_API_TOKEN` as a secret. For self-hosted runners on the same LAN the server is reachable without any extra tunneling. `-fsS` (fail on HTTP errors, silent otherwise but still print errors) replaces a bare `-s`, so a `403`/`401`/etc. fails the step loudly instead of the workflow silently reporting success with nothing delivered.
+
+**Note on `OFFICE_ALLOWED_HOSTS`**: this example already sends a matching `X-Office-Token`, and a request with a *valid* token is exempt from the Host-header check (see [DEPLOYMENT.md](deployment/DEPLOYMENT.md#environment-variables)) — a DNS-rebinding browser can send any `Host` it likes, but it cannot know your token, so proof of the token is proof this isn't one. That means `OFFICE_URL`'s hostname does **not** need to be added to `OFFICE_ALLOWED_HOSTS` for this specific call. It still would need to be, though, for any *unauthenticated* request to that same hostname (e.g. hitting `/api/health` from a monitoring job without a token) or if you drop `OFFICE_API_TOKEN` from the workflow.
 
 ---
 
