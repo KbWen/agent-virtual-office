@@ -133,6 +133,17 @@ function safeParseUrl(reqUrl) {
 // ─── SSE clients ──────────────────────────────────────────────────────────────
 const sseClients = new Set()
 
+// LOW-4 (review round 2, 2026-09-26): with the per-socket idle timeout now disabled on SSE
+// connections (F2 above), a client (or a `--host` LAN peer) can hold sockets open
+// indefinitely. Cap concurrent SSE clients so that can never grow unbounded; configurable
+// since the right ceiling depends on deployment (a single-operator localhost office vs. a
+// shared --host instance watched by a small team). Default is generous — this is a
+// resource-exhaustion backstop, not a normal-use limit.
+const MAX_SSE_CLIENTS = (() => {
+  const raw = parseInt(process.env.OFFICE_MAX_SSE_CLIENTS, 10)
+  return Number.isFinite(raw) && raw > 0 ? raw : 500
+})()
+
 function broadcastSSE(merged) {
   if (sseClients.size === 0) return
   const payload = `event: status\ndata: ${JSON.stringify(merged)}\n\n`
@@ -177,10 +188,26 @@ const SERVER_IPS = getServerIPs()
 // this server from the victim's browser — bypassing our Origin-based CORS entirely, since
 // CORS never restricts simple GETs, only whether the response is *readable* cross-origin by
 // script, and a top-level/rebound navigation IS same-origin from the browser's point of view.
-// Mirrors Vite's own `server.allowedHosts` semantics (dev is already covered by Vite's
-// internal hostValidationMiddleware — this closes the same gap in the production server).
+// Modeled on (NOT identical to) Vite's own `server.allowedHosts` semantics — dev is already
+// covered by Vite's internal hostValidationMiddleware; this closes the same class of gap in
+// the production server, but the two allowlists differ (see review round 2, 2026-09-26):
+//   - AVO supports a leading-dot suffix entry (`.example.com` matches `example.com` AND any
+//     `*.example.com` subdomain); Vite's own wildcard shape differs slightly.
+//   - AVO strips a trailing `:port` from env entries (`mypc.local:5174` behaves the same as
+//     `mypc.local`), since the port a request arrives on is deployment-specific and shouldn't
+//     have to be duplicated into the allowlist.
+//   - A REQUEST WITH NO HOST HEADER AT ALL IS ALLOWED THROUGH (see the comment on
+//     isAllowedHost below) — this matches Vite's behavior, but for a different, explicit
+//     reason specific to this server.
 const ALLOWED_HOSTS_ENV = (process.env.OFFICE_ALLOWED_HOSTS || '')
-  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  .split(',').map(s => s.trim()).filter(Boolean)
+  .map(entry => {
+    // Reuse the same port/bracket stripping as a real Host header so
+    // `OFFICE_ALLOWED_HOSTS=mypc.local:5174` and `=mypc.local` behave identically, and a
+    // leading-dot suffix entry (`.example.com`) survives (no colon in it, so it passes
+    // through unchanged other than lowercasing).
+    return hostnameFromHeader(entry) ?? entry.toLowerCase()
+  })
 
 // Host header may be `host`, `host:port`, or `[v6-literal]:port`. Strip the port and any
 // IPv6 brackets so the remainder can be compared as a bare hostname/IP.
@@ -195,13 +222,42 @@ function hostnameFromHeader(hostHeader) {
 
 function isAllowedHost(hostHeader) {
   const host = hostnameFromHeader(hostHeader)
-  if (!host) return false
+  // A request with NO Host header at all cannot be the product of a DNS-rebinding attack:
+  // rebinding relies on the victim's BROWSER sending an attacker-chosen Host that resolves to
+  // this server's IP, and every browser HTTP/1.1 request always includes a Host header. A
+  // request with no Host is either a deliberately-crafted raw/HTTP-1.0-style request (already
+  // on the least-privileged path here — this check runs before any handler, so it still gets
+  // routed as an ordinary GET/POST with no elevated access) or a local health-check/proxy
+  // quirk. Rejecting it would only break those benign callers while adding no protection
+  // against the actual threat model, so it is allowed through — matching Vite's own choice,
+  // arrived at independently for this reason.
+  if (host === null) return true
   if (host === 'localhost' || host.endsWith('.localhost')) return true
   if (net.isIP(host)) return true // any IP literal (v4/v6) — matches Vite's allowedHosts default
   for (const ip of SERVER_IPS) {
     if (ip.replace(/^\[|\]$/g, '').toLowerCase() === host) return true
   }
-  return ALLOWED_HOSTS_ENV.includes(host)
+  for (const entry of ALLOWED_HOSTS_ENV) {
+    if (entry.startsWith('.')) {
+      if (host === entry.slice(1) || host.endsWith(entry)) return true
+    } else if (entry === host) {
+      return true
+    }
+  }
+  return false
+}
+
+// Rejected-Host logging: one line per DISTINCT rejected hostname, capped so a scanner
+// hammering random Host values can't grow this set (or the log) without bound. Once the cap
+// is hit, further NEW hostnames are silently dropped from logging (existing 403 behavior is
+// unaffected — this only bounds *logging*, never access control).
+const REJECTED_HOST_LOG_CAP = 50
+const _loggedRejectedHosts = new Set()
+function logRejectedHostOnce(hostHeader) {
+  const key = typeof hostHeader === 'string' && hostHeader ? hostHeader : '(missing)'
+  if (_loggedRejectedHosts.has(key) || _loggedRejectedHosts.size >= REJECTED_HOST_LOG_CAP) return
+  _loggedRejectedHosts.add(key)
+  console.warn(`  403: rejected request with disallowed Host "${key}". Set OFFICE_ALLOWED_HOSTS to permit it (see docs/deployment/DEPLOYMENT.md#environment-variables).`)
 }
 
 const apiToken = process.env.OFFICE_API_TOKEN?.trim() || null
@@ -523,6 +579,7 @@ const server = http.createServer((req, res) => {
   // routing — closes the DNS-rebinding read across every route (API, SSE, and static assets
   // alike; Vite's own dev-server host guard applies the same way for consistency).
   if (!isAllowedHost(req.headers.host)) {
+    logRejectedHostOnce(req.headers.host)
     res.statusCode = 403
     return res.end('Forbidden: Host not allowed. Set OFFICE_ALLOWED_HOSTS to permit additional hostnames.')
   }
@@ -536,6 +593,10 @@ const server = http.createServer((req, res) => {
     setCors(res, req.headers.origin, 'GET, OPTIONS')
     if (req.method === 'OPTIONS') return handlePreflight(req, res)
     if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); res.statusCode = 405; return res.end() }
+    if (sseClients.size >= MAX_SSE_CLIENTS) {
+      res.statusCode = 503
+      return res.end('Too many concurrent SSE clients. Set OFFICE_MAX_SSE_CLIENTS to raise the limit.')
+    }
     // F2: SSE connections are long-lived by design. `server.setTimeout(30000)` below applies
     // a 30s idle-socket timeout to every connection, and the heartbeat interval below also
     // fires every 30s — the two clocks aren't phase-locked, so roughly every other heartbeat

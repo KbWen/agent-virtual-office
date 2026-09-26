@@ -89,7 +89,18 @@ beforeAll(async () => {
     {
       cwd: ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, HOME: tempDir, USERPROFILE: tempDir, OFFICE_API_TOKEN: '' },
+      env: {
+        ...process.env,
+        HOME: tempDir,
+        USERPROFILE: tempDir,
+        OFFICE_API_TOKEN: '',
+        // Review round 2 fix: an inherited OFFICE_STATUS_DIR would point this child at the
+        // developer's real status dir instead of the isolated temp one (HOME/USERPROFILE
+        // alone aren't enough once that override is set), and an inherited
+        // OFFICE_ALLOWED_HOSTS could silently widen the F3 403 assertions below.
+        OFFICE_STATUS_DIR: join(tempDir, '.claude'),
+        OFFICE_ALLOWED_HOSTS: '',
+      },
     }
   )
   serverProc.stderr.on('data', d => { stderr += d.toString() })
@@ -154,6 +165,53 @@ describe('F3 — Host header validation (DNS-rebinding guard)', () => {
     expect(raw).toMatch(/^HTTP\/1\.1 403/)
   })
 
+  it('a reverse-proxy-style Host (nginx.conf forwards "Host $host" = server_name) is 403 by default', async () => {
+    // Reproduces HIGH-1 from review round 2: docs/deployment/nginx.conf forwards the
+    // configured server_name (e.g. office.example.com) verbatim as the Host header. Without
+    // OFFICE_ALLOWED_HOSTS set, that MUST be rejected (this server's default is deny, not the
+    // documented-deployment host) — see the companion describe block below for the
+    // OFFICE_ALLOWED_HOSTS-set case that proves the escape hatch actually works.
+    const raw = await rawRequest(PORT, 'GET /api/health HTTP/1.1', { hostHeader: 'office.example.com' })
+    expect(raw).toMatch(/^HTTP\/1\.1 403/)
+  })
+
+  it('an HTTP/1.1 request with NO Host header is 400 from Node itself (never reaches our code)', async () => {
+    // RFC 7230 requires Host on HTTP/1.1; Node's own http_parser enforces this and returns
+    // 400 before our request-listener callback ever runs. Documented here so the isAllowedHost
+    // "missing Host is allowed" branch below isn't mistaken for reachable on this path.
+    const raw = await new Promise((resolve) => {
+      const sock = connect(PORT, '127.0.0.1', () => {
+        sock.write('GET /api/health HTTP/1.1\r\nConnection: close\r\n\r\n')
+      })
+      let data = ''
+      sock.on('data', d => { data += d.toString() })
+      const finish = () => { try { sock.destroy() } catch {}; resolve(data) }
+      sock.on('close', finish)
+      sock.on('error', finish)
+      setTimeout(finish, 2000)
+    })
+    expect(raw).toMatch(/^HTTP\/1\.1 400/)
+  })
+
+  it('an HTTP/1.0 request with NO Host header reaches isAllowedHost and IS allowed through', async () => {
+    // HTTP/1.0 has no Host requirement, so this DOES reach our request listener with
+    // req.headers.host === undefined. A rebinding attack requires the BROWSER to send an
+    // attacker-chosen Host; a request that omits Host entirely poses no rebinding risk (see
+    // the isAllowedHost comment in server.mjs), so it must NOT be rejected.
+    const raw = await new Promise((resolve) => {
+      const sock = connect(PORT, '127.0.0.1', () => {
+        sock.write('GET /api/health HTTP/1.0\r\nConnection: close\r\n\r\n')
+      })
+      let data = ''
+      sock.on('data', d => { data += d.toString() })
+      const finish = () => { try { sock.destroy() } catch {}; resolve(data) }
+      sock.on('close', finish)
+      sock.on('error', finish)
+      setTimeout(finish, 2000)
+    })
+    expect(raw).toMatch(/^HTTP\/1\.1 200/)
+  })
+
   it('an attacker-controlled Host header is rejected with 403 on /api/status', async () => {
     const raw = await rawRequest(PORT, 'GET /api/status HTTP/1.1', { hostHeader: 'evil.example' })
     expect(raw).toMatch(/^HTTP\/1\.1 403/)
@@ -167,5 +225,71 @@ describe('F3 — Host header validation (DNS-rebinding guard)', () => {
   it('the server stays alive after a rejected-Host request', async () => {
     const health = await fetch(`${BASE_URL}/api/health`)
     expect(health.status).toBe(200)
+  })
+})
+
+// ─── F3 round 2 — OFFICE_ALLOWED_HOSTS escape hatch (HIGH-1 fix) ────────────────
+//
+// A separate server instance, spawned with OFFICE_ALLOWED_HOSTS set, proves the documented
+// reverse-proxy fix actually works end-to-end (not just "the code compiles").
+describe('F3 round 2 — OFFICE_ALLOWED_HOSTS permits a reverse-proxy / extra-LAN Host', () => {
+  let altPort, altProc, altTempDir, altStderr = ''
+
+  beforeAll(async () => {
+    altTempDir = mkdtempSync(join(tmpdir(), 'avo-hardening-allowedhosts-'))
+    mkdirSync(join(altTempDir, '.claude'), { recursive: true })
+    altPort = await freePort()
+    altProc = spawn(
+      process.execPath,
+      ['server.mjs', `--port=${altPort}`, '--no-open'],
+      {
+        cwd: ROOT,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          HOME: altTempDir,
+          USERPROFILE: altTempDir,
+          OFFICE_API_TOKEN: '',
+          OFFICE_STATUS_DIR: join(altTempDir, '.claude'),
+          // office.example.com: exact match, mirrors nginx.conf's server_name.
+          // .suffix.example: leading-dot entry — must match both the bare suffix AND subdomains.
+          // mypc.local:9999: a port suffix in the env value itself must be stripped/ignored.
+          OFFICE_ALLOWED_HOSTS: 'office.example.com, .suffix.example, mypc.local:9999',
+        },
+      }
+    )
+    altProc.stderr.on('data', d => { altStderr += d.toString() })
+    const ready = await waitForServer(`http://127.0.0.1:${altPort}`, 25_000)
+    if (!ready) {
+      altProc.kill('SIGKILL')
+      throw new Error(`allowlisted server.mjs did not become ready.\nStderr: ${altStderr.slice(-800)}`)
+    }
+  }, 30_000)
+
+  afterAll(() => { try { altProc?.kill('SIGTERM') } catch {} })
+
+  it('an exact-match env entry (the nginx.conf server_name case) is allowed', async () => {
+    const raw = await rawRequest(altPort, 'GET /api/health HTTP/1.1', { hostHeader: 'office.example.com' })
+    expect(raw).toMatch(/^HTTP\/1\.1 200/)
+  })
+
+  it('a hostname NOT in the allowlist is still 403 on this same server', async () => {
+    const raw = await rawRequest(altPort, 'GET /api/health HTTP/1.1', { hostHeader: 'evil.example' })
+    expect(raw).toMatch(/^HTTP\/1\.1 403/)
+  })
+
+  it('a leading-dot env entry matches the bare suffix itself', async () => {
+    const raw = await rawRequest(altPort, 'GET /api/health HTTP/1.1', { hostHeader: 'suffix.example' })
+    expect(raw).toMatch(/^HTTP\/1\.1 200/)
+  })
+
+  it('a leading-dot env entry matches an arbitrary subdomain', async () => {
+    const raw = await rawRequest(altPort, 'GET /api/health HTTP/1.1', { hostHeader: 'deep.nested.suffix.example' })
+    expect(raw).toMatch(/^HTTP\/1\.1 200/)
+  })
+
+  it('an env entry with a port suffix matches a request Host with a DIFFERENT port', async () => {
+    const raw = await rawRequest(altPort, 'GET /api/health HTTP/1.1', { hostHeader: `mypc.local:${altPort}` })
+    expect(raw).toMatch(/^HTTP\/1\.1 200/)
   })
 })
