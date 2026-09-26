@@ -2,7 +2,7 @@
 status: shipped
 title: "#20 (H3) — Hook status-file write lock (read-modify-write race fix)"
 created: 2026-06-10
-last_updated: 2026-06-10
+last_updated: 2026-09-26
 ---
 
 # #20 / H3 — Hook Status-File Write Lock
@@ -53,6 +53,18 @@ hardening-wave H3.
 ## Risks & Rollback
 
 - **Risk**: sync busy-wait adds latency under contention — bounded ≤300ms and only when contended.
-- **Risk**: lock-steal races two stealers — mkdir atomicity means exactly one wins the retake; the
-  loser keeps retrying within budget, then proceeds unlocked (safe fallback).
+- **Risk (corrected 2026-09-26, `docs/specs/hook-robustness-privacy.md`)**: the original text here
+  claimed "mkdir atomicity means exactly one wins the retake" for the *steal* path. That is false:
+  the steal path is `rmdirSync(stale-lock)` followed by a separate `mkdirSync`, two independent
+  syscalls. Two racing stealers can both pass the staleness check, both call `rmdirSync` (the
+  second is a silent no-op on an already-removed dir), and both then succeed at `mkdirSync` at
+  different points in time — including one stealer's `mkdirSync` landing, then the *other*
+  stealer's later `rmdirSync` (from its own steal attempt against what it still believes is the
+  stale dir) removing the first stealer's fresh lock out from under it. Both processes can end up
+  believing they hold the lock. Fixed by making the steal atomic
+  (`renameSync(lockDir, uniqueName)` — only one racing rename can win against the same source
+  name) and by gating `releaseStatusLock` on an owner token so a process can never remove a lock
+  it does not currently hold. mkdir atomicity is still true and load-bearing for the *fresh-lock*
+  race (two processes racing to acquire an absent lock) — the false claim was specifically about
+  applying that same guarantee to the two-step steal sequence.
 - **Rollback**: revert the single hook file + test; no data-format change.
