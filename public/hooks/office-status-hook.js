@@ -56,6 +56,22 @@ const LANG = detectHookLang()
 // Read hook event from stdin
 let input = ''
 process.stdin.setEncoding('utf-8')
+// Privacy/robustness fix (2026-09-26 audit finding 3): opt-in capture had no rotation or size
+// cap. Raw events include full tool inputs/outputs (file contents, commands, stdout), so a
+// long-running captured session grew this file unbounded. Rotate to a single ".1" generation
+// once the live file exceeds CAPTURE_MAX_BYTES (checked before each append) — bounds total
+// on-disk size to ~2x the cap without a dependency or a background timer. Pure-ish + exported
+// for direct unit testing; NEVER throws (caller already wraps this in its own try/catch).
+const CAPTURE_MAX_BYTES = 10 * 1024 * 1024  // 10 MB
+function rotateCaptureFileIfNeeded(capturePath, maxBytes = CAPTURE_MAX_BYTES) {
+  try {
+    const st = fs.statSync(capturePath)
+    if (st.size > maxBytes) {
+      try { fs.renameSync(capturePath, capturePath + '.1') } catch {}
+    }
+  } catch {}  // ENOENT = first write ever — nothing to rotate
+}
+
 process.stdin.on('data', (chunk) => { input += chunk })
 process.stdin.on('end', () => {
   // AC-1 (AVO-153): opt-in raw-event capture — statSync marker each invocation (cheap);
@@ -65,6 +81,7 @@ process.stdin.on('end', () => {
     try { fs.statSync(markerPath) } catch { /* marker absent — skip capture */ throw new Error('no-marker') }
     try {
       const capturePath = path.join(os.homedir(), '.claude', 'office-hook-capture.jsonl')
+      rotateCaptureFileIfNeeded(capturePath)
       fs.appendFileSync(capturePath, input.trimEnd() + '\n')
     } catch { /* capture write failed — continue processing normally */ }
   } catch { /* no-marker sentinel or outer error — zero effect on processing */ }
@@ -183,29 +200,99 @@ function _syncSleep(ms) {
   try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) } catch {}
 }
 
+// AC-2 fix (2026-09-26 audit finding 2): write `json` to `target` via tmp-write + rename,
+// retrying the rename a bounded number of times (short Atomics.wait sleep between attempts)
+// before falling back to a direct, non-atomic write. On Windows, `renameSync` can fail with
+// EBUSY/EPERM when AV/indexing transiently holds the target handle — the old code fell back to
+// the truncating direct write on the FIRST such failure, and a reader racing that exact window
+// could JSON.parse a partial file, hit its own catch{}, and silently reset workflow/helpers/
+// promptIds/agents. Retrying first makes that outcome the exception, not the first response.
+// NEVER throws. Total added latency is bounded: `retries` × `waitMs` (default ≤ 3×15 = 45ms).
+function atomicWriteJson(target, json, opts) {
+  const retries = (opts && opts.retries) || 3
+  const waitMs = (opts && opts.waitMs) || 15
+  for (let i = 0; i <= retries; i++) {
+    const tmp = target + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+    try {
+      fs.writeFileSync(tmp, json)
+      fs.renameSync(tmp, target)
+      return true
+    } catch {
+      try { fs.unlinkSync(tmp) } catch {}
+      if (i < retries) _syncSleep(waitMs)
+    }
+  }
+  // Retry budget exhausted — fall back to a direct (non-atomic) write. A reader racing this
+  // exact window could still observe a partial file; accepted in exchange for a bounded wait.
+  try { fs.writeFileSync(target, json); return true } catch { return false }
+}
+
+// AC-1 fix (2026-09-26 audit finding 1): the lock dir carries a small owner-token FILE
+// (`lockDir/owner`) written immediately after a successful mkdirSync. Only the process whose
+// token matches the one currently on disk may remove the lock — this is what makes a steal safe
+// even if two processes briefly disagree about staleness (see acquireStatusLock's steal path).
+function _makeToken() {
+  return `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+function _ownerTokenPath(lockDir) {
+  return path.join(lockDir, 'owner')
+}
+function _writeOwnerToken(lockDir, token) {
+  try { fs.writeFileSync(_ownerTokenPath(lockDir), token) } catch {}
+}
+function _readOwnerToken(lockDir) {
+  try { return fs.readFileSync(_ownerTokenPath(lockDir), 'utf-8') } catch { return null }
+}
+
 /**
  * Try to acquire the STATUS_FILE write-lock.
- * Returns { ok: true } on success, { ok: false } after exhausting the retry budget.
+ * Returns { ok: true, token } on success, { ok: false } after exhausting the retry budget.
  * NEVER throws — any fs error degrades gracefully to { ok: false }.
- * Stale lock (mtime older than staleMs) is stolen: rmdir + retry mkdir.
+ * Stale lock (mtime older than staleMs) is stolen ATOMICALLY: renameSync the stale dir to a
+ * unique name first (only one racing stealer's rename can win against the same source path —
+ * the loser gets ENOENT and falls back into the normal retry loop), THEN mkdir a fresh lock and
+ * claim it with our own token. This replaces the old rmdir-then-mkdir steal (two independent
+ * syscalls) which let two racing stealers both believe they owned the lock — see
+ * docs/specs/hook-status-write-lock.md Risks (corrected 2026-09-26) for the full race.
  */
 function acquireStatusLock() {
   const { lockDir, staleMs, waitMs, maxRetries } = STATUS_LOCK_CONFIG
+  const token = _makeToken()
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       fs.mkdirSync(lockDir)
-      return { ok: true }   // we own the lock
+      _writeOwnerToken(lockDir, token)
+      return { ok: true, token }   // we own the lock — fresh-lock race is mkdir-atomic
     } catch (mkErr) {
       if (!mkErr || mkErr.code !== 'EEXIST') return { ok: false }  // unexpected error
       // Lock dir exists — check staleness
       try {
         const st = fs.statSync(lockDir)
         if (Date.now() - st.mtimeMs > staleMs) {
-          // Stale lock: remove it and retry immediately (no sleep).
-          // Two concurrent stealers: mkdirSync atomicity means exactly one wins; the
-          // loser gets EEXIST again and re-enters the retry loop.
-          try { fs.rmdirSync(lockDir) } catch {}
-          continue  // retry without sleeping
+          // Stale lock: steal it atomically. renameSync onto a not-yet-existing unique path
+          // either succeeds exclusively (we alone now own evicting the stale dir) or fails with
+          // ENOENT (another stealer's rename already won this exact race — the old name is
+          // already gone). Two racers can never BOTH win: only one rename call can succeed
+          // against the same source path.
+          const evicted = `${lockDir}.stale.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`
+          try {
+            fs.renameSync(lockDir, evicted)
+          } catch (renErr) {
+            if (renErr && renErr.code === 'ENOENT') continue  // lost the steal race — retry loop
+            return { ok: false }  // unexpected rename failure — bail (proceed unlocked)
+          }
+          // We exclusively evicted the stale dir. Claim a fresh lock immediately.
+          try {
+            fs.mkdirSync(lockDir)
+            _writeOwnerToken(lockDir, token)
+            try { fs.rmSync(evicted, { recursive: true, force: true }) } catch {}
+            return { ok: true, token }
+          } catch {
+            // Should not normally happen (we just evicted the only prior occupant of this
+            // path) — clean up the evicted dir and fall through to the retry loop.
+            try { fs.rmSync(evicted, { recursive: true, force: true }) } catch {}
+            continue
+          }
         }
       } catch (stErr) {
         // ENOENT = the holder released between our EEXIST and this stat — the lock is
@@ -221,11 +308,24 @@ function acquireStatusLock() {
 }
 
 /**
- * Release the STATUS_FILE write-lock held by this process.
- * Only call when lock.ok === true.  NEVER throws.
+ * Release the STATUS_FILE write-lock. Only call when lock.ok === true, passing the SAME
+ * `token` returned by that acquireStatusLock() call. NEVER throws.
+ *
+ * Token-gated: if the lock dir currently holds a DIFFERENT token (another process stole it
+ * after our staleMs window expired, e.g. we were descheduled past the stale threshold), this is
+ * a no-op — removing it would delete a lock we no longer own out from under its new holder.
+ * A missing/unreadable token file (legacy state, or the lock vanished already) is treated as
+ * safe to clear. Called with no token (legacy zero-arg form) skips the ownership check entirely.
  */
-function releaseStatusLock() {
-  try { fs.rmdirSync(STATUS_LOCK_CONFIG.lockDir) } catch {}
+function releaseStatusLock(token) {
+  const { lockDir } = STATUS_LOCK_CONFIG
+  try {
+    if (token !== undefined) {
+      const owned = _readOwnerToken(lockDir)
+      if (owned !== null && owned !== token) return  // someone else owns it now — do not remove
+    }
+    fs.rmSync(lockDir, { recursive: true, force: true })
+  } catch {}
 }
 
 // ─── Shared role list — single source for Stop handler and merge logic ───
@@ -509,7 +609,11 @@ function extractContext(tool, toolInput, lang = LANG) {
       case 'Agent': {
         // Strip leading absolute path components from descriptions so a long description
         // like "/home/user/proj: review the auth module" becomes "review the auth module".
-        const desc = input.description || input.prompt?.slice(0, 40) || null
+        // Privacy fix (2026-09-26 audit finding 3): no `input.prompt` fallback any more — a
+        // sub-agent's full prompt can carry arbitrary free text (product names, PII, etc.) that
+        // `description` (a short human-authored label) does not. No description → no context,
+        // same as any other tool with nothing to show (falls through to the generic label).
+        const desc = input.description || null
         if (!desc) return null
         // Remove any leading path segment (starts with / or drive letter + colon)
         const stripped = desc.replace(/^(?:[A-Za-z]:)?\/[^\s:]*[:\s]+/, '').trim()
@@ -519,7 +623,14 @@ function extractContext(tool, toolInput, lang = LANG) {
         // Use only the hostname (no path) to avoid leaking absolute URLs into bubbles
         return input.query || (input.url ? (() => { try { return new URL(input.url).hostname.slice(0, 25) } catch { return input.url.replace(/^https?:\/\//, '').split('/')[0].slice(0, 25) } })() : null)
       case 'WebSearch':
-        return input.query || input.url?.replace(/^https?:\/\//, '').slice(0, 25) || null
+        // Privacy fix (2026-09-26 audit finding 3): previously returned the raw search query
+        // verbatim (bounded only by the generic 200-char field cap), unlike WebFetch (hostname
+        // only) and Bash/PowerShell (office-vibe noun via AVO-126 — see bashVibeLabel and
+        // docs/specs/ux-vibe-rebalance.md's "no raw text in a bubble" posture). A search query
+        // can carry arbitrary free text, so it gets the same treatment: no context here means
+        // toolLabel() falls through to its existing generic-noun fallback for WebSearch
+        // ('🌐 Searching' / '🌐 搜尋中' etc.) instead of ever showing what was searched for.
+        return null
       case 'TodoWrite':
         return input.todos?.length ? (lang === 'zh-TW' ? `${input.todos.length} 個任務` : `${input.todos.length} tasks`) : null
       case 'EnterPlanMode':
@@ -1073,18 +1184,11 @@ function processEvent(event) {
         const sfDir = path.dirname(getStatusFile())
         if (!fs.existsSync(sfDir)) fs.mkdirSync(sfDir, { recursive: true })
         const sfJson = JSON.stringify(sfOutput, null, 2)
-        const sfTmp = getStatusFile() + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
-        try {
-          fs.writeFileSync(sfTmp, sfJson)
-          fs.renameSync(sfTmp, getStatusFile())
-        } catch {
-          try { fs.writeFileSync(getStatusFile(), sfJson) } catch {}
-          try { fs.unlinkSync(sfTmp) } catch {}
-        }
+        atomicWriteJson(getStatusFile(), sfJson)
       } catch {
         // Defensive: any unexpected error → silent no-op, never throws
       } finally {
-        if (sfLock.ok) releaseStatusLock()
+        if (sfLock.ok) releaseStatusLock(sfLock.token)
       }
       return  // no further processing needed (wrote directly, like Stop handler)
     }
@@ -1135,15 +1239,7 @@ function processEvent(event) {
           const dir = path.dirname(getStatusFile())
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
           const json = JSON.stringify(output, null, 2)
-          const tmp = getStatusFile() + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
-          try {
-            fs.writeFileSync(tmp, json)
-            fs.renameSync(tmp, getStatusFile())
-          } catch {
-            // Rename failed (EBUSY / file locked) — write directly as fallback
-            try { fs.writeFileSync(getStatusFile(), json) } catch {}
-            try { fs.unlinkSync(tmp) } catch {}
-          }
+          atomicWriteJson(getStatusFile(), json)
         } catch {
           // File doesn't exist yet (first-ever Stop) or is invalid — write a clean "idle" state
           // so the office always receives a response rather than silently getting nothing.
@@ -1163,18 +1259,11 @@ function processEvent(event) {
           try {
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
             const json = JSON.stringify(output, null, 2)
-            const tmp = getStatusFile() + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
-            try {
-              fs.writeFileSync(tmp, json)
-              fs.renameSync(tmp, getStatusFile())
-            } catch {
-              try { fs.writeFileSync(getStatusFile(), json) } catch {}
-              try { fs.unlinkSync(tmp) } catch {}
-            }
+            atomicWriteJson(getStatusFile(), json)
           } catch {}
         }
       } finally {
-        if (stopLock.ok) releaseStatusLock()
+        if (stopLock.ok) releaseStatusLock(stopLock.token)
       }
       return  // no further processing needed
     }
@@ -1403,7 +1492,6 @@ function processEvent(event) {
   // to see a false mismatch and abort as a straggler even though it belongs to this turn.
   const dir = path.dirname(getStatusFile())
   const json = JSON.stringify(output, null, 2)
-  const tmp = getStatusFile() + '.tmp.' + process.pid + '.' + (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
   const writeAttempts = (hookEvent === 'UserPromptSubmit' || hookEvent === 'PreToolUse') ? 3 : 1
   let writeOk = false
   try {
@@ -1416,29 +1504,24 @@ function processEvent(event) {
         try {
           const latest = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
           const sAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
-          if (latest._stopped && Number.isFinite(sAt) && Date.now() - sAt < 30_000) {
-            try { fs.unlinkSync(tmp) } catch {}
-            return
-          }
+          if (latest._stopped && Number.isFinite(sAt) && Date.now() - sAt < 30_000) return
           // New turn started between our first write attempt and this retry — abort so we
           // don't overwrite UPS's fresh PM-planning state with old-turn working data.
           if (hookEvent === 'PreToolUse' && capturedPromptId && latest._promptId
-              && latest._promptId !== capturedPromptId) {
-            try { fs.unlinkSync(tmp) } catch {}
-            return
-          }
+              && latest._promptId !== capturedPromptId) return
         } catch (err) {
-          if (err.code === 'EBUSY' || err.code === 'EPERM') { try { fs.unlinkSync(tmp) } catch {}; return }
+          if (err.code === 'EBUSY' || err.code === 'EPERM') return
         }
       }
-      try { fs.writeFileSync(tmp, json); fs.renameSync(tmp, getStatusFile()); writeOk = true } catch {}
-      if (!writeOk) { try { fs.writeFileSync(getStatusFile(), json); writeOk = true } catch {} }
+      // atomicWriteJson (AC-2 fix) retries the tmp-write + rename internally before falling
+      // back to a direct write — it owns its own tmp file naming/cleanup, so no outer `tmp`
+      // variable is needed here any more.
+      writeOk = atomicWriteJson(getStatusFile(), json)
     }
-    try { fs.unlinkSync(tmp) } catch {}  // clean up tmp; ENOENT (already renamed) is swallowed
   } catch {}
 
   } finally {
-    if (mainLock.ok) releaseStatusLock()
+    if (mainLock.ok) releaseStatusLock(mainLock.token)
   }
 }
 
@@ -1458,5 +1541,7 @@ if (typeof module !== 'undefined') {
     toolResultText,
     // Branch-hop ghost cleanup (exported for unit testing)
     cleanupGhostAliases,
+    // 2026-09-26 audit fixes: exported for unit testing
+    atomicWriteJson, rotateCaptureFileIfNeeded, CAPTURE_MAX_BYTES,
   }
 }
