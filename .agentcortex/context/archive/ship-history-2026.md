@@ -58,7 +58,15 @@ Rotated 1 additional entry on 2026-09-26 (SSoT Update Sequence 135 -> 136).
 
 Rotated 1 additional entry on 2026-09-26 (SSoT Update Sequence 136 -> 137).
 
+Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 137 -> 138).
+
 ---
+
+### Ship-fix-bubble-truncation-width-2026-09-19 (speech bubbles fit by width, so English stops getting cut mid-word) · REV-07
+
+- Quick-win shipped: REV-07 of the 2026-09-19 external review, held back from #236 because it changes how the office looks. Bubbles were cut at 16 CHARACTERS, and 16 CJK characters are ~1.7× as wide as 16 Latin ones, so 46% of English lines were cut mid-word ("forgot a semicol…") against 5% of zh-TW. The review under-stated this; it reads as an occasional cut.
+- Bubbles now fit a **width budget** (140). The width is measured with canvas `measureText` in the bubble's own font (one shared constant with the `<text>`), grapheme-safe, with a Latin word back-off and a trailing-punctuation trim. The budget was chosen by simulating five budgets against every locale line in a real browser. It shows more text with less clutter, because the old per-char estimate over-padded English by ~22%: whole lines en 52%→85%, zh 92%→95%; mean bubble narrower in both (108→101, 90→86); widest bubble in the office 187→158. The owner approved same-state en + zh-TW captures before commit.
+- Tests: vitest **2481 passed / 130 files** (+13). 4 mutations killed; one survived the first test set (its only case cut exactly at a space), and a mid-word case was added until it failed. Build, bundle-budget +0.63%, render + panel smoke PASS. PR #237.
 
 ### Ship-fix-review-2026-09-19-2026-09-19 (an external review, re-derived — panel mode stops clipping and losing speech; waiting times keep counting)
 
