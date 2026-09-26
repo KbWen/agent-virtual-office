@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { createPersistedState, validatePersistedAgent, validatePersistedDailyDoneLedger } from '../src/systems/store.js'
+import {
+  createPersistedState,
+  validatePersistedAgent,
+  validatePersistedDailyDoneLedger,
+  persistedSnapshotKey,
+  salvageStalePersistedState,
+} from '../src/systems/store.js'
 
 describe('createPersistedState', () => {
   it('keeps only persistable agent fields', () => {
@@ -213,5 +219,60 @@ describe('validatePersistedDailyDoneLedger — stale-day reconciliation (R73)', 
       seenEventKeys: [],
     }, noonToday)
     expect(v.counts).toEqual({ dev: 2 })
+  })
+})
+
+describe('persistedSnapshotKey — dedup key excludes _savedAt (finding 3: autosave never deduped)', () => {
+  it('produces the SAME key for two blobs that differ only in _savedAt', () => {
+    const a = { _savedAt: 1000, agents: { dev: { behavior: 'idle' } }, dailyDoneLedger: { dayKey: 'x', counts: {}, seenEventKeys: [] } }
+    const b = { _savedAt: 999999, agents: { dev: { behavior: 'idle' } }, dailyDoneLedger: { dayKey: 'x', counts: {}, seenEventKeys: [] } }
+    // Before the fix, savePersistedState compared full JSON.stringify(data) including
+    // _savedAt = Date.now(), so this pair would always compare unequal and localStorage.setItem
+    // ran on every autosave tick regardless of whether office state had actually changed.
+    expect(persistedSnapshotKey(a)).toBe(persistedSnapshotKey(b))
+  })
+
+  it('produces a DIFFERENT key when the actual content differs', () => {
+    const a = { _savedAt: 1000, agents: { dev: { behavior: 'idle' } } }
+    const b = { _savedAt: 1000, agents: { dev: { behavior: 'typing' } } }
+    expect(persistedSnapshotKey(a)).not.toBe(persistedSnapshotKey(b))
+  })
+
+  it('returns a stable empty-string sentinel for null/non-object input', () => {
+    expect(persistedSnapshotKey(null)).toBe('')
+    expect(persistedSnapshotKey(undefined)).toBe('')
+  })
+})
+
+describe('salvageStalePersistedState — same-day ledger survival past the 4h cutoff (finding 4)', () => {
+  it('keeps dailyDoneLedger and dailyBlockedLedger, drops everything else (agents)', () => {
+    const stale = {
+      _savedAt: 1000,
+      agents: { dev: { behavior: 'typing', position: { x: 10, y: 20 } } },
+      dailyDoneLedger: { dayKey: '2026-09-26', counts: { dev: 3 }, seenEventKeys: ['k1'] },
+      dailyBlockedLedger: { dayKey: '2026-09-26', counts: { qa: 1 } },
+    }
+    const salvaged = salvageStalePersistedState(stale)
+    expect(salvaged.dailyDoneLedger).toEqual(stale.dailyDoneLedger)
+    expect(salvaged.dailyBlockedLedger).toEqual(stale.dailyBlockedLedger)
+    // Position/behavior restore is what the 4h cutoff protects against — must be dropped.
+    expect(salvaged.agents).toBeUndefined()
+    expect(salvaged._savedAt).toBeUndefined()
+  })
+
+  it('is null-safe for malformed input', () => {
+    expect(salvageStalePersistedState(null)).toBeNull()
+    expect(salvageStalePersistedState('corrupt')).toBeNull()
+  })
+
+  it('passes a stale-day ledger through unvalidated — validatePersistedDailyDoneLedger is the one that resets it', () => {
+    // salvageStalePersistedState itself does not need to check dayKey: the caller
+    // (_persisted?.dailyDoneLedger feeding validatePersistedDailyDoneLedger) already resets
+    // any ledger whose dayKey isn't today, so this function staying dumb cannot resurrect
+    // a genuinely stale (yesterday's) tally.
+    const stale = { _savedAt: 1, agents: {}, dailyDoneLedger: { dayKey: '2020-01-01', counts: { dev: 99 } } }
+    const salvaged = salvageStalePersistedState(stale)
+    const revalidated = validatePersistedDailyDoneLedger(salvaged.dailyDoneLedger)
+    expect(revalidated.counts).toEqual({})   // stale day → reset, not resurrected
   })
 })

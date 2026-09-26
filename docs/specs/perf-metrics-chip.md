@@ -77,3 +77,21 @@ state shape; no downstream consumers.
 - CHANGELOG v1.1.0 → "#6 底部效能指標"
 - Backlog row: `_shipped-log.md` #6
 - Related: [[character-growth-system]] (parallel `dailyDoneLedger`)
+
+## 2026-09-26 hygiene update (client-runtime-hygiene)
+
+Two persistence bugs affected both ledgers here (`dailyDoneLedger` and `dailyBlockedLedger`
+alike, since they share `createPersistedState`/`loadPersistedState`/`savePersistedState`):
+
+1. `savePersistedState`'s dedup key included `_savedAt` (stamped fresh via `Date.now()` on every
+   call), so it never matched a byte-identical prior snapshot — `localStorage.setItem` ran on
+   every 2s autosave tick regardless of whether either ledger's counts had actually changed.
+2. `loadPersistedState` discarded the ENTIRE persisted blob (both ledgers included) once the
+   blob was older than the 4h staleness cutoff — closing the tab for >4h on the SAME calendar
+   day silently reset both "today" tallies to zero.
+
+Fixed via `persistedSnapshotKey()` (excludes `_savedAt` from the comparison) and
+`salvageStalePersistedState()` (keeps same-day ledgers past the 4h cutoff, drops only the agent
+position/behavior restore that cutoff exists to protect against; the existing
+`validatePersistedDailyDoneLedger`/`validatePersistedDailyBlockedLedger` dayKey checks still
+reset a ledger from a genuinely earlier day). See `docs/specs/client-runtime-hygiene.md` AC3/AC4.

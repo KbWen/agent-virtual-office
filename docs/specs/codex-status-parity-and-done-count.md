@@ -65,3 +65,14 @@ EXTENDS `docs/specs/agent-inspector-info-enhancement.md`
 - [TRADEOFF] Passive heuristics like title watching may remain as fallback signals, but they are not trusted as the primary Codex integration path because they are too lossy.
 - [CONSTRAINT] Existing Claude and manual `POST /api/status` flows must keep working through the migration.
 - [CONSTRAINT] Codex App parity can only be claimed with real evidence from the running platform or an explicit documented limitation.
+
+## 2026-09-26 hygiene update (client-runtime-hygiene)
+
+AC1 requires `today done` to "remain accurate even when ... the browser session is refreshed."
+A persistence bug (unrelated to Codex specifically, but affecting this same-day counter)
+discarded the ENTIRE persisted blob — `dailyDoneLedger` included — once it was older than a 4h
+staleness cutoff, even on the SAME calendar day. Closing the tab for >4h mid-day silently reset
+"today done" to zero, contradicting AC1. Fixed in `src/systems/store.js`'s
+`loadPersistedState`/`salvageStalePersistedState`: same-day ledgers now survive the cutoff (a
+ledger from a genuinely earlier day still resets, via the existing dayKey validators). See
+`docs/specs/client-runtime-hygiene.md` AC4 and `docs/specs/perf-metrics-chip.md`.

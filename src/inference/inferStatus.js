@@ -254,6 +254,21 @@ export function isNumericSeq(seq) {
   return typeof seq === 'string' && /^\d+$/.test(seq)
 }
 
+// R1 fix: whether a poll-probe result should refresh the staleness timer. `unchanged` is set
+// only for a 304 from pollFileStatusOnce's GET /api/status — the server's GET handler
+// (server.mjs handleStatus) recomputes scanAndMerge() fresh on every request, so a 304 is
+// proof the server just re-derived the SAME state from live session files, not a cached
+// echo of a possibly-dead hook. Refreshing staleness on it therefore cannot hide a genuinely
+// dead hook: once the underlying session ages past the server's own STALE_MS (scanSessions.mjs,
+// 300s), scanAndMerge's output changes, the ETag stops matching, and a real (non-304) message
+// is delivered — which still clears normally via applyMessage's own resetStalenessTimer call.
+// Without this, a single long tool call with no intermediate hook writes (e.g. a multi-minute
+// test run) hit the client's 120s STALENESS_TIMEOUT and showed the agent as idle while it was
+// still genuinely working.
+export function shouldRefreshStalenessOnProbe(result) {
+  return Boolean(result && result.unchanged)
+}
+
 // What the staleness sweep should do after STALENESS_TIMEOUT of no updates.
 // - 'clear-external': an external source is showing → clear external status (which also
 //   resets activeWorkflow + statusSource back to organic).
@@ -845,6 +860,7 @@ export function startStatusIntegration(store) {
 
   function handleProbe(result) {
     if (result.skipped) return
+    if (shouldRefreshStalenessOnProbe(result)) resetStalenessTimer()
     store.getState().markIntegrationProbe({ ok: Boolean(result.ok) })
   }
 
@@ -899,9 +915,27 @@ export function startStatusIntegration(store) {
   // Try SSE first; fall back to 1s polling if SSE isn't available.
   // When SSE is active, reduce HTTP polling to a 10s heartbeat (catches missed pushes).
   // If SSE permanently gives up (5 consecutive errors), restart file polling at the fast rate.
-  // Object ref so the onGiveUp closure always sees the current cleanup function,
+  // Object ref so the giveup/retry closures always see the current cleanup function,
   // regardless of when SSE gives up relative to polling startup.
   const polling = { cleanup: null, active: false }
+  let sseCleanupRef = null
+  let sseRetryTimer = null
+  // R2 fix: how long to wait before trying SSE again after it permanently gives up. Each
+  // retry that fails again still has to burn through startSSEListening's own ~2s→4s→8s→16s
+  // exponential backoff (MAX_CONSECUTIVE_ERRORS=5) before giving up a second time, so a
+  // fully-down endpoint retries roughly every ~90s total — not a reconnect storm.
+  const SSE_RETRY_INTERVAL_MS = 60_000
+
+  // Heartbeat failure probe: only treat genuine reachability failures as health-down.
+  // parseError (malformed 200) and non-404 HTTP errors (500/401) mean the server answered —
+  // they are proof of life and must not drive integrationHealth offline. networkError and
+  // 404 are the only cases where the endpoint is truly unreachable. `unchanged` (304) still
+  // refreshes staleness (R1 fix), regardless of the health-signal decision below.
+  function heartbeatProbe(result) {
+    if (result.skipped) return
+    if (shouldRefreshStalenessOnProbe(result)) resetStalenessTimer()
+    if (result.networkError || result.status === 404) handleProbe(result)
+  }
 
   function startFastPolling() {
     if (polling.active) return
@@ -909,29 +943,45 @@ export function startStatusIntegration(store) {
     polling.cleanup = startFilePolling(handleIncoming, STATUS_POLL_INTERVAL, handleProbe)
   }
 
-  const sseCleanup = startSSEListening(handleIncoming, handleProbe, () => {
+  function startHeartbeatPolling() {
+    // Unconditionally replace whatever poller is currently running (e.g. the fast poller
+    // left over from a prior SSE give-up) — this is also the reconnect-success path, not
+    // just first-connect, so it must not skip when polling.active is already true.
+    if (polling.cleanup) polling.cleanup()
+    polling.active = true
+    polling.cleanup = startFilePolling(handleIncoming, 10_000, heartbeatProbe)
+  }
+
+  function handleSSEGiveUp() {
     // SSE permanently failed — stop the slow heartbeat poller and restart at fast rate.
     // Guard against teardown races: if the component is already unmounted (torn=true),
     // a concurrent SSE giveup must not spawn a new poller that leaks outside cleanup.
     if (torn) return
+    sseCleanupRef = null
     if (polling.cleanup) { polling.cleanup(); polling.active = false }
     startFastPolling()
-  })
-
-  if (sseCleanup && !polling.active) {
-    polling.active = true
-    // Heartbeat failure probe: only treat genuine reachability failures as health-down.
-    // parseError (malformed 200) and non-404 HTTP errors (500/401) mean the server answered —
-    // they are proof of life and must not drive integrationHealth offline. networkError and
-    // 404 are the only cases where the endpoint is truly unreachable.
-    const heartbeatProbe = result => {
-      if (result.skipped) return
-      if (result.networkError || result.status === 404) handleProbe(result)
-    }
-    polling.cleanup = startFilePolling(handleIncoming, 10_000, heartbeatProbe)
-  } else {
-    startFastPolling()
+    // R2 fix: previously SSE was abandoned forever once it gave up, leaving the client on
+    // 1s/8s-backoff polling for the rest of the page's life even after the server recovered.
+    // Retry the SSE connection on a slow interval; a successful reconnect switches back down
+    // to the heartbeat cadence inside connectSSE() itself.
+    clearTimeout(sseRetryTimer)
+    sseRetryTimer = setTimeout(() => {
+      sseRetryTimer = null
+      connectSSE()
+    }, SSE_RETRY_INTERVAL_MS)
   }
+
+  function connectSSE() {
+    if (torn) return
+    sseCleanupRef = startSSEListening(handleIncoming, handleProbe, handleSSEGiveUp)
+    if (sseCleanupRef) {
+      startHeartbeatPolling()
+    } else if (!polling.active) {
+      startFastPolling()
+    }
+  }
+
+  connectSSE()
 
   // Start all listeners (active + passive channels)
   const cleanups = [
@@ -940,7 +990,10 @@ export function startStatusIntegration(store) {
     startPolling(handleIncoming),                     // window global (CLI injection)
     listenHashChanges(handleIncoming),                // URL hash (passive, any platform)
     () => { if (polling.cleanup) polling.cleanup() }, // /api/status fallback
-    ...(sseCleanup ? [sseCleanup] : []),              // SSE push channel
+    () => {                                           // SSE push channel (+ pending retry)
+      clearTimeout(sseRetryTimer)
+      if (sseCleanupRef) sseCleanupRef()
+    },
   ]
 
   return () => {
