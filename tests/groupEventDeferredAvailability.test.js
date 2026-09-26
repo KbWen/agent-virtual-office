@@ -92,6 +92,18 @@ describe('deferred handler steps re-check availability (finding #3)', () => {
     expect(store.getState().agents.arch.inGroupEvent).toBe(false)
   })
 
+  it('group-stretch: an agent that goes busy before its staggered turn is skipped (review round 2, finding #3 coverage)', () => {
+    const store = makeStore(['dev', 'qa', 'arch'])
+    expect(triggerInteractiveEvent(store, 'group-stretch')).toBe(true)
+    // Mark the last-staggered agent busy before its i*300ms turn comes up.
+    store.getState()._markBusy('arch')
+    vi.advanceTimersByTime(1000)
+    expect(store.getState().agents.arch.inGroupEvent).toBe(false)
+    // The ones that stayed available still got stretched.
+    expect(store.getState().agents.dev.inGroupEvent).toBe(true)
+    expect(store.getState().agents.qa.inGroupEvent).toBe(true)
+  })
+
   it('pm-all-meeting: stage-2 crew members that go busy before the 2.5s meeting-room step are skipped', () => {
     const store = makeStore(['pm', 'dev', 'qa'])
     expect(triggerInteractiveEvent(store, 'pm-all-meeting')).toBe(true)

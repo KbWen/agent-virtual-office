@@ -44,9 +44,21 @@ the same class of defect AVO-191/AVO-194 previously closed for `pickParticipants
 - No change to `WORK_CLAIM_GATES`' recency-based eligibility model (evaluated a status-based
   tightening for `deploy-success`/`ops-dev-deploy-check`; deferred — see Work Log `## Known Risk`;
   `done` is a 10s-transient status by design, so a literal `status === 'done'` requirement would
-  make the gate almost never open).
+  make the gate almost never open). The reviewer agreed `status === 'done'` is unworkable. A
+  **residual honesty window remains and is out of scope for this branch**: `recentSignal` only
+  checks changedAt recency, not the CURRENT status, so an ops that goes `done` → (quickly) `idle` →
+  starts new real work within `WORK_CLAIM_SIGNAL_WINDOW` can still read as eligible off the stale
+  `done` edge. Follow-up candidate for a future ticket: stamp a dedicated `doneAt` (set only on the
+  real transition INTO `done`, distinct from the general `changedAt`) and gate on `now - doneAt <
+  WORK_CLAIM_SIGNAL_WINDOW` instead of the general-purpose `changedAt`. No code change here.
 - No visual/layout change. This is a state-honesty fix: fewer dishonest transient poses/banners, not
   a new look.
+- No new machine-side "BUSY" visual for the deploy button / whiteboard click (finding #5, round 2):
+  evaluated reusing AVO-193's coffee-BUSY pattern; declined for THIS branch because it is a UI
+  feature addition (new visual state, Design Gate territory per `engineering_guardrails.md §4.4`),
+  not a state-honesty removal. Decision: prefer silence (no bubble) over a fabricated quip when the
+  reactor is genuinely tracked-busy. Follow-up candidate: a dedicated BUSY glyph for
+  `deploy-success`/`eureka` clicks, mirroring AVO-193.
 
 ## Solution
 
@@ -65,7 +77,49 @@ the same class of defect AVO-191/AVO-194 previously closed for `pickParticipants
    establish a FIRST-TIME lock (rather than re-checking an existing one) now re-verify
    `isAgentAvailable` at the moment they run, not just at cast-selection time.
 
+## Round 2 (2026-09-26 fresh review) additions
+
+A fresh `/review` returned NOT READY with 2 further blocking findings (same honesty class) and one
+non-blocking decision request, all fixed on this branch:
+
+4. **Abandoned mid-event, activeEvent stays live over an empty scene**: releasing the last locked
+   participant (finding #3's fix) or a deferred stage abandoning before locking anyone (e.g.
+   `pm-all-meeting` stage 2 when `pm` was already released) left `activeEvent` set — a live
+   banner/confetti with nobody performing it, reproduced by the reviewer against the real store
+   (`pm` → `working` at t=1s, `activeEvent` still `pm-all-meeting` at t=13s with nobody in-group;
+   same for `deploy-success` when `ops` is released). Fixed: `startOfficeLife`'s existing
+   `store.subscribe` callback now tracks whether the CURRENT `activeEvent` has ever actually locked
+   a participant (`trackedEventHadParticipant`), and clears it the moment the scene goes empty
+   after having been non-empty. The tracking guard specifically avoids a false-positive clear during
+   the real async window some handlers (`dog-visit`, `group-stretch`) have between `setActiveEvent`
+   and their first STAGGERED lock, where an unrelated store tick would otherwise read as "abandoned
+   before it started."
+5. **`fireInteractionReaction`'s R1 guard was inGroupEvent-only**: a click-reaction quip (e.g.
+   "nothing to ship right now") could land on a genuinely tracked-busy reactor (working/blocked)
+   that simply wasn't locked into any officeLife group event — overwriting a real hook-driven
+   bubble with a fabricated one. Fixed: the guard now also checks `isAgentAvailable`. Decision on
+   the alternative (a machine-side BUSY badge) is recorded in Non-goals.
+6. Test coverage gap (non-code, AC-1/AC-4/AC-6 hardening): the required-actor check was only
+   exercised via the interactive-click path, which has its own independent call to the same guard
+   — deleting the equivalent call inside `fireWithCast` (the daily/rare-scheduler and real-seed
+   path) still passed the full suite. Added `tests/fireWithCastRequiredActorsScheduler.test.js`,
+   which mocks the event catalog down to one event so `pickEligibleEvent`'s random draw is
+   deterministic, and manually verified (mutation: temporarily removed the `fireWithCast` guard)
+   that this new test goes red and the rest of the suite does not catch it alone. Also fixed the
+   `review-debate` negative test in `requiredActorsGate.test.js`, which had been silently isolating
+   the pre-existing `eventEligible` gate instead of the new required-actor check (qa lacked a fresh
+   `changedAt`), and added the missing `group-stretch` case to
+   `tests/groupEventDeferredAvailability.test.js`.
+
 ## Acceptance Criteria
+
+**Target Files** (the diff for AC-1..AC-9 below):
+`src/systems/officeLife.js`, `src/systems/store.js`, `src/inference/idleGapInfer.js`,
+`docs/specs/idle-gap-inference.md`, `docs/specs/living-office-events.md`,
+`tests/avo184-equivalence.test.js`, `tests/idleGapInfer.test.js`,
+`tests/requiredActorsGate.test.js`, `tests/groupEventDeferredAvailability.test.js`,
+`tests/activeEventAbandonment.test.js`, `tests/fireWithCastRequiredActorsScheduler.test.js`,
+`tests/interactiveEventGate.test.js`.
 
 - AC-1: A work-claim event whose cast is missing its required actor does not set `activeEvent`,
   does not produce an eventFeed entry, and returns `false`.
@@ -80,17 +134,59 @@ the same class of defect AVO-191/AVO-194 previously closed for `pickParticipants
 - AC-6: `tests/agentSeparationInvariants.test.js` and the AVO-191 invariant sweep
   (`tests/eventParticipantR1.test.js`) stay green — this remediation must not reopen either closed
   defect class.
+- AC-7: an `activeEvent` that has already locked at least one participant is cleared the moment
+  every participant is released/never locked — never rides out its full duration over an empty
+  scene. A NOT-YET-locked event (the async gap before a staggered handler's first lock) is never
+  mistaken for an abandoned one.
+- AC-8: a gated interactive click's neutral reaction never overwrites the bubble of a reactor that
+  is genuinely tracked busy (working/blocked), whether or not it is locked in a group event.
+- AC-9: `fireWithCast`'s required-actor refusal is covered independently of
+  `triggerInteractiveEvent`'s (the daily-scheduler path), via a deterministic mocked-catalog test.
+
+## Domain Decisions
+
+- [DECISION] `hasRequiredActors()` is a symmetric pre-fire refusal alongside the existing empty-cast
+  refusal (AVO-191) rather than a change to `pickParticipants` itself — it targets exactly the
+  "non-empty but missing a specific actor" gap without touching the participant-selection logic
+  Protected Surfaces guard.
+- [DECISION] `idleGapInfer.js` carries the agent's own prior `externalStatus` fields forward via a
+  new `inferredUpdate()` helper rather than changing `buildExtEntry`'s general carry-field loop —
+  the corruption is specific to the caller sending a partial payload, not to `buildExtEntry`'s
+  contract.
+- [DECISION] `store.js`'s `applyExternalStatus` releases `inGroupEvent`/`groupTarget` on ANY real
+  busy status (working/blocked/awaiting-approval/thinking), not only the exact status the
+  participant was picked for — becoming busy in a DIFFERENT way is just as dishonest to keep
+  grouped.
+- [TRADEOFF] Deferred handler steps that establish a first-time lock re-verify `isAgentAvailable`
+  synchronously against the CURRENT store state when the deferred `setTimeout` fires, rather than
+  re-running the original cast-selection algorithm — cheaper and sufficient, since the only failure
+  mode is "went busy since being cast," not "should now be re-shuffled."
+- [DECISION] the mid-event abandonment auto-clear (round 2, finding #4) lives in `startOfficeLife`'s
+  existing `store.subscribe` callback (co-located with the other reactive/seeded checks) rather than
+  as a new dedicated subscription, and is gated on a per-event `trackedEventHadParticipant` flag to
+  avoid a false-positive clear during a staggered handler's pre-first-lock window.
+- [DECISION] evaluated tightening `deploy-success`/`ops-dev-deploy-check` eligibility to require live
+  `status === 'done'`; declined — `done` is a 10s-transient status by design, so the change would
+  make the gate almost never open, and conflicts with a currently-shipped test contract. See
+  Non-goals for the residual window and the `doneAt` follow-up candidate.
+- [TRADEOFF] `fireInteractionReaction`'s fix (finding #5) prefers silence over building a new
+  machine-side BUSY badge — the badge is a UI feature addition (Design Gate), out of this
+  state-honesty fix's scope. See Non-goals.
 
 ## Files
 
 - `src/systems/officeLife.js` — `REQUIRED_ACTORS`, `hasRequiredActors`, `fireWithCast`,
-  `triggerInteractiveEvent`, and the deferred steps in `food-delivery`, `coffee-spill`,
-  `deploy-success`, `dog-visit`, `group-stretch`, `pm-all-meeting`.
+  `triggerInteractiveEvent`, `fireInteractionReaction`, the deferred steps in `food-delivery`,
+  `coffee-spill`, `deploy-success`, `dog-visit`, `group-stretch`, `pm-all-meeting`, and the
+  mid-event-abandonment tracking added to `startOfficeLife`'s `store.subscribe` callback.
 - `src/inference/idleGapInfer.js` — `tick()` carry-forward.
 - `src/systems/store.js` — `buildExtEntry` (isInferred param), `applyExternalStatus` (release-on-
   real-status).
-- `tests/officeLife.test.js`, `tests/avo184-equivalence.test.js`, `tests/idleGapInfer.test.js` —
-  red-first coverage for AC-1..AC-5.
+- `tests/avo184-equivalence.test.js`, `tests/idleGapInfer.test.js`, `tests/interactiveEventGate.test.js`
+  — updated red-first coverage for AC-1..AC-5 and AC-8.
+- `tests/requiredActorsGate.test.js`, `tests/groupEventDeferredAvailability.test.js`,
+  `tests/activeEventAbandonment.test.js`, `tests/fireWithCastRequiredActorsScheduler.test.js` — new,
+  cover AC-1, AC-3/AC-4 (deferred-step recheck), AC-7, and AC-9 respectively.
 
 ## Rollback
 

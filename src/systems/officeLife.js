@@ -629,8 +629,14 @@ function fireInteractionReaction(store, eventId) {
   if (!reactorId) return
   const s = store.getState()
   const agent = s.agents?.[reactorId]
-  // R1-safe: never override an agent genuinely locked in a real group event.
-  if (!agent || agent.inGroupEvent) return
+  // R1-safe: never override an agent genuinely locked in a real group event OR genuinely tracked
+  // busy (working/blocked/etc). rem-honest-office-events review round 2, finding #5: the prior
+  // `agent.inGroupEvent` check alone let a click-reaction quip (e.g. "nothing to ship right now")
+  // land on a genuinely-working ops that simply hadn't been locked into any group event yet —
+  // overwriting a real hook-driven bubble with a fabricated one. Decision (recorded in the spec):
+  // prefer silence over a dedicated machine-side "BUSY" badge here — AVO-193's coffee-BUSY visual
+  // is its own UI feature addition (Design Gate territory), out of this state-honesty fix's scope.
+  if (!agent || agent.inGroupEvent || !isAgentAvailable(reactorId, s.agents, s.externalStatus)) return
   const line = eventBubble(INTERACTION_BUBBLE_KEY[eventId])
   if (!line) return
   s.setAgentBehavior(reactorId, agent.behavior, agent.expression, line)
@@ -776,6 +782,16 @@ export function startOfficeLife(store) {
     seedCooldown[eventId] = now
     lastSeedAt = now
   }
+  // rem-honest-office-events review round 2, finding #2: track whether the CURRENT activeEvent has
+  // ever actually locked a participant. Some handlers (dog-visit, group-stretch) only schedule
+  // setTimeout-deferred locks and lock NOBODY synchronously — there is a real window right after
+  // setActiveEvent where activeEvent is set but nobody is in-group yet. Without this guard, an
+  // unrelated set() call landing in that window (e.g. a position tick) would see "activeEvent set,
+  // nobody in-group" and clear the event before its first participant ever got locked. Reset per
+  // activeEvent identity so each event gets its own fresh grace window.
+  let trackedEvent = null
+  let trackedEventHadParticipant = false
+
   seedUnsub = typeof store.subscribe === 'function' ? store.subscribe((state, prev) => {
     if (cancelled.value || !prev) return
     // AVO-106: co-editing pair overlay. PURE derived "show-while-true" state — computed BEFORE the
@@ -789,6 +805,27 @@ export function startOfficeLife(store) {
         state.setPairLink({ a: pair[0], b: pair[1], file })
       } else {
         state.setPairLink(null)
+      }
+    }
+    // rem-honest-office-events review round 2, finding #2: a released participant (finding #3's
+    // store.js release-on-real-status fix) or a deferred stage that abandons before locking anyone
+    // (e.g. pm-all-meeting stage 2 when pm was already released) can leave `activeEvent` live over
+    // an EMPTY scene — the same phantom-event class as finding #1, just reached mid-event instead
+    // of at cast time. Only clear once this event has ACTUALLY had a participant (trackedEventHad
+    // Participant) — see the grace-window comment above this subscription — so a not-yet-locked
+    // event (dog-visit/group-stretch's staggered first lock) is never mistaken for an abandoned one.
+    if (state.activeEvent !== trackedEvent) {
+      trackedEvent = state.activeEvent
+      trackedEventHadParticipant = false
+    }
+    if (state.activeEvent) {
+      const anyInGroup = Object.values(state.agents || {}).some((a) => a?.inGroupEvent)
+      if (anyInGroup) {
+        trackedEventHadParticipant = true
+      } else if (trackedEventHadParticipant) {
+        state.clearActiveEvent()
+        if (state.clearReluctant) state.clearReluctant()
+        trackedEventHadParticipant = false
       }
     }
     // ── Seeded EVENTS below remain pause/mutex gated (they fire coordinated set-pieces). ──

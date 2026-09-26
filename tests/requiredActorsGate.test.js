@@ -66,7 +66,10 @@ describe('required-actor gate (finding #1) — refuse to fire when the cast is m
   })
 
   it('review-debate (array cast [dev, qa]): dev busy, qa idle — non-empty cast still lacks dev — refuses to fire', () => {
-    const store = makeStore({ externalStatus: { dev: { status: 'working' } } })
+    // qa gets a fresh changedAt so eventEligible(review-debate) (recentSignal on qa/gate) is
+    // already satisfied — isolates the assertion to the NEW required-actor check, not the
+    // separate honesty gate (which would refuse for its own, unrelated reason if qa were bare).
+    const store = makeStore({ externalStatus: { dev: { status: 'working' }, qa: { status: 'idle', changedAt: Date.now() } } })
     const fired = triggerInteractiveEvent(store, 'review-debate')
     expect(fired).toBe(false)
     expect(store.getState().activeEvent).toBeNull()
