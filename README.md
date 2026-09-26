@@ -259,6 +259,8 @@ v1.4.0 started from one of these captures.
 
 **Colleagues can't see it (LAN)** → set `OFFICE_API_ALLOWED_ORIGINS=http://192.168.1.100:5174`, or use `--no-host` for localhost only.
 
+**LAN colleague gets 403 Forbidden by hostname (e.g. `http://mypc.local:5174`)** → reaching the office by IP already works; reaching it by a LAN hostname needs that hostname in `OFFICE_ALLOWED_HOSTS=mypc.local` (Host-header validation guards against DNS rebinding). See [DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md#environment-variables).
+
 **Windows Firewall prompt** → the dev server binds all interfaces; use `--no-host` to avoid it.
 
 **Node version error** → requires Node ≥ 22 (`node --version`).

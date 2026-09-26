@@ -168,6 +168,7 @@ docker compose up -d --build             # rebuild image and recreate container
 | --- | --- | --- |
 | `OFFICE_API_TOKEN` | No | If set, all API **write** endpoints (POST) require this token via the `X-Office-Token` header or `Authorization: Bearer <token>`. GET `/api/status` is always readable (status data only, no secrets). Leave unset for trusted local networks. |
 | `OFFICE_API_ALLOWED_ORIGINS` | No | Comma-separated list of allowed CORS origins (e.g. `https://office.example.com`). If unset, only loopback and the server's own IPs are accepted. |
+| `OFFICE_ALLOWED_HOSTS` | No | Comma-separated list of extra hostnames allowed in the request `Host` header (e.g. `mypc.local`). Every request is rejected with 403 unless its `Host` is `localhost`, `*.localhost`, an IP literal, one of the server's own IPs, or in this list — this is a DNS-rebinding guard, so a colleague reaching the office via a LAN **hostname** (not an IP) needs this set; reaching it by IP or `--host` LAN IP already works without it. |
 | `OFFICE_PROJECT_ROOT` | No | Project directory that session files are matched against (each file carries the `_cwd` the hook ran in). Defaults to the directory the office was launched from — `bin/cli.js` forwards it, since both servers are spawned with their cwd set to the package directory. Set it explicitly to watch a different project root, e.g. a shared worktree. |
 
 ## Hook integration note
