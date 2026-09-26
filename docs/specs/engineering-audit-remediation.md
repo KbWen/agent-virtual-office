@@ -81,8 +81,9 @@ Routed from a follow-up audit that re-derived the remaining dev-only (`vite.conf
 from `server.mjs` (production) after the 2026-09-24 wave fixed the shared `_seq` clock. Branch
 `fix/dev-server-parity`; behavioral tests in `tests/viteDevServerParity.test.js` (real
 `vite.createServer()` harness) and `tests/cliDevLanWarning.test.js`; scope limited to
-`vite.config.mjs` and the dev-start warning lines in `bin/cli.js` (no `server.mjs` or
-`bin/cli.js` setup/uninstall changes — those belong to sibling remediation branches).
+`vite.config.mjs`, the dev-start warning lines in `bin/cli.js`, and a one-line `STALE_MS` export
+from `src/server/scanSessions.mjs` (no `server.mjs` or `bin/cli.js` setup/uninstall changes —
+those belong to sibling remediation branches).
 
 - **F-1 (file-watcher fallback scope leak)**: `officeStatusPlugin`'s `server.watcher.add(watchDir)`
   extends the SAME shared chokidar watcher to also cover `OFFICE_STATUS_DIR`, but
@@ -91,7 +92,12 @@ from `server.mjs` (production) after the 2026-09-24 wave fixed the shared `_seq`
   misread as a project source edit and fabricated a fake, `_cwd`-less agent status that then showed
   up in *any* project's office. Fixed: the fallback now resolves `server.config.root` and ignores
   any file outside it, plus explicitly ignores the status dir itself (even when nested inside the
-  project root) and `.claude/` (Claude Code state / nested worktrees).
+  project root) and `.claude/` (Claude Code state / nested worktrees). **Round-2 correction**: the
+  `.claude`/`node_modules`/`dist`/`.git` exclusion first shipped as a substring regex tested
+  against the ABSOLUTE file path — which silenced the fallback for every project rooted under a
+  `.claude` segment (every `.claude/worktrees/**` agent worktree, including this repo's own
+  convention) and could false-match a real file like `distance.js`. Fixed: matched as exact path
+  SEGMENTS of the path relative to `server.config.root` instead.
   **Disclosure**: under `bin/cli.js`/npx, Vite's cwd — and therefore `server.config.root` — is the
   *installed package directory* (`bin/cli.js` resolves `root` from its own location and spawns Vite
   with `cwd: root`), not the end user's project (`OFFICE_PROJECT_ROOT` only affects `_cwd` stamping,

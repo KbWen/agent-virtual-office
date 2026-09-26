@@ -21,11 +21,15 @@
  *        a long window with no _cwd filter let ANY other project's hook file silence this
  *        project's fallback almost permanently
  *   R-3  (review) OFFICE_STATUS_DIR nested INSIDE the project root must still be excluded
+ *   R2-1 (review round 2 regression) the ignored-path-segment check must match path SEGMENTS
+ *        relative to the project root, not a substring test against the absolute path — the
+ *        absolute-path version silenced the fallback for every project rooted under a
+ *        `.claude` segment (every `.claude/worktrees/**` agent worktree, including this repo)
  */
 
 import { describe, it, expect, afterEach } from 'vitest'
 import { createServer } from 'vite'
-import { mkdtempSync, writeFileSync, appendFileSync, mkdirSync, unlinkSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, appendFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -35,11 +39,20 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const servers = []
 const scratchFiles = []
+// Every temp dir any test creates (project roots + status dirs), removed in afterEach —
+// review R2-2: these previously leaked into the OS temp dir on every run.
+const tempDirs = []
+
+function mkdtempTracked(prefix) {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+  tempDirs.push(dir)
+  return dir
+}
 
 async function bootDevServer(env = {}) {
-  const tempRoot = mkdtempSync(join(tmpdir(), 'avo-dev-parity-root-'))
+  const tempRoot = mkdtempTracked('avo-dev-parity-root-')
   writeFileSync(join(tempRoot, 'index.html'), '<!doctype html><html><body></body></html>')
-  const tempStatus = mkdtempSync(join(tmpdir(), 'avo-dev-parity-status-'))
+  const tempStatus = mkdtempTracked('avo-dev-parity-status-')
   const savedEnv = {}
   const keys = ['OFFICE_STATUS_DIR', 'OFFICE_DISABLE_FILE_WATCHER', 'OFFICE_API_ALLOWED_ORIGINS', 'OFFICE_API_TOKEN']
   for (const k of keys) savedEnv[k] = process.env[k]
@@ -85,6 +98,10 @@ afterEach(async () => {
     const f = scratchFiles.pop()
     try { unlinkSync(f) } catch {}
   }
+  while (tempDirs.length) {
+    const d = tempDirs.pop()
+    try { rmSync(d, { recursive: true, force: true }) } catch {}
+  }
 }, 30_000)
 
 // ─── F-1: fallback must not react to files under OFFICE_STATUS_DIR ────────────
@@ -111,7 +128,7 @@ describe('F-1 file-watcher fallback scope (must not fabricate status from OFFICE
   }, 25_000)
 
   it('R-3: OFFICE_STATUS_DIR nested INSIDE the project root is still excluded', async () => {
-    const tempRoot = mkdtempSync(join(tmpdir(), 'avo-dev-parity-root-'))
+    const tempRoot = mkdtempTracked('avo-dev-parity-root-')
     writeFileSync(join(tempRoot, 'index.html'), '<!doctype html><html><body></body></html>')
     const nestedStatusDir = join(tempRoot, '.status-nested')
     mkdirSync(nestedStatusDir, { recursive: true })
@@ -139,6 +156,42 @@ describe('F-1 file-watcher fallback scope (must not fabricate status from OFFICE
 
     const res = await fetch(`${base}/api/status`)
     expect(await res.text()).toBe('null')
+  }, 25_000)
+
+  it('R2-1: a project rooted under a .claude segment (e.g. .claude/worktrees/<name>) still gets fallback status', async () => {
+    // Reproduces the reviewer's exact probe: root = <scratch>/.claude/worktrees/<name>. Every
+    // worktree this repo's own convention creates is rooted exactly like this — the absolute-
+    // path substring regex silenced the fallback for every one of them.
+    const uniqueBase = mkdtempTracked('avo-dev-parity-nested-')
+    const nestedRoot = join(uniqueBase, '.claude', 'worktrees', 'proj')
+    mkdirSync(nestedRoot, { recursive: true })
+    writeFileSync(join(nestedRoot, 'index.html'), '<!doctype html><html><body></body></html>')
+    const tempStatus = mkdtempTracked('avo-dev-parity-status-')
+
+    const savedDir = process.env.OFFICE_STATUS_DIR
+    process.env.OFFICE_STATUS_DIR = tempStatus
+    const server = await createServer({
+      configFile: 'vite.config.mjs',
+      root: nestedRoot,
+      logLevel: 'silent',
+      optimizeDeps: { noDiscovery: true, include: [] },
+      server: { port: 0, strictPort: false, host: '127.0.0.1' },
+    })
+    await server.listen()
+    if (savedDir === undefined) delete process.env.OFFICE_STATUS_DIR
+    else process.env.OFFICE_STATUS_DIR = savedDir
+    servers.push(server)
+    const base = `http://127.0.0.1:${server.httpServer.address().port}`
+
+    const scratchFile = join(nestedRoot, 'src-a.jsx')
+    writeFileSync(scratchFile, '// a\n')
+    await new Promise((r) => setTimeout(r, 300))
+    appendFileSync(scratchFile, '// edit\n')
+    await new Promise((r) => setTimeout(r, 2000))
+
+    const merged = await (await fetch(`${base}/api/status`)).json()
+    expect(merged, 'a .claude-rooted project must still get a fallback status').not.toBeNull()
+    expect(merged.agents.find((a) => a.role === 'dev')?.status).toBe('working')
   }, 25_000)
 })
 

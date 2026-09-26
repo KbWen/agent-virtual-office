@@ -9,7 +9,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest'
 import { spawn } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:net'
@@ -17,6 +17,15 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+// Every temp HOME dir created below, removed in afterEach (review R2-2: these previously
+// leaked into the OS temp dir on every run).
+const tempDirs = []
+function mkdtempTracked(prefix) {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+  tempDirs.push(dir)
+  return dir
+}
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -36,11 +45,15 @@ afterEach(() => {
     try { child.kill(process.platform === 'win32' ? undefined : 'SIGTERM') } catch {}
     child = null
   }
+  while (tempDirs.length) {
+    const d = tempDirs.pop()
+    try { rmSync(d, { recursive: true, force: true }) } catch {}
+  }
 })
 
 async function runCli(extraEnv = {}) {
   const port = await freePort()
-  const tempHome = mkdtempSync(join(tmpdir(), 'avo-cli-warn-'))
+  const tempHome = mkdtempTracked('avo-cli-warn-')
   let stdout = ''
   child = spawn(process.execPath, [join(ROOT, 'bin', 'cli.js'), '--no-open', `--port=${port}`], {
     cwd: ROOT,
@@ -81,7 +94,7 @@ describe('F-6 dev LAN-exposure warning (bin/cli.js parity with server.mjs)', () 
 
   it('does not warn when --no-host is passed (not LAN-exposed)', async () => {
     const port = await freePort()
-    const tempHome = mkdtempSync(join(tmpdir(), 'avo-cli-warn-nohost-'))
+    const tempHome = mkdtempTracked('avo-cli-warn-nohost-')
     let stdout = ''
     child = spawn(process.execPath, [join(ROOT, 'bin', 'cli.js'), '--no-open', '--no-host', `--port=${port}`], {
       cwd: ROOT,

@@ -794,15 +794,23 @@ function fileWatcherFallbackPlugin() {
         const cmp = isWin ? resolved.toLowerCase() : resolved
         return cmp === statusDirLower || cmp.startsWith(statusDirLower + path.sep)
       }
+      // Ignored path segments, matched against the path RELATIVE TO projectRoot (not the
+      // absolute path) — an absolute-path substring test false-matches any project whose
+      // ancestor directories happen to contain one of these names anywhere above the root
+      // (e.g. EVERY project checked out under a `.claude/worktrees/**` path, including this
+      // repo's own convention — the fallback was silently dead for all of them), and also
+      // false-matches a real source file like "distance.js" containing "dist" as a substring.
+      // Segment equality avoids both: only an exact path COMPONENT ('node_modules', 'dist',
+      // '.git', '.claude') inside the project is skipped.
+      const IGNORED_SEGMENTS = new Set(['node_modules', 'dist', '.git', '.claude'])
+      function hasIgnoredSegment(resolvedFile) {
+        return path.relative(projectRoot, resolvedFile).split(path.sep).some((seg) => IGNORED_SEGMENTS.has(seg))
+      }
       // Watch project source files for changes (Vite's watcher covers src/)
       const onFallbackChange = (file) => {
         if (!isUnderProjectRoot(file)) return
         if (isUnderStatusDir(file)) return
-        // Skip node_modules, dist, .git, .claude (Claude Code state / nested worktrees — a
-        // worktree checked out under .claude/worktrees/** would otherwise fire the main
-        // checkout's own dev server if it happens to be watching this deep), and the status
-        // file itself.
-        if (/node_modules|dist|\.git|\.claude/.test(file)) return
+        if (hasIgnoredSegment(path.resolve(file))) return
         if (file.includes('office-status')) return
         const role = fileToRole(file)
         writeStatus(role, file)
