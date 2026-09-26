@@ -196,9 +196,20 @@ const SERVER_IPS = getServerIPs()
 //   - AVO strips a trailing `:port` from env entries (`mypc.local:5174` behaves the same as
 //     `mypc.local`), since the port a request arrives on is deployment-specific and shouldn't
 //     have to be duplicated into the allowlist.
-//   - A REQUEST WITH NO HOST HEADER AT ALL IS ALLOWED THROUGH (see the comment on
-//     isAllowedHost below) — this matches Vite's behavior, but for a different, explicit
-//     reason specific to this server.
+//   - A REQUEST WITH NO HOST HEADER, OR AN EMPTY `Host:` HEADER, IS ALLOWED THROUGH (see
+//     the comment on isAllowedHost below) — this matches Vite's behavior, but for a
+//     different, explicit reason specific to this server.
+//   - An UNBRACKETED IPv6 literal in Host (e.g. `Host: ::1`, no brackets) is REJECTED, not
+//     allowed. This is deliberate, not a bug: RFC 3986 §3.2.2 / RFC 7230 §5.4 require IPv6
+//     literals in a Host header to be bracket-delimited specifically so the address's own
+//     colons can't be confused with a `:port` separator — a compliant HTTP client never
+//     sends one unbracketed. Parsing an unbracketed form "leniently" would mean guessing
+//     where the address ends and the port begins, which is exactly the kind of ambiguity a
+//     Host-validation guard exists to refuse, not paper over.
+//   - A request whose Host is disallowed but carries a VALID `OFFICE_API_TOKEN` (see
+//     hasValidApiToken, defined further down) is allowed through anyway: a DNS-rebinding
+//     browser can send any Host it likes, but it has no way to know this server's secret
+//     token, so proof of the token is proof the caller isn't a rebinding browser.
 const ALLOWED_HOSTS_ENV = (process.env.OFFICE_ALLOWED_HOSTS || '')
   .split(',').map(s => s.trim()).filter(Boolean)
   .map(entry => {
@@ -208,6 +219,15 @@ const ALLOWED_HOSTS_ENV = (process.env.OFFICE_ALLOWED_HOSTS || '')
     // through unchanged other than lowercasing).
     return hostnameFromHeader(entry) ?? entry.toLowerCase()
   })
+  // review round 3, LOW-5: a bare '.' entry (e.g. from a trailing/stray comma-separated
+  // ".") would make `host.endsWith('.')` true for EVERY trailing-dot FQDN
+  // (`evil.com.` is a valid absolute hostname), silently re-opening rebinding via
+  // `http://attacker.com.:<port>`. Never treat '.' as a usable suffix entry.
+  .filter(entry => entry && entry !== '.')
+  // review round 3, LOW-5: a bare '.' entry (e.g. from a trailing/stray comma-separated
+  // ".") would make `host.endsWith('.')` true for EVERY trailing-dot FQDN
+  // (`evil.com.` is a valid absolute hostname), silently re-opening rebinding via
+  // `http://attacker.com.:<port>`. Never treat '.' as a usable suffix entry.
 
 // Host header may be `host`, `host:port`, or `[v6-literal]:port`. Strip the port and any
 // IPv6 brackets so the remainder can be compared as a bare hostname/IP.
@@ -222,18 +242,25 @@ function hostnameFromHeader(hostHeader) {
 
 function isAllowedHost(hostHeader) {
   const host = hostnameFromHeader(hostHeader)
-  // A request with NO Host header at all cannot be the product of a DNS-rebinding attack:
-  // rebinding relies on the victim's BROWSER sending an attacker-chosen Host that resolves to
-  // this server's IP, and every browser HTTP/1.1 request always includes a Host header. A
-  // request with no Host is either a deliberately-crafted raw/HTTP-1.0-style request (already
-  // on the least-privileged path here — this check runs before any handler, so it still gets
-  // routed as an ordinary GET/POST with no elevated access) or a local health-check/proxy
-  // quirk. Rejecting it would only break those benign callers while adding no protection
-  // against the actual threat model, so it is allowed through — matching Vite's own choice,
-  // arrived at independently for this reason.
+  // A request with NO Host header, or an EMPTY `Host:` header, cannot be the product of a
+  // DNS-rebinding attack: rebinding relies on the victim's BROWSER sending an
+  // attacker-chosen Host that resolves to this server's IP, and every browser HTTP/1.1
+  // request always includes a non-empty Host header. Either case here is either a
+  // deliberately-crafted raw/HTTP-1.0-style request (already on the least-privileged path —
+  // this check runs before any handler, so it still gets routed as an ordinary GET/POST with
+  // no elevated access) or a local health-check/proxy quirk. Rejecting it would only break
+  // those benign callers while adding no protection against the actual threat model, so both
+  // are allowed through — matching Vite's own choice, arrived at independently for this
+  // reason. `hostnameFromHeader` returns `null` for both `undefined` and `''`.
   if (host === null) return true
   if (host === 'localhost' || host.endsWith('.localhost')) return true
-  if (net.isIP(host)) return true // any IP literal (v4/v6) — matches Vite's allowedHosts default
+  // net.isIP() only recognizes a BRACES-FREE v4 literal or an UNBRACKETED v6 literal — but by
+  // the time we get here, hostnameFromHeader has already stripped brackets from a bracketed
+  // v6 Host, so this correctly matches `[::1]` (passed in as `::1`). An actually-unbracketed
+  // v6 Host (e.g. raw `Host: ::1`) is misparsed upstream by the port-stripping heuristic in
+  // hostnameFromHeader (it sees a colon and guesses "port") and never reaches here looking
+  // like a clean IP — see the deliberate-rejection note on ALLOWED_HOSTS_ENV above.
+  if (net.isIP(host)) return true
   for (const ip of SERVER_IPS) {
     if (ip.replace(/^\[|\]$/g, '').toLowerCase() === host) return true
   }
@@ -247,10 +274,13 @@ function isAllowedHost(hostHeader) {
   return false
 }
 
-// Rejected-Host logging: one line per DISTINCT rejected hostname, capped so a scanner
-// hammering random Host values can't grow this set (or the log) without bound. Once the cap
-// is hit, further NEW hostnames are silently dropped from logging (existing 403 behavior is
-// unaffected — this only bounds *logging*, never access control).
+// Rejected-Host logging: one line per DISTINCT rejected hostname, capped at
+// REJECTED_HOST_LOG_CAP entries for the entire lifetime of this process — NOT a
+// time-windowed rate limit (there is no reset; once 50 distinct hostnames have been seen,
+// logging for any newly-seen hostname stops until the process restarts). This bounds a
+// scanner hammering random Host values from growing the set (or the log) without bound.
+// Existing 403 behavior is unaffected either way — this only bounds *logging*, never access
+// control.
 const REJECTED_HOST_LOG_CAP = 50
 const _loggedRejectedHosts = new Set()
 function logRejectedHostOnce(hostHeader) {
@@ -281,14 +311,29 @@ function safeEqual(a, b) {
   return timingSafeEqual(ha, hb)
 }
 
-function isAuthorized(req) {
-  if (!apiToken) return true
+// Whether THIS request carries a token that matches the configured OFFICE_API_TOKEN.
+// Distinct from isAuthorized() below: this returns false (never true) when no token is
+// configured at all, because "no secret is set" proves nothing about the caller — whereas
+// isAuthorized() treats an unset token as "endpoint doesn't require auth" and returns true.
+// Used by the F3 Host-check exemption (review round 3, MEDIUM-2): a DNS-rebinding browser
+// can issue same-origin requests with an attacker-chosen Host, but it CANNOT know this
+// server's secret token (it isn't same-origin-readable, isn't cookie-like, and the attacker
+// page never had it) — so proof of the token is proof the caller isn't a rebinding browser,
+// independent of what Host it sent. This lets a legitimate integration (e.g. the GitHub
+// Actions example in docs/INTEGRATIONS.md, POSTing by a bare hostname URL) work without also
+// needing OFFICE_ALLOWED_HOSTS, while a token-less request still gets the full Host check.
+function hasValidApiToken(req) {
+  if (!apiToken) return false
   const h = req.headers['x-office-token']
   const a = req.headers.authorization
   // Evaluate both before OR-ing — avoids timing oracle from short-circuit evaluation.
   const m1 = typeof h === 'string' && safeEqual(h, apiToken)
   const m2 = typeof a === 'string' && safeEqual(a, `Bearer ${apiToken}`)
   return m1 || m2
+}
+
+function isAuthorized(req) {
+  return !apiToken || hasValidApiToken(req)
 }
 
 // ─── Rate limiter (sliding window) ───────────────────────────────────────────
@@ -577,8 +622,11 @@ const server = http.createServer((req, res) => {
 
   // F3: reject requests whose Host header doesn't resolve to an allowed host BEFORE any
   // routing — closes the DNS-rebinding read across every route (API, SSE, and static assets
-  // alike; Vite's own dev-server host guard applies the same way for consistency).
-  if (!isAllowedHost(req.headers.host)) {
+  // alike; Vite's own dev-server host guard applies the same way for consistency). EXEMPT: a
+  // request carrying a valid OFFICE_API_TOKEN (see hasValidApiToken's comment) — a
+  // rebinding browser cannot know that token, so proof of it is proof the caller is a
+  // deliberate integration, not a victim's browser.
+  if (!isAllowedHost(req.headers.host) && !hasValidApiToken(req)) {
     logRejectedHostOnce(req.headers.host)
     res.statusCode = 403
     return res.end('Forbidden: Host not allowed. Set OFFICE_ALLOWED_HOSTS to permit additional hostnames.')

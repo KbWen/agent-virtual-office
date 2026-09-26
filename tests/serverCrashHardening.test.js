@@ -292,4 +292,222 @@ describe('F3 round 2 — OFFICE_ALLOWED_HOSTS permits a reverse-proxy / extra-LA
     const raw = await rawRequest(altPort, 'GET /api/health HTTP/1.1', { hostHeader: `mypc.local:${altPort}` })
     expect(raw).toMatch(/^HTTP\/1\.1 200/)
   })
+
+  // Review round 3, LOW-7: a leading-dot suffix entry must match only at a real label
+  // boundary (a preceding '.'), not on a bare string-suffix overlap.
+  it('a hostname that merely ENDS WITH the suffix text (no dot boundary) is still rejected', async () => {
+    // ".suffix.example" must NOT match "evilsuffix.example" — "evilsuffix.example" ends with
+    // the literal characters "suffix.example" but there is no '.' immediately before them.
+    const raw = await rawRequest(altPort, 'GET /api/health HTTP/1.1', { hostHeader: 'evilsuffix.example' })
+    expect(raw).toMatch(/^HTTP\/1\.1 403/)
+  })
+
+  it('a hostname that is a prefix of the suffix entry (no leading dot match) is rejected', async () => {
+    const raw = await rawRequest(altPort, 'GET /api/health HTTP/1.1', { hostHeader: 'suffix.example.evil.com' })
+    expect(raw).toMatch(/^HTTP\/1\.1 403/)
+  })
+})
+
+// ─── Review round 3, LOW-5 — a '.' allowlist entry must never re-open trailing-dot rebinding
+describe('F3 round 3 — a bare "." env entry is ignored, not treated as a universal suffix', () => {
+  let dotPort, dotProc, dotTempDir, dotStderr = ''
+
+  beforeAll(async () => {
+    dotTempDir = mkdtempSync(join(tmpdir(), 'avo-hardening-dotentry-'))
+    mkdirSync(join(dotTempDir, '.claude'), { recursive: true })
+    dotPort = await freePort()
+    dotProc = spawn(
+      process.execPath,
+      ['server.mjs', `--port=${dotPort}`, '--no-open'],
+      {
+        cwd: ROOT,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          HOME: dotTempDir,
+          USERPROFILE: dotTempDir,
+          OFFICE_API_TOKEN: '',
+          OFFICE_STATUS_DIR: join(dotTempDir, '.claude'),
+          // A stray/trailing comma can produce an effectively-'.' entry; also test a
+          // literal lone '.' directly.
+          OFFICE_ALLOWED_HOSTS: '.',
+        },
+      }
+    )
+    dotProc.stderr.on('data', d => { dotStderr += d.toString() })
+    const ready = await waitForServer(`http://127.0.0.1:${dotPort}`, 25_000)
+    if (!ready) {
+      dotProc.kill('SIGKILL')
+      throw new Error(`dot-entry server.mjs did not become ready.\nStderr: ${dotStderr.slice(-800)}`)
+    }
+  }, 30_000)
+
+  afterAll(() => { try { dotProc?.kill('SIGTERM') } catch {} })
+
+  it('a trailing-dot FQDN (a rebinding vector if "." were treated as a suffix) is still 403', async () => {
+    const raw = await rawRequest(dotPort, 'GET /api/health HTTP/1.1', { hostHeader: 'attacker.com.' })
+    expect(raw).toMatch(/^HTTP\/1\.1 403/)
+  })
+
+  it('an ordinary unrelated hostname is still 403 (the "." entry grants nothing)', async () => {
+    const raw = await rawRequest(dotPort, 'GET /api/health HTTP/1.1', { hostHeader: 'evil.example' })
+    expect(raw).toMatch(/^HTTP\/1\.1 403/)
+  })
+})
+
+// ─── Review round 3, MEDIUM-2 — a valid OFFICE_API_TOKEN exempts a request from the Host check
+describe('F3 round 3 — a valid OFFICE_API_TOKEN bearer exempts a request from the Host check', () => {
+  let tokPort, tokProc, tokTempDir, tokStderr = ''
+  const TOKEN = 'test-secret-token-123'
+
+  beforeAll(async () => {
+    tokTempDir = mkdtempSync(join(tmpdir(), 'avo-hardening-token-'))
+    mkdirSync(join(tokTempDir, '.claude'), { recursive: true })
+    tokPort = await freePort()
+    tokProc = spawn(
+      process.execPath,
+      ['server.mjs', `--port=${tokPort}`, '--no-open'],
+      {
+        cwd: ROOT,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          HOME: tokTempDir,
+          USERPROFILE: tokTempDir,
+          OFFICE_API_TOKEN: TOKEN,
+          OFFICE_STATUS_DIR: join(tokTempDir, '.claude'),
+          OFFICE_ALLOWED_HOSTS: '',
+        },
+      }
+    )
+    tokProc.stderr.on('data', d => { tokStderr += d.toString() })
+    // /api/health requires no auth, so it can't prove readiness once a token is required for
+    // writes — but GET /api/health itself is unauthenticated either way, so this still works.
+    const ready = await waitForServer(`http://127.0.0.1:${tokPort}`, 25_000)
+    if (!ready) {
+      tokProc.kill('SIGKILL')
+      throw new Error(`token-exempt server.mjs did not become ready.\nStderr: ${tokStderr.slice(-800)}`)
+    }
+  }, 30_000)
+
+  afterAll(() => { try { tokProc?.kill('SIGTERM') } catch {} })
+
+  it('bad Host + a valid token is allowed on a write route (POST /api/event)', async () => {
+    const body = JSON.stringify({ event: 'test-passed' })
+    const reqStr =
+      `POST /api/event HTTP/1.1\r\n` +
+      `Host: evil.example\r\n` +
+      `X-Office-Token: ${TOKEN}\r\n` +
+      `Content-Type: application/json\r\n` +
+      `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+      `Connection: close\r\n\r\n${body}`
+    const raw = await new Promise((resolve) => {
+      const sock = connect(tokPort, '127.0.0.1', () => { sock.write(reqStr) })
+      let data = ''
+      sock.on('data', d => { data += d.toString() })
+      const finish = () => { try { sock.destroy() } catch {}; resolve(data) }
+      sock.on('close', finish)
+      sock.on('error', finish)
+      setTimeout(finish, 3000)
+    })
+    expect(raw).toMatch(/^HTTP\/1\.1 200/)
+  })
+
+  it('bad Host + NO token is still 403 on the same write route', async () => {
+    const body = JSON.stringify({ event: 'test-passed' })
+    const reqStr =
+      `POST /api/event HTTP/1.1\r\n` +
+      `Host: evil.example\r\n` +
+      `Content-Type: application/json\r\n` +
+      `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+      `Connection: close\r\n\r\n${body}`
+    const raw = await new Promise((resolve) => {
+      const sock = connect(tokPort, '127.0.0.1', () => { sock.write(reqStr) })
+      let data = ''
+      sock.on('data', d => { data += d.toString() })
+      const finish = () => { try { sock.destroy() } catch {}; resolve(data) }
+      sock.on('close', finish)
+      sock.on('error', finish)
+      setTimeout(finish, 3000)
+    })
+    expect(raw).toMatch(/^HTTP\/1\.1 403/)
+  })
+
+  it('bad Host + an INVALID token is still 403 (not any-token, only a MATCHING token)', async () => {
+    const body = JSON.stringify({ event: 'test-passed' })
+    const reqStr =
+      `POST /api/event HTTP/1.1\r\n` +
+      `Host: evil.example\r\n` +
+      `X-Office-Token: wrong-token\r\n` +
+      `Content-Type: application/json\r\n` +
+      `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+      `Connection: close\r\n\r\n${body}`
+    const raw = await new Promise((resolve) => {
+      const sock = connect(tokPort, '127.0.0.1', () => { sock.write(reqStr) })
+      let data = ''
+      sock.on('data', d => { data += d.toString() })
+      const finish = () => { try { sock.destroy() } catch {}; resolve(data) }
+      sock.on('close', finish)
+      sock.on('error', finish)
+      setTimeout(finish, 3000)
+    })
+    expect(raw).toMatch(/^HTTP\/1\.1 403/)
+  })
+})
+
+// ─── Review round 3, LOW-7 — rejected-Host log cap is a lifetime cap, not a time window
+describe('F3 round 3 — rejected-Host log cap (lifetime, not rate-limited)', () => {
+  let capPort, capProc, capTempDir, capStderr = ''
+
+  beforeAll(async () => {
+    capTempDir = mkdtempSync(join(tmpdir(), 'avo-hardening-logcap-'))
+    mkdirSync(join(capTempDir, '.claude'), { recursive: true })
+    capPort = await freePort()
+    capProc = spawn(
+      process.execPath,
+      ['server.mjs', `--port=${capPort}`, '--no-open'],
+      {
+        cwd: ROOT,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          HOME: capTempDir,
+          USERPROFILE: capTempDir,
+          OFFICE_API_TOKEN: '',
+          OFFICE_STATUS_DIR: join(capTempDir, '.claude'),
+          OFFICE_ALLOWED_HOSTS: '',
+        },
+      }
+    )
+    capProc.stdout.on('data', () => {}) // drain
+    capProc.stderr.on('data', d => { capStderr += d.toString() })
+    const ready = await waitForServer(`http://127.0.0.1:${capPort}`, 25_000)
+    if (!ready) {
+      capProc.kill('SIGKILL')
+      throw new Error(`log-cap server.mjs did not become ready.\nStderr: ${capStderr.slice(-800)}`)
+    }
+  }, 30_000)
+
+  afterAll(() => { try { capProc?.kill('SIGTERM') } catch {} })
+
+  it('logs at most 50 distinct-hostname lines even after 60 distinct rejected Hosts', async () => {
+    // stdout carries the console.warn lines (console.warn goes to stderr in Node, actually —
+    // capture both to be safe).
+    let out = ''
+    capProc.stdout.on('data', d => { out += d.toString() })
+    capProc.stderr.on('data', d => { out += d.toString() })
+    for (let i = 0; i < 60; i++) {
+      await rawRequest(capPort, 'GET /api/health HTTP/1.1', { hostHeader: `evil-${i}.example` })
+    }
+    // Give the async console writes a moment to flush.
+    await new Promise(r => setTimeout(r, 300))
+    const matches = out.match(/403: rejected request with disallowed Host/g) || []
+    expect(matches.length).toBeLessThanOrEqual(50)
+    expect(matches.length).toBeGreaterThan(0)
+  })
+
+  it('the server stays alive after 60 distinct rejected Hosts', async () => {
+    const health = await fetch(`http://127.0.0.1:${capPort}/api/health`)
+    expect(health.status).toBe(200)
+  })
 })
