@@ -869,10 +869,37 @@ export function startStatusIntegration(store) {
     }, DEBOUNCE_MS)
   }
 
-  function handleProbe(result) {
+  // R2-1 fix: tracks whether the GET-polling channel's OWN most recent probe succeeded,
+  // independent of anything SSE reports. `null` until a poller has reported at least once.
+  // Read by handleSSEProbe below to decide whether an SSE-side failure is even worth forwarding.
+  let pollProbeOk = null
+
+  // Probe callback for the GET-polling channels (fast poller + heartbeat poller's own tracking).
+  // Polling is unconditionally authoritative for health when it's the one reporting — every
+  // result (success or failure) is forwarded to markIntegrationProbe.
+  function handlePollProbe(result) {
     if (result.skipped) return
     if (shouldRefreshStalenessOnProbe(result)) resetStalenessTimer()
-    store.getState().markIntegrationProbe({ ok: Boolean(result.ok) })
+    pollProbeOk = Boolean(result.ok)
+    store.getState().markIntegrationProbe({ ok: pollProbeOk })
+  }
+
+  // Probe callback for the SSE channel (open/stability success, message delivery, or onerror).
+  // R2-1 fix: while an active GET poller's most recent probe succeeded, polling is the
+  // authoritative transport for health at that moment — an SSE-side failure (e.g. one of a
+  // retry attempt's 5 give-up errors, landing back-to-back within the poller's own backed-off
+  // interval) must not flap `integrationHealth` to 'degraded'/'offline' underneath a poller that
+  // is demonstrably still working. Only forward the SSE failure when polling isn't ITSELF
+  // currently confirming health (no poller running, or the poller's own last result also
+  // failed) — offline still fires correctly when both channels are actually down.
+  function handleSSEProbe(result) {
+    if (result.skipped) return
+    if (result.ok) {
+      store.getState().markIntegrationProbe({ ok: true })
+      return
+    }
+    if (polling.active && pollProbeOk === true) return
+    store.getState().markIntegrationProbe({ ok: false })
   }
 
   function resetStalenessTimer() {
@@ -941,17 +968,20 @@ export function startStatusIntegration(store) {
   // parseError (malformed 200) and non-404 HTTP errors (500/401) mean the server answered —
   // they are proof of life and must not drive integrationHealth offline. networkError and
   // 404 are the only cases where the endpoint is truly unreachable. `unchanged` (304) still
-  // refreshes staleness (R1 fix), regardless of the health-signal decision below.
+  // refreshes staleness (R1 fix), regardless of the health-signal decision below. Also tracks
+  // `pollProbeOk` on EVERY result (not just forwarded failures) — R2-1's SSE gate needs to know
+  // this poller's true last-known state even for results this function itself doesn't forward.
   function heartbeatProbe(result) {
     if (result.skipped) return
     if (shouldRefreshStalenessOnProbe(result)) resetStalenessTimer()
-    if (result.networkError || result.status === 404) handleProbe(result)
+    pollProbeOk = Boolean(result.ok)
+    if (result.networkError || result.status === 404) store.getState().markIntegrationProbe({ ok: false })
   }
 
   function startFastPolling() {
     if (polling.active) return
     polling.active = true
-    polling.cleanup = startFilePolling(handleIncoming, STATUS_POLL_INTERVAL, handleProbe)
+    polling.cleanup = startFilePolling(handleIncoming, STATUS_POLL_INTERVAL, handlePollProbe)
   }
 
   function startHeartbeatPolling() {
@@ -990,12 +1020,15 @@ export function startStatusIntegration(store) {
   // itself only ever ensures the FAST poller is running as a safe default. Without this
   // distinction, every retry attempt (including ones doomed to fail again) immediately killed
   // the fast poller in favor of a 10s poller that hadn't ticked yet, and each of the retry's 5
-  // give-up errors called `handleProbe({ok:false})` with no compensating fast-poll success in
-  // between — flapping `integrationHealth` to offline every ~90s even though GET polling was
-  // healthy the whole time.
+  // give-up errors called `handleSSEProbe({ok:false})` with no compensating fast-poll success in
+  // between. R2-1 further hardened this: even WITH the fast poller surviving the retry, its
+  // cadence can be backed off to 8s by then, so a retry's 3 errors can still land faster than
+  // the poller ticks — handleSSEProbe now separately gates SSE-sourced failures against the
+  // poller's own last-known health (see its doc comment above) so health doesn't flap offline
+  // underneath a poller that is demonstrably still working.
   function connectSSE() {
     if (torn) return
-    sseCleanupRef = startSSEListening(handleIncoming, handleProbe, handleSSEGiveUp, handleSSEOpen)
+    sseCleanupRef = startSSEListening(handleIncoming, handleSSEProbe, handleSSEGiveUp, handleSSEOpen)
     if (!polling.active) startFastPolling()
   }
 

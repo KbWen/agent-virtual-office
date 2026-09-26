@@ -143,6 +143,45 @@ describe('SSE retry (R2) — reconnects after giving up, no reconnect storm', ()
   })
 })
 
+describe('integrationHealth does not flap offline during a retry while polling is healthy (R2-1 fix)', () => {
+  it("suppresses SSE-sourced failure probes while the poller's last result was ok:true", async () => {
+    const { store, probes } = mkStore()
+    const stop = startStatusIntegration(store)
+
+    await burnGiveUp()                          // first give-up → fast poller running
+    await vi.advanceTimersByTimeAsync(60_500)    // retry fires (a second ES now exists)
+    expect(FakeES.all.length).toBeGreaterThanOrEqual(2)
+
+    // Confirm the poller itself has reported at least one success by now (every fetch response
+    // in this file is a 304 by default -- i.e. ok:true -- once the initial call#1 delivery is
+    // past).
+    expect(probes.includes(true)).toBe(true)
+
+    const probesBefore = probes.length
+    // Fire 3 rapid SSE failures on the retry's connection -- small gaps (well under any poll
+    // interval, real or backed-off) so no new poll tick can land in between and "coincidentally"
+    // explain a passing result. This is the reviewer's exact repro shape: by retry time the fast
+    // poller can have backed off to its 8s cap, so a burst of SSE errors used to land with no
+    // compensating poll success in between, flapping integrationHealth to 'degraded'/'offline'
+    // even though GET polling was healthy throughout.
+    const retryES = FakeES.all[FakeES.all.length - 1]
+    retryES.fail()
+    await vi.advanceTimersByTimeAsync(100)
+    FakeES.all[FakeES.all.length - 1].fail()
+    await vi.advanceTimersByTimeAsync(100)
+    FakeES.all[FakeES.all.length - 1].fail()
+
+    const newProbes = probes.slice(probesBefore)
+    // Before the fix: each SSE onerror unconditionally called markIntegrationProbe({ok:false}),
+    // producing 3 `false` entries here regardless of the healthy poller underneath. After the
+    // fix: an SSE-sourced failure while the poller's last known result was true must be
+    // suppressed entirely (not merely downgraded) -- polling is authoritative in that moment.
+    expect(newProbes).toEqual([])
+
+    stop()
+  })
+})
+
 describe('fast-poll continuity during a retry (R1 fix)', () => {
   it('does not reset to a fresh 10s heartbeat poller at retry-START — only a confirmed SSE open does that', async () => {
     const { store } = mkStore()

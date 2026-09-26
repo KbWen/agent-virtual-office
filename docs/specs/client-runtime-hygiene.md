@@ -76,8 +76,26 @@ taken on the audit's word) before being fixed. All 6 were confirmed real; none w
 
 - No change to the `office-status` message contract or any external API.
 - Small, reversible changes — each of the 6 fixes is independently revertible.
-- Preserve the "a dead hook eventually clears" honesty guarantee (AC1's server-side liveness
-  argument; AC4's dayKey re-validation on salvaged ledgers).
+- Preserve the "a dead hook eventually clears" honesty guarantee (AC1's client-side `expiresAt`
+  backstop, unchanged by this fix; AC4's dayKey re-validation on salvaged ledgers).
+
+## Domain Decisions
+
+- [DECISION] Refresh the client's existing 120s staleness timer on a confirmed-unchanged (304)
+  poll response, rather than raising `STALENESS_TIMEOUT` itself — channels with no heartbeat
+  backstop (hash-bridge, postMessage-only) keep their original fast-clear behavior; only
+  channels that can actively confirm liveness get the extension.
+- [DECISION] Gate SSE-sourced failure probes behind the GET-polling channel's own last-known
+  health (`pollProbeOk`), rather than resetting the poller to base cadence at retry-start —
+  isolates the fix to the health SIGNAL and avoids perturbing the poller's own adaptive-backoff
+  state, which the fast-poll-continuity fix (R1) already depends on staying untouched across a
+  retry attempt.
+- [TRADEOFF] Did not unify the 3 dynamic-agent-eviction call sites (`applyExternalStatus`,
+  `abortAgentMovement`, `clearExternalStatus`) into one shared prune helper beyond the local
+  `pruneEvictedId` added for AC6 — smaller, safer diff now; leaves latent duplication risk if a
+  4th removal path is added later without copying the same three cleanup calls.
+- [CONSTRAINT] Every fix must be independently `git revert`-able — no schema/migration change,
+  no new persisted-data shape, no new external API surface.
 
 ## Findings & Disposition
 
