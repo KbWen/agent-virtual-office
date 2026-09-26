@@ -368,5 +368,8 @@ prevent — a real activeEvent (banner/confetti/feed entry) with no honest cast 
   `coffee-spill`, `deploy-success` celebrate, `dog-visit`, `group-stretch`, `pm-all-meeting` stage 2
   — now re-verify `isAgentAvailable` at the moment the deferred step runs.
 
-No change to event cadence, gather-spot coordinates, or which events exist. Full detail:
-`docs/specs/honest-office-events.md`.
+No change to event cadence beyond one later decision in the same remediation (round 5, G2): Friday
+15:00 now fires `group-meeting` instead of `tea-break` (a swap of WHICH existing event owns that
+slot — tea-break's real fix introduced a working mutex that otherwise let it win every Friday
+15:00 race, permanently starving group-meeting). No change to gather-spot coordinates or which
+events exist otherwise. Full detail: `docs/specs/honest-office-events.md`.

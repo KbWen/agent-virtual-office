@@ -276,4 +276,49 @@ describe('crew reaction-bubble clear uses a per-paint token, not text alone (rou
     vi.advanceTimersByTime(2000)
     expect(st().agents[crewId].bubble).toBeNull()
   })
+
+  it('M5 regression: the crew-reaction clear does not depend on epoch liveness -- it still fires after the event is abandoned', () => {
+    expect(triggerInteractiveEvent(useOfficeStore, 'food-delivery')).toBe(true)
+    vi.advanceTimersByTime(2000) // crew reaction painted
+    const crewId = Object.keys(st().agents).find((id) => st().agents[id].behavior === 'eat-snack')
+    expect(crewId).toBeTruthy()
+    expect(st().agents[crewId].bubble).toBeTruthy()
+
+    // Abandon the event: release the bringer via a real status -> scene empties -> finding #2
+    // auto-clears activeEvent AND invalidates the epoch (isStaleEpoch would now read true for it).
+    const bringerId = Object.keys(st().agents).find((id) => st().agents[id].inGroupEvent)
+    st().applyExternalStatus([{ agentId: bringerId, status: 'working' }])
+    expect(st().activeEvent).toBeNull()
+
+    // The reaction's OWN clear timer (4000ms from its paint, i.e. absolute t=6000) falls due
+    // here. It must STILL fire -- clearing this crew bubble is gated on bubble identity
+    // (text+token), never on the event still being "live". If a future edit re-added an
+    // isStaleEpoch(epoch) check to this clear (the bug F3 originally fixed), the now-stale epoch
+    // would make it a no-op and strand the bubble indefinitely.
+    vi.advanceTimersByTime(4000)
+    expect(st().agents[crewId].bubble).toBeNull()
+  })
+
+  it('a stale reaction clear must not wipe a REAL status bubble that has since replaced it', () => {
+    expect(triggerInteractiveEvent(useOfficeStore, 'food-delivery')).toBe(true)
+    vi.advanceTimersByTime(2000) // crew reaction painted
+    const crewId = Object.keys(st().agents).find((id) => st().agents[id].behavior === 'eat-snack')
+    expect(crewId).toBeTruthy()
+    const reactionBubble = st().agents[crewId].bubble
+    expect(reactionBubble).toBeTruthy()
+
+    // The SAME agent now gets a REAL tracked status with a REAL bubble, before the reaction's own
+    // clear timer fires. Nothing else touches `lastReactionToken` for this agent in between, so a
+    // token-only check (with the text check removed) would wrongly still consider this "mine".
+    st().applyExternalStatus([{ agentId: crewId, status: 'working', task: 'real task' }])
+    const realBubble = st().agents[crewId].bubble
+    expect(realBubble).toBeTruthy()
+    expect(realBubble).not.toBe(reactionBubble)
+
+    // The reaction's ORIGINAL clear timer (4000ms from its OWN paint, i.e. absolute t=6000) falls
+    // due here. It must NOT wipe the real bubble -- the text no longer matches what this reaction
+    // painted.
+    vi.advanceTimersByTime(4000)
+    expect(st().agents[crewId].bubble).toBe(realBubble)
+  })
 })

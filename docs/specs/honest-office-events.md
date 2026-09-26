@@ -40,7 +40,10 @@ the same class of defect AVO-191/AVO-194 previously closed for `pickParticipants
 
 ## Non-goals
 
-- No change to event cadence, gather-spot coordinates, or which events exist (Protected Surfaces).
+- No change to event cadence beyond the Round 5 (G2) decision — Friday 15:00 fires `group-meeting`
+  instead of `tea-break` (a swap of WHICH existing event owns that one slot, not a frequency or
+  timing change). No change to gather-spot coordinates or which events exist otherwise (Protected
+  Surfaces).
 - No change to `WORK_CLAIM_GATES`' recency-based eligibility model (evaluated a status-based
   tightening for `deploy-success`/`ops-dev-deploy-check`; deferred — see Work Log `## Known Risk`;
   `done` is a 10s-transient status by design, so a literal `status === 'done'` requirement would
@@ -317,10 +320,10 @@ improperly in place (see the active Work Log's Drift Log governance-correction e
   answer, and the catalog objects (`EVENT_BY_ID`) are intentionally reused across fires. A stale
   epoch makes `endEventEpochIfLive`/every deferred step a FULL no-op — it does not even release its
   own captured `participants` — because an agent released early from event A may since have been
-  picked up by event B, and touching it would clobber B. (Round 5, G1) this same counter, plus
-  `fireWithCast` itself, is now exported so the mutex is directly unit-testable rather than only
-  provable by tracing every call site — matching the existing "exported for tests" precedent
-  already set by `isAgentAvailable`/`eventEligible`/`floorTickAllowed`.
+  picked up by event B, and touching it would clobber B. (Round 5, G1) `fireWithCast` itself — not
+  the epoch counter/state, which stays module-private — is now exported so the mutex is directly
+  unit-testable rather than only provable by tracing every call site — matching the existing
+  "exported for tests" precedent already set by `isAgentAvailable`/`eventEligible`/`floorTickAllowed`.
 - [DECISION] (round 4, F1) the event mutex lives as a single fresh `store.getState().activeEvent`
   check inside `fireWithCast` itself, not as an extra check at each of its ~6 call sites — every
   call site already believed it had this guarantee (the module's own prior comments assumed it),
@@ -356,11 +359,12 @@ improperly in place (see the active Work Log's Drift Log governance-correction e
 - `tests/requiredActorsGate.test.js`, `tests/groupEventDeferredAvailability.test.js`,
   `tests/activeEventAbandonment.test.js`, `tests/fireWithCastRequiredActorsScheduler.test.js` — new,
   cover AC-1, AC-3/AC-4 (deferred-step recheck), AC-7, and AC-9 respectively.
-- `tests/eventEpochRace.test.js` — covers AC-10 (N1), AC-11 (N2), AC-12 (F1, Friday-15:00
-  double-fire), AC-13 (F2 — group-stretch M3 + lunch-nap M4). All 4 mutation cases hand-verified
-  (N1/N2: `isStaleEpoch` forced `false`; M3: dropped the guard on `group-stretch`'s staggered
-  lock; M4: `lunch-nap`'s cleanup passed the current live epoch instead of its own captured one —
-  each turned its corresponding test red; restoring turned it green).
+- `tests/eventEpochRace.test.js` — covers AC-10 (N1), AC-11 (N2), AC-13 (F2 — group-stretch M3 +
+  lunch-nap M4). All mutation-verified (N1/N2: `isStaleEpoch` forced `false`; M3: dropped the
+  guard on `group-stretch`'s staggered lock; M4: `lunch-nap`'s cleanup passed the current live
+  epoch instead of its own captured one — each turned its corresponding test red; restoring turned
+  it green). AC-12's original test here (F1, Friday-15:00 double-fire) was itself non-discriminating
+  and was REPLACED in round 5 — see below; AC-12 is now covered by the round-5 G1 test (AC-15).
 - `tests/multiAgentReactionPools.test.js` — pre-existing source-scanning test; unaffected by F3's
   behavior change but its 10-line fan-out lookback window required keeping the new code compact
   (no code/AC change here, just a comment-length constraint discovered while implementing F3).

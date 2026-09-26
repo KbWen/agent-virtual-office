@@ -119,3 +119,41 @@ Advisory:
 
 - R3 `/review` (security_guardrails.md §1-§4 over the 14 changed files): 0 findings. No new
   inputs/endpoints/auth/crypto/deps; no secrets; store writes are local transient UI state only.
+
+## Phase Summary (r6 addendum)
+
+- Overflow appended during round-6 `/implement` (2026-09-26) because R4's Review Feedback / Red
+  Team / Security Findings entries were fully resolved by R5's PASS and superseded by it. Moved
+  VERBATIM (byte-identical) from the active log at appendix time, same rule as part-1's original
+  compaction: reviewer records relocated whole, never reworded. Active log keeps R5 (latest PASS)
+  and all protected sections untouched.
+
+## Review Feedback (moved — R4, verbatim)
+
+**R4** `/review` 2026-09-26T14:52:30Z, HEAD `b088b9e` (fresh reviewer `review-r4`). Verified: F1
+fix (Fri 15:00 probe HEAD 0/20 stranded vs `1031fd6` 20/20); M3/M4 each kill their new test; F3
+(probe: crew bubbles cleared after abandonment, real bubble kept); F4 receipts truthful. BLOCKING:
+- G1 MEDIUM: the F1 test (`eventEpochRace` "F1: ...") cannot fail — `Math.random`=0.999 makes tea
+  and meeting pick the SAME cast, so meeting's cleanup releases it. It passes on `1031fd6` and with
+  the mutex line deleted (M0 survives all 24 officeLife test files + rhythm/soak). Commit's
+  "all mutation-verified" is false for F1. Fix: make the casts differ; prove red on M0.
+- G2 MEDIUM: Friday 15:00 `group-meeting` is now dead (same random-2-3 cast rule as tea, so tea
+  always takes the mutex first; `lastTriggeredHour` already consumed). `c238a30` fired both. Spec
+  "Cadence is unaffected" is false. Fix: owner decides (Friday fires meeting instead of tea, or
+  drop the block) + correct the spec.
+Advisory LOW: AC-14 has no test (M5 epoch-gate revert survives); F3 compares bubble TEXT
+("finally..." x3 in en.json); Drift Log says ADR-010 is in External References (it is not).
+
+**R4 resolution (r5)**: G1/G2/F3/F4 all fixed — see Phase Summary + spec Round 5 + Domain
+Decisions. AC-14 test gap (M5, advisory not blocking) not addressed this round — open item below.
+
+## Red Team Findings (moved — R4, verbatim)
+
+- R4: 0 CRITICAL/HIGH; G1/G2 MEDIUM (see Review Feedback R4, both fixed in r5).
+- HIGH risk decisions: none — F1 (r4) and G1/G2 (r5) were all FIXED, not accepted as residual risk.
+- Open (LOW, advisory from R4): AC-14 epoch-gate-revert mutant M5 has no killing test — tracked,
+  not silently dropped.
+
+## Security Findings (moved — R4, verbatim)
+
+- R4 `/review` (same scope, delta `b088b9e`): 0 findings.
