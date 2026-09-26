@@ -248,12 +248,31 @@ function _readOwnerToken(lockDir) {
  * Try to acquire the STATUS_FILE write-lock.
  * Returns { ok: true, token } on success, { ok: false } after exhausting the retry budget.
  * NEVER throws — any fs error degrades gracefully to { ok: false }.
- * Stale lock (mtime older than staleMs) is stolen ATOMICALLY: renameSync the stale dir to a
- * unique name first (only one racing stealer's rename can win against the same source path —
- * the loser gets ENOENT and falls back into the normal retry loop), THEN mkdir a fresh lock and
- * claim it with our own token. This replaces the old rmdir-then-mkdir steal (two independent
- * syscalls) which let two racing stealers both believe they owned the lock — see
- * docs/specs/hook-status-write-lock.md Risks (corrected 2026-09-26) for the full race.
+ *
+ * Stale lock (mtime older than staleMs) is stolen with an IDENTITY-VERIFIED renameSync steal
+ * (2026-09-26 review finding HIGH #1 — corrects the PRIOR "atomic rename" fix, which was still
+ * disprovable: rename-onto-a-unique-name IS exclusive against other racers targeting the exact
+ * same syscall, but it does nothing to stop a stealer from renaming away a lock that a DIFFERENT
+ * process already replaced with a brand-new, non-stale one in the window between "we observed
+ * staleness" and "we renamed it away" — a real adversarial repro (fs.statSync interception)
+ * proved two processes could both end up believing they held the lock).
+ *
+ * The fix: capture the stale lock's identity (owner token + the SAME mtime value already used
+ * to judge it stale) BEFORE renaming, then — after the rename — re-read that identity from the
+ * MOVED (`evicted`) directory and compare. Renaming a directory does not change its mtime or
+ * contents, so if `evicted` still carries the identity we observed, nobody replaced it in the
+ * interim and it is safe to claim. If it does NOT match, we just evicted a lock someone else
+ * legitimately holds (their fresh recreate raced ours): best-effort rename it back (only
+ * succeeds if `lockDir` is currently free) and go back to waiting — we do NOT claim ownership.
+ *
+ * Honest residual (a filesystem has no compare-and-swap, so this narrows the window rather than
+ * closing it to zero): the owner-token read and the mtime read happen as two back-to-back
+ * synchronous calls just before the rename, not atomically WITH it. A process could still be
+ * descheduled between reading identity and calling renameSync, and another process could steal,
+ * release, and re-steal the SAME path in that exact window with a token collision (astronomically
+ * unlikely — tokens are pid+timestamp+random) such that the post-rename identity check passes by
+ * coincidence. Worst case if that ever happened is the ORIGINAL pre-lock hazard this lock exists
+ * to narrow: one lost update on a single STATUS_FILE write, not a systemic double-ownership bug.
  */
 function acquireStatusLock() {
   const { lockDir, staleMs, waitMs, maxRetries } = STATUS_LOCK_CONFIG
@@ -265,23 +284,44 @@ function acquireStatusLock() {
       return { ok: true, token }   // we own the lock — fresh-lock race is mkdir-atomic
     } catch (mkErr) {
       if (!mkErr || mkErr.code !== 'EEXIST') return { ok: false }  // unexpected error
-      // Lock dir exists — check staleness
+      // Lock dir exists. Read its owner token BEFORE stat-ing it (minimizes, does not
+      // eliminate, the identity-capture window — see the doc comment above) so both pieces of
+      // "what is this lock's identity" are captured as close together as the filesystem allows.
+      const preOwner = _readOwnerToken(lockDir)
       try {
         const st = fs.statSync(lockDir)
         if (Date.now() - st.mtimeMs > staleMs) {
-          // Stale lock: steal it atomically. renameSync onto a not-yet-existing unique path
-          // either succeeds exclusively (we alone now own evicting the stale dir) or fails with
-          // ENOENT (another stealer's rename already won this exact race — the old name is
-          // already gone). Two racers can never BOTH win: only one rename call can succeed
-          // against the same source path.
           const evicted = `${lockDir}.stale.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`
           try {
             fs.renameSync(lockDir, evicted)
           } catch (renErr) {
             if (renErr && renErr.code === 'ENOENT') continue  // lost the steal race — retry loop
+            // Windows can report EPERM/EBUSY/EACCES when another process holds an open handle
+            // on a file inside the directory (e.g. its `owner` token file) — this means
+            // CONTENDED, not gone. Treat it like a fresh held lock: sleep and retry within the
+            // bound rather than giving up and proceeding unlocked immediately (finding LOW #3).
+            if (renErr && ['EPERM', 'EBUSY', 'EACCES'].includes(renErr.code)) {
+              if (attempt < maxRetries) _syncSleep(waitMs)
+              continue
+            }
             return { ok: false }  // unexpected rename failure — bail (proceed unlocked)
           }
-          // We exclusively evicted the stale dir. Claim a fresh lock immediately.
+          // Re-validate: did we just evict the SAME stale instance we observed, or did someone
+          // else's fresh lock get swapped in between our stat and this rename?
+          const postOwner = _readOwnerToken(evicted)
+          let postMtime = null
+          try { postMtime = fs.statSync(evicted).mtimeMs } catch { /* leave null — treated as mismatch below */ }
+          const sameInstance = postOwner === preOwner && postMtime === st.mtimeMs
+          if (!sameInstance) {
+            // We evicted a lock that is NOT the stale one we judged — it now belongs to
+            // whoever legitimately holds it. Put it back (best-effort; only succeeds if
+            // lockDir is currently free) and retry from scratch. We never claim ownership here.
+            try { fs.renameSync(evicted, lockDir) } catch { /* lockDir no longer free, or already gone — either way, not ours to fix */ }
+            if (attempt < maxRetries) _syncSleep(waitMs)
+            continue
+          }
+          // Confirmed: `evicted` is the same stale instance we judged a moment ago. Claim a
+          // fresh lock immediately.
           try {
             fs.mkdirSync(lockDir)
             _writeOwnerToken(lockDir, token)
@@ -316,6 +356,20 @@ function acquireStatusLock() {
  * a no-op — removing it would delete a lock we no longer own out from under its new holder.
  * A missing/unreadable token file (legacy state, or the lock vanished already) is treated as
  * safe to clear. Called with no token (legacy zero-arg form) skips the ownership check entirely.
+ *
+ * Honest residual (review finding LOW #4): this is read-token-then-rmSync, not atomic — another
+ * process could steal the lock in the gap between our token read and our rmSync call, and we'd
+ * remove ITS fresh lock. Narrower than it looks in practice: a legitimate steal only happens
+ * after `staleMs` (2s) of us NOT refreshing the lock, and we refresh (by virtue of still running
+ * this exact function on our own still-held lock) essentially immediately after acquiring — so
+ * the window this could bite in is the same order of magnitude as the acquire-side window
+ * documented above, not a new, larger one. Also narrow: a `null` owner token (the brief window
+ * between a fresh `mkdirSync` and its own `_writeOwnerToken` call, a few sync instructions wide)
+ * is currently treated as "safe to remove" by the `owned !== null` check — this could, in
+ * principle, let a release-with-token call race a fresh acquire whose token write hasn't landed
+ * yet. Not closed here: doing so would require a rename-verify release symmetric to the acquire
+ * fix above, which is more machinery than this LOW-severity, narrow window currently justifies
+ * (per review: "document or use rename-verify release" — documenting per that explicit option).
  */
 function releaseStatusLock(token) {
   const { lockDir } = STATUS_LOCK_CONFIG

@@ -297,8 +297,16 @@ function onFileChange(filePath, port, source, watchDir) {
 // bridge's own hook/status files by name (e.g. `office-status-hook.js`), not a directory.
 const IGNORE_DIR_RE = /(^|[\\/])(node_modules|\.git|dist|\.next|\.nuxt|\.turbo)([\\/]|$)/
 const IGNORE_FILE_RE = /office-status/
-function shouldIgnorePath(fullPath) {
-  const norm = fullPath.replace(/\\/g, '/')
+// 2026-09-26 review finding LOW #6: the anchored regex above still tested the ABSOLUTE path —
+// a --watch dir living under any ancestor directory named node_modules/.git/dist/.next/.nuxt/
+// .turbo (e.g. a project checked out at /builds/dist/my-project) matched every single event and
+// silently ignored the entire watch. Test the path RELATIVE to the watched project instead, so
+// only segments INSIDE the watched tree can trigger the ignore rule. `watchDir` is optional so
+// existing callers that only have an absolute path (none remain in this file, kept for safety)
+// degrade to the old absolute-path behavior rather than throwing.
+function shouldIgnorePath(fullPath, watchDir) {
+  const rel = watchDir ? path.relative(watchDir, fullPath) : fullPath
+  const norm = rel.replace(/\\/g, '/')
   if (IGNORE_DIR_RE.test(norm)) return true
   return IGNORE_FILE_RE.test(path.basename(norm))
 }
@@ -311,7 +319,7 @@ function startWatcher(watchDir, port, source) {
     watcher = fs.watch(watchDir, { recursive: true }, (eventType, filename) => {
       if (!filename) return
       const full = path.join(watchDir, filename)
-      if (shouldIgnorePath(full)) return
+      if (shouldIgnorePath(full, watchDir)) return
       onFileChange(full, port, source, watchDir)
     })
   } catch {
@@ -322,7 +330,7 @@ function startWatcher(watchDir, port, source) {
       watcher = fs.watch(target, { recursive: false }, (eventType, filename) => {
         if (!filename) return
         const full = path.join(target, filename)
-        if (shouldIgnorePath(full)) return
+        if (shouldIgnorePath(full, watchDir)) return
         onFileChange(full, port, source, watchDir)
       })
       console.warn(`[bridge] Recursive watch unavailable — watching ${target} only`)

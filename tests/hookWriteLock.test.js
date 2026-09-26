@@ -273,6 +273,74 @@ describe('acquireStatusLock / releaseStatusLock — token-gated release (finding
   })
 })
 
+// ─── 2026-09-26 REVIEW finding HIGH #1: deterministic forced-interleaving repro ─────────
+// The prior fix (atomic rename-based steal alone) still let two racers both believe they held
+// the lock: it made the RENAME exclusive against other renames of the exact same source path,
+// but did nothing to stop a stealer from renaming away a lock that a DIFFERENT process already
+// replaced with a fresh, non-stale one in the window between "we observed staleness" and "we
+// renamed it away". A fresh reviewer session proved this with an `fs.statSync` interception
+// (scratchpad `review-hookpriv/toctou2.cjs`) forcing exactly that interleaving. This test
+// reproduces the same forced interleaving in-process via `vi.spyOn` — it FAILS against the
+// prior (pre-identity-verification) acquireStatusLock and PASSES after the fix that re-validates
+// the evicted lock's identity (owner token + mtime) before claiming ownership.
+describe('acquireStatusLock — forced-interleaving TOCTOU repro (review finding HIGH #1)', () => {
+  let restore
+  let base
+
+  beforeEach(() => {
+    base = makeTempBase('toctou')
+    restore = withLockBase(base)
+  })
+
+  afterEach(() => {
+    restore()
+    try { fs.rmSync(path.dirname(base), { recursive: true, force: true }) } catch {}
+  })
+
+  it('B must not also acquire after A completes a full steal DURING B\'s staleness check', () => {
+    const lockDir = STATUS_LOCK_CONFIG.lockDir
+    // Seed a stale, ownerless lock dir (simulates a crashed holder — no owner-token file yet,
+    // matching the reviewer's repro which seeds via a bare mkdirSync).
+    fs.mkdirSync(lockDir, { recursive: true })
+    const past = new Date(Date.now() - 5_000)
+    fs.utimesSync(lockDir, past, past)
+
+    let A = null
+    let triggered = false
+    const realStatSync = fs.statSync.bind(fs)
+    // Intercept ONLY the read that B uses to judge staleness. The FIRST time B stats the lock
+    // dir, let A run its ENTIRE acquireStatusLock() to completion (a full steal: rename + mkdir
+    // + token write) BEFORE returning B's (now stale/outdated) stat result — exactly the
+    // interleaving the reviewer's probe forces via real OS scheduling between two processes.
+    const spy = vi.spyOn(fs, 'statSync').mockImplementation((p, o) => {
+      const st = realStatSync(p, o)
+      if (!triggered && p === lockDir && !A) {
+        triggered = true
+        A = acquireStatusLock()
+      }
+      return st
+    })
+
+    let B
+    try {
+      B = acquireStatusLock()
+    } finally {
+      spy.mockRestore()
+    }
+
+    expect(A).not.toBeNull()
+    expect(A.ok).toBe(true)
+    // The load-bearing assertion: A and B must never BOTH believe they hold the lock at once.
+    // Pre-fix (HEAD 0d10d70), this was `true` — the exact review disproof.
+    expect(A.ok && B.ok).toBe(false)
+
+    if (A.ok) releaseStatusLock(A.token)
+    if (B && B.ok) releaseStatusLock(B.token)
+    // Whichever one actually owns it at the end, releasing both must leave no lock behind.
+    expect(fs.existsSync(lockDir)).toBe(false)
+  })
+})
+
 // ─── 2026-09-26 audit finding 2: atomicWriteJson retry-before-fallback ──────
 
 describe('atomicWriteJson — retry rename before falling back to a direct write (finding 2)', () => {

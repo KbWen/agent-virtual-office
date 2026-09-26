@@ -75,16 +75,50 @@ and what was deliberately left out.
 
 ## Fixes (priority order — see "What was dropped" for anything below the cut line)
 
-1. **Lock double-steal** (`office-status-hook.js` `acquireStatusLock`/`releaseStatusLock`):
-   steal atomically via `fs.renameSync(lockDir, lockDir + '.stale.<pid>.<ts>')` — rename onto a
-   path that does not yet exist is atomic; only one racing stealer's rename can succeed against
-   the same source name (the loser gets `ENOENT` and falls back into the normal retry loop, where
-   it will observe either the winner's fresh lock as held, or a released lock as free). The
-   winning stealer then `mkdirSync`s a fresh lock and writes a random owner token file inside it.
-   `releaseStatusLock(token)` only removes the lock dir when the token file it currently holds
-   matches the caller's own token (or is unreadable/absent — legacy/interrupted state, safe to
-   clear). All three call sites (`StopFailure`, `Stop`, main write path) now retain and pass their
-   `acquireStatusLock()` result's `.token` to `releaseStatusLock()`.
+1. **Lock double-steal** (`office-status-hook.js` `acquireStatusLock`/`releaseStatusLock`) — TWO
+   rounds, both from a same-day 2026-09-26 fresh-reviewer `/review`:
+   - **Round 1** (this fix's original shape): steal via `fs.renameSync(lockDir, lockDir +
+     '.stale.<pid>.<ts>')` instead of `rmdirSync` + `mkdirSync`, on the premise that "rename onto
+     a not-yet-existing path is exclusive, so two racing stealers can never both win." **That
+     premise was disproven by the review**: exclusivity of the rename call only prevents two
+     stealers from both renaming the *same* source successfully — it does nothing to stop a
+     stealer from renaming away a lock that a *different* process had already legitimately
+     replaced with a fresh, non-stale lock in the window between "we observed staleness" and "we
+     renamed it away." A deterministic `fs.statSync` interception (forcing one process's entire
+     steal-and-recreate cycle to complete synchronously inside another's staleness check) proved
+     two processes could both end up holding the lock.
+   - **Round 2** (the actual fix): before renaming, capture the stale lock's identity — its owner
+     token (`_readOwnerToken`) and the same mtime value already used to judge it stale. After the
+     rename, re-read that identity from the *moved* directory and compare. A rename does not
+     change a directory's mtime or contents, so if the moved directory's identity still matches
+     what was observed, nothing replaced it in between and it is safe to claim; the winning
+     stealer then `mkdirSync`s a fresh lock and writes a random owner token file inside it. If the
+     identity does NOT match, the rename evicted a lock someone else legitimately holds:
+     best-effort rename it back (only succeeds if the lock path is currently free) and fall back
+     into the retry loop — ownership is never claimed on a mismatch. Also treats `EPERM`/`EBUSY`/
+     `EACCES` on the steal rename (observed on Windows when another process holds the lock's
+     `owner` file open) as contended-not-gone: sleep and retry within the existing bound instead
+     of proceeding unlocked immediately.
+   - **Honest residual (documented, not eliminated — a filesystem has no compare-and-swap)**: the
+     identity-capture reads happen as two back-to-back synchronous calls immediately before the
+     rename, not atomically with it; a process could still be descheduled in that exact narrower
+     gap. Worst case is the original pre-lock hazard this file exists to narrow (one lost
+     STATUS_FILE update), not a new failure class. `releaseStatusLock` has a narrower, symmetric
+     residual (read-token-then-`rmSync`, and a `null` token — the brief window between `mkdirSync`
+     and its own token write — is treated as safe to remove); this is documented rather than
+     closed with a rename-verify release, per review LOW #4 ("document or use rename-verify
+     release"). Full text: `docs/specs/hook-status-write-lock.md` Risks (both corrections) and the
+     `acquireStatusLock`/`releaseStatusLock` doc comments in the hook source.
+   - **Removed claim**: "two racers can never BOTH win" no longer appears anywhere in the spec or
+     source comments — it was false both times it was written (once for the original rmdir+mkdir
+     steal, once for the round-1 rename-based steal), and the actual guarantee (mkdir atomicity
+     for a *fresh*, non-stale lock race) is stated narrowly where it is still true.
+   - All three call sites (`StopFailure`, `Stop`, main write path) retain and pass their
+     `acquireStatusLock()` result's `.token` to `releaseStatusLock()`.
+   - **Worst-case wait updated**: acquire alone ≤ ~250ms; combined with the write-retry budget
+     added by fix 2, most events are ≤ ~295ms and `UserPromptSubmit`/`PreToolUse` (which retry the
+     write up to 3 times) are ≤ ~385ms — see `hook-status-write-lock.md` AC-2 for the breakdown.
+     The previous flat "≤300ms" figure did not account for the write-retry budget.
 2. **Non-atomic fallback** (`office-status-hook.js`, 4 call sites: `StopFailure`, `Stop`'s two
    internal writes, and the main write path): extracted into one shared `atomicWriteJson(target,
    json)` helper that retries the tmp-write + rename up to 3 times with a short bounded
@@ -123,9 +157,21 @@ and what was deliberately left out.
      `dist/` as whole path segments, not substrings) plus a basename-only check for
      `office-status` (intentionally still a substring match — it is meant to catch the bridge's
      own hook/status files by name, e.g. `office-status-hook.js`, not a directory).
+   - **Amended 2026-09-26 (review LOW #6)**: the anchored regex above was still being tested
+     against the ABSOLUTE path, so a `--watch` dir living under any ancestor directory literally
+     named `node_modules`/`.git`/`dist`/etc. (e.g. a project checked out at
+     `/builds/dist/my-project`) matched every single event and silently ignored the entire watch.
+     `shouldIgnorePath(fullPath, watchDir)` now tests the path RELATIVE to `watchDir` — only
+     segments INSIDE the watched project can trigger the ignore rule; an ancestor segment outside
+     it no longer can.
    - `parseArgs()` now accepts both `--port 5174` and `--port=5174` (and the same two forms for
      `--watch`/`--source`), matching the `--port=` form already documented in
      `docs/INTEGRATIONS.md`.
+   - **Accepted residuals (review LOW #7, documented not fixed)**: two concurrent capture-file
+     rotators can overwrite the 10MB `.1` generation with a smaller one (debug-only opt-in
+     feature, narrow); `uninstall` does not currently remove `office-hook-capture.jsonl`/`.1`
+     (pre-existing class of "cleanup glob doesn't cover every debug artifact", same shape as
+     other files that already aren't matched by the uninstall glob).
 6. **CLI edge cases** (`bin/cli.js`):
    - `setup` resolves `settingsPath` through `fs.realpathSync` when it is a symlink
      (`fs.lstatSync(...).isSymbolicLink()`) before the atomic tmp-write, so the write lands on the
@@ -168,7 +214,13 @@ decision. Two things were deliberately narrowed rather than fixed in full:
 
 - **AC-1**: A test reproducing the two-stealer race (two processes/simulated racers steal the
   same stale lock) proves at most one holds the lock at a time, and neither's release removes the
-  other's active lock.
+  other's active lock. **Amended 2026-09-26 (review round 2)**: the discriminating case is not
+  "two racers targeting the identical stale generation simultaneously" (mkdir/rename exclusivity
+  already covers that) but "one racer judges staleness on stale data while another has *already*
+  completed a full steal-and-recreate cycle in the interim" — a forced `fs.statSync` interception
+  test (`tests/hookWriteLock.test.js` "forced-interleaving TOCTOU repro") is required to prove
+  this specific case; the original 8-worker spawn test does not discriminate it (it passed even
+  against the disproven round-1 fix).
 - **AC-2**: `atomicWriteJson` retries rename on failure before falling back to a direct write; a
   unit test forces `renameSync` to fail N times then succeed and asserts the tmp-retry path is
   taken instead of the immediate direct-write fallback.

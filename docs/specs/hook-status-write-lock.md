@@ -2,7 +2,7 @@
 status: shipped
 title: "#20 (H3) — Hook status-file write lock (read-modify-write race fix)"
 created: 2026-06-10
-last_updated: 2026-09-26
+last_updated: 2026-09-26T09:56Z
 ---
 
 # #20 / H3 — Hook Status-File Write Lock
@@ -24,8 +24,10 @@ hardening-wave H3.
 - Standalone CJS, zero dependencies, Windows + POSIX.
 - Lock primitive: `fs.mkdirSync(lockDir)` — atomic existence-check-and-create on all platforms.
   `STATUS_FILE + '.lock'` directory; retry ~10 × 25ms sleep (sync busy-wait via Atomics.wait or
-  Date-loop — keep it simple and bounded ≤ ~300ms total); stale lock (mtime older than 2s) is
-  stolen (rmdir + retake) so a crashed holder can't brick the office.
+  Date-loop — keep it simple and bounded; see corrected worst-case figures below, updated
+  2026-09-26 review); stale lock (mtime older than 2s) is stolen via an identity-verified
+  renameSync (not a bare rmdir + retake — see the Risks correction below) so a crashed holder
+  can't brick the office.
 
 ## Acceptance Criteria
 
@@ -34,9 +36,15 @@ hardening-wave H3.
   after the rename, ALWAYS released via try/finally).
 - **AC-2** Bounded: acquire returns `{ok:false}` after the retry budget and the handler proceeds
   unlocked exactly as today (no thrown errors, no user-visible stall). Total worst-case added
-  latency ≤ ~300ms only under active contention.
-- **AC-3** Stale-lock steal: a lock dir whose mtime is older than 2s is removed and retaken; a
-  crashed hook process cannot wedge subsequent hooks.
+  latency (corrected 2026-09-26, see Risks): acquire alone is bounded ≤ ~250ms (10 × 25ms) under
+  active contention; the write-side retry added by `atomicWriteJson` (finding 2) adds up to
+  another ~45ms per write attempt on top of that. Most events make exactly one write attempt
+  (≤ ~295ms combined worst case); `UserPromptSubmit`/`PreToolUse` retry the write up to 3 times
+  (≤ ~385ms combined worst case). The previous "≤ ~300ms" figure here did not account for the
+  write-retry budget added alongside the lock.
+- **AC-3** Stale-lock steal: a lock dir whose mtime is older than 2s is removed and retaken via an
+  identity-verified renameSync steal (owner token + mtime compared before/after the rename — see
+  Risks correction below); a crashed hook process cannot wedge subsequent hooks.
 - **AC-4 (load-bearing)** Multi-process mutual-exclusion proof: a vitest test spawns ≥6 concurrent
   Node child processes, each performing N lock-protected read-increment-write cycles on a shared
   temp JSON file via the EXPORTED helpers; final counter MUST equal exactly 6×N (lost-update-free).
@@ -52,7 +60,9 @@ hardening-wave H3.
 
 ## Risks & Rollback
 
-- **Risk**: sync busy-wait adds latency under contention — bounded ≤300ms and only when contended.
+- **Risk**: sync busy-wait adds latency under contention — see the corrected worst-case figures in
+  AC-2 above (previously stated as a flat "≤300ms", which did not account for the write-retry
+  budget added alongside the lock).
 - **Risk (corrected 2026-09-26, `docs/specs/hook-robustness-privacy.md`)**: the original text here
   claimed "mkdir atomicity means exactly one wins the retake" for the *steal* path. That is false:
   the steal path is `rmdirSync(stale-lock)` followed by a separate `mkdirSync`, two independent
@@ -61,10 +71,35 @@ hardening-wave H3.
   different points in time — including one stealer's `mkdirSync` landing, then the *other*
   stealer's later `rmdirSync` (from its own steal attempt against what it still believes is the
   stale dir) removing the first stealer's fresh lock out from under it. Both processes can end up
-  believing they hold the lock. Fixed by making the steal atomic
-  (`renameSync(lockDir, uniqueName)` — only one racing rename can win against the same source
-  name) and by gating `releaseStatusLock` on an owner token so a process can never remove a lock
-  it does not currently hold. mkdir atomicity is still true and load-bearing for the *fresh-lock*
-  race (two processes racing to acquire an absent lock) — the false claim was specifically about
-  applying that same guarantee to the two-step steal sequence.
+  believing they hold the lock.
+- **Risk (corrected AGAIN 2026-09-26, same-day fresh-reviewer /review — the first correction above
+  was itself incomplete)**: replacing the steal with `renameSync(lockDir, uniqueName)` closes the
+  *"two stealers race the identical rmdir+mkdir sequence"* class, but a fresh adversarial review
+  proved a DIFFERENT interleaving still let two processes both win: renaming a source path is
+  exclusive against other renames of that *exact* path, but it does nothing to stop a stealer from
+  renaming away a lock that a completely different process had *already legitimately replaced*
+  with a brand-new, non-stale lock in the window between "we observed staleness" and "we renamed
+  it away" — the claim "two racers can never BOTH win" was, again, false, and was disproven with a
+  deterministic `fs.statSync` interception (forcing one process to complete an entire steal cycle
+  synchronously inside the other's staleness check). **Actual fix**: capture the stale lock's
+  identity (its owner token + the same mtime value used to judge it stale) immediately before
+  renaming it away, then re-read that identity from the *moved* directory afterward. Renaming
+  does not change a directory's mtime or contents, so if the moved directory's identity doesn't
+  match what was observed, the rename evicted a *different, currently-valid* lock — best-effort
+  put it back (only succeeds if the lock path is currently free) and go back to waiting; ownership
+  is never claimed on a mismatch. `releaseStatusLock`'s owner-token gate (added by the first
+  correction) is still correct and necessary but was never sufficient on its own to prevent
+  concurrent ownership in the first place — it only limits the blast radius (a stale release
+  no-ops instead of evicting a live lock) once double-ownership has already occurred.
+  **Honest residual — this narrows the window, it does not close it to zero**: a filesystem
+  offers no atomic compare-and-swap across a stat + a rename. The owner-token read and the mtime
+  read happen as two back-to-back synchronous calls immediately before the rename, not atomically
+  with it; a process could still be descheduled in that exact gap. Worst case if that ever landed
+  is the ORIGINAL pre-lock hazard this file exists to narrow (one lost STATUS_FILE update), not a
+  new or larger failure mode. `releaseStatusLock` has a symmetric, narrower residual: it is
+  read-token-then-`rmSync`, not atomic with the read, and treats a `null` owner token (the brief
+  window between a fresh `mkdirSync` and its own token write) as "safe to remove". Both residuals
+  are documented in the hook source (`acquireStatusLock`/`releaseStatusLock` doc comments) rather
+  than closed with a rename-verify release, which the severity of this specific window (LOW, per
+  2026-09-26 review) does not currently justify.
 - **Rollback**: revert the single hook file + test; no data-format change.

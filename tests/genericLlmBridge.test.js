@@ -86,3 +86,36 @@ describe('fileToRole — .github routing is reachable again once the ignore rege
     expect(fileToRole('/repo/.github/workflows/ci.yml')).toBe('ops')
   })
 })
+
+// 2026-09-26 review finding LOW #6: shouldIgnorePath used to test the ABSOLUTE path, so a
+// --watch dir living under an ancestor directory named node_modules/.git/dist/etc. (e.g. a
+// project checked out at /builds/dist/my-project) ignored every single event under it.
+describe('shouldIgnorePath(path, watchDir) — tests the path RELATIVE to the watched project', () => {
+  it('does not ignore project files when an ANCESTOR of watchDir is named "dist"', () => {
+    const watchDir = '/builds/dist/my-project'
+    expect(shouldIgnorePath('/builds/dist/my-project/src/index.js', watchDir)).toBe(false)
+    expect(shouldIgnorePath('/builds/dist/my-project/README.md', watchDir)).toBe(false)
+  })
+
+  it('does not ignore project files when an ANCESTOR of watchDir is named ".git" or "node_modules"', () => {
+    expect(shouldIgnorePath('/x/.git/checkout/my-project/src/a.js', '/x/.git/checkout/my-project')).toBe(false)
+    expect(shouldIgnorePath('/x/node_modules/my-project/src/a.js', '/x/node_modules/my-project')).toBe(false)
+  })
+
+  it('still ignores a real dist/ or .git/ segment INSIDE the watched project', () => {
+    const watchDir = '/builds/dist/my-project'
+    expect(shouldIgnorePath('/builds/dist/my-project/dist/bundle.js', watchDir)).toBe(true)
+    expect(shouldIgnorePath('/builds/dist/my-project/.git/HEAD', watchDir)).toBe(true)
+    expect(shouldIgnorePath('/builds/dist/my-project/node_modules/pkg/x.js', watchDir)).toBe(true)
+  })
+
+  it('still catches office-status basename matches relative to watchDir', () => {
+    expect(shouldIgnorePath('/builds/dist/my-project/public/hooks/office-status-hook.js', '/builds/dist/my-project')).toBe(true)
+  })
+
+  it('handles the fallback-watcher shape (full path built from a src/ subdir, watchDir is the project root)', () => {
+    const watchDir = '/builds/dist/my-project'
+    const target = path.join(watchDir, 'src')
+    expect(shouldIgnorePath(path.join(target, 'App.jsx'), watchDir)).toBe(false)
+  })
+})
