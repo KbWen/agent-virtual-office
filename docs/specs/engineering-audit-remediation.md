@@ -74,3 +74,52 @@ Routed from `docs/reviews/2026-09-24-audit.md` (read-only audit findings). Focus
 - **F-01 (Monotonic Clock Parity)**: In `vite.config.mjs`, import `nextSeq` from `./src/utils/statusContract.mjs` and remove local duplicate counter. Guard with test in `tests/viteEventMiddlewareParity.test.js`.
 - **F-05 (Bridge UI Parity)**: Add `planning` and `awaiting-approval` status toggle buttons to `public/bridge-ui.js` matching `statusContract.mjs` valid statuses.
 - **F-04 (Spec Drift)**: Document wave closure and maintain living traceability.
+
+## 2026-09-26 Dev-Server Parity Wave
+
+Routed from a follow-up audit that re-derived the remaining dev-only (`vite.config.mjs`) divergences
+from `server.mjs` (production) after the 2026-09-24 wave fixed the shared `_seq` clock. Branch
+`fix/dev-server-parity`; behavioral tests in `tests/viteDevServerParity.test.js` (real
+`vite.createServer()` harness) and `tests/cliDevLanWarning.test.js`; scope limited to
+`vite.config.mjs` and the dev-start warning lines in `bin/cli.js` (no `server.mjs` or
+`bin/cli.js` setup/uninstall changes — those belong to sibling remediation branches).
+
+- **F-1 (file-watcher fallback scope leak)**: `officeStatusPlugin`'s `server.watcher.add(watchDir)`
+  extends the SAME shared chokidar watcher to also cover `OFFICE_STATUS_DIR`, but
+  `fileWatcherFallbackPlugin`'s `'change'` handler had no project-root check — any write under the
+  status dir (a Claude Code transcript `projects/**/<uuid>.jsonl`, a `debug/*.txt` log, etc.) was
+  misread as a project source edit and fabricated a fake, `_cwd`-less agent status that then showed
+  up in *any* project's office. Fixed: the fallback now resolves `server.config.root` and ignores
+  any file outside it.
+- **F-2 (fallback overwrite window too short)**: the fallback's guard against overwriting a
+  webhook/API-set status used a hardcoded 10s window; production (`server.mjs`) has no fallback at
+  all, so a `blocked`/API-set status there simply persists until the real ~5-minute stale window.
+  Fixed: the dev guard window is now `FALLBACK_PROTECT_MS = 300_000`, mirroring
+  `src/server/scanSessions.mjs`'s `STALE_MS` (duplicated as a literal, not imported — this branch's
+  edit scope excludes `scanSessions.mjs`; see the Work Log `## Known Risk` for the drift note).
+- **F-3 (watcher missed add/unlink)**: `officeStatusPlugin`'s SSE-push watcher only bound `'change'`;
+  a brand-new or deleted session file waited for the next poll instead of an immediate push.
+  Production's `fs.watch` fires on rename too. Fixed: also bind `'add'` and `'unlink'` to the same
+  debounced handler.
+- **F-4 (dev CORS preflight divergence)**: Vite registers its own permissive-loopback
+  `server.cors` middleware *before* plugin middlewares, so it always answers OPTIONS itself and
+  unconditionally adds `Access-Control-Allow-Origin` for loopback GETs — bypassing this file's own
+  `isAllowedOrigin`/`OFFICE_API_ALLOWED_ORIGINS` logic entirely. An explicit non-loopback allowed
+  origin failed preflight in dev (worked in prod); a loopback origin excluded by an explicit
+  allowlist was still let through in dev (rejected in prod). Fixed: `server.cors: false`, so the
+  plugin's own logic is the sole authority in dev too. Verified `npm run smoke` / `npm run
+  smoke:panel` still pass (HMR/dev asset serving is same-origin, no preflight involved).
+- **F-5 (unguarded `scanAndMerge` call sites)**: the `/api/status/stream` initial-snapshot read and
+  the watcher-debounce broadcast callback called `scanAndMerge` with no try/catch, unlike every
+  other call site in this file and in `server.mjs`. Fixed defensively (matches the existing
+  pattern elsewhere in this file) — no forced-throw regression test was written since
+  `scanAndMerge`/`readSessionFileCached` already guard per-file parse errors internally; the added
+  tests instead confirm a corrupt session file does not crash the dev server end-to-end.
+- **F-6 (no LAN-exposure warning in dev)**: `bin/cli.js` binds the dev server to `--host` (LAN,
+  0.0.0.0) by default with no `OFFICE_API_TOKEN` warning, unlike `server.mjs`'s production
+  warning. Fixed: the same warning now prints from the dev-start path under the same condition
+  (LAN-bound, no token).
+- Considered out of scope: dev never sweeps stale session files the way `server.mjs`'s 10-minute
+  interval does. Not implemented — would need its own design (sweep cadence, dev-only lifecycle)
+  rather than a copy-paste, and no correctness bug was found from its absence (stale files are
+  already excluded from `scanAndMerge` by `_seq` age, they just aren't deleted from disk).
