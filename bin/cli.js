@@ -381,6 +381,13 @@ if (host) {
     console.log(`  Note: Windows Firewall may prompt you to allow access.`)
   }
   console.log()
+  // Parity with server.mjs's production warning (server.mjs ~L540-543): the dev server binds
+  // to the LAN by default just like --host in production, so it deserves the same warning.
+  if (!process.env.OFFICE_API_TOKEN?.trim()) {
+    console.warn('  WARNING: --host is set but OFFICE_API_TOKEN is not.')
+    console.warn('  Anyone on the network can write to /api/status without authentication.')
+    console.warn('  Set OFFICE_API_TOKEN=<secret> to require a token for writes.\n')
+  }
 }
 
 // Run Vite's CLI entry directly with this Node binary. Avoids depending on
