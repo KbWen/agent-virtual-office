@@ -29,7 +29,16 @@
  *
  * Polling cadence: 10s. Coarser than #8 (5s) since the thresholds are
  * larger (45s / 90s) so fewer chances are needed and we save wakeups.
+ *
+ * rem-honest-office-events (2026-09-26): the update now carries the agent's own prior
+ * externalStatus fields (task/label/activeFile/reasonCode/skill/hint) forward instead of
+ * sending {agentId, status} alone — otherwise store.js's buildExtEntry wipes them to null on
+ * every inferred tick. store.js also keeps `changedAt` unchanged and skips the new-bubble pop
+ * for `source: 'idle-gap-infer'` updates, since a heuristic re-interpretation of silence is not
+ * a fresh real signal.
  */
+
+import { AGENT_CARRY_FIELDS } from '../utils/statusFields.js'
 
 const WORKING_GAP_MS = 45_000   // 45s → thinking
 const BLOCKED_GAP_MS = 90_000   // 90s → awaiting-approval
@@ -39,10 +48,27 @@ const POLL_INTERVAL_MS = 10_000
 // reactivity because the polling loop keeps a stable reference.
 const lastUpdatedAt = new Map()
 
+// rem-honest-office-events finding #2: an inferred update used to send ONLY {agentId, status}.
+// store.js's buildExtEntry writes `u[f] || null` for every AGENT_CARRY_FIELDS entry, so
+// task/label/activeFile/reasonCode/skill/hint were WIPED to null on every inference — even
+// though nothing about the agent's real task changed, only how long it has been silent. Carry
+// the agent's own prior externalStatus fields through so an inferred status change looks like
+// exactly what it is: the SAME task, now visualized as a stall, not a fresh unrelated update.
+function inferredUpdate(agentId, status, prevExt) {
+  const u = { agentId, status }
+  if (prevExt) {
+    for (const f of AGENT_CARRY_FIELDS) {
+      if (prevExt[f] != null) u[f] = prevExt[f]
+    }
+  }
+  return u
+}
+
 function tick(store, opts, now = Date.now) {
   const t0 = now()
   const state = store.getState()
   const agents = state.agents
+  const externalStatus = state.externalStatus || {}
   const updates = []
   for (const id of Object.keys(agents)) {
     const a = agents[id]
@@ -54,9 +80,9 @@ function tick(store, opts, now = Date.now) {
     }
     const elapsed = t0 - lastUpdatedAt.get(id)
     if (a.status === 'working' && elapsed >= opts.workingGapMs) {
-      updates.push({ agentId: id, status: 'thinking' })
+      updates.push(inferredUpdate(id, 'thinking', externalStatus[id]))
     } else if (a.status === 'blocked' && elapsed >= opts.blockedGapMs) {
-      updates.push({ agentId: id, status: 'awaiting-approval' })
+      updates.push(inferredUpdate(id, 'awaiting-approval', externalStatus[id]))
     }
     // Note: we don't need an explicit INFERRED_STATUSES guard here because
     // the outer conditions already restrict to 'working' and 'blocked'.

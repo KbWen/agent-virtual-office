@@ -365,7 +365,14 @@ const ROLE_GROWTH_ITEMS = {
 // between PreToolUse and PostToolUse; a shorter expiry flickered the workflow banner). In practice
 // the 120s staleness sweep (inferStatus.js) clears a static external status first, so 5 min is a
 // rarely-reached backstop. done: 10s (brief celebration then back to idle).
-function buildExtEntry(prevExt, u, now) {
+//
+// rem-honest-office-events finding #2: `isInferred` (true for meta.source === 'idle-gap-infer')
+// keeps `changedAt` UNCHANGED even though the status literally differs (working→thinking is a
+// heuristic re-interpretation of silence, not a fresh real signal) — otherwise a work-claim gate's
+// `recentSignal(es, now)` check reads the inferred flip as legitimate freshness. carryFields is
+// unaffected: idleGapInfer.js now carries the prior entry's fields forward in `u` itself, so this
+// function needs no special-casing there.
+function buildExtEntry(prevExt, u, now, isInferred = false) {
   const sigChanged = !prevExt || prevExt.status !== u.status || (prevExt.task || '') !== (u.task || '')
   const nextActiveFile = u.activeFile || null
   const fileChanged = !prevExt || (prevExt.activeFile || null) !== nextActiveFile
@@ -383,7 +390,7 @@ function buildExtEntry(prevExt, u, now) {
     activeFile: nextActiveFile,
     activeFileAt,
     expiresAt: u.status === 'done' ? now + 10000 : now + 300000,
-    changedAt: sigChanged ? now : (Number.isFinite(prevExt.changedAt) ? prevExt.changedAt : now),
+    changedAt: (sigChanged && !isInferred) ? now : (Number.isFinite(prevExt?.changedAt) ? prevExt.changedAt : now),
   }
   return { entry, sigChanged }
 }
@@ -1193,7 +1200,7 @@ export const useOfficeStore = create((set) => ({
         // prior inline build; full rationale in its module-scope doc). prevExt stays in scope below
         // for isNewBlockedEpisode.
         const prevExt = ext[u.agentId]
-        const { entry: extEntry, sigChanged } = buildExtEntry(prevExt, u, now)
+        const { entry: extEntry, sigChanged } = buildExtEntry(prevExt, u, now, meta.source === 'idle-gap-infer')
         ext[u.agentId] = extEntry
         // AVO-117: record a blocked EPISODE only on a real edge (pure isNewBlockedEpisode owns the
         // rule: transition INTO blocked from a non-blocked-family state, or a reason-change while
@@ -1210,13 +1217,24 @@ export const useOfficeStore = create((set) => ({
         // Don't overwrite behavior/expression during group events (officeLife controls those)
         const prevAgent = agents[u.agentId]
         const inGroup = prevAgent.inGroupEvent
+        // rem-honest-office-events finding #3: a REAL tracked status (anything other than
+        // idle/done — working/blocked/awaiting-approval/thinking) arriving for an agent
+        // currently locked in an officeLife group event means the agent has genuinely
+        // started/resumed real work. The group event's pose must not keep hiding that — release
+        // the lock so the real status drives behavior/expression, same as a never-grouped agent.
+        // An idle/done update (the agent is still genuinely available) leaves the group lock
+        // untouched — officeLife still owns behavior/expression for that case (unchanged
+        // contract, see tests/avo184-equivalence.test.js J2b).
+        const releasedFromGroup = inGroup && u.status !== 'idle' && u.status !== 'done'
+        const effectiveInGroup = inGroup && !releasedFromGroup
         // AVO-184: resolveAgentVisual owns behavior/expression resolution (decideBehavior +
         // STATUS_BEHAVIOR_MAP expression + the inGroup guard); byte-identical, see its module doc.
         // AVO-143: on a pure poll re-apply these resolve to the agent's CURRENT values, so the no-op
         // guard below can skip the re-allocation entirely and keep the agent's identity (no re-render).
-        const { nextBehavior, nextExpression } = resolveAgentVisual(u, s.activeWorkflow, prevAgent, inGroup)
+        const { nextBehavior, nextExpression } = resolveAgentVisual(u, s.activeWorkflow, prevAgent, effectiveInGroup)
         if (
           !createdThisUpdate && !dayChanged && !sigChanged && !prevAgent.removeAfterDoorAbort &&
+          !releasedFromGroup &&
           u.status === prevAgent.status &&
           nextBehavior === prevAgent.behavior &&
           nextExpression === prevAgent.expression
@@ -1229,6 +1247,7 @@ export const useOfficeStore = create((set) => ({
           status: u.status,
           behavior: nextBehavior,
           expression: nextExpression,
+          ...(releasedFromGroup ? { inGroupEvent: false, groupTarget: null } : {}),
           ...(prevAgent.removeAfterDoorAbort ? { removeAfterDoorAbort: false, doorAbortJourneyId: null } : {}),
         }
         // Bubble fires only on a REAL status/task change (sigChanged) — NOT on every poll re-apply.
@@ -1237,7 +1256,11 @@ export const useOfficeStore = create((set) => ({
         // bubble at once → the reported "every character suddenly speaks for no reason / refresh feel".
         // Same principle as `changedAt` above (cf. the earlier 0s-everywhere fix). An unchanged re-apply
         // now keeps the prior bubble, which clears on its own doSchedule timer.
-        if (sigChanged && !inGroup) {
+        // rem-honest-office-events finding #2: an idle-gap-inferred status change is a heuristic
+        // re-interpretation of silence, not a fresh real signal — it must not pop a new speech
+        // bubble (the status ring + behavior pose already carry the visualization).
+        const isInferredUpdate = meta.source === 'idle-gap-infer'
+        if (sigChanged && !effectiveInGroup && !isInferredUpdate) {
           const bubble = generateContextBubble(u.agentId, u, ext)
             || _storeFallbackBubble(u.agentId, u.status)
           if (bubble) nextAgent.bubble = bubble

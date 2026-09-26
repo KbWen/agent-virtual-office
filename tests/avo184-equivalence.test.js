@@ -283,12 +283,36 @@ describe('I. integration-channel patch', () => {
 
 // ─── J. Behavior/bubble gating invariants (R1/R2) ────────────────────────────────────────────────
 describe('J. group-event + no-op gating', () => {
-  it('J2 inGroupEvent agent keeps its behavior/expression (officeLife owns them)', () => {
+  // rem-honest-office-events finding #3: a REAL tracked status arriving for an in-group agent
+  // must release it — the group event's pose must not keep hiding genuine work. This REPLACES
+  // the prior "keeps its behavior/expression" assertion, which was the bug: an agent locked into
+  // a group event (e.g. a standup) that started real work mid-event kept performing the group's
+  // pose indefinitely, because nothing ever cleared inGroupEvent on a real status arrival.
+  it('J2 inGroupEvent agent releases on a REAL tracked status (honesty gate)', () => {
     apply([{ agentId: 'dev', status: 'working', task: 'Bash' }])
     useOfficeStore.setState((s) => ({
-      agents: { ...s.agents, dev: { ...s.agents.dev, inGroupEvent: true, behavior: 'meeting', expression: 'happy' } },
+      agents: { ...s.agents, dev: { ...s.agents.dev, inGroupEvent: true, groupTarget: { x: 1, y: 2 }, behavior: 'meeting', expression: 'happy' } },
     }))
     apply([{ agentId: 'dev', status: 'blocked', task: 'Bash' }])
+    expect(st().agents.dev.inGroupEvent).toBe(false)
+    expect(st().agents.dev.groupTarget).toBeNull()
+    expect(st().agents.dev.status).toBe('blocked')
+    // behavior/expression now reflect the real 'blocked' status, not the stale group pose
+    expect(st().agents.dev.behavior).not.toBe('meeting')
+    expect(st().agents.dev.expression).not.toBe('happy')
+  })
+
+  // Boundary: an idle/done update means the agent is still genuinely AVAILABLE — the group lock
+  // must NOT be released for that case (officeLife still owns behavior/expression while it waits
+  // for its own release timer). Pins the other side of the finding #3 fix.
+  it('J2b inGroupEvent agent keeps its behavior/expression when the update is idle/done (still available)', () => {
+    apply([{ agentId: 'dev', status: 'idle' }])
+    useOfficeStore.setState((s) => ({
+      agents: { ...s.agents, dev: { ...s.agents.dev, inGroupEvent: true, groupTarget: { x: 1, y: 2 }, behavior: 'meeting', expression: 'happy' } },
+    }))
+    apply([{ agentId: 'dev', status: 'done', task: 'Bash' }])
+    expect(st().agents.dev.inGroupEvent).toBe(true)
+    expect(st().agents.dev.groupTarget).toEqual({ x: 1, y: 2 })
     expect(st().agents.dev.behavior).toBe('meeting')
     expect(st().agents.dev.expression).toBe('happy')
   })
@@ -298,5 +322,31 @@ describe('J. group-event + no-op gating', () => {
     const before = st().agents.dev.bubble
     apply([{ agentId: 'dev', status: 'working', task: 'Bash' }])
     expect(st().agents.dev.bubble).toBe(before)
+  })
+})
+
+// ─── K. idle-gap-infer honesty (rem-honest-office-events finding #2) ────────────────────────────
+describe('K. idle-gap-infer updates do not fabricate a fresh signal', () => {
+  it('K1 an inferred update does NOT advance changedAt', () => {
+    apply([{ agentId: 'dev', status: 'working', task: 'Bash' }], { now: NOW })
+    expect(st().externalStatus.dev.changedAt).toBe(NOW)
+    apply([{ agentId: 'dev', status: 'thinking', task: 'Bash' }], { now: NOW + 50000, source: 'idle-gap-infer' })
+    // status DID change (visualized as thinking) but changedAt must stay at the original real signal
+    expect(st().agents.dev.status).toBe('thinking')
+    expect(st().externalStatus.dev.changedAt).toBe(NOW)
+  })
+
+  it('K2 an inferred update does NOT pop a new bubble', () => {
+    apply([{ agentId: 'dev', status: 'working', task: 'Bash' }], { now: NOW })
+    const before = st().agents.dev.bubble
+    apply([{ agentId: 'dev', status: 'thinking', task: 'Bash' }], { now: NOW + 50000, source: 'idle-gap-infer' })
+    expect(st().agents.dev.bubble).toBe(before)
+  })
+
+  it('K3 a REAL hook update after an inferred one still advances changedAt (real signal restores freshness)', () => {
+    apply([{ agentId: 'dev', status: 'working', task: 'Bash' }], { now: NOW })
+    apply([{ agentId: 'dev', status: 'thinking', task: 'Bash' }], { now: NOW + 50000, source: 'idle-gap-infer' })
+    apply([{ agentId: 'dev', status: 'working', task: 'Read' }], { now: NOW + 51000 })
+    expect(st().externalStatus.dev.changedAt).toBe(NOW + 51000)
   })
 })

@@ -163,12 +163,37 @@ function pickParticipants(event, agents, externalStatus) {
   return available.slice(0, 3)
 }
 
+// rem-honest-office-events finding #1: some handlers assert behavior for a SPECIFIC named actor
+// (e.g. deploy-success needs 'ops' to press the button). pickParticipants can return a non-empty
+// cast that is still missing that actor — an "all"/array cast partially filtered by availability —
+// and the handler's own `if (!participants.includes(...)) return` bails only AFTER fireWithCast
+// already called setActiveEvent. That is a real activeEvent + banner/confetti/eventFeed entry with
+// nobody performing it for the whole event duration. Refuse to fire in that case too, symmetrically
+// with the empty-cast refusal below.
+const REQUIRED_ACTORS = {
+  'deploy-success': ['ops'],
+  'ops-dev-deploy-check': ['ops', 'dev'],
+  'review-debate': ['dev', 'qa'],
+  'dev-arch-disagree': ['dev', 'arch'],
+  'eureka': ['arch'],
+  'pm-all-meeting': ['pm'],
+}
+
+function hasRequiredActors(event, participants) {
+  const required = REQUIRED_ACTORS[event.id]
+  if (!required) return true
+  const pset = new Set(participants)
+  return required.every((id) => pset.has(id))
+}
+
 // Pick a cast and fire, or do nothing. Returns whether the event actually fired.
 // An empty cast must NOT reach setActiveEvent: activeEvent is the global event mutex, so a
-// phantom one blocks every subsequent event for its whole duration.
+// phantom one blocks every subsequent event for its whole duration. Same for a cast missing a
+// required actor (finding #1 above).
 function fireWithCast(store, event, state, cancelled) {
   const participants = pickParticipants(event, state.agents, state.externalStatus)
   if (participants.length === 0) return false
+  if (!hasRequiredActors(event, participants)) return false
   store.getState().setActiveEvent(event)
   executeEvent(store, event, participants, cancelled)
   return true
@@ -234,7 +259,10 @@ const EVENT_HANDLERS = {
       if (cancelled?.value) return
       participants.slice(1).forEach((id) => {
         const s = store.getState()
-        if (s.agents[id]) {
+        // Finding #3: this crew member was never locked inGroupEvent (only the bringer is) —
+        // re-check availability before painting a reaction 2s later, otherwise a genuinely-
+        // working agent gets an honesty-violating "happy snack" bubble on top of its real work.
+        if (s.agents[id] && isAgentAvailable(id, s.agents, s.externalStatus)) {
           s.setAgentBehavior(id, 'eat-snack', 'happy', eventBubble('food-react'))
           setTimeout(() => { if (!cancelled?.value) s.clearBubble(id) }, 4000)
         }
@@ -260,7 +288,9 @@ const EVENT_HANDLERS = {
         if (cancelled?.value) return
         const s = store.getState()
         const spillerPos = s.agents[spiller]?.position
-        if (spillerPos) {
+        // Finding #3: the neighbour was never locked at t0 either — re-check availability
+        // 1.5s later before locking it into a "helping" pose.
+        if (spillerPos && isAgentAvailable(participants[1], s.agents, s.externalStatus)) {
           s.setAgentGroupEvent(participants[1], {
             behavior: 'pass-document',
             expression: 'normal',
@@ -332,7 +362,9 @@ const EVENT_HANDLERS = {
       if (cancelled?.value) return
       participants.filter(id => id !== 'ops').forEach((id) => {
         const s = store.getState()
-        if (s.agents[id]) {
+        // Finding #3: the celebrate crew was never locked inGroupEvent (only ops is) —
+        // re-check availability before painting the celebration 2s later.
+        if (s.agents[id] && isAgentAvailable(id, s.agents, s.externalStatus)) {
           s.setAgentBehavior(id, 'thumbs-up', 'happy', eventBubble('deploy-celebrate'))
           setTimeout(() => { if (!cancelled?.value) s.clearBubble(id) }, 5000)
         }
@@ -429,8 +461,12 @@ const EVENT_HANDLERS = {
     })
     setTimeout(() => {
       if (cancelled?.value) return
+      const s2 = store.getState()
+      // Finding #3: pm may have been released by a real tracked status in the last 2.5s.
+      if (!s2.agents.pm?.inGroupEvent) return
       const chairs = [...MEETING_CHAIRS].sort(() => Math.random() - 0.5)
-      const otherIds = participants.filter(id => id !== 'pm')
+      // otherIds were never locked at t0 either — re-check availability before locking them in.
+      const otherIds = participants.filter(id => id !== 'pm' && isAgentAvailable(id, s2.agents, s2.externalStatus))
       store.getState().setMultipleAgentGroupEvents(
         otherIds.map((id, i) => ({
           id, behavior: 'meeting', expression: 'confused',
@@ -478,7 +514,11 @@ const EVENT_HANDLERS = {
     participants.forEach((id, i) => {
       setTimeout(() => {
         if (cancelled?.value) return
-        store.getState().setAgentGroupEvent(id, {
+        const s = store.getState()
+        // Finding #3: staggered first-time lock (up to ~3s for a full cast) — re-check
+        // availability right before locking, not just at cast-selection time.
+        if (!isAgentAvailable(id, s.agents, s.externalStatus)) return
+        s.setAgentGroupEvent(id, {
           behavior: i === 0 ? 'stretch' : 'chat',
           expression: 'happy',
           bubble: eventBubble('dog-visit'),
@@ -529,7 +569,10 @@ const EVENT_HANDLERS = {
     participants.forEach((id, i) => {
       setTimeout(() => {
         if (cancelled?.value) return
-        store.getState().setAgentGroupEvent(id, {
+        const s = store.getState()
+        // Finding #3: staggered first-time lock — re-check availability right before locking.
+        if (!isAgentAvailable(id, s.agents, s.externalStatus)) return
+        s.setAgentGroupEvent(id, {
           behavior: 'stretch',
           expression: 'happy',
           bubble: eventBubble('group-stretch'),
@@ -614,9 +657,10 @@ export function triggerInteractiveEvent(store, eventId) {
 
   // AVO-191: no honest cast (everyone is genuinely working/blocked) — treat the click exactly
   // like a gated-out one: a neutral in-place reaction, never a set-piece that drags a working
-  // agent to the coffee machine, and never a phantom activeEvent.
+  // agent to the coffee machine, and never a phantom activeEvent. Finding #1: a cast that is
+  // non-empty but missing its required actor is the same phantom-event class — refuse it too.
   const participants = pickParticipants(event, state.agents, state.externalStatus)
-  if (participants.length === 0) {
+  if (participants.length === 0 || !hasRequiredActors(event, participants)) {
     fireInteractionReaction(store, eventId)
     return false
   }
