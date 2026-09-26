@@ -341,6 +341,229 @@ describe('acquireStatusLock — forced-interleaving TOCTOU repro (review finding
   })
 })
 
+// ─── 2026-09-26 review round 2, MEDIUM #3: mutant-killing tests for the identity check ─────
+// Each test independently forges a scenario where ONE of the two identity signals (owner token,
+// mtime) would say "same instance" while the OTHER correctly says "different" — proving each
+// comparison is load-bearing on its own, not just their conjunction. Verified by literally
+// commenting out each half of `postOwner === preOwner && postMtime === st.mtimeMs` and confirming
+// the corresponding test below fails (manual mutation check, recorded in the Work Log).
+describe('acquireStatusLock — identity check kills token-only and mtime-only mutants (review MEDIUM #3)', () => {
+  let restore
+  let base
+
+  beforeEach(() => {
+    base = makeTempBase('mutant-identity')
+    restore = withLockBase(base)
+  })
+
+  afterEach(() => {
+    restore()
+    try { fs.rmSync(path.dirname(base), { recursive: true, force: true }) } catch {}
+  })
+
+  it('kills "remove the token check": token differs but mtime coincides — must still detect mismatch', () => {
+    const lockDir = STATUS_LOCK_CONFIG.lockDir
+    fs.mkdirSync(lockDir, { recursive: true })
+    fs.writeFileSync(path.join(lockDir, 'owner'), 'seed-token')
+    const past = new Date(Date.now() - 3_000)
+    fs.utimesSync(lockDir, past, past)
+
+    let reverseRenameAttempted = false
+    let tampered = false
+    const realRename = fs.renameSync.bind(fs)
+    const spy = vi.spyOn(fs, 'renameSync').mockImplementation((a, b) => {
+      const r = realRename(a, b)
+      if (a === lockDir && !tampered) {
+        tampered = true
+        // Simulate a coincidental mtime match with a DIFFERENT lock instance: swap the moved
+        // copy's owner token, then re-pin its mtime to the exact value it had before the move
+        // (rename alone preserves mtime; this makes the adversarial "same mtime, different
+        // identity" case reachable deterministically instead of relying on real timing luck).
+        fs.writeFileSync(path.join(b, 'owner'), 'hijacked-token')
+        fs.utimesSync(b, past, past)
+      }
+      if (a !== lockDir && b === lockDir) reverseRenameAttempted = true  // the restore direction
+      return r
+    })
+    let result
+    try { result = acquireStatusLock() } finally { spy.mockRestore() }
+
+    // A mutant that dropped the token comparison (kept only mtime) would see mtime match and
+    // wrongly conclude "same instance" — no reverse-rename attempt, straight to claiming.
+    expect(reverseRenameAttempted).toBe(true)
+    if (result.ok) releaseStatusLock(result.token)
+  })
+
+  it('kills "remove the mtime check": mtime differs but token coincides — must still detect mismatch', () => {
+    const lockDir = STATUS_LOCK_CONFIG.lockDir
+    fs.mkdirSync(lockDir, { recursive: true })
+    fs.writeFileSync(path.join(lockDir, 'owner'), 'seed-token')
+    const past = new Date(Date.now() - 3_000)
+    fs.utimesSync(lockDir, past, past)
+
+    let reverseRenameAttempted = false
+    let tampered = false
+    const realRename = fs.renameSync.bind(fs)
+    const spy = vi.spyOn(fs, 'renameSync').mockImplementation((a, b) => {
+      const r = realRename(a, b)
+      if (a === lockDir && !tampered) {
+        tampered = true
+        // Owner token is left untouched (still "seed-token", matching what was read before the
+        // rename) — only the mtime is bumped to "now", simulating a different lock instance
+        // that happens to share the same token bytes (astronomically unlikely in practice with
+        // real random tokens; the point is to isolate the mtime signal deterministically).
+        const fresh = new Date()
+        fs.utimesSync(b, fresh, fresh)
+      }
+      if (a !== lockDir && b === lockDir) reverseRenameAttempted = true
+      return r
+    })
+    let result
+    try { result = acquireStatusLock() } finally { spy.mockRestore() }
+
+    // A mutant that dropped the mtime comparison (kept only the token check) would see the
+    // token match and wrongly conclude "same instance" — no reverse-rename attempt.
+    expect(reverseRenameAttempted).toBe(true)
+    if (result.ok) releaseStatusLock(result.token)
+  })
+
+  it('kills "remove the EPERM/EBUSY retry path" (review LOW #3): retries past a transient rename failure instead of bailing unlocked', () => {
+    const lockDir = STATUS_LOCK_CONFIG.lockDir
+    fs.mkdirSync(lockDir, { recursive: true })
+    const past = new Date(Date.now() - 3_000)
+    fs.utimesSync(lockDir, past, past)
+
+    let thrown = false
+    const realRename = fs.renameSync.bind(fs)
+    const spy = vi.spyOn(fs, 'renameSync').mockImplementation((a, b) => {
+      if (a === lockDir && !thrown) {
+        thrown = true
+        const e = new Error('EPERM: operation not permitted, rename')
+        e.code = 'EPERM'
+        throw e
+      }
+      return realRename(a, b)
+    })
+    let result
+    try { result = acquireStatusLock() } finally { spy.mockRestore() }
+
+    expect(thrown).toBe(true)     // sanity: the injected EPERM actually fired
+    // A mutant that treated EPERM like any other "unexpected rename failure" would `return
+    // {ok:false}` immediately instead of retrying — this asserts the retry actually happened.
+    expect(result.ok).toBe(true)
+    if (result.ok) releaseStatusLock(result.token)
+  })
+})
+
+// ─── 2026-09-26 review round 3: move-aside/rename-back window (the ACTUAL residual) ────────
+// A fresh adversarial repro (scratchpad review-hookpriv2/threeway.cjs) proved the residual isn't
+// the pre-rename identity-capture gap (the identity check catches that correctly) but the window
+// between "we renamed a live lock away by mistake" and "we finish putting it back." This pins
+// both consequences described in the acquireStatusLock doc comment, in-suite rather than only in
+// the external scratchpad script.
+describe('acquireStatusLock — move-aside/rename-back window (review round 3, documented residual)', () => {
+  let restore
+  let base
+
+  beforeEach(() => {
+    base = makeTempBase('threeway')
+    restore = withLockBase(base)
+  })
+
+  afterEach(() => {
+    restore()
+    try { fs.rmSync(path.dirname(base), { recursive: true, force: true }) } catch {}
+  })
+
+  it('class (a): a third acquirer claiming the vacated path leaves no orphan .stale.* dir behind', () => {
+    const lockDir = STATUS_LOCK_CONFIG.lockDir
+    fs.mkdirSync(lockDir, { recursive: true })  // crashed holder: no owner token, stale mtime
+    const past = new Date(Date.now() - 5_000)
+    fs.utimesSync(lockDir, past, past)
+
+    let A = null, C = null, fired = false, statTriggered = false
+    const realStat = fs.statSync.bind(fs)
+    const realRename = fs.renameSync.bind(fs)
+    const statSpy = vi.spyOn(fs, 'statSync').mockImplementation((p, o) => {
+      const st = realStat(p, o)
+      // Guard with statTriggered (set BEFORE the nested call), not just `!A` — A stays `null`
+      // for the ENTIRE duration of `A = acquireStatusLock()` since the assignment only lands
+      // after the call returns, so a bare `!A` check re-fires on every nested statSync(lockDir)
+      // call A itself makes, causing unbounded recursion (this bit a first draft of this test).
+      if (p === lockDir && !statTriggered) { statTriggered = true; A = acquireStatusLock() }
+      return st
+    })
+    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation((a, b) => {
+      const r = realRename(a, b)
+      if (a === lockDir && A && !fired) {
+        fired = true
+        // A third process claims the now-vacant canonical path WHILE B (the current
+        // acquireStatusLock call) is still mid-steal, before B's rename-back attempt.
+        C = acquireStatusLock()
+      }
+      return r
+    })
+
+    let B
+    try { B = acquireStatusLock() } finally { statSpy.mockRestore(); renameSpy.mockRestore() }
+
+    expect(A.ok).toBe(true)
+    expect(C.ok).toBe(true)
+    // B correctly refuses to become a THIRD simultaneous owner (the fix's actual guarantee).
+    expect(B.ok).toBe(false)
+    // The documented fix for this test: no leaked `.stale.*` directory from B's failed restore.
+    const leftovers = fs.readdirSync(path.dirname(lockDir)).filter((n) => n.includes('.stale.'))
+    expect(leftovers).toEqual([])
+
+    if (A.ok) releaseStatusLock(A.token)
+    if (C.ok) releaseStatusLock(C.token)
+  })
+
+  it('class (b): the rightful owner releasing mid-restore resurrects its lock at the canonical path (bounded zombie)', () => {
+    const lockDir = STATUS_LOCK_CONFIG.lockDir
+    fs.mkdirSync(lockDir, { recursive: true })
+    const past = new Date(Date.now() - 5_000)
+    fs.utimesSync(lockDir, past, past)
+
+    let A = null, fired = false, statTriggered = false
+    const realStat = fs.statSync.bind(fs)
+    const realRename = fs.renameSync.bind(fs)
+    const statSpy = vi.spyOn(fs, 'statSync').mockImplementation((p, o) => {
+      const st = realStat(p, o)
+      // See the twin test above for why `statTriggered` (not bare `!A`) is the correct guard.
+      if (p === lockDir && !statTriggered) { statTriggered = true; A = acquireStatusLock() }
+      return st
+    })
+    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation((a, b) => {
+      const r = realRename(a, b)
+      if (a === lockDir && A && !fired) {
+        fired = true
+        // A releases ITS OWN lock while it is sitting at the moved-aside path — release only
+        // ever touches the canonical path, finds nothing there right now, and no-ops.
+        releaseStatusLock(A.token)
+      }
+      return r
+    })
+
+    let B
+    try { B = acquireStatusLock() } finally { statSpy.mockRestore(); renameSpy.mockRestore() }
+
+    expect(B.ok).toBe(false)  // B still correctly refuses to claim ownership itself
+    // The documented residual: A's already-released lock is resurrected at the canonical path
+    // (a bounded zombie — self-heals once its mtime next exceeds staleMs).
+    expect(fs.existsSync(lockDir)).toBe(true)
+    const resurrectedToken = fs.readFileSync(path.join(lockDir, 'owner'), 'utf-8')
+    expect(resurrectedToken).toBe(A.token)
+
+    // Self-heals: backdate it again (simulating time passing past staleMs) and confirm a later
+    // acquirer correctly reclaims it rather than being wedged forever.
+    fs.utimesSync(lockDir, past, past)
+    const rescuer = acquireStatusLock()
+    expect(rescuer.ok).toBe(true)
+    releaseStatusLock(rescuer.token)
+  })
+})
+
 // ─── 2026-09-26 audit finding 2: atomicWriteJson retry-before-fallback ──────
 
 describe('atomicWriteJson — retry rename before falling back to a direct write (finding 2)', () => {

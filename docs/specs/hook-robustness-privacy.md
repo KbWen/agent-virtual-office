@@ -99,26 +99,54 @@ and what was deliberately left out.
      `EACCES` on the steal rename (observed on Windows when another process holds the lock's
      `owner` file open) as contended-not-gone: sleep and retry within the existing bound instead
      of proceeding unlocked immediately.
-   - **Honest residual (documented, not eliminated — a filesystem has no compare-and-swap)**: the
-     identity-capture reads happen as two back-to-back synchronous calls immediately before the
-     rename, not atomically with it; a process could still be descheduled in that exact narrower
-     gap. Worst case is the original pre-lock hazard this file exists to narrow (one lost
-     STATUS_FILE update), not a new failure class. `releaseStatusLock` has a narrower, symmetric
-     residual (read-token-then-`rmSync`, and a `null` token — the brief window between `mkdirSync`
-     and its own token write — is treated as safe to remove); this is documented rather than
-     closed with a rename-verify release, per review LOW #4 ("document or use rename-verify
-     release"). Full text: `docs/specs/hook-status-write-lock.md` Risks (both corrections) and the
-     `acquireStatusLock`/`releaseStatusLock` doc comments in the hook source.
+   - **Round 3 (2026-09-26, same-day fresh-reviewer /review — corrects the "Honest residual"
+     paragraph this bullet used to have here)**: the paragraph previously blamed the pre-rename
+     identity-capture gap (the two back-to-back reads just before the rename) as the residual.
+     That was the WRONG window — the post-rename identity check is exactly what catches anything
+     that changed in that gap. A fresh adversarial repro (renameSync interception, 3 concurrent
+     actors — scratchpad `review-hookpriv2/threeway.cjs`) located the REAL residual in the
+     MOVE-ASIDE / RENAME-BACK window instead: the time between "we renamed a lock away that
+     turned out not to be ours" and "we finished putting it back." Two consequences land there:
+     (a) a third acquirer can legitimately claim the now-vacant canonical path before the
+     rename-back runs — the rename-back then fails, so *we* correctly refuse to become a third
+     owner, but the process we mistakenly evicted and the third acquirer both still believe they
+     hold the lock (their earlier `{ok:true}` can't be un-told); (b) the rightful owner can
+     release while its lock sits at the moved-aside path (release only ever touches the
+     canonical path, finds nothing there, no-ops) — the rename-back then resurrects that
+     already-released lock as a zombie at the canonical path, self-healing once its mtime next
+     exceeds `staleMs`. Both require ≥3 concurrent hook invocations racing a genuinely stale
+     (crashed-holder) lock within a sub-millisecond window — not reachable from ordinary
+     single-writer traffic — and both worst cases match the SAME envelope the lock exists to
+     narrow: one lost STATUS_FILE update (a), or a bounded ≤`staleMs` (~2s) self-healing
+     unavailability window (b) — not an unbounded wedge or a new failure class.
+   - **Fixed as part of round 3**: class (a) used to leak an orphaned `.stale.*` directory on
+     disk (B's failed rename-back had nowhere to put the evicted content, and nothing cleaned it
+     up). `acquireStatusLock` now `fs.rmSync`s the evicted directory whenever the rename-back
+     fails, so no `.stale.*` cruft accumulates — this does not change which processes end up
+     believing they hold the lock (that is the accepted, bounded residual above), only whether a
+     disk artifact is left behind. The misleading `/* lockDir no longer free, or already gone —
+     either way, not ours to fix */` comment on the rename-back's catch block is replaced with an
+     accurate description of both failure causes.
+   - `releaseStatusLock` has a narrower, symmetric residual (read-token-then-`rmSync`, and a
+     `null` token — the brief window between `mkdirSync` and its own token write — is treated as
+     safe to remove); documented rather than closed with a rename-verify release, per review LOW
+     #4 ("document or use rename-verify release"). Full text: `docs/specs/hook-status-write-lock.md`
+     Risks (all three corrections) and the `acquireStatusLock`/`releaseStatusLock` doc comments
+     in the hook source.
    - **Removed claim**: "two racers can never BOTH win" no longer appears anywhere in the spec or
-     source comments — it was false both times it was written (once for the original rmdir+mkdir
-     steal, once for the round-1 rename-based steal), and the actual guarantee (mkdir atomicity
-     for a *fresh*, non-stale lock race) is stated narrowly where it is still true.
+     source comments — it was false every time it was written (the original rmdir+mkdir steal,
+     the round-1 rename-based steal, and — implicitly, via the wrongly-blamed residual — round 2's
+     own residual framing), and the actual guarantee (mkdir atomicity for a *fresh*, non-stale
+     lock race) is stated narrowly where it is still true.
    - All three call sites (`StopFailure`, `Stop`, main write path) retain and pass their
      `acquireStatusLock()` result's `.token` to `releaseStatusLock()`.
-   - **Worst-case wait updated**: acquire alone ≤ ~250ms; combined with the write-retry budget
-     added by fix 2, most events are ≤ ~295ms and `UserPromptSubmit`/`PreToolUse` (which retry the
-     write up to 3 times) are ≤ ~385ms — see `hook-status-write-lock.md` AC-2 for the breakdown.
-     The previous flat "≤300ms" figure did not account for the write-retry budget.
+   - **Worst-case wait, nominal vs measured**: acquire alone is ≤ ~250ms nominal (10×25ms) but
+     measured ~320ms on the reviewer's and this session's Windows box (real syscall/scheduling
+     overhead a sleep-budget sum doesn't model); `atomicWriteJson` alone is ≤ ~45ms nominal but
+     measured ~93ms. Combined: most events (one write attempt) are ≤ ~295ms nominal / ~413ms
+     measured; `UserPromptSubmit`/`PreToolUse` (3 write attempts) are ≤ ~385ms nominal / ~599ms
+     measured. See `hook-status-write-lock.md` AC-2 for the full table. Both bounds stay well
+     under a second and only apply under active contention — the common case adds 0ms.
 2. **Non-atomic fallback** (`office-status-hook.js`, 4 call sites: `StopFailure`, `Stop`'s two
    internal writes, and the main write path): extracted into one shared `atomicWriteJson(target,
    json)` helper that retries the tmp-write + rename up to 3 times with a short bounded
@@ -198,17 +226,33 @@ decision. Two things were deliberately narrowed rather than fixed in full:
   scoped its finding to. Folding it into `atomicWriteJson()` anyway would be an unrequested
   refactor of a file the audit didn't flag as broken.
 
-## Decisions
+## Domain Decisions
 
-- **D-1**: `GET /api/status` stays unauthenticated (no `OFFICE_API_TOKEN` gate on reads) and keeps
-  serving `activeFile`/`_cwd` verbatim. Rationale: the default bind is loopback-only
-  (`server.mjs` `bindHost = '127.0.0.1'` unless `--host` is passed), so the exposure only reaches
-  another machine when the operator has already opted into LAN mode — the same trust boundary
-  `server.mjs` already warns about for the *write* side (`--host` + no `OFFICE_API_TOKEN` prints a
-  startup warning). Extending that warning to cover the read side, or gating GET behind the token
-  when one is set, is a reasonable follow-up but touches `server.mjs`, which is outside this
-  branch's target files. Recorded here so it isn't lost; not filed as a backlog item without
-  owner sign-off on priority.
+- [DECISION] `GET /api/status` stays unauthenticated and keeps serving `activeFile`/`_cwd`
+  verbatim — the default bind is loopback-only, so exposure only reaches another machine once
+  the operator has already opted into `--host` (the same trust boundary the existing write-side
+  warning covers); fixing the read side touches `server.mjs`, outside this branch's target files.
+- [TRADEOFF] Identity-verified lock steal (owner token + mtime, re-checked after the rename) adds
+  ~93-320ms measured worst-case latency under active contention in exchange for closing the
+  double-steal TOCTOU; accepted since steals are already the rare, already-contended path and the
+  common case (no contention) adds 0ms.
+- [DECISION] Accept the move-aside/rename-back window's two residual outcomes — a bounded
+  double-claim when a third acquirer races the restore, and a bounded (≤staleMs) self-healing
+  zombie lock — rather than adding OS-level file locking (`flock`/`LockFileEx`) or a second lock
+  primitive; both match the pre-lock baseline hazard this file exists to narrow, not a new class.
+- [CONSTRAINT] The hook must never hang or add unbounded latency — every steal-path addition
+  (identity check, EPERM/EBUSY retry, orphan cleanup) stays inside the existing
+  `maxRetries × waitMs` budget.
+- [DECISION] `WebSearch`/`Agent` privacy fixes reuse the existing generic-noun fallback labels
+  (no new locale strings) rather than inventing new office-vibe copy for two tools.
+- [DECISION] `bridge.js` duplicates `HOOK_ORIGIN` from `inferStatus.js` (kept in sync via a
+  comment) rather than adding a bundler dependency to a standalone, no-build-step script.
+- [DECISION] `saveSkillContext`'s non-atomic write is left untouched — it is a single-agent cache
+  file, not the shared multi-writer `STATUS_FILE` the audit scoped `atomicWriteJson` to; folding
+  it in would be an unrequested refactor of a file the audit never flagged.
+- [TRADEOFF] `releaseStatusLock`'s read-token-then-`rmSync` residual (LOW #4) is documented, not
+  closed with a rename-verify release — the window is narrower than the acquire-side one and its
+  severity (LOW) does not currently justify the added machinery.
 
 ## Acceptance Criteria
 
@@ -220,7 +264,15 @@ decision. Two things were deliberately narrowed rather than fixed in full:
   completed a full steal-and-recreate cycle in the interim" — a forced `fs.statSync` interception
   test (`tests/hookWriteLock.test.js` "forced-interleaving TOCTOU repro") is required to prove
   this specific case; the original 8-worker spawn test does not discriminate it (it passed even
-  against the disproven round-1 fix).
+  against the disproven round-1 fix). **Amended again (review round 3)**: three more tests pin
+  the remaining, accepted-bounded surface — two `vi.spyOn(fs.renameSync)`-based mutant-killers
+  proving the token check and the mtime check are each independently load-bearing (a mutant
+  keeping only one of the two survives the round-2 test but is killed by these), one proving the
+  `EPERM`/`EBUSY` retry path (LOW #3) is load-bearing, and two (`class (a)`/`class (b)`) that pin
+  the move-aside/rename-back window's two documented consequences — an orphaned `.stale.*`
+  directory (now cleaned up) and a bounded, self-healing zombie lock (documented, not eliminated).
+  All five verified by manual mutation (temporarily reverting the corresponding source line and
+  confirming the specific new test fails) — see Work Log Evidence for the red/green transcript.
 - **AC-2**: `atomicWriteJson` retries rename on failure before falling back to a direct write; a
   unit test forces `renameSync` to fail N times then succeed and asserts the tmp-retry path is
   taken instead of the immediate direct-write fallback.

@@ -265,14 +265,34 @@ function _readOwnerToken(lockDir) {
  * legitimately holds (their fresh recreate raced ours): best-effort rename it back (only
  * succeeds if `lockDir` is currently free) and go back to waiting — we do NOT claim ownership.
  *
- * Honest residual (a filesystem has no compare-and-swap, so this narrows the window rather than
- * closing it to zero): the owner-token read and the mtime read happen as two back-to-back
- * synchronous calls just before the rename, not atomically WITH it. A process could still be
- * descheduled between reading identity and calling renameSync, and another process could steal,
- * release, and re-steal the SAME path in that exact window with a token collision (astronomically
- * unlikely — tokens are pid+timestamp+random) such that the post-rename identity check passes by
- * coincidence. Worst case if that ever happened is the ORIGINAL pre-lock hazard this lock exists
- * to narrow: one lost update on a single STATUS_FILE write, not a systemic double-ownership bug.
+ * Honest residual (2026-09-26 review round 3 — corrects the PRIOR "honest residual" paragraph,
+ * which named the wrong window): the pre-rename identity-capture gap (owner-token read + mtime
+ * read, just before the rename) is NOT where the remaining risk lives — the post-rename identity
+ * check above is exactly what catches a mismatch caused by something changing in that gap. The
+ * REAL residual is the MOVE-ASIDE / RENAME-BACK window itself, i.e. the time between "we just
+ * renamed a lock away that turned out not to be ours" and "we finished putting it back." A fresh
+ * adversarial repro (renameSync interception, 3 concurrent actors — scratchpad
+ * `review-hookpriv2/threeway.cjs`) proved two distinct consequences land in that window:
+ *   (a) A third acquirer can legitimately claim the now-VACANT canonical path before our
+ *       rename-back runs. Our rename-back then fails (the target exists again), so we correctly
+ *       do NOT claim ownership ourselves — but the process whose lock we mistakenly evicted (now
+ *       stuck at the orphaned `evicted` path) and the third acquirer (now at the canonical path)
+ *       both still believe they hold the lock. We clean up the orphaned `evicted` directory
+ *       either way (see below) so it does not leak on disk, but we cannot un-ring that bell for
+ *       the two processes that were already told `{ok:true}`.
+ *   (b) The lock's rightful owner can release while its lock is sitting at the moved-aside path
+ *       (its release only ever touches the CANONICAL path, finds nothing there, and no-ops).
+ *       Our rename-back then succeeds and resurrects that lock — now unowned by any live process
+ *       — at the canonical path. It sits there as a zombie until its mtime naturally exceeds
+ *       `staleMs` again, at which point the normal steal path reclaims it exactly like any other
+ *       crashed-holder lock.
+ * Both consequences require ~3 concurrent hook invocations racing a genuinely stale (crashed
+ * holder) lock within a sub-millisecond window — not reachable from ordinary single-writer
+ * traffic. Their worst case is bounded and matches the SAME envelope the lock exists to narrow
+ * in the first place: (a) one lost STATUS_FILE update from the evicted-but-not-restored process
+ * (identical to the pre-lock baseline hazard), and (b) a bounded, self-healing unavailability
+ * window of at most `staleMs` (~2s) before the zombie is reclaimed — not an unbounded wedge.
+ * A filesystem has no directory-level compare-and-swap, so this is narrowed, not eliminated.
  */
 function acquireStatusLock() {
   const { lockDir, staleMs, waitMs, maxRetries } = STATUS_LOCK_CONFIG
@@ -316,7 +336,14 @@ function acquireStatusLock() {
             // We evicted a lock that is NOT the stale one we judged — it now belongs to
             // whoever legitimately holds it. Put it back (best-effort; only succeeds if
             // lockDir is currently free) and retry from scratch. We never claim ownership here.
-            try { fs.renameSync(evicted, lockDir) } catch { /* lockDir no longer free, or already gone — either way, not ours to fix */ }
+            let restored = false
+            try { fs.renameSync(evicted, lockDir); restored = true } catch {
+              // Restore failed — per the class (a) race in the doc comment above, a THIRD
+              // process already claimed lockDir while we were mid-steal. `evicted` is now
+              // unreachable cruft (nothing will ever look at this specific `.stale.*` path
+              // again): clean it up rather than leaking it on disk.
+            }
+            if (!restored) { try { fs.rmSync(evicted, { recursive: true, force: true }) } catch {} }
             if (attempt < maxRetries) _syncSleep(waitMs)
             continue
           }

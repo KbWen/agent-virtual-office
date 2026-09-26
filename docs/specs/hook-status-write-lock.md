@@ -36,12 +36,24 @@ hardening-wave H3.
   after the rename, ALWAYS released via try/finally).
 - **AC-2** Bounded: acquire returns `{ok:false}` after the retry budget and the handler proceeds
   unlocked exactly as today (no thrown errors, no user-visible stall). Total worst-case added
-  latency (corrected 2026-09-26, see Risks): acquire alone is bounded ≤ ~250ms (10 × 25ms) under
-  active contention; the write-side retry added by `atomicWriteJson` (finding 2) adds up to
-  another ~45ms per write attempt on top of that. Most events make exactly one write attempt
-  (≤ ~295ms combined worst case); `UserPromptSubmit`/`PreToolUse` retry the write up to 3 times
-  (≤ ~385ms combined worst case). The previous "≤ ~300ms" figure here did not account for the
-  write-retry budget added alongside the lock.
+  latency (corrected 2026-09-26, see Risks) — **nominal** (from the constants alone) vs
+  **measured** (2026-09-26 review, this Windows box, forced-failure probe — real syscall/OS
+  scheduling overhead the constants don't capture):
+
+  | Component | Nominal (10 × 25ms / 3 × 15ms) | Measured (this box) |
+  | --- | --- | --- |
+  | Lock acquire alone (contended, budget exhausted) | ≤ ~250ms | **~320ms** (310–345ms observed) |
+  | `atomicWriteJson` alone (rename always fails, falls back) | ≤ ~45ms | **~93ms** |
+  | Combined, single write attempt (most events) | ≤ ~295ms | **~413ms** |
+  | Combined, `UserPromptSubmit`/`PreToolUse` (3 write attempts) | ≤ ~385ms | **~599ms** (320 + 3×93) |
+
+  The nominal figures are what the constants (`maxRetries×waitMs`, `atomicWriteJson`'s
+  `retries×waitMs`) sum to; the measured figures include real `fs.mkdirSync`/`renameSync`
+  syscall latency and OS scheduling jitter that a pure sleep-budget sum does not model. Both are
+  still well under a second and only apply under active contention (the common case is 0ms
+  added latency — the very first `mkdirSync` succeeds). The previous "≤ ~300ms" figure here was
+  the nominal lock-only number, presented as the combined total, and predates the write-retry
+  budget added alongside the lock.
 - **AC-3** Stale-lock steal: a lock dir whose mtime is older than 2s is removed and retaken via an
   identity-verified renameSync steal (owner token + mtime compared before/after the rename — see
   Risks correction below); a crashed hook process cannot wedge subsequent hooks.
