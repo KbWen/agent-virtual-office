@@ -26,12 +26,32 @@ const os = require('os')
 
 // ─── CLI args ─────────────────────────────────────────────────────────────────
 
+// 2026-09-26 audit finding 5: the shipped docs (docs/INTEGRATIONS.md lines 201/215) invoke this
+// script with `--port=5174` (one argv token), but parseArgs only recognized the two-token
+// `--port 5174` form — the `=` form was silently ignored, falling back to the default port.
+// Support both forms for every flag: `--flag value` and `--flag=value`.
 function parseArgs(argv) {
   const args = { port: 5174, watch: process.cwd(), source: 'generic' }
   for (let i = 2; i < argv.length; i++) {
-    if (argv[i] === '--port' && argv[i + 1]) { args.port = /^\d+$/.test(argv[i + 1]) ? parseInt(argv[i + 1], 10) : NaN; i++ }
-    else if (argv[i] === '--watch' && argv[i + 1]) { args.watch = path.resolve(argv[i + 1]); i++ }
-    else if (argv[i] === '--source' && argv[i + 1]) { args.source = argv[i + 1]; i++ }
+    const tok = argv[i]
+    const eq = tok.indexOf('=')
+    let flag, inlineValue
+    if (eq !== -1 && tok.startsWith('--')) {
+      flag = tok.slice(0, eq)
+      inlineValue = tok.slice(eq + 1)
+    } else {
+      flag = tok
+      inlineValue = undefined
+    }
+    const takeValue = () => {
+      if (inlineValue !== undefined) return inlineValue
+      const next = argv[i + 1]
+      if (next !== undefined) i++
+      return next
+    }
+    if (flag === '--port') { const v = takeValue(); if (v !== undefined) args.port = /^\d+$/.test(v) ? parseInt(v, 10) : NaN }
+    else if (flag === '--watch') { const v = takeValue(); if (v) args.watch = path.resolve(v) }
+    else if (flag === '--source') { const v = takeValue(); if (v) args.source = v }
   }
   if (!args.port || args.port < 1 || args.port > 65535) {
     console.error(`[bridge] Invalid port: ${args.port}. Must be 1-65535.`)
@@ -233,7 +253,7 @@ function resetIdleTimer(port, source) {
   }, IDLE_TIMEOUT_MS)
 }
 
-function onFileChange(filePath, port, source) {
+function onFileChange(filePath, port, source, watchDir) {
   const role = fileToRole(filePath)
 
   // Update tracking
@@ -244,8 +264,13 @@ function onFileChange(filePath, port, source) {
   debounceTimers.set(role, setTimeout(() => {
     debounceTimers.delete(role)
 
-    // On debounce tick: refresh changed files from git to get accurate picture
-    const changed = getGitChangedFiles(process.cwd())
+    // On debounce tick: refresh changed files from git to get accurate picture.
+    // 2026-09-26 audit finding 5: this used to call getGitChangedFiles(process.cwd()) — the
+    // BRIDGE PROCESS's own cwd, not the watched project (`watchDir`). Both servers/CLIs are
+    // spawned with `cwd: root` (bin/cli.js), so this silently no-op'd whenever the bridge was
+    // launched from a different directory than `--watch` — exactly the documented multi-worktree
+    // use case (docs/INTEGRATIONS.md "Multi-Worktree Support").
+    const changed = getGitChangedFiles(watchDir)
     for (const cf of changed) {
       const r = fileToRole(cf)
       // Only update if we haven't already seen this role from fs.watch
@@ -262,8 +287,29 @@ function onFileChange(filePath, port, source) {
 
 // ─── File watcher ─────────────────────────────────────────────────────────────
 
-// Paths to ignore (avoid noise from build artifacts, caches, and the status file itself)
-const IGNORE_RE = /node_modules|\.git|dist|\.next|\.nuxt|\.turbo|office-status/
+// Paths to ignore (avoid noise from build artifacts, caches, and the status file itself).
+// 2026-09-26 audit finding 5: the old single unanchored regex matched `\.git` and `dist` as
+// SUBSTRINGS anywhere in the path — `.git` also matched `.github/…` (permanently killing the
+// `.github` → `ops` rule in fileToRole(), since the watcher filtered those paths out before
+// fileToRole ever saw them) and `dist` matched any filename containing it, e.g. `distance.js`.
+// Split into a path-segment-anchored directory check and a basename-only check: `office-status`
+// is INTENTIONALLY still a substring match on the basename — it exists to filter out the
+// bridge's own hook/status files by name (e.g. `office-status-hook.js`), not a directory.
+const IGNORE_DIR_RE = /(^|[\\/])(node_modules|\.git|dist|\.next|\.nuxt|\.turbo)([\\/]|$)/
+const IGNORE_FILE_RE = /office-status/
+// 2026-09-26 review finding LOW #6: the anchored regex above still tested the ABSOLUTE path —
+// a --watch dir living under any ancestor directory named node_modules/.git/dist/.next/.nuxt/
+// .turbo (e.g. a project checked out at /builds/dist/my-project) matched every single event and
+// silently ignored the entire watch. Test the path RELATIVE to the watched project instead, so
+// only segments INSIDE the watched tree can trigger the ignore rule. `watchDir` is optional so
+// existing callers that only have an absolute path (none remain in this file, kept for safety)
+// degrade to the old absolute-path behavior rather than throwing.
+function shouldIgnorePath(fullPath, watchDir) {
+  const rel = watchDir ? path.relative(watchDir, fullPath) : fullPath
+  const norm = rel.replace(/\\/g, '/')
+  if (IGNORE_DIR_RE.test(norm)) return true
+  return IGNORE_FILE_RE.test(path.basename(norm))
+}
 
 function startWatcher(watchDir, port, source) {
   let watcher
@@ -273,8 +319,8 @@ function startWatcher(watchDir, port, source) {
     watcher = fs.watch(watchDir, { recursive: true }, (eventType, filename) => {
       if (!filename) return
       const full = path.join(watchDir, filename)
-      if (IGNORE_RE.test(full.replace(/\\/g, '/'))) return
-      onFileChange(full, port, source)
+      if (shouldIgnorePath(full, watchDir)) return
+      onFileChange(full, port, source, watchDir)
     })
   } catch {
     // Fall back to watching src/ only (Linux without inotify flags)
@@ -284,8 +330,8 @@ function startWatcher(watchDir, port, source) {
       watcher = fs.watch(target, { recursive: false }, (eventType, filename) => {
         if (!filename) return
         const full = path.join(target, filename)
-        if (IGNORE_RE.test(full.replace(/\\/g, '/'))) return
-        onFileChange(full, port, source)
+        if (shouldIgnorePath(full, watchDir)) return
+        onFileChange(full, port, source, watchDir)
       })
       console.warn(`[bridge] Recursive watch unavailable — watching ${target} only`)
     } catch (err) {
@@ -345,4 +391,10 @@ function main() {
   process.on('SIGTERM', () => shutdown(port, source, watcher))
 }
 
-main()
+// Guard direct execution vs `require()` so unit tests can exercise the pure helpers
+// (parseArgs, shouldIgnorePath, fileToRole) without starting a real file watcher / HTTP client.
+if (require.main === module) {
+  main()
+}
+
+module.exports = { parseArgs, fileToRole, shouldIgnorePath, IGNORE_DIR_RE, IGNORE_FILE_RE }

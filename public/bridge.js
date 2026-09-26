@@ -35,6 +35,21 @@
   const VALID_STATUSES = ['idle', 'working', 'blocked', 'done', 'planning', 'awaiting-approval']
   const DEFAULT_SOURCE = detectDefaultSource()
 
+  // 2026-09-26 audit finding 4 (bridge spoofing): must stay in sync with the identically-named
+  // set in `src/inference/inferStatus.js` (`HOOK_ORIGIN`). This file is a standalone script
+  // (loaded via a plain <script> tag, no bundler) so it cannot `import` that module — the set
+  // is duplicated here deliberately. `inferStatus.js` treats these sources as sharing one
+  // monotonic clock and uses their `_seq` as a stale-drop high-water mark; a page (or a crafted
+  // `bridge.html?source=claude-cli&_seq=<future>` URL) claiming one of these origins could raise
+  // that mark and cause real, later hook updates to be dropped as "stale". Any caller-supplied
+  // `source` naming one of these is replaced with the page's own DEFAULT_SOURCE.
+  const HOOK_ORIGIN = new Set(['claude-cli', 'codex-cli', 'multi-session', 'file-watcher'])
+
+  function sanitizeSource(src) {
+    if (src && HOOK_ORIGIN.has(src)) return DEFAULT_SOURCE
+    return src || DEFAULT_SOURCE
+  }
+
   let bc = null
   try { bc = new BroadcastChannel(CHANNEL_NAME) } catch (_) {}
 
@@ -50,7 +65,7 @@
     const agents = []
     let workflow = obj.workflow || null
     let activeCount = obj.activeCount || 0
-    let source = obj.source || DEFAULT_SOURCE
+    let source = sanitizeSource(obj.source)
     let globalLabel = obj.label || null
 
     for (const key of VALID_ROLES) {
@@ -72,7 +87,10 @@
       activeCount,
       workflow,
       source,
-      _seq: obj._seq || String(Date.now()),
+      // Always our own — never the caller's. See HOOK_ORIGIN comment above: a caller-supplied
+      // `_seq` (including one arriving via URL params) could otherwise poison the client's
+      // stale-drop high-water mark.
+      _seq: String(Date.now()),
     }
   }
 
@@ -80,8 +98,8 @@
     const msg = shorthand.type === 'office-status'
       ? {
           ...shorthand,
-          source: shorthand.source || DEFAULT_SOURCE,
-          _seq: shorthand._seq || String(Date.now()),
+          source: sanitizeSource(shorthand.source),
+          _seq: String(Date.now()),
         }
       : parseShorthand(shorthand)
 
