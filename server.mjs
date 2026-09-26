@@ -16,6 +16,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import net from 'node:net'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
@@ -119,6 +120,16 @@ function atomicWrite(filePath, content) {
 const isWin = process.platform === 'win32'
 function pathsEqual(a, b) { return isWin ? a.toLowerCase() === b.toLowerCase() : a === b }
 
+// F1 (audit 2026-09-26): `new URL(req.url, base)` throws TypeError('Invalid URL') on a
+// malformed request-target (e.g. an absolute-form target with an invalid authority, or a
+// stray '['). That throw happens synchronously inside the http.createServer request-listener
+// callback — req/res 'error' listeners do NOT catch it — so an uncaught throw here crashes
+// the entire process on a single crafted request. Every call site that needs to parse
+// req.url MUST go through this helper instead of calling `new URL()` directly.
+function safeParseUrl(reqUrl) {
+  try { return new URL(reqUrl, 'http://x') } catch { return null }
+}
+
 // ─── SSE clients ──────────────────────────────────────────────────────────────
 const sseClients = new Set()
 
@@ -154,6 +165,38 @@ function getServerIPs() {
   return ips
 }
 const SERVER_IPS = getServerIPs()
+
+// F3 (audit 2026-09-26): DNS-rebinding guard. Without a Host-header check, a malicious page
+// can rebind an attacker-controlled hostname to 127.0.0.1 and issue a same-origin GET against
+// this server from the victim's browser — bypassing our Origin-based CORS entirely, since
+// CORS never restricts simple GETs, only whether the response is *readable* cross-origin by
+// script, and a top-level/rebound navigation IS same-origin from the browser's point of view.
+// Mirrors Vite's own `server.allowedHosts` semantics (dev is already covered by Vite's
+// internal hostValidationMiddleware — this closes the same gap in the production server).
+const ALLOWED_HOSTS_ENV = (process.env.OFFICE_ALLOWED_HOSTS || '')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+
+// Host header may be `host`, `host:port`, or `[v6-literal]:port`. Strip the port and any
+// IPv6 brackets so the remainder can be compared as a bare hostname/IP.
+function hostnameFromHeader(hostHeader) {
+  if (typeof hostHeader !== 'string' || !hostHeader) return null
+  const bracketed = hostHeader.match(/^\[([^\]]+)\](?::\d+)?$/)
+  if (bracketed) return bracketed[1].toLowerCase()
+  const idx = hostHeader.lastIndexOf(':')
+  if (idx !== -1 && /^\d+$/.test(hostHeader.slice(idx + 1))) return hostHeader.slice(0, idx).toLowerCase()
+  return hostHeader.toLowerCase()
+}
+
+function isAllowedHost(hostHeader) {
+  const host = hostnameFromHeader(hostHeader)
+  if (!host) return false
+  if (host === 'localhost' || host.endsWith('.localhost')) return true
+  if (net.isIP(host)) return true // any IP literal (v4/v6) — matches Vite's allowedHosts default
+  for (const ip of SERVER_IPS) {
+    if (ip.replace(/^\[|\]$/g, '').toLowerCase() === host) return true
+  }
+  return ALLOWED_HOSTS_ENV.includes(host)
+}
 
 const apiToken = process.env.OFFICE_API_TOKEN?.trim() || null
 const allowedOrigins = (process.env.OFFICE_API_ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean)
@@ -418,7 +461,9 @@ const MIME = {
 
 function serveStatic(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.setHeader('Allow', 'GET, HEAD'); res.statusCode = 405; return res.end() }
-  const urlPath = new URL(req.url, 'http://x').pathname
+  const parsedUrl = safeParseUrl(req.url)
+  if (!parsedUrl) { res.statusCode = 400; return res.end('Bad Request') }
+  const urlPath = parsedUrl.pathname
   // Reject NUL bytes which can cause filesystem misbehavior on some platforms.
   if (urlPath.includes('\0')) { res.statusCode = 400; return res.end('Bad Request') }
   let target = path.join(dist, urlPath)
@@ -467,7 +512,19 @@ const server = http.createServer((req, res) => {
   req.on('error', () => {})
   res.on('error', () => {})
   res.setHeader('X-Content-Type-Options', 'nosniff')
-  const url = new URL(req.url, 'http://x')
+
+  // F3: reject requests whose Host header doesn't resolve to an allowed host BEFORE any
+  // routing — closes the DNS-rebinding read across every route (API, SSE, and static assets
+  // alike; Vite's own dev-server host guard applies the same way for consistency).
+  if (!isAllowedHost(req.headers.host)) {
+    res.statusCode = 403
+    return res.end('Forbidden: Host not allowed. Set OFFICE_ALLOWED_HOSTS to permit additional hostnames.')
+  }
+
+  // F1: never let a malformed request-target's `new URL()` throw escape this callback —
+  // req/res 'error' listeners above do not catch a synchronous throw in the listener body.
+  const url = safeParseUrl(req.url)
+  if (!url) { res.statusCode = 400; return res.end('Bad Request') }
   if (url.pathname === '/api/status') return handleStatus(req, res)
   if (url.pathname === '/api/status/stream') {
     setCors(res, req.headers.origin, 'GET, OPTIONS')
