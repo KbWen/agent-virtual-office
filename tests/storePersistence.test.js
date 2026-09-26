@@ -5,6 +5,8 @@ import {
   validatePersistedDailyDoneLedger,
   persistedSnapshotKey,
   salvageStalePersistedState,
+  resolvePersisted,
+  shouldWritePersistedSnapshot,
 } from '../src/systems/store.js'
 
 describe('createPersistedState', () => {
@@ -274,5 +276,59 @@ describe('salvageStalePersistedState — same-day ledger survival past the 4h cu
     const salvaged = salvageStalePersistedState(stale)
     const revalidated = validatePersistedDailyDoneLedger(salvaged.dailyDoneLedger)
     expect(revalidated.counts).toEqual({})   // stale day → reset, not resurrected
+  })
+})
+
+describe('resolvePersisted — pure loadPersistedState extraction (R4 review follow-up)', () => {
+  it('returns the blob as-is when fresh (within 4h)', () => {
+    const now = 1_000_000_000
+    const raw = JSON.stringify({
+      _savedAt: now - 1000,
+      agents: { dev: { behavior: 'typing' } },
+      dailyDoneLedger: { dayKey: 'x', counts: {} },
+    })
+    const result = resolvePersisted(raw, now)
+    expect(result.agents).toEqual({ dev: { behavior: 'typing' } })
+  })
+
+  it('salvages same-day ledgers (never null) when stale (>4h) — kills a "return null" mutation', () => {
+    const now = 1_000_000_000
+    const stale = {
+      _savedAt: now - 5 * 60 * 60 * 1000,
+      agents: { dev: { behavior: 'typing' } },
+      dailyDoneLedger: { dayKey: 'today', counts: { dev: 4 } },
+    }
+    const result = resolvePersisted(JSON.stringify(stale), now)
+    // Before R4's wiring test existed, a mutation collapsing the stale branch to `return null`
+    // survived (it deleted the ledgers along with the positions — finding 4 regressed silently).
+    expect(result).not.toBeNull()
+    expect(result.dailyDoneLedger).toEqual(stale.dailyDoneLedger)
+    expect(result.agents).toBeUndefined()   // stale positions still correctly dropped
+  })
+
+  it('returns null for missing/malformed raw input', () => {
+    expect(resolvePersisted(null)).toBeNull()
+    expect(resolvePersisted(undefined)).toBeNull()
+    expect(resolvePersisted('')).toBeNull()
+    expect(resolvePersisted('{not json')).toBeNull()
+  })
+})
+
+describe('shouldWritePersistedSnapshot — R6 review follow-up (savedAt freshness on unchanged content)', () => {
+  it('always writes when the content key differs', () => {
+    expect(shouldWritePersistedSnapshot('keyA', 'keyB', 1000, 0, 1_800_000)).toBe(true)
+    expect(shouldWritePersistedSnapshot('keyA', null, 1000, 0, 1_800_000)).toBe(true)
+  })
+
+  it('skips when content is unchanged and the refresh window has not elapsed', () => {
+    expect(shouldWritePersistedSnapshot('keyA', 'keyA', 1_000_000, 999_000, 1_800_000)).toBe(false)
+  })
+
+  it('still writes on a slow cadence when content is unchanged but the refresh window elapsed', () => {
+    // Without this, a quiet-but-open office's `_savedAt` never advances past the last real
+    // content change, so the 4h loadPersistedState cutoff silently measures "since last
+    // content change" instead of "since the tab was last open" — a long-quiet reload could
+    // lose agent positions even though the tab was never actually closed.
+    expect(shouldWritePersistedSnapshot('keyA', 'keyA', 1_800_001, 0, 1_800_000)).toBe(true)
   })
 })

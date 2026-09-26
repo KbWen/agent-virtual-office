@@ -254,17 +254,19 @@ export function isNumericSeq(seq) {
   return typeof seq === 'string' && /^\d+$/.test(seq)
 }
 
-// R1 fix: whether a poll-probe result should refresh the staleness timer. `unchanged` is set
-// only for a 304 from pollFileStatusOnce's GET /api/status — the server's GET handler
-// (server.mjs handleStatus) recomputes scanAndMerge() fresh on every request, so a 304 is
-// proof the server just re-derived the SAME state from live session files, not a cached
-// echo of a possibly-dead hook. Refreshing staleness on it therefore cannot hide a genuinely
-// dead hook: once the underlying session ages past the server's own STALE_MS (scanSessions.mjs,
-// 300s), scanAndMerge's output changes, the ETag stops matching, and a real (non-304) message
-// is delivered — which still clears normally via applyMessage's own resetStalenessTimer call.
-// Without this, a single long tool call with no intermediate hook writes (e.g. a multi-minute
-// test run) hit the client's 120s STALENESS_TIMEOUT and showed the agent as idle while it was
-// still genuinely working.
+// R1 fix: whether a poll-probe result should refresh the staleness timer below. `unchanged` is
+// set only for a 304 from pollFileStatusOnce's GET /api/status — the server's GET handler
+// (server.mjs handleStatus) recomputes scanAndMerge() fresh on every request, so a 304 is proof
+// the server just re-derived the SAME state from live session files, not a cached echo.
+// Refreshing staleness on it prevents this 120s STALENESS_TIMEOUT sweep from firing EARLY —
+// before the fix, a single long tool call with no intermediate hook writes (e.g. a multi-minute
+// test run) hit this 120s timeout and showed the agent as idle while it was still genuinely
+// working. This does NOT make the honesty guarantee unbounded, though: each externalStatus
+// entry carries its own `expiresAt` (buildExtEntry in store.js, now+300000), independently
+// re-checked every 5s by the expiryInterval below — that field is untouched by a 304 (only a
+// delivered, applied message renews it). So a hook that goes fully silent still goes idle within
+// ~300–305s regardless of this timer, same as before the fix — the fix only removes the
+// premature 120s cutoff that used to fire well before that pre-existing 5-min backstop.
 export function shouldRefreshStalenessOnProbe(result) {
   return Boolean(result && result.unchanged)
 }
@@ -508,7 +510,13 @@ function startFilePolling(callback, baseIntervalMs = 1000, onProbe = null) {
 // Falls back to HTTP polling if EventSource is unavailable or the endpoint errors.
 // onGiveUp is called with no arguments when the SSE connection permanently fails
 // (5 consecutive errors with no successful event), so the caller can restore fast polling.
-function startSSEListening(callback, onProbe = null, onGiveUp = null) {
+// onOpen is called with no arguments the moment the underlying connection's network-level
+// 'open' event fires — this is the earliest genuine proof the endpoint is reachable (a real
+// EventSource only fires 'open' once the server has responded; if the server is down it never
+// fires, 'error' does instead). R1 fix: the caller uses this (not "startSSEListening returned a
+// cleanup function", which happens synchronously for every attempt including ones about to fail)
+// to decide when it is safe to drop from fast polling down to the slow heartbeat cadence.
+function startSSEListening(callback, onProbe = null, onGiveUp = null, onOpen = null) {
   if (typeof EventSource === 'undefined') return null
   if (typeof window !== 'undefined') {
     const proto = window.location.protocol
@@ -537,6 +545,9 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null) {
     es = new EventSource('/api/status/stream')
 
     es.addEventListener('open', () => {
+      // R1 fix: tell the caller the connection is genuinely live BEFORE the MIN_STABLE_MS
+      // stability wait below — the caller needs this to switch off fast polling safely.
+      if (onOpen) onOpen()
       // Schedule streak reset after MIN_STABLE_MS of connection uptime.
       // Fires regardless of whether the server has sent any events — covers quiet
       // servers where no tool calls are in flight for extended periods.
@@ -963,7 +974,8 @@ export function startStatusIntegration(store) {
     // R2 fix: previously SSE was abandoned forever once it gave up, leaving the client on
     // 1s/8s-backoff polling for the rest of the page's life even after the server recovered.
     // Retry the SSE connection on a slow interval; a successful reconnect switches back down
-    // to the heartbeat cadence inside connectSSE() itself.
+    // to the heartbeat cadence via handleSSEOpen (R1 fix — not here, and not merely on getting
+    // a cleanup function back from the retry attempt).
     clearTimeout(sseRetryTimer)
     sseRetryTimer = setTimeout(() => {
       sseRetryTimer = null
@@ -971,14 +983,25 @@ export function startStatusIntegration(store) {
     }, SSE_RETRY_INTERVAL_MS)
   }
 
+  // R1 fix: `startSSEListening` returns a cleanup function synchronously for ANY attempt,
+  // including one that is about to fail its very first round-trip — "got a cleanup function"
+  // is not "the connection is live". Only `handleSSEOpen` (wired to the network-level 'open'
+  // event) is allowed to drop the client into the slow 10s heartbeat cadence; `connectSSE`
+  // itself only ever ensures the FAST poller is running as a safe default. Without this
+  // distinction, every retry attempt (including ones doomed to fail again) immediately killed
+  // the fast poller in favor of a 10s poller that hadn't ticked yet, and each of the retry's 5
+  // give-up errors called `handleProbe({ok:false})` with no compensating fast-poll success in
+  // between — flapping `integrationHealth` to offline every ~90s even though GET polling was
+  // healthy the whole time.
   function connectSSE() {
     if (torn) return
-    sseCleanupRef = startSSEListening(handleIncoming, handleProbe, handleSSEGiveUp)
-    if (sseCleanupRef) {
-      startHeartbeatPolling()
-    } else if (!polling.active) {
-      startFastPolling()
-    }
+    sseCleanupRef = startSSEListening(handleIncoming, handleProbe, handleSSEGiveUp, handleSSEOpen)
+    if (!polling.active) startFastPolling()
+  }
+
+  function handleSSEOpen() {
+    if (torn) return
+    startHeartbeatPolling()
   }
 
   connectSSE()

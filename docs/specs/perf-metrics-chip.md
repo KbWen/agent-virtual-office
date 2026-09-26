@@ -90,6 +90,13 @@ alike, since they share `createPersistedState`/`loadPersistedState`/`savePersist
    blob was older than the 4h staleness cutoff — closing the tab for >4h on the SAME calendar
    day silently reset both "today" tallies to zero.
 
+**2026-09-26 follow-up (review R6, low severity)**: fix #1 above meant `_savedAt` stopped
+advancing while ledger content was unchanged, so the 4h cutoff in fix #2 silently started
+measuring "since the last count changed" instead of "since the tab was last open" — a
+long-quiet-but-open office could lose its agent positions on an unrelated reload.
+`shouldWritePersistedSnapshot()` now still writes (refreshing only `_savedAt`) at least once
+every 30 minutes even when content is unchanged.
+
 Fixed via `persistedSnapshotKey()` (excludes `_savedAt` from the comparison) and
 `salvageStalePersistedState()` (keeps same-day ledgers past the 4h cutoff, drops only the agent
 position/behavior restore that cutoff exists to protect against; the existing
