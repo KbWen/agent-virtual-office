@@ -76,7 +76,7 @@
   },
   "devDependencies": {
     "playwright": "^1.62.1",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "esbuild": "^0.28.1"
