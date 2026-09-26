@@ -237,20 +237,29 @@ function endEventEpochIfLive(store, epoch, participants) {
 // An empty cast must NOT reach setActiveEvent: activeEvent is the global event mutex, so a
 // phantom one blocks every subsequent event for its whole duration. Same for a cast missing a
 // required actor (finding #1 above).
-function fireWithCast(store, event, state, cancelled) {
+// Exported for tests (review round 5, G1): every CURRENT call site already re-checks a fresh
+// `!state.activeEvent` immediately before calling this, so this function's own mutex line is no
+// longer reachable via any natural same-tick collision in the source (G2 restructured the one
+// remaining shared-snapshot call site — Friday 15:00 — to be mutually exclusive with tea-break's
+// slot instead). It stays as defense-in-depth for a future caller that doesn't own that guarantee
+// itself (see the spec's round-4 Domain Decision) and is exported so that guarantee is still
+// directly, deterministically testable rather than only provable by a call-site audit.
+export function fireWithCast(store, event, state, cancelled) {
   // F1 (review round 4, HIGH): fireWithCast never checked whether an event was ALREADY active.
   // Every call SITE individually gated on `!state.activeEvent` before calling fireWithCast, but
-  // two sites can run in the SAME synchronous tick off the SAME stale `state` snapshot — e.g. the
-  // Friday-15:00 time-linked block fires 'tea-break' then 'group-meeting' unconditionally. The
-  // second fireWithCast call would silently supersede the first's epoch (beginEventEpoch), and
-  // the first event's cast then has NO cleanup path left (its own cleanup timer correctly no-ops
-  // as stale per the round-3 fix, and it was never a participant of the second event) — it stays
+  // two sites could run in the SAME synchronous tick off the SAME stale `state` snapshot — the
+  // Friday-15:00 time-linked block used to fire 'tea-break' then 'group-meeting' unconditionally
+  // (fixed separately by G2, which made that slot mutually exclusive — see below). The second
+  // fireWithCast call would silently supersede the first's epoch (beginEventEpoch), and the first
+  // event's cast then had NO cleanup path left (its own cleanup timer correctly no-ops as stale
+  // per the round-3 fix, and it was never a participant of the second event) — it stayed
   // `inGroupEvent: true` forever with `activeEvent: null`, frozen (doSchedule/watchdog skip
-  // in-group agents), and it also permanently disables finding #2's abandonment auto-clear (that
+  // in-group agents), and it also permanently disabled finding #2's abandonment auto-clear (that
   // check requires SOME agent in-group to ever have been true for a LOWER epoch, but the stranded
   // agents keep `anyInGroup` true for every later epoch that never claimed them). A single
   // re-check of the CURRENT (not stale) store state here is the actual event mutex the module's
-  // comments always assumed existed — it also incidentally covers any other same-tick double fire.
+  // comments always assumed existed — it also covers any FUTURE same-tick double fire, not just
+  // the one G2 already closed off structurally.
   if (store.getState().activeEvent) return false
   const participants = pickParticipants(event, state.agents, state.externalStatus)
   if (participants.length === 0) return false
@@ -260,6 +269,19 @@ function fireWithCast(store, event, state, cancelled) {
   executeEvent(store, event, participants, cancelled, epoch)
   return true
 }
+
+// F3 follow-up (review round 5, LOW): the food-delivery/deploy-success crew reaction bubbles are
+// cleared by comparing the CURRENT store bubble against the exact text this reaction painted —
+// but bubble text comes from a pool (`eventBubble`), and pools are not guaranteed disjoint (a
+// phrase can legitimately appear in more than one pool, or the same pool can hand two different
+// paints on the same agent the identical line). Text equality alone is therefore not a true
+// per-instance identity: if a LATER, unrelated reaction repaints the same agent with a
+// coincidentally identical string, an EARLIER reaction's stale clear-timer would wrongly treat it
+// as still its own and clear it early. A per-paint monotonic token (module-level, keyed by
+// agentId, updated on every paint) disambiguates same-text repaints without needing any store
+// schema change or a hidden marker embedded in the rendered text.
+let nextReactionToken = 1
+const lastReactionToken = new Map() // agentId -> token of the most recent crew-reaction paint
 
 // ─── Event handlers: each sets visual states for participants ────────
 
@@ -325,13 +347,19 @@ const EVENT_HANDLERS = {
         // re-check availability before painting a reaction 2s later, otherwise a genuinely-
         // working agent gets an honesty-violating "happy snack" bubble on top of its real work.
         if (s.agents[id] && isAgentAvailable(id, s.agents, s.externalStatus)) {
-          // F3: clear per-agent (bubble identity), not epoch — else an abandoned event strands this.
+          // F3: clear per-agent (bubble identity), not epoch — else an abandoned event strands
+          // this. F3 follow-up (round 5): a token disambiguates two coincidentally-identical
+          // pool draws on the same agent (text alone is not a true per-instance identity).
           const reactionBubble = eventBubble('food-react')
+          const reactionToken = nextReactionToken++
+          lastReactionToken.set(id, reactionToken)
           s.setAgentBehavior(id, 'eat-snack', 'happy', reactionBubble)
           setTimeout(() => {
             if (cancelled?.value) return
             const s2 = store.getState()
-            if (s2.agents[id]?.bubble === reactionBubble) s2.clearBubble(id)
+            if (s2.agents[id]?.bubble === reactionBubble && lastReactionToken.get(id) === reactionToken) {
+              s2.clearBubble(id)
+            }
           }, 4000)
         }
       })
@@ -434,13 +462,18 @@ const EVENT_HANDLERS = {
         // re-check availability before painting the celebration 2s later.
         if (s.agents[id] && isAgentAvailable(id, s.agents, s.externalStatus)) {
           // F3 (review round 4): gate the clear per-agent (bubble identity), not on epoch
-          // staleness — otherwise an abandoned event strands this bubble indefinitely.
+          // staleness — otherwise an abandoned event strands this bubble indefinitely. Follow-up
+          // (round 5): add a per-paint token — text alone is not a true per-instance identity.
           const celebrateBubble = eventBubble('deploy-celebrate')
+          const celebrateToken = nextReactionToken++
+          lastReactionToken.set(id, celebrateToken)
           s.setAgentBehavior(id, 'thumbs-up', 'happy', celebrateBubble)
           setTimeout(() => {
             if (cancelled?.value) return
             const s2 = store.getState()
-            if (s2.agents[id]?.bubble === celebrateBubble) s2.clearBubble(id)
+            if (s2.agents[id]?.bubble === celebrateBubble && lastReactionToken.get(id) === celebrateToken) {
+              s2.clearBubble(id)
+            }
           }, 5000)
         }
       })
@@ -1021,15 +1054,23 @@ export function startOfficeLife(store) {
       }, 30000)
     }
 
-    // 10:00 or 15:00 — Auto tea break
-    if (hour === 10 || hour === 15) {
+    // G2 (review round 4): tea-break and group-meeting both use the 'random-2-3' cast rule, and
+    // with the round-4 fireWithCast mutex, whichever is checked FIRST always wins a same-tick
+    // race — tea-break (checked first) permanently starved Friday's group-meeting social boost,
+    // which never fired again after the mutex landed (`c238a30`/pre-mutex fired both; that
+    // double-fire was itself the F1/N1 bug this branch closes, so firing both is not an option).
+    // Decided by the orchestrator: Friday 15:00 hands its slot to group-meeting instead of
+    // tea-break, rather than dropping either event. Tea-break keeps 10:00 every day and 15:00 on
+    // every OTHER day.
+    const day = new Date().getDay()
+    const isFriday3pm = day === 5 && hour === 15
+    if (hour === 10 || (hour === 15 && !isFriday3pm)) {
       const teaEvent = EVENT_BY_ID['tea-break']
       if (teaEvent) fireWithCast(store, teaEvent, state, cancelled)
     }
 
-    // Friday 15:00+ — Social boost (handled via behavior weights already, but trigger a group-meeting)
-    const day = new Date().getDay()
-    if (day === 5 && hour === 15) {
+    // Friday 15:00 — Social boost group-meeting owns this slot (see above), replacing tea-break.
+    if (isFriday3pm) {
       const meetEvent = EVENT_BY_ID['group-meeting']
       if (meetEvent) fireWithCast(store, meetEvent, state, cancelled)
     }

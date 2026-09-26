@@ -160,8 +160,13 @@ calling it, but the Friday-15:00 time-linked block calls `fireWithCast` TWICE in
    `setActiveEvent`) whenever `store.getState().activeEvent` is already set, read FRESH at call
    time rather than trusting the caller's snapshot. This is the single-choke event mutex the
    module's comments always assumed existed, and it also covers any other future same-tick double
-   fire, not just this one Friday-afternoon case. Cadence is unaffected: the second same-tick event
-   simply never fires (no change to which random ticks happen or gather-spot coordinates).
+   fire, not just this one Friday-afternoon case.
+   **Correction (round 5, G2)**: this section originally claimed "cadence is unaffected... no
+   change to which random ticks happen." That was FALSE and went unchecked — see Round 5 below:
+   tea-break and group-meeting both use the `random-2-3` cast rule, and since tea-break's block is
+   checked first in the same time-linked tick, it deterministically wins the mutex every Friday
+   15:00, permanently starving group-meeting rather than merely losing one race. The fix for THAT
+   is Round 5's G2, not this one.
 10. **F2 (test-coverage gap)**: the round-3 tests exercised the epoch guard on `dog-visit`'s
     staggered lock and the general cleanup timer, but not `group-stretch`'s staggered lock (a
     structurally identical site) or `lunch-nap`'s cleanup specifically using ITS OWN captured
@@ -182,9 +187,54 @@ directly (Session Info gained a truthful `Guardrails loaded:` receipt and the Dr
 ADR Coverage Check record, both stamped at the time they were actually written, not backdated; the
 Evidence entry's phrasing was corrected, not the reviewer's own findings).
 
+## Round 5 (2026-09-26 third follow-up review) additions
+
+11. **G1 (MEDIUM, test-discrimination gap)**: the round-4 Friday-15:00 test used
+    `Math.random`=0.999 for BOTH tea-break's and group-meeting's `random-2-3` cast selection,
+    which picked the SAME cast for both — so whichever one's cleanup ran, the visible outcome
+    (something fires, ends cleanly) looked identical whether `fireWithCast`'s mutex line was
+    present or removed. The test passed against the actual round-3 bug AND against a mutant that
+    deleted the mutex line entirely. **Fix**: `fireWithCast` is now exported (`isAgentAvailable`/
+    `eventEligible`/`floorTickAllowed` already set this "exported for tests" precedent) and
+    directly tested with two events that require DISJOINT casts (`eureka`→`arch` only,
+    `review-debate`→`dev`+`qa`) — an unambiguous, isolated proof of the mutex line specifically,
+    independent of which natural call sites happen to collide. Hand mutation-verified: removing
+    the mutex line turns this new test red.
+12. **G2 (MEDIUM, cadence regression from G1's own round-4 fix)**: `tea-break` and
+    `group-meeting` both use the `random-2-3` cast rule, and the Friday-15:00 time-linked block
+    checks tea-break's `hour===10||15` condition BEFORE group-meeting's `day===5&&hour===15`
+    condition. Once `fireWithCast` had a working mutex (round 4), tea-break's check ran first
+    every single Friday-15:00 tick, claimed the mutex, and group-meeting's `fireWithCast` call was
+    then ALWAYS refused — permanently, not merely losing one race. Group-meeting's Friday social
+    boost effectively stopped firing. **Fix (decided by the orchestrator)**: Friday 15:00 hands
+    its slot to `group-meeting` instead of `tea-break` — tea-break's condition becomes
+    `hour===10 || (hour===15 && !isFriday3pm)`, and a new `isFriday3pm` block fires
+    `group-meeting` in tea-break's place. Tea-break unconditionally keeps 10:00 every day and
+    15:00 on every OTHER day; the only change is which ONE event owns the Friday-15:00 slot.
+    New tests assert Friday→`group-meeting`, Thursday→`tea-break`.
+13. **F3 follow-up (LOW)**: the round-4 bubble-identity fix compared bubble TEXT — but
+    `eventBubble`'s pools are not guaranteed disjoint (a phrase can legitimately repeat across
+    pools, or the same pool can hand two different paints on the same agent the identical line),
+    so a text-only check is not a true per-instance identity. **Fix**: added a per-paint monotonic
+    token (module-level `Map<agentId, token>`), checked ALONGSIDE the text (not instead of it —
+    the text check still guards against a fully external bubble overwrite the token map has no
+    visibility into). New test forces an identical-text collision via the `rng()` seam
+    (`src/systems/rng.js`, NOT `Math.random` — `eventBubble` routes through its own seeded seam)
+    and proves the newer instance's bubble survives the older instance's stale clear.
+14. **F4 follow-up (LOW)**: the Drift Log claimed ADR-010 was cited in `## External References`;
+    it was not (the ADR IS a genuine covering ADR for `store.js` — the fact was right, the
+    citation was simply missing). Added the row rather than removing the claim.
+
+**Work Log compaction (governance, not a code finding)**: the active Work Log exceeded 12KB again.
+Per `.agent/workflows/handoff.md §6`, older rounds' Review Feedback/Red Team Findings/Security
+Findings (rounds 1-3, already resolved) were moved WHOLE — byte-identical, not reworded — to
+`.agentcortex/context/archive/work/fix-honest-office-events-20260926-part1.md`, with a one-line
+pointer left in the active log. This is the legitimate mechanism for what an earlier round did
+improperly in place (see the active Work Log's Drift Log governance-correction entry).
+
 ## Acceptance Criteria
 
-**Target Files** (the diff for AC-1..AC-14 below):
+**Target Files** (the diff for AC-1..AC-17 below):
 `src/systems/officeLife.js`, `src/systems/store.js`, `src/inference/idleGapInfer.js`,
 `docs/specs/idle-gap-inference.md`, `docs/specs/living-office-events.md`,
 `tests/avo184-equivalence.test.js`, `tests/idleGapInfer.test.js`,
@@ -223,6 +273,13 @@ Evidence entry's phrasing was corrected, not the reviewer's own findings).
   same epoch-liveness guarantee as `dog-visit`'s (F2 — M3/M4 mutation-verified).
 - AC-14: a crew reaction bubble (`food-delivery`/`deploy-success`) is cleared once its own timer
   elapses even when the event that set it has since been abandoned (F3).
+- AC-15: `fireWithCast` refuses a second event while one is active — proven directly, via two
+  events with disjoint required casts, independent of any specific natural call-site collision (G1).
+- AC-16: Friday 15:00 fires `group-meeting`; every other day's 15:00 (and every day's 10:00) still
+  fires `tea-break` (G2).
+- AC-17: a crew reaction bubble survives a stale, earlier-instance clear even when its text
+  coincidentally matches an older instance's — disambiguated by a per-paint token, not text alone
+  (F3 follow-up).
 
 ## Domain Decisions
 
@@ -241,10 +298,10 @@ Evidence entry's phrasing was corrected, not the reviewer's own findings).
 - [TRADEOFF] Deferred handler steps that establish a first-time lock re-verify `isAgentAvailable`
   synchronously against the CURRENT store state when the deferred `setTimeout` fires, rather than
   re-running the original cast-selection algorithm — cheaper and sufficient, since the only failure
-  mode is "went busy since being cast," not "should now be re-shuffled."
-- [DECISION] the mid-event abandonment auto-clear (round 2, finding #4) lives in `startOfficeLife`'s
-  existing `store.subscribe` callback (co-located with the other reactive/seeded checks) rather than
-  as a new dedicated subscription, and is gated on the round-3 epoch state
+  mode is "went busy since being cast," not "should now be re-shuffled." Similarly, the mid-event
+  abandonment auto-clear (round 2, finding #4) lives in `startOfficeLife`'s existing
+  `store.subscribe` callback (co-located with the other reactive/seeded checks) rather than as a
+  new dedicated subscription, gated on the round-3 epoch state
   (`liveEventEpoch`/`liveEventHadParticipant`) to avoid a false-positive clear during a staggered
   handler's pre-first-lock window.
 - [DECISION] evaluated tightening `deploy-success`/`ops-dev-deploy-check` eligibility to require live
@@ -257,24 +314,40 @@ Evidence entry's phrasing was corrected, not the reviewer's own findings).
 - [DECISION] (round 3, N1/N2) a shared, module-level monotonic epoch counter — not a per-event
   object clone or a WeakMap keyed on the catalog object — because `triggerInteractiveEvent` and
   `fireWithCast` are independent entry points that must agree on ONE "what's live right now"
-  answer, and the catalog objects (`EVENT_BY_ID`) are intentionally reused across fires.
-- [TRADEOFF] (round 3) a stale epoch makes `endEventEpochIfLive`/every deferred step a FULL no-op —
-  it does not even release its own captured `participants` — because an agent released early from
-  event A may since have been picked up by event B, and touching it would clobber B, not just leave
-  A's bookkeeping incomplete.
+  answer, and the catalog objects (`EVENT_BY_ID`) are intentionally reused across fires. A stale
+  epoch makes `endEventEpochIfLive`/every deferred step a FULL no-op — it does not even release its
+  own captured `participants` — because an agent released early from event A may since have been
+  picked up by event B, and touching it would clobber B. (Round 5, G1) this same counter, plus
+  `fireWithCast` itself, is now exported so the mutex is directly unit-testable rather than only
+  provable by tracing every call site — matching the existing "exported for tests" precedent
+  already set by `isAgentAvailable`/`eventEligible`/`floorTickAllowed`.
 - [DECISION] (round 4, F1) the event mutex lives as a single fresh `store.getState().activeEvent`
   check inside `fireWithCast` itself, not as an extra check at each of its ~6 call sites — every
   call site already believed it had this guarantee (the module's own prior comments assumed it),
   so the bug was that the guarantee didn't actually exist yet, not that call sites were missing a
   check they should each own individually.
+- [DECISION] (round 5, G2) Friday 15:00 hands its slot to `group-meeting` instead of firing both
+  or dropping either — the orchestrator's call, not re-litigated here. Implemented as a mutually
+  exclusive day-branch rather than a priority/ordering tweak inside one shared `if`, so the two
+  events' conditions are independently readable and the exclusivity is structural, not incidental
+  ordering that a future edit could quietly undo.
+- [TRADEOFF] (round 5, F3) the crew-reaction bubble-clear check keeps comparing TEXT and adds a
+  per-paint token alongside it, rather than switching to token-only or embedding a hidden marker
+  in the rendered string — the text check is the only part of this mechanism with visibility into
+  a fully external bubble overwrite (a real hook event, or a different call path), which a
+  local-only token map cannot see; an embedded marker risks the bubble-width-fitting measurement
+  code (canvas `measureText`) that a prior session hardened for exactly this class of string.
 
 ## Files
 
-- `src/systems/officeLife.js` — `REQUIRED_ACTORS`, `hasRequiredActors`, `fireWithCast`,
-  `triggerInteractiveEvent`, `fireInteractionReaction`, every `EVENT_HANDLERS` entry with a
-  deferred step, `executeEvent`, the `lunch-nap` time-linked block, and the mid-event-abandonment
-  tracking in `startOfficeLife`'s `store.subscribe` callback — now all epoch-guarded
-  (`beginEventEpoch`/`isStaleEpoch`/`endEventEpochIfLive`).
+- `src/systems/officeLife.js` — `REQUIRED_ACTORS`, `hasRequiredActors`, `fireWithCast` (now
+  exported, G1), `triggerInteractiveEvent`, `fireInteractionReaction`, every `EVENT_HANDLERS` entry
+  with a deferred step, `executeEvent`, the `lunch-nap` time-linked block, and the
+  mid-event-abandonment tracking in `startOfficeLife`'s `store.subscribe` callback — now all
+  epoch-guarded (`beginEventEpoch`/`isStaleEpoch`/`endEventEpochIfLive`). The Friday-15:00
+  time-linked block now fires `group-meeting` instead of `tea-break` (G2). `food-delivery`/
+  `deploy-success`'s crew-reaction clear timers now also check a per-paint token
+  (`lastReactionToken`, F3 follow-up).
 - `src/inference/idleGapInfer.js` — `tick()` carry-forward.
 - `src/systems/store.js` — `buildExtEntry` (isInferred param), `applyExternalStatus` (release-on-
   real-status).
@@ -291,6 +364,10 @@ Evidence entry's phrasing was corrected, not the reviewer's own findings).
 - `tests/multiAgentReactionPools.test.js` — pre-existing source-scanning test; unaffected by F3's
   behavior change but its 10-line fan-out lookback window required keeping the new code compact
   (no code/AC change here, just a comment-length constraint discovered while implementing F3).
+- `tests/eventEpochRace.test.js` (round 5 additions) — the round-4 "F1" test was replaced by two
+  G2 tests (AC-16: Friday→group-meeting, Thursday→tea-break) plus a new direct G1 test (AC-15,
+  `fireWithCast` exported and called twice with disjoint casts) and a new F3-token test (AC-17,
+  forces an identical-text collision via the `rng()` seam). All hand mutation-verified.
 
 ## Rollback
 

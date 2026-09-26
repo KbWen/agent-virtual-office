@@ -16,9 +16,10 @@
 // Uses the REAL store (like tests/activeEventAbandonment.test.js) so store.subscribe's
 // abandonment auto-clear (finding #2) actually runs and can create the race window.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { startOfficeLife, triggerInteractiveEvent } from '../src/systems/officeLife.js'
+import { startOfficeLife, triggerInteractiveEvent, fireWithCast } from '../src/systems/officeLife.js'
 import { useOfficeStore } from '../src/systems/store.js'
 import { TIME_CHECK_INTERVAL } from '../src/systems/constants.js'
+import { __setRng, resetRng } from '../src/systems/rng.js'
 
 const st = () => useOfficeStore.getState()
 const inGroup = () => Object.entries(st().agents).filter(([, a]) => a.inGroupEvent).map(([id]) => id)
@@ -99,23 +100,58 @@ describe('fireWithCast event mutex + epoch coverage (round 4, F1/F2)', () => {
     vi.restoreAllMocks()
   })
 
-  it('F1: a Friday-15:00 same-tick double-fire (tea-break + group-meeting) refuses the second event instead of stranding the first cast', () => {
+  it('G2 (review round 5): Friday 15:00 fires group-meeting, not tea-break — no stranded cast either way', () => {
     // Push the daily/rare schedulers' next random tick far out so they cannot interfere with
     // this deterministic hour-15 tick, and make the SOCIAL cast-selection deterministic too.
     vi.spyOn(Math, 'random').mockReturnValue(0.999)
     vi.setSystemTime(new Date('2026-01-09T15:00:05')) // a Friday
-    useOfficeStore.setState({ hour: 15 })
 
     vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100) // fires the hour-15 time-linked tick
-    const active = st().activeEvent?.id ?? null
-    // Exactly one of the two candidates is live — the mutex refused the second same-tick fire.
-    expect(['tea-break', 'group-meeting']).toContain(active)
+    // G2: tea-break and group-meeting now own MUTUALLY EXCLUSIVE day-branches for the 15:00 slot,
+    // so group-meeting is the ONLY candidate that even attempts to fire on a Friday — this is no
+    // longer a same-tick race the mutex needs to arbitrate (see the dedicated G1 test below for
+    // the mutex itself). Confirms the fix this finding actually asked for: Friday's social boost
+    // fires again instead of being permanently starved by tea-break winning every race.
+    expect(st().activeEvent?.id).toBe('group-meeting')
     expect(inGroup().length).toBeGreaterThan(0)
 
-    // Past BOTH events' duration (18000ms / 20000ms) — nobody stranded, mutex fully released.
-    vi.advanceTimersByTime(21000)
+    // Past the event's duration (20000ms) — nobody stranded, mutex fully released.
+    vi.advanceTimersByTime(20100)
     expect(st().activeEvent).toBeNull()
-    expect(inGroup()).toEqual([]) // F1's exact regression: a stranded inGroupEvent cast under null activeEvent
+    expect(inGroup()).toEqual([])
+  })
+
+  it('G2: Thursday 15:00 still fires tea-break (only Friday hands the slot to group-meeting)', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999)
+    vi.setSystemTime(new Date('2026-01-08T15:00:05')) // a Thursday
+
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100)
+    expect(st().activeEvent?.id).toBe('tea-break')
+    expect(inGroup().length).toBeGreaterThan(0)
+
+    vi.advanceTimersByTime(18100)
+    expect(st().activeEvent).toBeNull()
+    expect(inGroup()).toEqual([])
+  })
+
+  it('G1 (review round 5): fireWithCast refuses a second event while one is active, leaving the first epoch/cast intact', () => {
+    // Direct, isolated test of fireWithCast's OWN mutex line — the round-4 test above no longer
+    // discriminates it (G2 made the Friday slot mutually exclusive, so there is no natural
+    // same-tick double-fire left to race). Two events with DISJOINT required casts (arch-only vs
+    // dev+qa) make the outcome unambiguous: if the mutex is missing, the second call would
+    // succeed and visibly change both activeEvent and the locked cast.
+    const cancelled = { value: false }
+    const eventA = { id: 'eureka', participants: ['arch'], duration: 8000 }
+    const eventB = { id: 'review-debate', participants: ['dev', 'qa'], duration: 18000 }
+
+    expect(fireWithCast(useOfficeStore, eventA, st(), cancelled)).toBe(true)
+    expect(st().activeEvent?.id).toBe('eureka')
+    const castA = inGroup()
+    expect(castA).toEqual(['arch'])
+
+    expect(fireWithCast(useOfficeStore, eventB, st(), cancelled)).toBe(false)
+    expect(st().activeEvent?.id).toBe('eureka')   // still A -- B never touched the mutex
+    expect(inGroup()).toEqual(castA)              // A's cast untouched; B never locked dev/qa
   })
 
   it('F2 (M3): an abandoned group-stretch does not keep locking its remaining cast under a null activeEvent', () => {
@@ -178,5 +214,66 @@ describe('fireWithCast event mutex + epoch coverage (round 4, F1/F2)', () => {
     vi.advanceTimersByTime(8100) // elapsed-since-nap = 45100
     expect(st().activeEvent?.id).toBe('tea-break')
     expect(inGroup()).toEqual(cCast)
+  })
+})
+
+// rem-honest-office-events review round 5, F3 follow-up (LOW) — bubble-identity comparison used
+// TEXT alone, but `eventBubble` pools are not guaranteed disjoint (the reviewer noted a phrase
+// like "finally..." can appear in more than one pool). Two crew-reaction instances on the SAME
+// agent that happen to draw the IDENTICAL line must not let an EARLIER instance's stale clear
+// timer wipe out a LATER, still-legitimate instance's bubble.
+describe('crew reaction-bubble clear uses a per-paint token, not text alone (round 5, F3 follow-up)', () => {
+  let teardown
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-05T09:00:00'))
+    useOfficeStore.setState({ isPaused: false, activeEvent: null, externalStatus: {}, mood: 'normal' })
+    teardown = startOfficeLife(useOfficeStore)
+  })
+  afterEach(() => {
+    if (teardown) teardown()
+    useOfficeStore.setState({ activeEvent: null, externalStatus: {} })
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+    resetRng()
+  })
+
+  it('a stale clear from an earlier reaction does not wipe a later, identical-text reaction on the same agent', () => {
+    // eventBubble() draws through the seeded rng() seam (src/systems/rng.js), NOT Math.random
+    // directly -- pin it to 0 so eventBubble('food-react') deterministically draws the SAME pool
+    // entry every time, forcing the identical-text collision this test exists to survive,
+    // regardless of what the actual pool contents happen to be today. Everything else in
+    // officeLife.js (participant order, jitter, interval scheduling) still uses raw Math.random,
+    // which is left alone here since 'all' participant order doesn't depend on it.
+    __setRng(() => 0)
+
+    expect(triggerInteractiveEvent(useOfficeStore, 'food-delivery')).toBe(true) // fire #1
+    vi.advanceTimersByTime(2000) // crew reaction #1 painted
+    const crewId = Object.keys(st().agents).find((id) => st().agents[id].behavior === 'eat-snack')
+    expect(crewId).toBeTruthy()
+    const bubble1 = st().agents[crewId].bubble
+    expect(bubble1).toBeTruthy()
+
+    // Free the mutex the way an abandonment would (release the bringer too, so fire #2 sees the
+    // full roster again and picks the same crew ordering).
+    const bringerId = Object.keys(st().agents).find((id) => st().agents[id].inGroupEvent)
+    st().clearAgentGroupEvent(bringerId)
+    useOfficeStore.setState({ activeEvent: null })
+
+    expect(triggerInteractiveEvent(useOfficeStore, 'food-delivery')).toBe(true) // fire #2
+    vi.advanceTimersByTime(2000) // crew reaction #2 painted on the SAME crewId
+    const bubble2 = st().agents[crewId].bubble
+    expect(bubble2).toBe(bubble1) // confirms the identical-text setup this test relies on
+
+    // Fire #1's crew reaction was painted at its own t=2000, so its clear timer (4000ms later)
+    // falls due here -- fire #2's own crew reaction was painted 2000ms later than fire #1's, so
+    // its clear timer is NOT due yet. The bubble must survive: it belongs to fire #2 now.
+    vi.advanceTimersByTime(2000)
+    expect(st().agents[crewId].bubble).toBe(bubble2)
+
+    // Fire #2's OWN clear timer falls due here and correctly clears its own bubble.
+    vi.advanceTimersByTime(2000)
+    expect(st().agents[crewId].bubble).toBeNull()
   })
 })
