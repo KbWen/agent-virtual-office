@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-25T00:06:00+08:00
+- **Last Updated**: 2026-09-26T22:53:00+08:00
 - **Last Verified**: 2026-09-25
-- **Update Sequence**: 135
+- **Update Sequence**: 136
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -60,7 +60,7 @@
     - **Session closure** — final retro at `docs/reviews/2026-05-29-session-retro.md` (snapshot, not authoritative). 27 commits ahead of `origin/main`, 0 behind. `main` branch is the canonical state; `_product-backlog.md` lean (14 items: AVO-101..AVO-115 minus done + #20 deferred); `_shipped-log.md` holds 73 prior shipped rows; vitest 960/960; build 887ms clean. All work-log archives in place + INDEX.jsonl up to date. Push to origin pending human confirmation.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
-  - [maintenance] docs/specs/engineering-audit-remediation.md [Shipped]  *(2026-09-24 audit remediation: dev server monotonic clock parity F-01, bridge UI planning/awaiting-approval toggles F-05)*
+  - [maintenance] docs/specs/engineering-audit-remediation.md [Shipped]  *(2026-09-24 audit remediation: dev server monotonic clock parity F-01, bridge UI planning/awaiting-approval toggles F-05; 2026-09-26 server-hardening wave: malformed-request crash guard, SSE heartbeat/client cap, Host-header DNS-rebinding allowlist, vitest CVE bump)*
   - [subagent] docs/specs/subagent-helper-huddle.md [Frozen]  *(SubagentStart→helper sprites; shipped)*
   - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
@@ -156,6 +156,13 @@
 
 ## Ship History
 
+### Ship-fix-server-hardening-2026-09-26 (a malformed request can no longer crash the server; SSE stays up; DNS-rebinding reads blocked)
+
+- Hotfix shipped: remediated 4 findings from a 2026-09-26 `server.mjs` audit, test-first in an isolated worktree over 4 review rounds. (1) `new URL(req.url, 'http://x')` in the main listener + `serveStatic` had no try/catch — one crafted malformed request-target threw synchronously inside `http.createServer`'s callback, outside any `'error'` handler, crashing the process; now scoped in `safeParseUrl()` with a 400 fallback. (2) SSE connections dropped ~every 60s (Node's default per-socket timeout); disabled for SSE sockets (accepted long-lived-by-design) and bounded by a new `OFFICE_MAX_SSE_CLIENTS` cap + 15s heartbeat. (3) No Host-header validation — any DNS-rebinding request could read office status; `isAllowedHost()` now gates on `OFFICE_ALLOWED_HOSTS`. (4) vitest/@vitest/mocker CVE GHSA-82fw-gwwq-j7x9 (dev-only) — bumped to vitest 4.1.11.
+- **Behavior change (owner-relevant)**: Host-header checking is ON by default. Reverse-proxy/Docker deployments MUST set `OFFICE_ALLOWED_HOSTS` (comma-separated externally-visible host[:port] values) or every proxied request 403s. A request carrying a valid `OFFICE_API_TOKEN` bypasses the Host check (same secret already gates every write endpoint). `docker-compose.yml` now forwards `OFFICE_ALLOWED_HOSTS`; documented in README/DEPLOYMENT.md.
+- **Two of four `/review` rounds came back NOT READY** on deployment-compat gaps a fresh reviewer found — reverse-proxy 403s (nginx) and Docker unable to pass the new env var — both closed same-branch before round-3/4 PASS (0 CRITICAL/HIGH/MEDIUM outstanding; 3 LOW advisory cleared in round 4).
+- Tests: full suite 2553/2553 (136 files); build 464ms; bundle-budget PASS (+0.90%, limit +10%); `npm run smoke` + `smoke:pack` PASS; `npm audit` 0 vulnerabilities. Live isolated prod-server smoke: malformed request-target -> 400, process survives, `/api/health` 200 right after; `Host: localhost` -> 200, `Host: evil.example` -> 403; `/api/status/stream` -> 200 text/event-stream, stays open. `validate.sh` pass=114 warn=5 fail=0 skip=5. PR #246.
+
 ### Ship-fix-bridge-ui-status-toggle-regex-2026-09-25 (support kebab-case status classes in active button toggle regex)
 
 - Quick-win shipped: fixed regex `replace(/active-[\w-]+/g, '')` in `public/bridge-ui.js` to match kebab-case status names without leaving trailing `-approval` fragments; added URL param parsing support for `planning` and `awaiting-approval`.
@@ -215,13 +222,6 @@
 - **A fresh-context reviewer caught the first cut putting speech on screen with no speaker.** Meeting chairs (x 645–765) sit right of every panel crop. The new flip and the old #47 edge clamp together dragged their bubbles into view, and no capture had staged a meeting. It was then measured: `main` already leaked ~2.5 such bubbles into the tall panel. Now 0, because the orphan guard covers both axes and the clamp. Speakers just BELOW a crop are still shown; that is AVO-196 and a design decision under ADR-007.
 - **Relative times tick.** A local 10 s `useNowTick` drives the roster, the inspector's AVO-169 duration and the activity feed. In a real-browser A/B after a 22 s wait, `main` was 14–20 s stale and the branch was current. The dead `document.title` channel is deleted, and a src-wide guard test keeps it out.
 - Tests: vitest **2468 passed / 129 files** (+46 tests, +3 files net). 9 wiring mutations each fail a test. Build, bundle-budget +0.48%, render/panel/pack smoke all PASS. Two independent fresh reviews: round 1 NOT READY, round 2 READY. **Disclosed:** spec AC-2/6/11 were amended under the owner's standing delegation without the §4.2 draft→frozen flip. PR #236.
-
-### Ship-chore-release-v1.6.8-2026-09-14 (a calmer office, and waiting finally looks like waiting) · release v1.6.8
-
-- Cuts the 5 commits merged since `v1.6.7` (2026-09-02) — #230 through #234 — as **v1.6.8**. No app code in the release commit itself: `package.json` 1.6.7 -> 1.6.8, **both** `package-lock.json` version fields (root + `packages[""]`), CHANGELOG narrative, this entry. Verified zero `"version": "1.6.7"` strings remain in either file.
-- **Two of the five are user-facing**: the calm palette with its legibility rules (#234) and the external-audit sweep (#232 — the container that never started, the waiting agent that looked busy, the Codex hook that dropped agents, the pasted hook config missing the two events that make a denial an honest `blocked`). The soak stale-label warning (#231), the June work-log archive (#233) and the v1.6.7 chain record (#230) sit under "Housekeeping — not user-facing".
-- **The notes state what the palette rules do not certify.** R1 compares each status colour at full strength while rings render below full opacity, so it guards the floor rather than certifying ring contrast — written into "What this release does not claim" alongside the partly-closed F-11 and the two owner-accepted layout quirks, rather than letting "legibility rules" read as a guarantee.
-- Tests at the cut: vitest **2422 passed / 126 files**; build PASS; `bundle-budget` PASS at 498871 vs baseline 496504 (**+0.48%**, limit +10%); `pack-smoke` PASS. The oldest entry (AVO-195 backlog row) rotated verbatim into `archive/ship-history-2026.md` to hold the cap of 10. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.8` tag + `gh release create --latest`.
 
 ## Spec Index Archive
 

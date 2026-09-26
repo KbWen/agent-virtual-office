@@ -54,7 +54,16 @@ Rotated 1 additional entry on 2026-09-24 (SSoT Update Sequence 133 -> 134).
 
 Rotated 1 additional entry on 2026-09-25 (SSoT Update Sequence 134 -> 135).
 
+Rotated 1 additional entry on 2026-09-26 (SSoT Update Sequence 135 -> 136).
+
 ---
+
+### Ship-chore-release-v1.6.8-2026-09-14 (a calmer office, and waiting finally looks like waiting) · release v1.6.8
+
+- Cuts the 5 commits merged since `v1.6.7` (2026-09-02) — #230 through #234 — as **v1.6.8**. No app code in the release commit itself: `package.json` 1.6.7 -> 1.6.8, **both** `package-lock.json` version fields (root + `packages[""]`), CHANGELOG narrative, this entry. Verified zero `"version": "1.6.7"` strings remain in either file.
+- **Two of the five are user-facing**: the calm palette with its legibility rules (#234) and the external-audit sweep (#232 — the container that never started, the waiting agent that looked busy, the Codex hook that dropped agents, the pasted hook config missing the two events that make a denial an honest `blocked`). The soak stale-label warning (#231), the June work-log archive (#233) and the v1.6.7 chain record (#230) sit under "Housekeeping — not user-facing".
+- **The notes state what the palette rules do not certify.** R1 compares each status colour at full strength while rings render below full opacity, so it guards the floor rather than certifying ring contrast — written into "What this release does not claim" alongside the partly-closed F-11 and the two owner-accepted layout quirks, rather than letting "legibility rules" read as a guarantee.
+- Tests at the cut: vitest **2422 passed / 126 files**; build PASS; `bundle-budget` PASS at 498871 vs baseline 496504 (**+0.48%**, limit +10%); `pack-smoke` PASS. The oldest entry (AVO-195 backlog row) rotated verbatim into `archive/ship-history-2026.md` to hold the cap of 10. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.8` tag + `gh release create --latest`.
 
 ### Ship-feat-calm-stationery-palette-2026-09-13 (a warmer, calmer office, and a palette anyone can change without breaking legibility)
 
