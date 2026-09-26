@@ -76,4 +76,34 @@ describe('normalizeCodexStatusPayload', () => {
     const result = normalizeCodexStatusPayload({ dev: 'working', qa: 'idle' }, 9999)
     expect(result.activeCount).toBe(1)  // dev:working only; qa:idle excluded
   })
+
+  // AVO audit remediation (2026-09-26, finding #3): the shorthand branch was missing the
+  // typeof+slice sanitizer the full-format branch already applied to `workflow`, and neither
+  // branch sanitized `source` at all — both drift from statusContract.mjs normalizePost.
+  it('sanitizes workflow on the shorthand path the same way as the full-format path (was unsanitized)', () => {
+    const oversized = 'x'.repeat(500)
+    const result = normalizeCodexStatusPayload({ dev: 'working', workflow: oversized })
+    expect(result.workflow).toBe(oversized.slice(0, 200))
+    expect(result.workflow.length).toBe(200)
+  })
+
+  it('drops a non-string workflow on the shorthand path instead of passing it through raw', () => {
+    const result = normalizeCodexStatusPayload({ dev: 'working', workflow: { evil: true } })
+    expect(result.workflow).toBeNull()
+  })
+
+  it('caps an oversized source string on both the full-format and shorthand paths', () => {
+    const oversized = 'y'.repeat(500)
+    const full = normalizeCodexStatusPayload({ type: 'office-status', agents: [], source: oversized })
+    expect(full.source).toBe(oversized.slice(0, 50))
+    const shorthand = normalizeCodexStatusPayload({ dev: 'working', source: oversized })
+    expect(shorthand.source).toBe(oversized.slice(0, 50))
+  })
+
+  it('falls back to codex-cli when source is not a string, on both paths', () => {
+    const full = normalizeCodexStatusPayload({ type: 'office-status', agents: [], source: { bad: 1 } })
+    expect(full.source).toBe('codex-cli')
+    const shorthand = normalizeCodexStatusPayload({ dev: 'working', source: 12345 })
+    expect(shorthand.source).toBe('codex-cli')
+  })
 })

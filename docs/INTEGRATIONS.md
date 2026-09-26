@@ -158,7 +158,7 @@ node public/hooks/office-status-codex.js '{
 }'
 ```
 
-The helper writes `~/.claude/office-status-{slug}.json`, so the office picks it up through the existing `/api/status` polling path. This is the recommended Codex CLI producer path for task runners, shell wrappers, or external automations.
+The helper writes `~/.claude/office-status-codex-{slug}.json` — its own filename namespace, separate from the Claude Code hook's `office-status-{slug}.json` — so the office picks it up through the existing `/api/status` polling path without the two writers ever colliding on the same file. This is the recommended Codex CLI producer path for task runners, shell wrappers, or external automations.
 
 ## Codex App Bridge
 

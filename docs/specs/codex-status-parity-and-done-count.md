@@ -65,3 +65,27 @@ EXTENDS `docs/specs/agent-inspector-info-enhancement.md`
 - [TRADEOFF] Passive heuristics like title watching may remain as fallback signals, but they are not trusted as the primary Codex integration path because they are too lossy.
 - [CONSTRAINT] Existing Claude and manual `POST /api/status` flows must keep working through the migration.
 - [CONSTRAINT] Codex App parity can only be claimed with real evidence from the running platform or an explicit documented limitation.
+
+## Addendum: 2026-09-26 — Codex filename namespace isolation
+
+A post-ship audit found that `office-status-codex.js` and `office-status-hook.js` wrote the
+SAME filename scheme (`office-status-<slug>.json`) with no provenance tag: a Codex write could
+silently clobber the Claude hook's read-modify-write state, and the Claude hook's own branch-hop
+`cleanupGhostAliases` sweep could delete a live Codex file sharing the same cwd-hash suffix and
+`_cwd`. Fixed without changing the API/Data Contract above:
+
+- Codex now writes `~/.claude/office-status-codex-<slug>.json` — its own namespace.
+  `scanSessions.mjs`'s `STATUS_FILE_RE = /^office-status(-[^.]+)?\.json$/` already matches any
+  suffix, so no server-side change was required (verified by reading the regex and the
+  equivalent patterns in `bin/cli.js`'s uninstall sweep and `scripts/proximity-audit.mjs` /
+  `scripts/zone-audit.mjs`).
+- `cleanupGhostAliases` (in `office-status-hook.js`) additionally requires `source ===
+  'claude-cli'` before deleting a sibling — belt-and-suspenders alongside the rename, since a
+  cwd-hash collision was always theoretically possible.
+- The two files' session-slug slice/strip order is now identical (slice(0,28) before stripping
+  leading/trailing dashes) — they previously disagreed at the 28-char boundary.
+- Old-name Codex files written before this fix age out via `scanSessions.mjs`'s existing 5-minute
+  staleness window; no migration step needed.
+
+See `docs/specs/hook-runtime-contract.md` Addendum and `.agentcortex/context/work/
+fix-codex-hook-isolation.md` for the full remediation record and test evidence.

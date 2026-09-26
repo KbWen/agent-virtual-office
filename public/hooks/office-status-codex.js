@@ -78,12 +78,21 @@ function getSessionSlug() {
       const refMatch = headContent.match(/^ref:\s+refs\/heads\/(.+)$/)
       const branch = refMatch ? refMatch[1] : null  // null = detached HEAD → fall through
       if (branch) {
-        return branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) + `-${cwdHash}`
+        // AVO audit remediation (2026-09-26, finding #1): slice(0, 28) BEFORE stripping
+        // leading/trailing dashes — matches office-status-hook.js's order exactly. The
+        // reverse order (strip-then-slice, this file's PRE-FIX behavior) can leave a
+        // trailing dash when the 28-char boundary lands on a separator, producing a
+        // DIFFERENT slug than the Claude hook for the same branch name and defeating
+        // "one checkout, one session" for exactly the long feature-branch names most
+        // likely to hit the 28-char cap. Pinned by tests/codexHookIsolation.test.js.
+        const slug = branch.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').slice(0, 28).replace(/^-+|-+$/g, '') || 'default'
+        return `${slug}-${cwdHash}`
       }
     }
   } catch {}
 
-  return path.basename(process.cwd()).replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28) + `-${cwdHash}`
+  const cwdSlug = path.basename(process.cwd()).replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').slice(0, 28).replace(/^-+|-+$/g, '') || 'default'
+  return `${cwdSlug}-${cwdHash}`
 }
 
 function normalizeAgent(agent) {
@@ -115,7 +124,10 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
       activeCount: agents.filter((a) => isActiveStatus(a.status)).length,
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
-      source: body.source || 'codex-cli',
+      // AVO audit remediation (2026-09-26, finding #3): sanitize like statusContract.mjs
+      // normalizePost does (type check + length cap) instead of a bare `||` passthrough —
+      // an object/number/oversized `source` used to reach the status file unchanged.
+      source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'codex-cli',
       _seq: coerceSeq(body._seq),
     }
   }
@@ -147,15 +159,25 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
     type: 'office-status',
     agents,
     activeCount: agents.filter((a) => isActiveStatus(a.status)).length,
-    workflow: body.workflow || null,
-    source: body.source || 'codex-cli',
+    // AVO audit remediation (2026-09-26, finding #3): the shorthand branch was missing the
+    // typeof+slice sanitizer the full-format branch above already applies — drift from
+    // statusContract.mjs normalizePost, which sanitizes workflow identically on both paths.
+    workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
+    source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'codex-cli',
     _seq: coerceSeq(body._seq),
   }
 }
 
 function writeCodexStatusFile(payload, cwd = process.cwd()) {
   const sessionSlug = getSessionSlug()
-  const statusFile = path.join(os.homedir(), '.claude', `office-status-${sessionSlug}.json`)
+  // AVO audit remediation (2026-09-26, finding #1): Codex writes into its OWN filename
+  // namespace (`office-status-codex-<slug>.json`) instead of sharing office-status-hook.js's
+  // `office-status-<slug>.json` scheme. Before this fix, a Codex write with no lock and no
+  // provenance tag could silently clobber the Claude hook's read-modify-write state
+  // (_stopped/_stoppedAt/_promptId/helpers/other agents) whenever both wrote the same file
+  // for the same checkout+branch. The `source: 'codex-cli'` field also now gates
+  // office-status-hook.js's cleanupGhostAliases (belt + suspenders — see that file).
+  const statusFile = path.join(os.homedir(), '.claude', `office-status-codex-${sessionSlug}.json`)
   const normalized = normalizeCodexStatusPayload(payload)
   const output = {
     ...normalized,
@@ -191,9 +213,20 @@ function readPayloadFromInput(argv, stdin) {
 }
 
 async function main() {
+  // AVO audit remediation (2026-09-26, finding #2): the documented usage
+  // `node office-status-codex.js '{"dev":"working"}'` used to block forever reading stdin
+  // to EOF BEFORE ever looking at argv[2] — hanging on any interactive TTY or long-lived
+  // open pipe. Only read stdin when the caller didn't pass JSON directly (or explicitly
+  // asked for --stdin), and never block on a TTY that has nothing piped into it (a bare
+  // TTY with no arg and no pipe has nothing to read either way — the usage error below
+  // fires immediately instead of waiting for a Ctrl-D that will never come from a hook).
+  const arg = process.argv[2]
+  const needsStdin = !arg || arg === '--stdin'
   let stdin = ''
-  process.stdin.setEncoding('utf-8')
-  for await (const chunk of process.stdin) stdin += chunk
+  if (needsStdin && !process.stdin.isTTY) {
+    process.stdin.setEncoding('utf-8')
+    for await (const chunk of process.stdin) stdin += chunk
+  }
 
   const payload = readPayloadFromInput(process.argv, stdin)
   const result = writeCodexStatusFile(payload)
