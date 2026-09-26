@@ -33,6 +33,22 @@ Edit `server_name` in the config to match your domain. The block proxies to
 `listen` directive to `443 ssl` and add your certificates (commented hints
 are in `nginx.conf`).
 
+**Required**: `server.mjs` validates the `Host` header on every request (a DNS-rebinding
+guard — see [Environment variables](#environment-variables) below), and Nginx forwards the
+incoming request's Host via `proxy_set_header Host $host` — for a legitimate client this is
+whichever `server_name` alias they used to reach Nginx (list every alias if `server_name`
+names more than one). Without telling `server.mjs` to trust that hostname, every proxied
+request — page, API, and the SSE stream — gets `403 Forbidden`. Set `OFFICE_ALLOWED_HOSTS`
+to the same value(s) as `server_name` before starting `server.mjs`, e.g.:
+
+```bash
+OFFICE_ALLOWED_HOSTS=office.example.com node server.mjs --no-open
+```
+
+(For PM2, systemd, or **Docker**, set it in that runtime's own env mechanism instead — see
+those sections below; the Docker section in particular needs it forwarded through
+`docker-compose.yml`/`docker run`, not just set in your shell.)
+
 ## TLS certificates (Let's Encrypt)
 
 After setting up Nginx on port 80, obtain a free certificate:
@@ -91,14 +107,22 @@ docker build -t agent-virtual-office .
 # change to -p 5174:5174 AND set OFFICE_API_TOKEN to protect the API.
 docker run -d --restart unless-stopped \
   -p 127.0.0.1:5174:5174 \
+  -e OFFICE_ALLOWED_HOSTS=office.example.com \
   -v "${HOME}/.claude:/home/node/.claude:rw" \
   --read-only --tmpfs /tmp \
   --security-opt no-new-privileges:true --cap-drop ALL \
   --memory 256m \
   --log-opt max-size=10m --log-opt max-file=3 \
   agent-virtual-office
-# or (recommended — all options pre-configured): docker compose up -d
+# or (recommended — all options pre-configured): OFFICE_ALLOWED_HOSTS=office.example.com docker compose up -d
 ```
+
+**Required if this container sits behind Nginx (or any reverse proxy) using a hostname**:
+same reasoning as the bare-`node` case in the Nginx section above — `-e OFFICE_ALLOWED_HOSTS=...`
+for `docker run`, or set it in your shell/`.env` for `docker compose` (the `docker-compose.yml`
+in this repo already forwards it via `OFFICE_ALLOWED_HOSTS: ${OFFICE_ALLOWED_HOSTS:-}`, but
+compose does **not** auto-forward an arbitrary shell variable that isn't listed in
+`environment:`, so this only works because that line exists — don't remove it).
 
 > **Before first run** ensure `~/.claude` exists and is writable by UID 1000:
 > ```bash
@@ -168,6 +192,8 @@ docker compose up -d --build             # rebuild image and recreate container
 | --- | --- | --- |
 | `OFFICE_API_TOKEN` | No | If set, all API **write** endpoints (POST) require this token via the `X-Office-Token` header or `Authorization: Bearer <token>`. GET `/api/status` is always readable (status data only, no secrets). Leave unset for trusted local networks. |
 | `OFFICE_API_ALLOWED_ORIGINS` | No | Comma-separated list of allowed CORS origins (e.g. `https://office.example.com`). If unset, only loopback and the server's own IPs are accepted. |
+| `OFFICE_ALLOWED_HOSTS` | **Required behind Nginx/PM2/systemd/Docker with a hostname** | Comma-separated list of extra hostnames allowed in the request `Host` header (e.g. `office.example.com`). Every request is rejected with 403 unless its `Host` is `localhost`/`*.localhost`, an IP literal in bracket notation for IPv6 (`[::1]`) or plain for IPv4 — an **unbracketed** IPv6 Host is rejected, deliberately: RFC 3986/7230 require brackets so the address's colons aren't ambiguous with a port, and a compliant client never omits them — one of the server's own IPs, or in this allowlist; a DNS-rebinding guard modeled on (not identical to) Vite's `allowedHosts`. **Exemption**: a request carrying a *valid* `OFFICE_API_TOKEN` bypasses this check entirely (a rebinding browser can't know the token — see `docs/INTEGRATIONS.md`'s CI example). **A colleague reaching the office via a LAN hostname needs this set** (by IP or `--host` LAN IP already works without it) — **so does the documented Nginx reverse-proxy setup and the Docker image behind it**: Nginx forwards the incoming request's Host via `$host` (for a legitimate client this equals whichever `server_name` alias they used — list **every** alias if `server_name` has more than one), and `docker-compose.yml`/`docker run` need the variable forwarded explicitly into the container (see the Docker section). A request with **no** `Host` header, or an **empty** `Host:` header, is allowed through either way (neither can be part of a rebinding attack — a browser never omits or empties `Host`). An entry may start with `.` for a suffix match (`.example.com` matches `example.com` and any subdomain, at a real label boundary only — `evilexample.com` does not match); a bare `.` entry is ignored rather than treated as a match-everything wildcard; a trailing `:port` on an entry is stripped, so `mypc.local:5174` behaves the same as `mypc.local`. Rejected hosts are logged once per distinct hostname, capped at 50 for the lifetime of the process (not a time-windowed rate limit — once 50 distinct hostnames have been logged, no further new ones are, until restart), so a misconfigured proxy is visible in the server's own log output without unbounded log growth. |
+| `OFFICE_MAX_SSE_CLIENTS` | No | Maximum concurrent `/api/status/stream` connections before new ones get `503`. Defaults to `500`. The per-connection idle-socket timeout is intentionally disabled for SSE (streams are long-lived by design), so this is the backstop against unbounded socket growth — raise it only if you have many simultaneous viewers. |
 | `OFFICE_PROJECT_ROOT` | No | Project directory that session files are matched against (each file carries the `_cwd` the hook ran in). Defaults to the directory the office was launched from — `bin/cli.js` forwards it, since both servers are spawned with their cwd set to the package directory. Set it explicitly to watch a different project root, e.g. a shared worktree. |
 
 ## Hook integration note

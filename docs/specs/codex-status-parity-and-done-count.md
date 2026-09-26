@@ -65,3 +65,52 @@ EXTENDS `docs/specs/agent-inspector-info-enhancement.md`
 - [TRADEOFF] Passive heuristics like title watching may remain as fallback signals, but they are not trusted as the primary Codex integration path because they are too lossy.
 - [CONSTRAINT] Existing Claude and manual `POST /api/status` flows must keep working through the migration.
 - [CONSTRAINT] Codex App parity can only be claimed with real evidence from the running platform or an explicit documented limitation.
+
+## Addendum: 2026-09-26 — Codex filename namespace isolation
+
+A post-ship audit found that `office-status-codex.js` and `office-status-hook.js` wrote the
+SAME filename scheme (`office-status-<slug>.json`) with no provenance tag: a Codex write could
+silently clobber the Claude hook's read-modify-write state, and the Claude hook's own branch-hop
+`cleanupGhostAliases` sweep could delete a live Codex file sharing the same cwd-hash suffix and
+`_cwd`. Fixed without changing the API/Data Contract above:
+
+- Codex now writes `~/.claude/office-status-codex-<slug>.json` — its own namespace.
+  `scanSessions.mjs`'s `STATUS_FILE_RE = /^office-status(-[^.]+)?\.json$/` already matches any
+  suffix, so no server-side change was required (verified by reading the regex and the
+  equivalent patterns in `bin/cli.js`'s uninstall sweep and `scripts/proximity-audit.mjs` /
+  `scripts/zone-audit.mjs`).
+- `cleanupGhostAliases` (in `office-status-hook.js`) additionally requires `source ===
+  'claude-cli'` before deleting a sibling — belt-and-suspenders alongside the rename, since a
+  cwd-hash collision was always theoretically possible.
+- The two files' session-slug slice/strip order is now identical (slice(0,28) before stripping
+  leading/trailing dashes) — they previously disagreed at the 28-char boundary.
+- Old-name Codex files written before this fix age out via `scanSessions.mjs`'s existing 5-minute
+  staleness window; no migration step needed.
+
+### Round 2 (same day) — a fresh review caught 3 more issues in the first pass
+
+- **`_seq` is now ALWAYS this process's own monotonic value** — a caller-supplied `_seq` is
+  never honored, not even a well-formed plain-integer string. `'codex-cli'` is a HOOK_ORIGIN
+  source (`src/inference/inferStatus.js` `isHookOrigin()`) that the client trusts to share its
+  own clock high-water mark; a caller-set future `_seq` (the server accepts up to 5 minutes
+  ahead — `scanSessions.mjs` `FUTURE_MS`) poisons that high-water mark and freezes the client
+  against the session's own next real write for the whole window (measured: a 239989 ms freeze).
+  This now matches `statusContract.mjs` `normalizePost`, which never honored a caller `_seq`
+  either — the first pass's "bounded by scanSessions staleness" reasoning for leaving it
+  caller-settable was wrong.
+- **`source` is now a PINNED constant (`'codex-cli'`), never caller-settable** — a caller-set
+  `'claude-cli'` would re-enable `cleanupGhostAliases`'s deletion of this very file (it gates on
+  `source === 'claude-cli'`); a caller-set `'multi-session'` would escape the client's
+  per-source stale-drop handling for that reserved value.
+- **Honest tradeoff, not a regression**: because Claude and Codex now write separate files,
+  running both in the SAME checkout at the same time is seen as two sessions by
+  `scanSessions.mjs`'s multi-session merge, which shows only one representative (most-urgent)
+  agent per session — a multi-role turn on either side can have a real active role hidden from
+  the merged view. Documented in `docs/INTEGRATIONS.md` (Codex CLI Status Bridge section).
+  This is strictly better than the pre-fix behavior (one source's write could silently erase the
+  other's state entirely), but it is not full multi-role parity across sources in one checkout —
+  that would require teaching `scanSessions.mjs` to merge more than one agent per session file,
+  out of scope here.
+
+This is the canonical writeup for this remediation (`docs/specs/hook-runtime-contract.md`
+points here — one-directional, not circular).
