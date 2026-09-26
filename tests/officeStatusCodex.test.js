@@ -35,11 +35,26 @@ describe('normalizeCodexStatusPayload', () => {
     expect(result._seq).toMatch(/^\d+$/)
   })
 
-  it('honors a caller-supplied _seq only when it is a plain integer string', () => {
-    // Valid integer string → passed through verbatim.
-    const valid = normalizeCodexStatusPayload({ type: 'office-status', agents: [], _seq: '1700000000000' })
-    expect(valid._seq).toBe('1700000000000')
-    // Non-numeric / colon-joined _seq would break the client /^\d+$/ guard → replaced.
+  // AVO audit remediation (2026-09-26, review round 2, finding #1): a caller-supplied _seq
+  // is NEVER honored, even a well-formed plain-integer string. 'codex-cli' is a HOOK_ORIGIN
+  // source the client trusts to share its own monotonic clock high-water mark
+  // (src/inference/inferStatus.js isHookOrigin()); a caller-set future _seq (server accepts
+  // up to 5 min ahead — scanSessions.mjs FUTURE_MS) poisons that high-water mark and freezes
+  // the client against the Codex session's own next real write for that whole window, and a
+  // caller-set past _seq gets silently dropped as stale. Always stamp this process's own
+  // nextSeq(), matching statusContract.mjs normalizePost (:137, :167), which never honors a
+  // caller _seq either.
+  it('ignores a caller-supplied _seq entirely and always stamps a fresh monotonic value', () => {
+    const withFutureSeq = normalizeCodexStatusPayload({ type: 'office-status', agents: [], _seq: '1700000000000' })
+    expect(withFutureSeq._seq).not.toBe('1700000000000')
+    expect(withFutureSeq._seq).toMatch(/^\d+$/)
+
+    const withPastSeq = normalizeCodexStatusPayload({ type: 'office-status', agents: [], _seq: '1' })
+    expect(withPastSeq._seq).not.toBe('1')
+    expect(withPastSeq._seq).toMatch(/^\d+$/)
+
+    // Non-numeric / colon-joined _seq is likewise ignored (was already replaced before this
+    // fix too — kept as a regression guard).
     const bad = normalizeCodexStatusPayload({ type: 'office-status', agents: [], _seq: '12:34' })
     expect(bad._seq).toMatch(/^\d+$/)
     expect(bad._seq).not.toBe('12:34')
@@ -92,18 +107,18 @@ describe('normalizeCodexStatusPayload', () => {
     expect(result.workflow).toBeNull()
   })
 
-  it('caps an oversized source string on both the full-format and shorthand paths', () => {
-    const oversized = 'y'.repeat(500)
-    const full = normalizeCodexStatusPayload({ type: 'office-status', agents: [], source: oversized })
-    expect(full.source).toBe(oversized.slice(0, 50))
-    const shorthand = normalizeCodexStatusPayload({ dev: 'working', source: oversized })
-    expect(shorthand.source).toBe(oversized.slice(0, 50))
-  })
-
-  it('falls back to codex-cli when source is not a string, on both paths', () => {
-    const full = normalizeCodexStatusPayload({ type: 'office-status', agents: [], source: { bad: 1 } })
+  // AVO audit remediation (2026-09-26, review round 2, finding #2): `source` is a PINNED
+  // constant on both paths — never caller-settable. A caller-set 'claude-cli' would
+  // re-enable office-status-hook.js's cleanupGhostAliases deleting this very Codex file
+  // (it gates on source === 'claude-cli'); a caller-set 'multi-session' would escape the
+  // client's per-source stale-drop handling for that reserved value. Neither is a
+  // legitimate Codex identity, so nothing the caller supplies can change it.
+  it('pins source to codex-cli on both paths regardless of what the caller supplies', () => {
+    const full = normalizeCodexStatusPayload({ type: 'office-status', agents: [], source: 'claude-cli' })
     expect(full.source).toBe('codex-cli')
-    const shorthand = normalizeCodexStatusPayload({ dev: 'working', source: 12345 })
+    const shorthand = normalizeCodexStatusPayload({ dev: 'working', source: 'multi-session' })
     expect(shorthand.source).toBe('codex-cli')
+    const nonString = normalizeCodexStatusPayload({ dev: 'working', source: 12345 })
+    expect(nonString.source).toBe('codex-cli')
   })
 })

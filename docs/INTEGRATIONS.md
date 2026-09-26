@@ -160,6 +160,8 @@ node public/hooks/office-status-codex.js '{
 
 The helper writes `~/.claude/office-status-codex-{slug}.json` — its own filename namespace, separate from the Claude Code hook's `office-status-{slug}.json` — so the office picks it up through the existing `/api/status` polling path without the two writers ever colliding on the same file. This is the recommended Codex CLI producer path for task runners, shell wrappers, or external automations.
 
+**Running both in the same checkout**: because each writer now has its own file, Claude Code and Codex CLI active in the same checkout at the same time are seen as **two separate sessions** by the office's multi-session merge, which shows only one representative (most-urgent) agent per session. A multi-role Claude turn and a multi-role Codex turn each collapse to a single visible agent, so a real active role on either side can be hidden from the merged view. This is a visibility tradeoff, not data loss — each source's own status file stays intact and un-clobbered, which is an improvement over the previous behavior (a shared file where one source could silently overwrite the other's state entirely).
+
 ## Codex App Bridge
 
 If Codex App can run or embed browser JavaScript, use the built-in bridge:

@@ -87,5 +87,30 @@ silently clobber the Claude hook's read-modify-write state, and the Claude hook'
 - Old-name Codex files written before this fix age out via `scanSessions.mjs`'s existing 5-minute
   staleness window; no migration step needed.
 
-See `docs/specs/hook-runtime-contract.md` Addendum and `.agentcortex/context/work/
-fix-codex-hook-isolation.md` for the full remediation record and test evidence.
+### Round 2 (same day) — a fresh review caught 3 more issues in the first pass
+
+- **`_seq` is now ALWAYS this process's own monotonic value** — a caller-supplied `_seq` is
+  never honored, not even a well-formed plain-integer string. `'codex-cli'` is a HOOK_ORIGIN
+  source (`src/inference/inferStatus.js` `isHookOrigin()`) that the client trusts to share its
+  own clock high-water mark; a caller-set future `_seq` (the server accepts up to 5 minutes
+  ahead — `scanSessions.mjs` `FUTURE_MS`) poisons that high-water mark and freezes the client
+  against the session's own next real write for the whole window (measured: a 239989 ms freeze).
+  This now matches `statusContract.mjs` `normalizePost`, which never honored a caller `_seq`
+  either — the first pass's "bounded by scanSessions staleness" reasoning for leaving it
+  caller-settable was wrong.
+- **`source` is now a PINNED constant (`'codex-cli'`), never caller-settable** — a caller-set
+  `'claude-cli'` would re-enable `cleanupGhostAliases`'s deletion of this very file (it gates on
+  `source === 'claude-cli'`); a caller-set `'multi-session'` would escape the client's
+  per-source stale-drop handling for that reserved value.
+- **Honest tradeoff, not a regression**: because Claude and Codex now write separate files,
+  running both in the SAME checkout at the same time is seen as two sessions by
+  `scanSessions.mjs`'s multi-session merge, which shows only one representative (most-urgent)
+  agent per session — a multi-role turn on either side can have a real active role hidden from
+  the merged view. Documented in `docs/INTEGRATIONS.md` (Codex CLI Status Bridge section).
+  This is strictly better than the pre-fix behavior (one source's write could silently erase the
+  other's state entirely), but it is not full multi-role parity across sources in one checkout —
+  that would require teaching `scanSessions.mjs` to merge more than one agent per session file,
+  out of scope here.
+
+See `docs/specs/hook-runtime-contract.md` Addendum for the fixture/contract-test angle on the
+same change.

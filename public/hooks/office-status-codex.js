@@ -39,20 +39,23 @@ function isActiveStatus(status) {
 
 // Monotonic _seq: plain integer string, matches office-status-hook.js / server.mjs.
 // Two invocations in the same ms get distinct values, so scanSessions dedup/staleness
-// keying stays correct. Caller-supplied _seq is only honored when it is a plain
-// integer string — a stale or non-numeric _seq would otherwise make scanAndMerge
-// drop the session as stale or fail the /^\d+$/ guard in the client.
+// keying stays correct.
+//
+// AVO audit remediation (2026-09-26, review round 2, finding #1): _seq is ALWAYS this
+// process's own nextSeq() — a caller-supplied value is never honored, even when it looks
+// like a valid plain-integer string. 'codex-cli' is a HOOK_ORIGIN source
+// (src/inference/inferStatus.js:204) that the CLIENT trusts to share its own monotonic
+// clock high-water mark (isHookOrigin()). A caller-supplied _seq up to 5 minutes in the
+// future is accepted server-side (scanSessions.mjs FUTURE_MS) but then FREEZES the
+// client's high-water mark for that same window — a live reviewer probe measured the next
+// real write landing 239989 ms behind the poisoned mark. A caller-supplied _seq in the
+// past is silently dropped as stale instead. statusContract.mjs's normalizePost
+// (:137,:167) never honors a caller _seq either — this now matches that contract exactly.
 let _seqLast = 0
 function nextSeq() {
   const now = Date.now()
   _seqLast = now > _seqLast ? now : _seqLast + 1
   return String(_seqLast)
-}
-
-function coerceSeq(raw) {
-  if (typeof raw === 'string' && /^\d+$/.test(raw)) return raw
-  if (typeof raw === 'number' && Number.isInteger(raw) && raw >= 0) return String(raw)
-  return nextSeq()
 }
 
 function getSessionSlug() {
@@ -106,11 +109,10 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
   if (!body || typeof body !== 'object') {
     throw new Error('Expected a JSON object payload')
   }
-  // Caller may supply _seq, but a stale/non-numeric value would break scanSessions
-  // staleness + the client's /^\d+$/ guard. coerceSeq accepts only plain-integer
-  // strings; anything else falls back to a fresh monotonic value.
-  // `now` is kept as a parameter for deterministic tests, but only via coerceSeq's
-  // nextSeq() fallback — a literal numeric `now` is no longer used as the seq.
+  // `now` is kept as a parameter for backward compatibility with existing callers/tests,
+  // but is otherwise unused: _seq is always this process's own nextSeq() (see its doc
+  // comment above for why a caller-supplied _seq is never honored), and `source` is always
+  // pinned to 'codex-cli' below (never caller-overridable — see that field's comment).
   void now
 
   if (body.type === 'office-status') {
@@ -124,11 +126,14 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
       activeCount: agents.filter((a) => isActiveStatus(a.status)).length,
       workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
       mood: VALID_MOODS.includes(body.mood) ? body.mood : null,
-      // AVO audit remediation (2026-09-26, finding #3): sanitize like statusContract.mjs
-      // normalizePost does (type check + length cap) instead of a bare `||` passthrough —
-      // an object/number/oversized `source` used to reach the status file unchanged.
-      source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'codex-cli',
-      _seq: coerceSeq(body._seq),
+      // AVO audit remediation (2026-09-26, review round 2, finding #2): `source` is now a
+      // PINNED constant, never caller-settable. A caller-set 'claude-cli' would re-enable
+      // office-status-hook.js's cleanupGhostAliases deleting this very file (it gates on
+      // source === 'claude-cli' — see that file); a caller-set 'multi-session' would escape
+      // the client's per-source stale-drop handling for that reserved value
+      // (src/inference/inferStatus.js). Neither is a legitimate Codex identity.
+      source: 'codex-cli',
+      _seq: nextSeq(),
     }
   }
 
@@ -163,8 +168,9 @@ function normalizeCodexStatusPayload(body, now = Date.now()) {
     // typeof+slice sanitizer the full-format branch above already applies — drift from
     // statusContract.mjs normalizePost, which sanitizes workflow identically on both paths.
     workflow: typeof body.workflow === 'string' ? body.workflow.slice(0, 200) : null,
-    source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'codex-cli',
-    _seq: coerceSeq(body._seq),
+    // Pinned constant — see the full-format branch's `source` comment above.
+    source: 'codex-cli',
+    _seq: nextSeq(),
   }
 }
 

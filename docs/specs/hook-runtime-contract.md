@@ -63,22 +63,10 @@ events.
 
 ## Addendum: 2026-09-26 — Codex helper filename isolation + stdin fix
 
-Two findings from a post-ship audit, fixed in `office-status-codex.js` / `office-status-hook.js`
-(the Claude hook file this spec covers) without changing the fixture/contract-test design above:
-
-- The Codex helper (`public/hooks/office-status-codex.js`) previously shared this hook's exact
-  filename scheme, which could let a Codex write clobber this hook's read-modify-write state
-  (`_stopped`/`_stoppedAt`/`_promptId`/helpers/other agents) with no lock and no way to tell the
-  writers apart. Codex now writes into its own `office-status-codex-<slug>.json` namespace, and
-  `cleanupGhostAliases` (the branch-hop sweep this file owns) now additionally requires
-  `source === 'claude-cli'` before deleting a sibling, so it can never remove a file this hook
-  did not write regardless of filename. See `docs/specs/codex-status-parity-and-done-count.md`
-  Addendum for the full writeup.
-- Unrelated to the fixture contract, but in the same file: `office-status-codex.js`'s `main()`
-  used to block reading stdin to EOF before checking `argv[2]`, hanging the documented
-  single-argument usage on a TTY/open pipe. It now only reads stdin when no JSON argument was
-  given (and skips it entirely on a bare TTY).
-
-Evidence: `tests/codexHookIsolation.test.js` (new), `tests/officeStatusCodex.test.js` (extended),
-`tests/hookGhostCleanup.test.js` (fixtures updated to carry `source: 'claude-cli'`, matching what
-the real hook always stamps).
+A post-ship audit found that the Codex helper (`public/hooks/office-status-codex.js`) shared
+this hook's exact filename scheme with no provenance tag, and separately that its `main()`
+blocked reading stdin to EOF before checking `argv[2]`, hanging its documented single-argument
+usage. Both were fixed touching this hook file only in `cleanupGhostAliases` (now additionally
+requires `source === 'claude-cli'` before deleting a sibling) — the fixture/contract-test design
+above is unchanged. Canonical writeup, full findings list, and test evidence:
+`docs/specs/codex-status-parity-and-done-count.md` Addendum.
