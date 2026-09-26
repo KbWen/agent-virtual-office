@@ -111,15 +111,41 @@ non-blocking decision request, all fixed on this branch:
    `changedAt`), and added the missing `group-stretch` case to
    `tests/groupEventDeferredAvailability.test.js`.
 
+## Round 3 (2026-09-26 follow-up review) additions
+
+The round-2 abandonment auto-clear (finding #4 above) introduced two new races, both stemming from
+one root cause: `EVENT_BY_ID`'s catalog objects are SHARED (two `tea-break` fires reuse the SAME
+object), so `activeEvent` identity alone cannot tell an OLD, already-superseded fire's stale timers
+apart from a NEW one.
+
+7. **N1 — a stale cleanup timer clobbers a later event**: event A's own duration-cleanup timer
+   (captured once, at `event.duration`) fires unconditionally and calls `clearActiveEvent()` +
+   releases A's cast, even after A was cleared early (finding #4) and a LATER event B has since
+   taken over — B's banner/cast gets clobbered mid-run. Reproduced against the real store:
+   `ac-broken` (A) cleared early at t=1s; `tea-break` (B) fires at t=2s; at t=15.1s (A's original
+   15000ms duration) A's stale timer cleared B's `activeEvent` and released B's cast 5s early.
+8. **N2 — a staggered handler keeps locking under a dead event**: `dog-visit`/`group-stretch` lock
+   participants via staggered `setTimeout`s. If the first-locked participant is released early
+   (emptying the scene, triggering finding #4's auto-clear), the REMAINING staggered callbacks keep
+   locking their participants anyway — under a `null activeEvent` (no mutex, no banner).
+
+**Fix**: every fired event (including the ad-hoc `lunch-nap` time-linked event, which has the same
+shape) is assigned a unique, monotonically-increasing epoch (`beginEventEpoch()`). Every deferred
+handler step and the duration-cleanup timer (`endEventEpochIfLive()`) act ONLY if their captured
+epoch is still the live one (`isStaleEpoch()`); a stale epoch is a full no-op that touches NOTHING
+— it must never release/relock agents that may since belong to a newer event. The round-2
+abandonment auto-clear (finding #4) now reads/writes this SAME epoch state instead of an
+`activeEvent`-identity check, so a clear there immediately invalidates every later step's guard.
+
 ## Acceptance Criteria
 
-**Target Files** (the diff for AC-1..AC-9 below):
+**Target Files** (the diff for AC-1..AC-11 below):
 `src/systems/officeLife.js`, `src/systems/store.js`, `src/inference/idleGapInfer.js`,
 `docs/specs/idle-gap-inference.md`, `docs/specs/living-office-events.md`,
 `tests/avo184-equivalence.test.js`, `tests/idleGapInfer.test.js`,
 `tests/requiredActorsGate.test.js`, `tests/groupEventDeferredAvailability.test.js`,
 `tests/activeEventAbandonment.test.js`, `tests/fireWithCastRequiredActorsScheduler.test.js`,
-`tests/interactiveEventGate.test.js`.
+`tests/interactiveEventGate.test.js`, `tests/eventEpochRace.test.js`.
 
 - AC-1: A work-claim event whose cast is missing its required actor does not set `activeEvent`,
   does not produce an eventFeed entry, and returns `false`.
@@ -142,6 +168,10 @@ non-blocking decision request, all fixed on this branch:
   is genuinely tracked busy (working/blocked), whether or not it is locked in a group event.
 - AC-9: `fireWithCast`'s required-actor refusal is covered independently of
   `triggerInteractiveEvent`'s (the daily-scheduler path), via a deterministic mocked-catalog test.
+- AC-10: a superseded event's duration-cleanup timer never clears a later event's `activeEvent` or
+  releases its cast (N1).
+- AC-11: an abandoned staggered event never locks a remaining participant once its epoch is no
+  longer live (N2).
 
 ## Domain Decisions
 
@@ -163,8 +193,9 @@ non-blocking decision request, all fixed on this branch:
   mode is "went busy since being cast," not "should now be re-shuffled."
 - [DECISION] the mid-event abandonment auto-clear (round 2, finding #4) lives in `startOfficeLife`'s
   existing `store.subscribe` callback (co-located with the other reactive/seeded checks) rather than
-  as a new dedicated subscription, and is gated on a per-event `trackedEventHadParticipant` flag to
-  avoid a false-positive clear during a staggered handler's pre-first-lock window.
+  as a new dedicated subscription, and is gated on the round-3 epoch state
+  (`liveEventEpoch`/`liveEventHadParticipant`) to avoid a false-positive clear during a staggered
+  handler's pre-first-lock window.
 - [DECISION] evaluated tightening `deploy-success`/`ops-dev-deploy-check` eligibility to require live
   `status === 'done'`; declined — `done` is a 10s-transient status by design, so the change would
   make the gate almost never open, and conflicts with a currently-shipped test contract. See
@@ -172,13 +203,22 @@ non-blocking decision request, all fixed on this branch:
 - [TRADEOFF] `fireInteractionReaction`'s fix (finding #5) prefers silence over building a new
   machine-side BUSY badge — the badge is a UI feature addition (Design Gate), out of this
   state-honesty fix's scope. See Non-goals.
+- [DECISION] (round 3, N1/N2) a shared, module-level monotonic epoch counter — not a per-event
+  object clone or a WeakMap keyed on the catalog object — because `triggerInteractiveEvent` and
+  `fireWithCast` are independent entry points that must agree on ONE "what's live right now"
+  answer, and the catalog objects (`EVENT_BY_ID`) are intentionally reused across fires.
+- [TRADEOFF] (round 3) a stale epoch makes `endEventEpochIfLive`/every deferred step a FULL no-op —
+  it does not even release its own captured `participants` — because an agent released early from
+  event A may since have been picked up by event B, and touching it would clobber B, not just leave
+  A's bookkeeping incomplete.
 
 ## Files
 
 - `src/systems/officeLife.js` — `REQUIRED_ACTORS`, `hasRequiredActors`, `fireWithCast`,
-  `triggerInteractiveEvent`, `fireInteractionReaction`, the deferred steps in `food-delivery`,
-  `coffee-spill`, `deploy-success`, `dog-visit`, `group-stretch`, `pm-all-meeting`, and the
-  mid-event-abandonment tracking added to `startOfficeLife`'s `store.subscribe` callback.
+  `triggerInteractiveEvent`, `fireInteractionReaction`, every `EVENT_HANDLERS` entry with a
+  deferred step, `executeEvent`, the `lunch-nap` time-linked block, and the mid-event-abandonment
+  tracking in `startOfficeLife`'s `store.subscribe` callback — now all epoch-guarded
+  (`beginEventEpoch`/`isStaleEpoch`/`endEventEpochIfLive`).
 - `src/inference/idleGapInfer.js` — `tick()` carry-forward.
 - `src/systems/store.js` — `buildExtEntry` (isInferred param), `applyExternalStatus` (release-on-
   real-status).
@@ -187,6 +227,9 @@ non-blocking decision request, all fixed on this branch:
 - `tests/requiredActorsGate.test.js`, `tests/groupEventDeferredAvailability.test.js`,
   `tests/activeEventAbandonment.test.js`, `tests/fireWithCastRequiredActorsScheduler.test.js` — new,
   cover AC-1, AC-3/AC-4 (deferred-step recheck), AC-7, and AC-9 respectively.
+- `tests/eventEpochRace.test.js` — new, covers AC-10 (N1) and AC-11 (N2); both cases
+  mutation-verified by hand (`isStaleEpoch` forced to always return `false` turned both red;
+  restoring it turned both green).
 
 ## Rollback
 

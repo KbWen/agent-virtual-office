@@ -186,6 +186,53 @@ function hasRequiredActors(event, participants) {
   return required.every((id) => pset.has(id))
 }
 
+// rem-honest-office-events review round 3, findings N1/N2: every FIRED event gets a unique
+// epoch. `EVENT_BY_ID`'s catalog objects are SHARED — two 'tea-break' fires reuse the SAME
+// object — so `activeEvent` identity alone cannot tell an OLD, already-superseded fire's stale
+// timers apart from a NEW one. Without this:
+//   N1 — event A's own duration-cleanup timer fires unconditionally at A's full duration and
+//        calls clearActiveEvent() + releases A's (stale) cast, even after A was already cleared
+//        early and a LATER event B is now live — B's banner/cast gets clobbered mid-run.
+//   N2 — a staggered handler (dog-visit/group-stretch) whose first lock gets released early
+//        (so the scene empties and finding #2's auto-clear fires) keeps locking its REMAINING
+//        staggered participants anyway, under a null activeEvent (no mutex, no banner).
+// Every deferred handler step AND executeEvent's own cleanup timer now capture the epoch they
+// were fired under and check it is STILL the live one before touching anything. A stale epoch
+// is a full no-op — it must never release/relock agents that may since belong to a newer event.
+let nextEventEpoch = 1
+let liveEventEpoch = 0                 // 0 = no event currently considered live
+let liveEventHadParticipant = false    // has the CURRENT liveEventEpoch ever locked >=1 participant
+
+function beginEventEpoch() {
+  const epoch = nextEventEpoch++
+  liveEventEpoch = epoch
+  liveEventHadParticipant = false
+  return epoch
+}
+
+function isStaleEpoch(epoch) {
+  return epoch !== liveEventEpoch
+}
+
+// Ends an event's epoch — releasing its participants + clearing the global mutex — ONLY if the
+// epoch is still the live one. A stale caller no-ops entirely (does not touch `participants`,
+// which may have been reassigned to a newer, still-running event).
+function endEventEpochIfLive(store, epoch, participants) {
+  if (isStaleEpoch(epoch)) return false
+  const s = store.getState()
+  participants.forEach((id) => {
+    if (s.agents[id]?.inGroupEvent) {
+      s.clearAgentGroupEvent(id)
+      s.clearBubble(id)
+    }
+  })
+  if (s.clearReluctant) s.clearReluctant()
+  s.clearActiveEvent()
+  liveEventEpoch = 0
+  liveEventHadParticipant = false
+  return true
+}
+
 // Pick a cast and fire, or do nothing. Returns whether the event actually fired.
 // An empty cast must NOT reach setActiveEvent: activeEvent is the global event mutex, so a
 // phantom one blocks every subsequent event for its whole duration. Same for a cast missing a
@@ -194,8 +241,9 @@ function fireWithCast(store, event, state, cancelled) {
   const participants = pickParticipants(event, state.agents, state.externalStatus)
   if (participants.length === 0) return false
   if (!hasRequiredActors(event, participants)) return false
+  const epoch = beginEventEpoch()
   store.getState().setActiveEvent(event)
-  executeEvent(store, event, participants, cancelled)
+  executeEvent(store, event, participants, cancelled, epoch)
   return true
 }
 
@@ -218,7 +266,7 @@ const EVENT_HANDLERS = {
     )
   },
 
-  'standup': (store, participants, cancelled) => {
+  'standup': (store, participants, cancelled, epoch) => {
     // Everyone gathers in front of the whiteboard — 8 SPACED spots (was a 40×30 pile that made the
     // whole team visually overlap; spread ~90×55 in two rows so each agent reads as distinct).
     // 8 spots IN FRONT OF the whiteboard, all verified on the mainOffice floor (x15-593, y168-394)
@@ -238,7 +286,7 @@ const EVENT_HANDLERS = {
       }))
     )
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       const s = store.getState()
       const ids = participants.filter(id => s.agents[id]?.inGroupEvent)
       if (ids.length >= 2) {
@@ -247,7 +295,7 @@ const EVENT_HANDLERS = {
     }, 8000)
   },
 
-  'food-delivery': (store, participants, cancelled) => {
+  'food-delivery': (store, participants, cancelled, epoch) => {
     const bringer = participants[0]
     store.getState().setAgentGroupEvent(bringer, {
       behavior: 'pass-document',
@@ -256,7 +304,7 @@ const EVENT_HANDLERS = {
       groupTarget: { x: 300, y: 290 },
     })
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       participants.slice(1).forEach((id) => {
         const s = store.getState()
         // Finding #3: this crew member was never locked inGroupEvent (only the bringer is) —
@@ -264,13 +312,13 @@ const EVENT_HANDLERS = {
         // working agent gets an honesty-violating "happy snack" bubble on top of its real work.
         if (s.agents[id] && isAgentAvailable(id, s.agents, s.externalStatus)) {
           s.setAgentBehavior(id, 'eat-snack', 'happy', eventBubble('food-react'))
-          setTimeout(() => { if (!cancelled?.value) s.clearBubble(id) }, 4000)
+          setTimeout(() => { if (!cancelled?.value && !isStaleEpoch(epoch)) s.clearBubble(id) }, 4000)
         }
       })
     }, 2000)
   },
 
-  'coffee-spill': (store, participants, cancelled) => {
+  'coffee-spill': (store, participants, cancelled, epoch) => {
     const spiller = participants[0]
     // Guard empty pool: pickParticipants returns [] when no agents are available,
     // so participants[0] may be undefined. Without this guard, setAgentGroupEvent
@@ -285,7 +333,7 @@ const EVENT_HANDLERS = {
     })
     if (participants[1]) {
       setTimeout(() => {
-        if (cancelled?.value) return
+        if (cancelled?.value || isStaleEpoch(epoch)) return
         const s = store.getState()
         const spillerPos = s.agents[spiller]?.position
         // Finding #3: the neighbour was never locked at t0 either — re-check availability
@@ -314,7 +362,7 @@ const EVENT_HANDLERS = {
     })
   },
 
-  'review-debate': (store, participants, cancelled) => {
+  'review-debate': (store, participants, cancelled, epoch) => {
     if (!participants.includes('dev') || !participants.includes('qa')) return
     const s = store.getState()
     if (!s.agents['dev'] || !s.agents['qa']) return
@@ -335,20 +383,20 @@ const EVENT_HANDLERS = {
       groupTarget: jitter({ x: meetPoint.x + 20, y: meetPoint.y }, 8),
     })
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       const s = store.getState()
       if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'chat', 'confused', eventBubble('review-dev-2'))
       if (s.agents.qa?.inGroupEvent) s.setAgentBehavior('qa', 'magnifier', 'focused', eventBubble('review-qa-2'))
     }, 6000)
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       const s = store.getState()
       if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'typing', 'normal', eventBubble('review-dev-3'))
       if (s.agents.qa?.inGroupEvent) s.setAgentBehavior('qa', 'thumbs-up', 'happy', eventBubble('review-qa-3'))
     }, 12000)
   },
 
-  'deploy-success': (store, participants, cancelled) => {
+  'deploy-success': (store, participants, cancelled, epoch) => {
     if (!participants.includes('ops')) return
     const s = store.getState()
     if (!s.agents['ops']) return
@@ -359,20 +407,20 @@ const EVENT_HANDLERS = {
       groupTarget: null,
     })
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       participants.filter(id => id !== 'ops').forEach((id) => {
         const s = store.getState()
         // Finding #3: the celebrate crew was never locked inGroupEvent (only ops is) —
         // re-check availability before painting the celebration 2s later.
         if (s.agents[id] && isAgentAvailable(id, s.agents, s.externalStatus)) {
           s.setAgentBehavior(id, 'thumbs-up', 'happy', eventBubble('deploy-celebrate'))
-          setTimeout(() => { if (!cancelled?.value) s.clearBubble(id) }, 5000)
+          setTimeout(() => { if (!cancelled?.value && !isStaleEpoch(epoch)) s.clearBubble(id) }, 5000)
         }
       })
     }, 2000)
   },
 
-  'group-meeting': (store, participants, cancelled) => {
+  'group-meeting': (store, participants, cancelled, epoch) => {
     const chairs = [...MEETING_CHAIRS].sort(() => Math.random() - 0.5)
     store.getState().setMultipleAgentGroupEvents(
       participants.map((id, i) => ({
@@ -384,7 +432,7 @@ const EVENT_HANDLERS = {
       }))
     )
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       const s = store.getState()
       const active = participants.filter(id => s.agents[id]?.inGroupEvent)
       if (active.length > 0) s.setAgentBehavior(active[0], 'meeting', 'focused', eventBubble('meeting-lead'))
@@ -392,7 +440,7 @@ const EVENT_HANDLERS = {
     }, 8000)
   },
 
-  'dev-arch-disagree': (store, participants, cancelled) => {
+  'dev-arch-disagree': (store, participants, cancelled, epoch) => {
     if (!participants.includes('dev') || !participants.includes('arch')) return
     const s = store.getState()
     if (!s.agents['dev'] || !s.agents['arch']) return
@@ -408,20 +456,20 @@ const EVENT_HANDLERS = {
       groupTarget: jitter({ x: meetPoint.x + 20, y: meetPoint.y }, 8),
     })
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       const s = store.getState()
       if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'chat', 'focused', eventBubble('dev-arch-dis-2'))
       if (s.agents.arch?.inGroupEvent) s.setAgentBehavior('arch', 'chat', 'normal', eventBubble('arch-dis-2'))
     }, 6000)
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       const s = store.getState()
       if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'typing', 'normal', eventBubble('dev-arch-dis-3'))
       if (s.agents.arch?.inGroupEvent) s.setAgentBehavior('arch', 'chat', 'happy', eventBubble('arch-dis-3'))
     }, 13000)
   },
 
-  'ops-dev-deploy-check': (store, participants, cancelled) => {
+  'ops-dev-deploy-check': (store, participants, cancelled, epoch) => {
     if (!participants.includes('ops') || !participants.includes('dev')) return
     const s = store.getState()
     if (!s.agents['ops'] || !s.agents['dev']) return
@@ -437,20 +485,20 @@ const EVENT_HANDLERS = {
       groupTarget: jitter({ x: devPos.x + 35, y: devPos.y }, 10),
     })
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       const s = store.getState()
       if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'scratch-head', 'confused', eventBubble('dev-ops-check-1'))
       if (s.agents.ops?.inGroupEvent) s.setAgentBehavior('ops', 'chat', 'normal', eventBubble('ops-dev-check-2'))
     }, 4000)
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       const s = store.getState()
       if (s.agents.dev?.inGroupEvent) s.setAgentBehavior('dev', 'thumbs-up', 'happy', eventBubble('dev-ops-check-2'))
       if (s.agents.ops?.inGroupEvent) s.setAgentBehavior('ops', 'deploy-button', 'happy', eventBubble('ops-dev-check-3'))
     }, 10000)
   },
 
-  'pm-all-meeting': (store, participants, cancelled) => {
+  'pm-all-meeting': (store, participants, cancelled, epoch) => {
     if (!participants.includes('pm')) return
     const s = store.getState()
     if (!s.agents['pm']) return
@@ -460,7 +508,7 @@ const EVENT_HANDLERS = {
       groupTarget: null,
     })
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       const s2 = store.getState()
       // Finding #3: pm may have been released by a real tracked status in the last 2.5s.
       if (!s2.agents.pm?.inGroupEvent) return
@@ -484,7 +532,7 @@ const EVENT_HANDLERS = {
 
   // ─── Rare events ─────────────────────────────────────────────────
 
-  'boss-visit': (store, participants, cancelled) => {
+  'boss-visit': (store, participants, cancelled, epoch) => {
     // Everyone rushes back to their desk and pretends to be busy
     store.getState().setMultipleAgentGroupEvents(
       participants
@@ -499,7 +547,7 @@ const EVENT_HANDLERS = {
     )
     // After a beat, everyone relaxes
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       const s = store.getState()
       participants.forEach((id) => {
         if (s.agents[id]?.inGroupEvent) {
@@ -509,14 +557,16 @@ const EVENT_HANDLERS = {
     }, 7000)
   },
 
-  'dog-visit': (store, participants, cancelled) => {
+  'dog-visit': (store, participants, cancelled, epoch) => {
     // Everyone reacts to a dog, then some gather in lounge
     participants.forEach((id, i) => {
       setTimeout(() => {
-        if (cancelled?.value) return
+        if (cancelled?.value || isStaleEpoch(epoch)) return
         const s = store.getState()
         // Finding #3: staggered first-time lock (up to ~3s for a full cast) — re-check
-        // availability right before locking, not just at cast-selection time.
+        // availability right before locking, not just at cast-selection time. N2 (round 3):
+        // isStaleEpoch also catches "the event was abandoned/cleared before my turn came up" —
+        // otherwise this lock would run under a null activeEvent (no mutex, no banner).
         if (!isAgentAvailable(id, s.agents, s.externalStatus)) return
         s.setAgentGroupEvent(id, {
           behavior: i === 0 ? 'stretch' : 'chat',
@@ -527,7 +577,7 @@ const EVENT_HANDLERS = {
       }, i * 800)
     })
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       const s = store.getState()
       participants.slice(0, 3).forEach((id) => {
         if (s.agents[id]?.inGroupEvent) {
@@ -542,7 +592,7 @@ const EVENT_HANDLERS = {
     }, 5000)
   },
 
-  'ac-broken': (store, participants, cancelled) => {
+  'ac-broken': (store, participants, cancelled, epoch) => {
     // Everyone fans themselves and complains
     store.getState().setMultipleAgentGroupEvents(
       participants.map((id) => ({
@@ -554,7 +604,7 @@ const EVENT_HANDLERS = {
       }))
     )
     setTimeout(() => {
-      if (cancelled?.value) return
+      if (cancelled?.value || isStaleEpoch(epoch)) return
       const s = store.getState()
       participants.forEach((id) => {
         if (s.agents[id]?.inGroupEvent) {
@@ -564,13 +614,14 @@ const EVENT_HANDLERS = {
     }, 6000)
   },
 
-  'group-stretch': (store, participants, cancelled) => {
+  'group-stretch': (store, participants, cancelled, epoch) => {
     // Everyone stretches at the same time
     participants.forEach((id, i) => {
       setTimeout(() => {
-        if (cancelled?.value) return
+        if (cancelled?.value || isStaleEpoch(epoch)) return
         const s = store.getState()
         // Finding #3: staggered first-time lock — re-check availability right before locking.
+        // N2 (round 3): isStaleEpoch also catches an abandoned/cleared event.
         if (!isAgentAvailable(id, s.agents, s.externalStatus)) return
         s.setAgentGroupEvent(id, {
           behavior: 'stretch',
@@ -583,10 +634,10 @@ const EVENT_HANDLERS = {
   },
 }
 
-function executeEvent(store, event, participants, cancelled) {
+function executeEvent(store, event, participants, cancelled, epoch) {
   const handler = EVENT_HANDLERS[event.id]
   if (handler) {
-    handler(store, participants, cancelled)
+    handler(store, participants, cancelled, epoch)
 
     // living-office P3 (reluctant participants): TRACKED (working/blocked) agents NOT in the scene
     // get a brief, sub-dominant "torn" tell — the team's life happens AROUND them while they stay
@@ -602,18 +653,15 @@ function executeEvent(store, event, participants, cancelled) {
       s0.setReluctant(reluctantIds, Date.now() + Math.min(event.duration || 8000, 6000))
     }
 
-    // Clean up after event duration — release all participants + clear reluctant tells
+    // Clean up after event duration — release all participants + clear reluctant tells.
+    // N1 (round 3): this timer is captured once, at event.duration, but the event may have
+    // ALREADY been cleared early (finding #2's abandonment auto-clear) and superseded by a
+    // LATER event by the time this fires. endEventEpochIfLive no-ops entirely unless `epoch`
+    // is still the live one — otherwise this stale timer would clobber a newer event's
+    // activeEvent/cast (exactly what the round-3 P1 probe caught).
     setTimeout(() => {
       if (cancelled.value) return
-      const s = store.getState()
-      participants.forEach((id) => {
-        if (s.agents[id]?.inGroupEvent) {
-          s.clearAgentGroupEvent(id)
-          s.clearBubble(id)
-        }
-      })
-      if (s.clearReluctant) s.clearReluctant()
-      s.clearActiveEvent()
+      endEventEpochIfLive(store, epoch, participants)
     }, event.duration)
   }
 }
@@ -675,8 +723,9 @@ export function triggerInteractiveEvent(store, eventId) {
   // Register so startOfficeLife teardown can cancel this event's deferred callbacks.
   interactiveCancellers.add(cancelled)
 
+  const epoch = beginEventEpoch()
   state.setActiveEvent(event)
-  executeEvent(store, event, participants, cancelled)
+  executeEvent(store, event, participants, cancelled, epoch)
 
   // Deregister once the event's lifetime (plus a margin past the longest deferred
   // handler step) has elapsed — keeps the Set from growing unbounded. The handle is
@@ -713,6 +762,11 @@ export function startOfficeLife(store) {
     // pending executeEvent cleanup early-return WITHOUT releasing its participants.
     // Release them here so no agent is stranded `inGroupEvent: true` (frozen forever).
     releaseAllGroupEvents(store)
+    // Hygiene reset (round 3): a new instance starts with no "live" event epoch. Not strictly
+    // required for correctness (epochs only ever increase, so a stale prior-instance epoch can
+    // never accidentally match a future one) but keeps the module state legible across restarts.
+    liveEventEpoch = 0
+    liveEventHadParticipant = false
   }
 
   // Shared cancellation flag — prevents stale event callbacks from firing after stop().
@@ -782,16 +836,6 @@ export function startOfficeLife(store) {
     seedCooldown[eventId] = now
     lastSeedAt = now
   }
-  // rem-honest-office-events review round 2, finding #2: track whether the CURRENT activeEvent has
-  // ever actually locked a participant. Some handlers (dog-visit, group-stretch) only schedule
-  // setTimeout-deferred locks and lock NOBODY synchronously — there is a real window right after
-  // setActiveEvent where activeEvent is set but nobody is in-group yet. Without this guard, an
-  // unrelated set() call landing in that window (e.g. a position tick) would see "activeEvent set,
-  // nobody in-group" and clear the event before its first participant ever got locked. Reset per
-  // activeEvent identity so each event gets its own fresh grace window.
-  let trackedEvent = null
-  let trackedEventHadParticipant = false
-
   seedUnsub = typeof store.subscribe === 'function' ? store.subscribe((state, prev) => {
     if (cancelled.value || !prev) return
     // AVO-106: co-editing pair overlay. PURE derived "show-while-true" state — computed BEFORE the
@@ -811,21 +855,21 @@ export function startOfficeLife(store) {
     // store.js release-on-real-status fix) or a deferred stage that abandons before locking anyone
     // (e.g. pm-all-meeting stage 2 when pm was already released) can leave `activeEvent` live over
     // an EMPTY scene — the same phantom-event class as finding #1, just reached mid-event instead
-    // of at cast time. Only clear once this event has ACTUALLY had a participant (trackedEventHad
-    // Participant) — see the grace-window comment above this subscription — so a not-yet-locked
-    // event (dog-visit/group-stretch's staggered first lock) is never mistaken for an abandoned one.
-    if (state.activeEvent !== trackedEvent) {
-      trackedEvent = state.activeEvent
-      trackedEventHadParticipant = false
-    }
-    if (state.activeEvent) {
+    // of at cast time. Only clear once the CURRENT epoch has ACTUALLY had a participant
+    // (liveEventHadParticipant, maintained by beginEventEpoch/this block) — so a not-yet-locked
+    // event (dog-visit/group-stretch's staggered first lock) is never mistaken for an abandoned
+    // one. Round 3: reusing the same epoch counter as N1/N2 (rather than an `activeEvent` identity
+    // check) means this auto-clear and the deferred-step/cleanup-timer guards always agree on
+    // which fire is "live" — clearing here already invalidates every later step's epoch check.
+    if (liveEventEpoch !== 0) {
       const anyInGroup = Object.values(state.agents || {}).some((a) => a?.inGroupEvent)
       if (anyInGroup) {
-        trackedEventHadParticipant = true
-      } else if (trackedEventHadParticipant) {
+        liveEventHadParticipant = true
+      } else if (liveEventHadParticipant) {
+        liveEventEpoch = 0
+        liveEventHadParticipant = false
         state.clearActiveEvent()
         if (state.clearReluctant) state.clearReluctant()
-        trackedEventHadParticipant = false
       }
     }
     // ── Seeded EVENTS below remain pause/mutex gated (they fire coordinated set-pieces). ──
@@ -887,6 +931,11 @@ export function startOfficeLife(store) {
         // event mutex, so setting it for a nap with no nappers would block every later event for
         // the full 45s while nothing is shown.
         const lunchNapEvent = { id: 'lunch-nap', duration: 45000 }
+        // Round 3 (N1/N2 class): lunch-nap has the SAME setActiveEvent-then-later-clearActiveEvent
+        // shape as a catalog event, so it gets the same epoch protection — otherwise an early
+        // finding-#2 abandonment-clear (all nappers released by a real status) followed by a
+        // DIFFERENT event firing would let this stale 45s timer clobber that later event.
+        const napEpoch = beginEventEpoch()
         store.getState().setActiveEvent(lunchNapEvent)
         store.getState().setMultipleAgentGroupEvents(
           nappers.map((id) => ({
@@ -899,20 +948,10 @@ export function startOfficeLife(store) {
         )
         setTimeout(() => {
           if (cancelled.value) return
-          const s = store.getState()
-          nappers.forEach((id) => {
-            if (s.agents[id]?.inGroupEvent) {
-              s.clearAgentGroupEvent(id)
-              // Pair clearBubble with clearAgentGroupEvent — setMultipleAgentGroupEvents
-              // installed an eventBubble('lunch-nap') speech bubble. Every other release
-              // path (executeEvent cleanup, releaseAllGroupEvents teardown) clears both;
-              // omitting it here strands the "lunch nap" bubble over the agent until the
-              // next doSchedule tick happens to overwrite it (up to a full behavior cycle
-              // later — longer if the next behavior defers its label until arrival).
-              s.clearBubble(id)
-            }
-          })
-          s.clearActiveEvent()
+          // endEventEpochIfLive releases each still-in-group napper (clearAgentGroupEvent +
+          // clearBubble pair — same as the hand-rolled loop this replaced) and clears
+          // activeEvent/reluctant ONLY if this nap's epoch is still the live one.
+          endEventEpochIfLive(store, napEpoch, nappers)
         }, 45000)
       }
     }
@@ -988,6 +1027,8 @@ export function startOfficeLife(store) {
     // never strands an agent `inGroupEvent: true` (doSchedule + watchdog both skip
     // in-group agents — the agent would freeze permanently).
     releaseAllGroupEvents(store)
+    liveEventEpoch = 0
+    liveEventHadParticipant = false
     // Only release the module-level flag if it still points at THIS instance —
     // a newer startOfficeLife() may have already replaced it.
     if (activeCancelled === cancelled) activeCancelled = null
