@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { normalizePost, nextSeq, VALID_ROLES, VALID_STATUSES } from './src/utils/statusContract.mjs'
-import { scanAndMerge, getSessionStats, resolveProjectRoot } from './src/server/scanSessions.mjs'
+import { scanAndMerge, getSessionStats, resolveProjectRoot, STALE_MS } from './src/server/scanSessions.mjs'
 
 // Middleware: Universal status API
 //   GET  /api/status → read current status (browser polls this)
@@ -48,12 +48,21 @@ const STATUS_DIR = process.env.OFFICE_STATUS_DIR || path.join(os.homedir(), '.cl
 const FILE_WATCHER_DISABLED = process.env.OFFICE_DISABLE_FILE_WATCHER === '1'
 const STATUS_PATH = path.join(STATUS_DIR, 'office-status.json')
 
-// Fallback overwrite-protection window (see fileWatcherFallbackPlugin's writeStatus below).
-// This mirrors src/server/scanSessions.mjs's STALE_MS (300_000). Duplicated as a literal
-// rather than imported: this branch's edit scope is vite.config.mjs (+ the bin/cli.js dev-start
-// warning) only, so a shared-module export is out of scope here. If STALE_MS ever changes,
-// this constant must be updated to match — recorded as a Known Risk in the Work Log.
-const FALLBACK_PROTECT_MS = 300_000
+// Fallback overwrite-protection window for the BARE status file only (see writeStatus below).
+// Reuses scanSessions.mjs's STALE_MS so a fallback write can never clobber a webhook/API-set
+// status before scanAndMerge itself would call it stale (prod has no fallback at all and simply
+// leaves such a status in place until the real stale window elapses — this matches that).
+// NOT used for the separate "hooks are actively running" guard below, which stays short
+// (HOOK_ACTIVE_MS) — see that guard's comment for why.
+const FALLBACK_PROTECT_MS = STALE_MS
+
+// "Don't fabricate status while hooks are actively running" guard window (writeStatus below).
+// Short and deliberately NOT STALE_MS/FALLBACK_PROTECT_MS: this loop scans EVERY slugged hook
+// file in the shared status dir with no _cwd filter, so a long window means any OTHER project's
+// hook file — written on every tool call, from a Claude session that may be idle for minutes —
+// suppresses THIS project's fallback almost permanently. 10s is enough to detect "a hook is
+// live right now" without silencing the fallback for unrelated foreign sessions.
+const HOOK_ACTIVE_MS = 10_000
 
 // The project directory session files are matched against. Vite's own cwd is the package
 // root when launched via bin/cli.js (and therefore npx), so it cannot be used here —
@@ -714,7 +723,7 @@ function fileWatcherFallbackPlugin() {
         if (!/^office-status-.+\.json$/.test(f)) continue
         try {
           const d = JSON.parse(fs.readFileSync(path.join(hookDir, f), 'utf-8'))
-          if (d.source !== 'file-watcher' && d._seq && now - parseInt(d._seq, 10) < FALLBACK_PROTECT_MS) return
+          if (d.source !== 'file-watcher' && d._seq && now - parseInt(d._seq, 10) < HOOK_ACTIVE_MS) return
         } catch {}  // file may have been deleted/truncated between readdir and read
       }
     } catch {}
@@ -776,11 +785,24 @@ function fileWatcherFallbackPlugin() {
         const cmp = isWin ? resolved.toLowerCase() : resolved
         return cmp === projectRootLower || cmp.startsWith(projectRootLower + path.sep)
       }
+      // Also exclude STATUS_DIR explicitly, even when it happens to live INSIDE the project
+      // root (e.g. a relative OFFICE_STATUS_DIR) — isUnderProjectRoot alone would admit it.
+      const statusDirResolved = path.resolve(path.dirname(statusPath))
+      const statusDirLower = isWin ? statusDirResolved.toLowerCase() : statusDirResolved
+      function isUnderStatusDir(file) {
+        const resolved = path.resolve(file)
+        const cmp = isWin ? resolved.toLowerCase() : resolved
+        return cmp === statusDirLower || cmp.startsWith(statusDirLower + path.sep)
+      }
       // Watch project source files for changes (Vite's watcher covers src/)
       const onFallbackChange = (file) => {
         if (!isUnderProjectRoot(file)) return
-        // Skip node_modules, dist, .git, and the status file itself
-        if (/node_modules|dist|\.git/.test(file)) return
+        if (isUnderStatusDir(file)) return
+        // Skip node_modules, dist, .git, .claude (Claude Code state / nested worktrees — a
+        // worktree checked out under .claude/worktrees/** would otherwise fire the main
+        // checkout's own dev server if it happens to be watching this deep), and the status
+        // file itself.
+        if (/node_modules|dist|\.git|\.claude/.test(file)) return
         if (file.includes('office-status')) return
         const role = fileToRole(file)
         writeStatus(role, file)

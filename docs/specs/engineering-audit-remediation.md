@@ -90,13 +90,35 @@ from `server.mjs` (production) after the 2026-09-24 wave fixed the shared `_seq`
   status dir (a Claude Code transcript `projects/**/<uuid>.jsonl`, a `debug/*.txt` log, etc.) was
   misread as a project source edit and fabricated a fake, `_cwd`-less agent status that then showed
   up in *any* project's office. Fixed: the fallback now resolves `server.config.root` and ignores
-  any file outside it.
+  any file outside it, plus explicitly ignores the status dir itself (even when nested inside the
+  project root) and `.claude/` (Claude Code state / nested worktrees).
+  **Disclosure**: under `bin/cli.js`/npx, Vite's cwd — and therefore `server.config.root` — is the
+  *installed package directory* (`bin/cli.js` resolves `root` from its own location and spawns Vite
+  with `cwd: root`), not the end user's project (`OFFICE_PROJECT_ROOT` only affects `_cwd` stamping,
+  a separate mechanism). So after this fix, the zero-config file-watcher fallback can only fire on
+  edits inside the installed package — which CLI/npx users never touch — making it effectively inert
+  for that install path. Before this fix it appeared to "work" for CLI users only via the very
+  `OFFICE_STATUS_DIR` leak this fix closes (any of their own hook/transcript activity under
+  `~/.claude` was being misread as a source edit). The fallback remains fully functional for in-repo
+  `npm run dev`, where `server.config.root` is the real project. No further change made here —
+  correct root-scoping honesty over a feature that only ever worked by relying on the bug.
 - **F-2 (fallback overwrite window too short)**: the fallback's guard against overwriting a
-  webhook/API-set status used a hardcoded 10s window; production (`server.mjs`) has no fallback at
-  all, so a `blocked`/API-set status there simply persists until the real ~5-minute stale window.
-  Fixed: the dev guard window is now `FALLBACK_PROTECT_MS = 300_000`, mirroring
-  `src/server/scanSessions.mjs`'s `STALE_MS` (duplicated as a literal, not imported — this branch's
-  edit scope excludes `scanSessions.mjs`; see the Work Log `## Known Risk` for the drift note).
+  webhook/API-set **bare-file** status used a hardcoded 10s window; production (`server.mjs`) has
+  no fallback at all, so a `blocked`/API-set status there simply persists until the real
+  ~5-minute stale window. Fixed: that specific guard's window is now `FALLBACK_PROTECT_MS`, which
+  imports `STALE_MS` from `src/server/scanSessions.mjs` (now exported — an in-scope import, since
+  `vite.config.mjs` already imports other symbols from that module).
+  **R-1 regression (caught in review) and fix**: the FIRST implementation of this finding also
+  widened the SEPARATE "don't write while a hook is actively running" guard (which scans every
+  slugged hook file in the shared status dir with no `_cwd` filter) from 10s to the same 5-minute
+  window — since `~/.claude` is shared across every project, any OTHER project's hook file
+  (written on every tool call, from a session that could sit idle for minutes) then silenced
+  THIS project's fallback almost permanently. That guard did not need widening (the fallback
+  never writes hook files, so F-2's overwrite scenario never applied to it) and is now a
+  distinct, still-short `HOOK_ACTIVE_MS = 10_000` constant, unaffected by the `STALE_MS` import.
+  Regression test: `tests/viteDevServerParity.test.js` "R-1 hook-file guard does not silence the
+  fallback for a foreign project" — a 30s-old foreign-`_cwd` hook file must not suppress this
+  project's own fallback write.
 - **F-3 (watcher missed add/unlink)**: `officeStatusPlugin`'s SSE-push watcher only bound `'change'`;
   a brand-new or deleted session file waited for the next poll instead of an immediate push.
   Production's `fs.watch` fires on rename too. Fixed: also bind `'add'` and `'unlink'` to the same

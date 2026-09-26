@@ -1,9 +1,13 @@
 /**
  * 2026-09-26 dev-server parity wave — behavioral tests.
  *
- * Boots the REAL `vite.config.mjs` middleware via Vite's programmatic `createServer()`
- * (root = repo root, so our plugins' relative imports resolve normally) with an isolated
- * `OFFICE_STATUS_DIR` per server instance — never touches the developer's real ~/.claude.
+ * Boots the REAL `vite.config.mjs` middleware via Vite's programmatic `createServer()` with:
+ *   - an isolated TEMP project root per server (never the real repo checkout — a running dev
+ *     server elsewhere, e.g. against the main checkout, could otherwise see our scratch edits;
+ *     caught in review as R-4). `optimizeDeps: { noDiscovery: true, include: [] }` skips
+ *     react/tailwind dependency prebundling, which the temp root has no node_modules for and
+ *     doesn't need (no page is ever rendered by these tests).
+ *   - an isolated `OFFICE_STATUS_DIR` per server — never the developer's real ~/.claude.
  * Prefers real HTTP/SSE behavior over source-regex assertions (existing
  * `viteEventMiddlewareParity.test.js` stays as-is; this file covers the NEW findings).
  *
@@ -13,11 +17,15 @@
  *   F-3  officeStatusPlugin's SSE watcher must react to add/unlink, not just change
  *   F-4  Vite's own permissive CORS middleware must not shadow the plugin's CORS/token logic
  *   F-5  scanAndMerge call sites that were unguarded must not crash the dev server
+ *   R-1  (review regression) the hook-file guard must stay short (10s) and per-instance-only —
+ *        a long window with no _cwd filter let ANY other project's hook file silence this
+ *        project's fallback almost permanently
+ *   R-3  (review) OFFICE_STATUS_DIR nested INSIDE the project root must still be excluded
  */
 
 import { describe, it, expect, afterEach } from 'vitest'
 import { createServer } from 'vite'
-import { mkdtempSync, writeFileSync, appendFileSync, rmSync, mkdirSync, unlinkSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, appendFileSync, mkdirSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -29,6 +37,8 @@ const servers = []
 const scratchFiles = []
 
 async function bootDevServer(env = {}) {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'avo-dev-parity-root-'))
+  writeFileSync(join(tempRoot, 'index.html'), '<!doctype html><html><body></body></html>')
   const tempStatus = mkdtempSync(join(tmpdir(), 'avo-dev-parity-status-'))
   const savedEnv = {}
   const keys = ['OFFICE_STATUS_DIR', 'OFFICE_DISABLE_FILE_WATCHER', 'OFFICE_API_ALLOWED_ORIGINS', 'OFFICE_API_TOKEN']
@@ -45,8 +55,9 @@ async function bootDevServer(env = {}) {
 
   const server = await createServer({
     configFile: 'vite.config.mjs',
-    root: ROOT,
+    root: tempRoot,
     logLevel: 'silent',
+    optimizeDeps: { noDiscovery: true, include: [] },
     server: { port: 0, strictPort: false, host: '127.0.0.1' },
   })
   await server.listen()
@@ -62,7 +73,7 @@ async function bootDevServer(env = {}) {
   const addr = server.httpServer.address()
   const base = `http://127.0.0.1:${addr.port}`
   servers.push(server)
-  return { server, base, tempStatus }
+  return { server, base, tempStatus, tempRoot }
 }
 
 afterEach(async () => {
@@ -97,6 +108,37 @@ describe('F-1 file-watcher fallback scope (must not fabricate status from OFFICE
     expect(res.status).toBe(200)
     const body = await res.text()
     expect(body).toBe('null')
+  }, 25_000)
+
+  it('R-3: OFFICE_STATUS_DIR nested INSIDE the project root is still excluded', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'avo-dev-parity-root-'))
+    writeFileSync(join(tempRoot, 'index.html'), '<!doctype html><html><body></body></html>')
+    const nestedStatusDir = join(tempRoot, '.status-nested')
+    mkdirSync(nestedStatusDir, { recursive: true })
+
+    const savedDir = process.env.OFFICE_STATUS_DIR
+    process.env.OFFICE_STATUS_DIR = nestedStatusDir
+    const server = await createServer({
+      configFile: 'vite.config.mjs',
+      root: tempRoot,
+      logLevel: 'silent',
+      optimizeDeps: { noDiscovery: true, include: [] },
+      server: { port: 0, strictPort: false, host: '127.0.0.1' },
+    })
+    await server.listen()
+    if (savedDir === undefined) delete process.env.OFFICE_STATUS_DIR
+    else process.env.OFFICE_STATUS_DIR = savedDir
+    servers.push(server)
+    const base = `http://127.0.0.1:${server.httpServer.address().port}`
+
+    const foreignFile = join(nestedStatusDir, 'debug-log.txt')
+    writeFileSync(foreignFile, 'line 1\n')
+    await new Promise((r) => setTimeout(r, 300))
+    appendFileSync(foreignFile, 'line 2\n')
+    await new Promise((r) => setTimeout(r, 2000))
+
+    const res = await fetch(`${base}/api/status`)
+    expect(await res.text()).toBe('null')
   }, 25_000)
 })
 
@@ -148,6 +190,10 @@ describe('F-3 SSE push on new/removed session files (add/unlink), not just chang
     const sessionFile = join(tempStatus, 'office-status-parityslug.json')
     writeFileSync(sessionFile, JSON.stringify({
       _seq: String(Date.now()),
+      // NOT tempRoot: PROJECT_ROOT inside vite.config.mjs is resolveProjectRoot() (this
+      // process's actual cwd / OFFICE_PROJECT_ROOT), independent of Vite's `root:` server
+      // config — this is JSON payload data, not a filesystem write, so it carries none of
+      // the R-4 test-isolation hazard.
       _cwd: ROOT,
       type: 'office-status',
       agents: [{ role: 'dev', status: 'working' }],
@@ -168,7 +214,7 @@ describe('F-3 SSE push on new/removed session files (add/unlink), not just chang
 
 describe('F-2 fallback overwrite protection outlives 10s (matches the multi-minute stale window)', () => {
   it('a webhook-set blocked status survives past 10s when a file-watcher edit follows', async () => {
-    const { base } = await bootDevServer()
+    const { base, tempRoot } = await bootDevServer()
 
     const eventRes = await fetch(`${base}/api/event`, {
       method: 'POST',
@@ -183,8 +229,10 @@ describe('F-2 fallback overwrite protection outlives 10s (matches the multi-minu
     // Wait past the OLD 10s guard window (but well inside the 5-minute stale window).
     await new Promise((r) => setTimeout(r, 10_800))
 
-    // Trigger the file-watcher fallback via a real project-root edit.
-    const scratchFile = join(ROOT, `.avo-dev-parity-scratch-${process.pid}.jsx`)
+    // Trigger the file-watcher fallback via a real project-root edit — inside the isolated
+    // temp project root, never the real checkout (R-4: a running dev server elsewhere could
+    // otherwise pick up an edit made directly to the repo).
+    const scratchFile = join(tempRoot, `scratch-${process.pid}.jsx`)
     scratchFiles.push(scratchFile)
     writeFileSync(scratchFile, '// scratch\n')
     await new Promise((r) => setTimeout(r, 200))
@@ -196,6 +244,38 @@ describe('F-2 fallback overwrite protection outlives 10s (matches the multi-minu
     const ops = merged.agents.find((a) => a.role === 'ops')
     expect(ops?.status, 'webhook-set blocked status must not be overwritten by the file-watcher fallback within the stale window').toBe('blocked')
   }, 30_000)
+})
+
+// ─── R-1: the "hooks are actively running" guard must stay short and per-instance-only ────
+
+describe('R-1 hook-file guard does not silence the fallback for a foreign project (review regression)', () => {
+  it('a 30s-old hook file from ANOTHER project (different _cwd) does not suppress this project\'s fallback', async () => {
+    const { base, tempStatus, tempRoot } = await bootDevServer()
+
+    // A hook file written by a DIFFERENT project sharing the same status dir (the normal
+    // ~/.claude case), 30s old — older than the 10s "hook is live right now" window, younger
+    // than the old (wrongly widened to 5-minute) window this regression test guards against.
+    const foreignHookFile = join(tempStatus, 'office-status-otherproject.json')
+    writeFileSync(foreignHookFile, JSON.stringify({
+      _seq: String(Date.now() - 30_000),
+      _cwd: join(tmpdir(), 'some-other-project-entirely'),
+      type: 'office-status',
+      source: 'claude-cli',
+      agents: [{ role: 'dev', status: 'idle' }],
+    }))
+
+    const scratchFile = join(tempRoot, `r1-scratch-${process.pid}.jsx`)
+    scratchFiles.push(scratchFile)
+    writeFileSync(scratchFile, '// r1 scratch\n')
+    await new Promise((r) => setTimeout(r, 300))
+    appendFileSync(scratchFile, '// r1 edit\n')
+    await new Promise((r) => setTimeout(r, 2000))
+
+    const merged = await (await fetch(`${base}/api/status`)).json()
+    expect(merged, 'the fallback must still produce a status despite the foreign hook file').not.toBeNull()
+    const dev = merged.agents.find((a) => a.role === 'dev')
+    expect(dev?.status).toBe('working')
+  }, 25_000)
 })
 
 // ─── F-4: dev CORS must be governed by the plugin, not Vite's built-in cors middleware ────
