@@ -18,6 +18,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { startOfficeLife, triggerInteractiveEvent } from '../src/systems/officeLife.js'
 import { useOfficeStore } from '../src/systems/store.js'
+import { TIME_CHECK_INTERVAL } from '../src/systems/constants.js'
 
 const st = () => useOfficeStore.getState()
 const inGroup = () => Object.entries(st().agents).filter(([, a]) => a.inGroupEvent).map(([id]) => id)
@@ -35,6 +36,7 @@ describe('event epoch guards against stale-timer races (round 3, N1/N2)', () => 
     useOfficeStore.setState({ activeEvent: null, externalStatus: {} })
     vi.runOnlyPendingTimers()
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('N1: a stale cleanup timer from an early-cleared event A does not clobber a later event B', () => {
@@ -76,5 +78,105 @@ describe('event epoch guards against stale-timer races (round 3, N1/N2)', () => 
     vi.advanceTimersByTime(3000) // past every remaining staggered lock (800/1600/2400ms...)
     expect(st().activeEvent).toBeNull()
     expect(inGroup()).toEqual([])   // nobody gets locked into a dead event
+  })
+})
+
+// rem-honest-office-events review round 4 — F1 (HIGH regression introduced by the round-3 epoch
+// fix) and F2 (test-coverage gap for the same fix, group-stretch + lunch-nap).
+describe('fireWithCast event mutex + epoch coverage (round 4, F1/F2)', () => {
+  let teardown
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-05T09:00:00'))
+    useOfficeStore.setState({ isPaused: false, activeEvent: null, externalStatus: {}, mood: 'normal' })
+    teardown = startOfficeLife(useOfficeStore)
+  })
+  afterEach(() => {
+    if (teardown) teardown()
+    useOfficeStore.setState({ activeEvent: null, externalStatus: {} })
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('F1: a Friday-15:00 same-tick double-fire (tea-break + group-meeting) refuses the second event instead of stranding the first cast', () => {
+    // Push the daily/rare schedulers' next random tick far out so they cannot interfere with
+    // this deterministic hour-15 tick, and make the SOCIAL cast-selection deterministic too.
+    vi.spyOn(Math, 'random').mockReturnValue(0.999)
+    vi.setSystemTime(new Date('2026-01-09T15:00:05')) // a Friday
+    useOfficeStore.setState({ hour: 15 })
+
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100) // fires the hour-15 time-linked tick
+    const active = st().activeEvent?.id ?? null
+    // Exactly one of the two candidates is live — the mutex refused the second same-tick fire.
+    expect(['tea-break', 'group-meeting']).toContain(active)
+    expect(inGroup().length).toBeGreaterThan(0)
+
+    // Past BOTH events' duration (18000ms / 20000ms) — nobody stranded, mutex fully released.
+    vi.advanceTimersByTime(21000)
+    expect(st().activeEvent).toBeNull()
+    expect(inGroup()).toEqual([]) // F1's exact regression: a stranded inGroupEvent cast under null activeEvent
+  })
+
+  it('F2 (M3): an abandoned group-stretch does not keep locking its remaining cast under a null activeEvent', () => {
+    expect(triggerInteractiveEvent(useOfficeStore, 'group-stretch')).toBe(true)
+    vi.advanceTimersByTime(1) // first staggered lock (i=0) fires
+    const first = inGroup()
+    expect(first.length).toBeGreaterThanOrEqual(1)
+
+    vi.advanceTimersByTime(99) // t=100ms — well before the 2nd staggered lock (300ms)
+    st().applyExternalStatus(first.map((agentId) => ({ agentId, status: 'working' })))
+    expect(st().activeEvent).toBeNull() // released -> scene empty -> finding #2 auto-clears
+
+    vi.advanceTimersByTime(1000) // past every remaining staggered lock (300/600/900ms...)
+    expect(st().activeEvent).toBeNull()
+    expect(inGroup()).toEqual([]) // nobody gets locked into a dead event
+  })
+
+  it('F2 (M4): a superseded lunch-nap does not clobber the later event that took over', () => {
+    // hour is derived from the REAL (faked) clock inside updateTime(), not a settable field —
+    // set the system time to just before noon, like officeLife.test.js's Fix-1 lunch-nap test.
+    vi.setSystemTime(new Date('2026-01-05T11:59:30'))
+    vi.spyOn(Math, 'random').mockReturnValue(0) // every agent naps; deterministic cast selection
+    vi.advanceTimersByTime(TIME_CHECK_INTERVAL + 100) // crosses into hour 12 -> lunch-nap fires
+    expect(st().activeEvent?.id).toBe('lunch-nap')
+    const nappers = inGroup()
+    expect(nappers.length).toBeGreaterThan(0)
+
+    // Pause the schedulers for the rest of this test — Math.random is pinned to 0, which would
+    // otherwise make the daily scheduler's reschedule interval a flat, frequent 60000ms and risk
+    // grabbing the mutex during the gaps below. `isPaused` blocks every NEW fire (scheduleDaily/
+    // scheduleRare/time-linked) without affecting the already-scheduled cleanup timers under test.
+    useOfficeStore.setState({ isPaused: true })
+
+    // Release every napper via a real status -> scene empties -> finding #2 auto-clears the nap
+    // early, well before its own 45000ms duration.
+    vi.advanceTimersByTime(1000)
+    st().applyExternalStatus(nappers.map((agentId) => ({ agentId, status: 'working' })))
+    expect(st().activeEvent).toBeNull()
+    st().applyExternalStatus(nappers.map((agentId) => ({ agentId, status: 'idle' })))
+
+    // No catalog event lasts 45000ms, so keep SOMETHING alive continuously (re-firing tea-break
+    // — 18000ms each — right as each instance naturally ends) until we're past the nap's ORIGINAL
+    // 45000ms mark, rather than picking one long-lived "survivor" that doesn't exist.
+    const fireTeaBreak = () => {
+      useOfficeStore.setState({ isPaused: false })
+      const fired = triggerInteractiveEvent(useOfficeStore, 'tea-break')
+      useOfficeStore.setState({ isPaused: true })
+      expect(fired).toBe(true)
+      return inGroup()
+    }
+    fireTeaBreak()                     // elapsed-since-nap = 1000; ends at 19000
+    vi.advanceTimersByTime(18000)
+    fireTeaBreak()                     // elapsed-since-nap = 19000; ends at 37000
+    vi.advanceTimersByTime(18000)
+    const cCast = fireTeaBreak()       // elapsed-since-nap = 37000; still alive past 45000
+
+    // The nap's ORIGINAL 45000ms cleanup (captured at its own epoch) falls due here, 8100ms into
+    // this THIRD chained fire's 18000ms life. If it used the CURRENT live epoch instead of its
+    // own captured one (M4), this check would trivially pass and clobber it.
+    vi.advanceTimersByTime(8100) // elapsed-since-nap = 45100
+    expect(st().activeEvent?.id).toBe('tea-break')
+    expect(inGroup()).toEqual(cCast)
   })
 })

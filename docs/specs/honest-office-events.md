@@ -137,9 +137,54 @@ epoch is still the live one (`isStaleEpoch()`); a stale epoch is a full no-op th
 abandonment auto-clear (finding #4) now reads/writes this SAME epoch state instead of an
 `activeEvent`-identity check, so a clear there immediately invalidates every later step's guard.
 
+## Round 4 (2026-09-26 second follow-up review) additions
+
+The round-3 epoch fix (above) itself introduced one HIGH regression, once a genuine same-tick
+double-fire is possible: `fireWithCast` never actually verified an event wasn't ALREADY active —
+every call SITE individually checked a (sometimes stale) `state.activeEvent` snapshot before
+calling it, but the Friday-15:00 time-linked block calls `fireWithCast` TWICE in the SAME tick
+(`tea-break` then `group-meeting`) off ONE stale snapshot, with no re-check between the two calls.
+
+9. **F1 (HIGH)**: the second `fireWithCast` call silently superseded the first event's epoch via
+   `beginEventEpoch()`. The first event's cast then had no release path left: its own
+   duration-cleanup timer correctly (per round 3) no-ops as stale, and it was never part of the
+   second event's cast either — it stayed `inGroupEvent: true` forever with `activeEvent: null`
+   (`doSchedule`/the watchdog both skip in-group agents — permanently frozen), and it also
+   permanently disabled the round-2 abandonment auto-clear (that check needs `anyInGroup` to
+   become false at some point for the CURRENT epoch, but the stranded agents keep it true for
+   every later epoch that never claimed them). Reproduced against the real store: 18/20 runs
+   stranded on the round-3 HEAD; 0/20 on the round-1 and round-2 bases (neither had the epoch
+   mechanism yet, so a stale cleanup still unconditionally released its own cast, even though the
+   mutex/banner correctness was already imperfect there).
+   **Fix**: `fireWithCast` now refuses (returns `false`, no side effects — no epoch consumed, no
+   `setActiveEvent`) whenever `store.getState().activeEvent` is already set, read FRESH at call
+   time rather than trusting the caller's snapshot. This is the single-choke event mutex the
+   module's comments always assumed existed, and it also covers any other future same-tick double
+   fire, not just this one Friday-afternoon case. Cadence is unaffected: the second same-tick event
+   simply never fires (no change to which random ticks happen or gather-spot coordinates).
+10. **F2 (test-coverage gap)**: the round-3 tests exercised the epoch guard on `dog-visit`'s
+    staggered lock and the general cleanup timer, but not `group-stretch`'s staggered lock (a
+    structurally identical site) or `lunch-nap`'s cleanup specifically using ITS OWN captured
+    epoch rather than whatever is currently live. Added one test per gap
+    (`tests/eventEpochRace.test.js`), each hand mutation-verified.
+
+**F3 (LOW)**: the `food-delivery`/`deploy-success` crew reaction-bubble clear timers were ALSO
+epoch-gated (round 3) — meaning an abandoned event strands that fabricated reaction bubble
+indefinitely (until `doSchedule` happens to overwrite it), since the clear itself never runs.
+Fixed: gate the clear per-agent instead, on bubble IDENTITY (clear only if that agent's `bubble`
+is still the exact value this reaction set) — an abandoned event now still cleans up its own
+stray bubbles, and a real hook bubble or a newer event's bubble that has since replaced it is
+never touched.
+
+**F4 (Work Log hygiene, LOW)**: a fresh reviewer flagged that 3 of this Work Log's own validator
+WARNs were mischaracterized as "pre-existing" in a prior Evidence entry. Corrected in the Work Log
+directly (Session Info gained a truthful `Guardrails loaded:` receipt and the Drift Log gained an
+ADR Coverage Check record, both stamped at the time they were actually written, not backdated; the
+Evidence entry's phrasing was corrected, not the reviewer's own findings).
+
 ## Acceptance Criteria
 
-**Target Files** (the diff for AC-1..AC-11 below):
+**Target Files** (the diff for AC-1..AC-14 below):
 `src/systems/officeLife.js`, `src/systems/store.js`, `src/inference/idleGapInfer.js`,
 `docs/specs/idle-gap-inference.md`, `docs/specs/living-office-events.md`,
 `tests/avo184-equivalence.test.js`, `tests/idleGapInfer.test.js`,
@@ -172,6 +217,12 @@ abandonment auto-clear (finding #4) now reads/writes this SAME epoch state inste
   releases its cast (N1).
 - AC-11: an abandoned staggered event never locks a remaining participant once its epoch is no
   longer live (N2).
+- AC-12: `fireWithCast` refuses to fire (returns `false`, no side effects) whenever an event is
+  already active, even when the caller's own snapshot says otherwise (F1).
+- AC-13: `group-stretch`'s staggered lock and `lunch-nap`'s duration-cleanup are covered by the
+  same epoch-liveness guarantee as `dog-visit`'s (F2 — M3/M4 mutation-verified).
+- AC-14: a crew reaction bubble (`food-delivery`/`deploy-success`) is cleared once its own timer
+  elapses even when the event that set it has since been abandoned (F3).
 
 ## Domain Decisions
 
@@ -211,6 +262,11 @@ abandonment auto-clear (finding #4) now reads/writes this SAME epoch state inste
   it does not even release its own captured `participants` — because an agent released early from
   event A may since have been picked up by event B, and touching it would clobber B, not just leave
   A's bookkeeping incomplete.
+- [DECISION] (round 4, F1) the event mutex lives as a single fresh `store.getState().activeEvent`
+  check inside `fireWithCast` itself, not as an extra check at each of its ~6 call sites — every
+  call site already believed it had this guarantee (the module's own prior comments assumed it),
+  so the bug was that the guarantee didn't actually exist yet, not that call sites were missing a
+  check they should each own individually.
 
 ## Files
 
@@ -227,9 +283,14 @@ abandonment auto-clear (finding #4) now reads/writes this SAME epoch state inste
 - `tests/requiredActorsGate.test.js`, `tests/groupEventDeferredAvailability.test.js`,
   `tests/activeEventAbandonment.test.js`, `tests/fireWithCastRequiredActorsScheduler.test.js` — new,
   cover AC-1, AC-3/AC-4 (deferred-step recheck), AC-7, and AC-9 respectively.
-- `tests/eventEpochRace.test.js` — new, covers AC-10 (N1) and AC-11 (N2); both cases
-  mutation-verified by hand (`isStaleEpoch` forced to always return `false` turned both red;
-  restoring it turned both green).
+- `tests/eventEpochRace.test.js` — covers AC-10 (N1), AC-11 (N2), AC-12 (F1, Friday-15:00
+  double-fire), AC-13 (F2 — group-stretch M3 + lunch-nap M4). All 4 mutation cases hand-verified
+  (N1/N2: `isStaleEpoch` forced `false`; M3: dropped the guard on `group-stretch`'s staggered
+  lock; M4: `lunch-nap`'s cleanup passed the current live epoch instead of its own captured one —
+  each turned its corresponding test red; restoring turned it green).
+- `tests/multiAgentReactionPools.test.js` — pre-existing source-scanning test; unaffected by F3's
+  behavior change but its 10-line fan-out lookback window required keeping the new code compact
+  (no code/AC change here, just a comment-length constraint discovered while implementing F3).
 
 ## Rollback
 

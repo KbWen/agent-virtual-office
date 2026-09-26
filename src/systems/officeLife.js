@@ -238,6 +238,20 @@ function endEventEpochIfLive(store, epoch, participants) {
 // phantom one blocks every subsequent event for its whole duration. Same for a cast missing a
 // required actor (finding #1 above).
 function fireWithCast(store, event, state, cancelled) {
+  // F1 (review round 4, HIGH): fireWithCast never checked whether an event was ALREADY active.
+  // Every call SITE individually gated on `!state.activeEvent` before calling fireWithCast, but
+  // two sites can run in the SAME synchronous tick off the SAME stale `state` snapshot — e.g. the
+  // Friday-15:00 time-linked block fires 'tea-break' then 'group-meeting' unconditionally. The
+  // second fireWithCast call would silently supersede the first's epoch (beginEventEpoch), and
+  // the first event's cast then has NO cleanup path left (its own cleanup timer correctly no-ops
+  // as stale per the round-3 fix, and it was never a participant of the second event) — it stays
+  // `inGroupEvent: true` forever with `activeEvent: null`, frozen (doSchedule/watchdog skip
+  // in-group agents), and it also permanently disables finding #2's abandonment auto-clear (that
+  // check requires SOME agent in-group to ever have been true for a LOWER epoch, but the stranded
+  // agents keep `anyInGroup` true for every later epoch that never claimed them). A single
+  // re-check of the CURRENT (not stale) store state here is the actual event mutex the module's
+  // comments always assumed existed — it also incidentally covers any other same-tick double fire.
+  if (store.getState().activeEvent) return false
   const participants = pickParticipants(event, state.agents, state.externalStatus)
   if (participants.length === 0) return false
   if (!hasRequiredActors(event, participants)) return false
@@ -311,8 +325,14 @@ const EVENT_HANDLERS = {
         // re-check availability before painting a reaction 2s later, otherwise a genuinely-
         // working agent gets an honesty-violating "happy snack" bubble on top of its real work.
         if (s.agents[id] && isAgentAvailable(id, s.agents, s.externalStatus)) {
-          s.setAgentBehavior(id, 'eat-snack', 'happy', eventBubble('food-react'))
-          setTimeout(() => { if (!cancelled?.value && !isStaleEpoch(epoch)) s.clearBubble(id) }, 4000)
+          // F3: clear per-agent (bubble identity), not epoch — else an abandoned event strands this.
+          const reactionBubble = eventBubble('food-react')
+          s.setAgentBehavior(id, 'eat-snack', 'happy', reactionBubble)
+          setTimeout(() => {
+            if (cancelled?.value) return
+            const s2 = store.getState()
+            if (s2.agents[id]?.bubble === reactionBubble) s2.clearBubble(id)
+          }, 4000)
         }
       })
     }, 2000)
@@ -413,8 +433,15 @@ const EVENT_HANDLERS = {
         // Finding #3: the celebrate crew was never locked inGroupEvent (only ops is) —
         // re-check availability before painting the celebration 2s later.
         if (s.agents[id] && isAgentAvailable(id, s.agents, s.externalStatus)) {
-          s.setAgentBehavior(id, 'thumbs-up', 'happy', eventBubble('deploy-celebrate'))
-          setTimeout(() => { if (!cancelled?.value && !isStaleEpoch(epoch)) s.clearBubble(id) }, 5000)
+          // F3 (review round 4): gate the clear per-agent (bubble identity), not on epoch
+          // staleness — otherwise an abandoned event strands this bubble indefinitely.
+          const celebrateBubble = eventBubble('deploy-celebrate')
+          s.setAgentBehavior(id, 'thumbs-up', 'happy', celebrateBubble)
+          setTimeout(() => {
+            if (cancelled?.value) return
+            const s2 = store.getState()
+            if (s2.agents[id]?.bubble === celebrateBubble) s2.clearBubble(id)
+          }, 5000)
         }
       })
     }, 2000)
