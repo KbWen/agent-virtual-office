@@ -142,12 +142,18 @@ function broadcastSSE(merged) {
 }
 
 // M1: capture handle so gracefulShutdown can clear it; unref so it doesn't block exit alone
+//
+// F2 (audit 2026-09-26): kept well under both the 30s server.setTimeout below AND the 30s
+// proxy_read_timeout in docs/deployment/nginx.conf — a heartbeat byte resets an intermediary
+// proxy's own idle-read timer, so 15s keeps a fronting reverse proxy from dropping the stream
+// even though the direct-connection case is now handled by req.socket.setTimeout(0) on the
+// SSE route itself (see the /api/status/stream handler below).
 const _sseHeartbeat = setInterval(() => {
   if (sseClients.size === 0) return
   for (const client of [...sseClients]) {
     try { client.write(':heartbeat\n\n') } catch { sseClients.delete(client) }
   }
-}, 30_000)
+}, 15_000)
 _sseHeartbeat.unref()
 
 // ─── CORS + auth ─────────────────────────────────────────────────────────────
@@ -530,6 +536,15 @@ const server = http.createServer((req, res) => {
     setCors(res, req.headers.origin, 'GET, OPTIONS')
     if (req.method === 'OPTIONS') return handlePreflight(req, res)
     if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); res.statusCode = 405; return res.end() }
+    // F2: SSE connections are long-lived by design. `server.setTimeout(30000)` below applies
+    // a 30s idle-socket timeout to every connection, and the heartbeat interval below also
+    // fires every 30s — the two clocks aren't phase-locked, so roughly every other heartbeat
+    // window the socket goes idle for the full 30s first and gets destroyed, dropping the
+    // stream ~every 60s (client then reconnects, briefly reporting degraded integration
+    // health — src/inference/inferStatus.js's onerror path). Disabling the per-socket
+    // timeout here is scoped to ONLY this route: headersTimeout/requestTimeout (slowloris
+    // guards) and the 30s default for every other request are untouched.
+    req.socket?.setTimeout(0)
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')
     res.setHeader('X-Accel-Buffering', 'no')
