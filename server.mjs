@@ -224,10 +224,6 @@ const ALLOWED_HOSTS_ENV = (process.env.OFFICE_ALLOWED_HOSTS || '')
   // (`evil.com.` is a valid absolute hostname), silently re-opening rebinding via
   // `http://attacker.com.:<port>`. Never treat '.' as a usable suffix entry.
   .filter(entry => entry && entry !== '.')
-  // review round 3, LOW-5: a bare '.' entry (e.g. from a trailing/stray comma-separated
-  // ".") would make `host.endsWith('.')` true for EVERY trailing-dot FQDN
-  // (`evil.com.` is a valid absolute hostname), silently re-opening rebinding via
-  // `http://attacker.com.:<port>`. Never treat '.' as a usable suffix entry.
 
 // Host header may be `host`, `host:port`, or `[v6-literal]:port`. Strip the port and any
 // IPv6 brackets so the remainder can be compared as a bare hostname/IP.

@@ -453,6 +453,116 @@ describe('F3 round 3 — a valid OFFICE_API_TOKEN bearer exempts a request from 
     })
     expect(raw).toMatch(/^HTTP\/1\.1 403/)
   })
+
+  // Review round 4, LOW-11: the exemption reads BOTH credential forms (X-Office-Token above,
+  // and Authorization: Bearer here) via the same hasValidApiToken()/isAuthorized() path — a
+  // caller authenticating with a bearer token must get the same exemption, not just the
+  // custom header form.
+  it('bad Host + a valid token in Bearer form (Authorization header) also exempts the request', async () => {
+    const body = JSON.stringify({ event: 'test-passed' })
+    const reqStr =
+      `POST /api/event HTTP/1.1\r\n` +
+      `Host: evil.example\r\n` +
+      `Authorization: Bearer ${TOKEN}\r\n` +
+      `Content-Type: application/json\r\n` +
+      `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+      `Connection: close\r\n\r\n${body}`
+    const raw = await new Promise((resolve) => {
+      const sock = connect(tokPort, '127.0.0.1', () => { sock.write(reqStr) })
+      let data = ''
+      sock.on('data', d => { data += d.toString() })
+      const finish = () => { try { sock.destroy() } catch {}; resolve(data) }
+      sock.on('close', finish)
+      sock.on('error', finish)
+      setTimeout(finish, 3000)
+    })
+    expect(raw).toMatch(/^HTTP\/1\.1 200/)
+  })
+})
+
+// ─── Review round 4, LOW-11 — "open mode" (no OFFICE_API_TOKEN configured) grants no
+// Host-check exemption, no matter what credential header a request carries. hasValidApiToken()
+// returns false whenever apiToken is null (see server.mjs) — this proves that decision holds
+// end-to-end, not just at the unit level.
+describe('F3 round 4 — open mode (no token configured) grants no Host-check exemption', () => {
+  let openPort, openProc, openTempDir, openStderr = ''
+
+  beforeAll(async () => {
+    openTempDir = mkdtempSync(join(tmpdir(), 'avo-hardening-openmode-'))
+    mkdirSync(join(openTempDir, '.claude'), { recursive: true })
+    openPort = await freePort()
+    openProc = spawn(
+      process.execPath,
+      ['server.mjs', `--port=${openPort}`, '--no-open'],
+      {
+        cwd: ROOT,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          HOME: openTempDir,
+          USERPROFILE: openTempDir,
+          OFFICE_API_TOKEN: '', // open mode — no token configured at all
+          OFFICE_STATUS_DIR: join(openTempDir, '.claude'),
+          OFFICE_ALLOWED_HOSTS: '',
+        },
+      }
+    )
+    openProc.stderr.on('data', d => { openStderr += d.toString() })
+    const ready = await waitForServer(`http://127.0.0.1:${openPort}`, 25_000)
+    if (!ready) {
+      openProc.kill('SIGKILL')
+      throw new Error(`open-mode server.mjs did not become ready.\nStderr: ${openStderr.slice(-800)}`)
+    }
+  }, 30_000)
+
+  afterAll(() => { try { openProc?.kill('SIGTERM') } catch {} })
+
+  it('bad Host + an X-Office-Token header (any value) is still 403 in open mode', async () => {
+    const body = JSON.stringify({ event: 'test-passed' })
+    const reqStr =
+      `POST /api/event HTTP/1.1\r\n` +
+      `Host: evil.example\r\n` +
+      `X-Office-Token: anything-at-all\r\n` +
+      `Content-Type: application/json\r\n` +
+      `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+      `Connection: close\r\n\r\n${body}`
+    const raw = await new Promise((resolve) => {
+      const sock = connect(openPort, '127.0.0.1', () => { sock.write(reqStr) })
+      let data = ''
+      sock.on('data', d => { data += d.toString() })
+      const finish = () => { try { sock.destroy() } catch {}; resolve(data) }
+      sock.on('close', finish)
+      sock.on('error', finish)
+      setTimeout(finish, 3000)
+    })
+    expect(raw).toMatch(/^HTTP\/1\.1 403/)
+  })
+
+  it('bad Host + an Authorization: Bearer header (any value) is still 403 in open mode', async () => {
+    const body = JSON.stringify({ event: 'test-passed' })
+    const reqStr =
+      `POST /api/event HTTP/1.1\r\n` +
+      `Host: evil.example\r\n` +
+      `Authorization: Bearer anything-at-all\r\n` +
+      `Content-Type: application/json\r\n` +
+      `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+      `Connection: close\r\n\r\n${body}`
+    const raw = await new Promise((resolve) => {
+      const sock = connect(openPort, '127.0.0.1', () => { sock.write(reqStr) })
+      let data = ''
+      sock.on('data', d => { data += d.toString() })
+      const finish = () => { try { sock.destroy() } catch {}; resolve(data) }
+      sock.on('close', finish)
+      sock.on('error', finish)
+      setTimeout(finish, 3000)
+    })
+    expect(raw).toMatch(/^HTTP\/1\.1 403/)
+  })
+
+  it('the server stays alive after open-mode 403s (GET /api/health still 200 with an allowed Host)', async () => {
+    const health = await fetch(`http://127.0.0.1:${openPort}/api/health`)
+    expect(health.status).toBe(200)
+  })
 })
 
 // ─── Review round 3, LOW-7 — rejected-Host log cap is a lifetime cap, not a time window
