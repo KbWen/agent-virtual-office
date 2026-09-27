@@ -1,7 +1,7 @@
 ---
 kind: maintenance
-status: frozen
-primary_domain: frontend
+status: shipped
+primary_domain: office-runtime
 parent_spec: docs/specs/living-office-events.md
 created: 2026-09-26
 signal_tier: none
@@ -285,6 +285,13 @@ improperly in place (see the active Work Log's Drift Log governance-correction e
   (F3 follow-up).
 
 ## Domain Decisions
+
+> **Frontmatter correction (ship, 2026-09-27)**: `primary_domain` was recorded as `frontend` at
+> spec creation (inherited from parent `living-office-events.md`); corrected to `office-runtime` at
+> ship time — the actual touched files (`officeLife.js`, `store.js`, `idleGapInfer.js`) and every
+> comparable prior spec in this class (client-runtime-hygiene, avo-187, blocked-reason-tags,
+> standing-overlap-deconfliction) are `office-runtime`. `living-office-events.md` itself is left
+> untouched (its own domain question is out of scope here). See Work Log Drift Log.
 
 - [DECISION] `hasRequiredActors()` is a symmetric pre-fire refusal alongside the existing empty-cast
   refusal (AVO-191) rather than a change to `pickParticipants` itself — it targets exactly the
