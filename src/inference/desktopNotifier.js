@@ -119,6 +119,25 @@ function fireRecurringNotification(agentId, reasonCode) {
   }
 }
 
+// Prune dedupe-map entries for agents no longer present in the store. Called every tick
+// (not just on stop) so a dynamic 'slug~role' id that gets evicted mid-session and later
+// reused by a fresh worktree session doesn't inherit a stale blockedSince timestamp — that
+// stale timestamp let tick() immediately treat the brand-new episode as already past the
+// 30s threshold and fire a false "blocked 30+s" notification on its very first tick.
+function pruneEvictedAgents(currentAgents) {
+  for (const agentId of blockedSince.keys()) {
+    if (!(agentId in currentAgents)) {
+      blockedSince.delete(agentId)
+      notifiedFor.delete(agentId)
+    }
+  }
+  // AVO-172: recurringNotifiedFor can hold keys that blockedSince does NOT (an episode entering
+  // via the awaiting-approval branch never sets blockedSince), so prune it by its OWN keys.
+  for (const agentId of recurringNotifiedFor.keys()) {
+    if (!(agentId in currentAgents)) recurringNotifiedFor.delete(agentId)
+  }
+}
+
 /**
  * Internal: one polling tick. Walks the store's agents and decides whether
  * to start, continue, fire, or clear an episode for each agent.
@@ -131,6 +150,7 @@ function tick(store, opts, now = Date.now) {
   // before the per-agent loop.
   const canFire = isNotificationGranted() && isTabHidden()
   const agents = store.getState().agents
+  pruneEvictedAgents(agents)
   for (const id of Object.keys(agents)) {
     const a = agents[id]
     if (BLOCKED_FAMILY.has(a?.status)) {
@@ -198,21 +218,10 @@ export function startDesktopNotifier(store, options = {}) {
   const id = setInterval(() => tick(store, opts, opts.now), opts.intervalMs)
   return function stopDesktopNotifier() {
     if (typeof clearInterval !== 'undefined') clearInterval(id)
-    // Prune Map entries for agents no longer present in the store so
-    // evicted/worktree agents don't accumulate across spawned instances.
-    const currentAgents = store.getState?.()?.agents ?? {}
-    for (const agentId of blockedSince.keys()) {
-      if (!(agentId in currentAgents)) {
-        blockedSince.delete(agentId)
-        notifiedFor.delete(agentId)
-      }
-    }
-    // AVO-172: recurringNotifiedFor can hold keys that blockedSince does NOT (an episode entering via
-    // the awaiting-approval branch never sets blockedSince), so prune it by its OWN keys — otherwise a
-    // re-spawned same-id agent's recurring-failure notice stays suppressed across spawned instances.
-    for (const agentId of recurringNotifiedFor.keys()) {
-      if (!(agentId in currentAgents)) recurringNotifiedFor.delete(agentId)
-    }
+    // Final safety-net prune (tick() already prunes every interval now) so evicted/worktree
+    // agents don't accumulate across spawned instances even if no tick ran between the last
+    // eviction and stop.
+    pruneEvictedAgents(store.getState?.()?.agents ?? {})
   }
 }
 

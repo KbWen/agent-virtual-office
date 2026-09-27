@@ -356,6 +356,39 @@ describe('desktopNotifier — stop() prunes evicted agents (fix #3)', () => {
   })
 })
 
+describe('desktopNotifier — mid-run eviction pruning (finding 5: stale blockedSince on id reuse)', () => {
+  it('a re-spawned same-id agent starts a FRESH episode instead of inheriting the old blockedSince timestamp', () => {
+    // fix #3 above only pruned on stop(). Between eviction and stop(), tick()'s per-id loop
+    // iterates Object.keys(agents) — an id that has been DELETED from agents (not merely set to
+    // a non-blocked status) is invisible to that loop, so the stale blockedSince entry survived
+    // untouched. If the SAME id ('wt1~dev') was later reused by a brand-new worktree session,
+    // its fresh episode inherited the ancient blockedSince timestamp and looked instantly
+    // "blocked 30+s" on the very first tick.
+    let state = { agents: { 'wt1~dev': { status: 'blocked' } } }
+    const store = { getState: () => state }
+    const stop = startDesktopNotifier(store, { intervalMs: 5000, thresholdMs: 30000 })
+    expect(MockNotification.lastFired.length).toBe(0)   // immediate tick: episode just started
+
+    // Evicted mid-session (worktree ended) WITHOUT stopping the notifier. Many ticks elapse
+    // while the id is entirely absent from agents.
+    state = { ...state, agents: {} }
+    vi.advanceTimersByTime(100000)   // 20 ticks with the id absent
+
+    // Same id reused by a brand-new worktree session, freshly blocked.
+    state = { ...state, agents: { 'wt1~dev': { status: 'blocked' } } }
+    vi.advanceTimersByTime(5000)   // exactly one tick into the NEW episode
+    // Before the fix: blockedSince still held the timestamp from the FIRST episode (t=0), so
+    // this tick saw "blocked for 105000ms" and fired instantly — a false notification for an
+    // episode that had only just begun.
+    expect(MockNotification.lastFired.some(n => n.tag === 'office-blocked-wt1~dev')).toBe(false)
+
+    // The new episode still gets detected honestly once it genuinely crosses the threshold.
+    vi.advanceTimersByTime(30000)
+    expect(MockNotification.lastFired.some(n => n.tag === 'office-blocked-wt1~dev')).toBe(true)
+    stop()
+  })
+})
+
 describe('desktopNotifier — recurring-failure notice (AVO-117)', () => {
   const recStore = (agentId, reasonCode, episodes) => ({
     getState: () => ({
