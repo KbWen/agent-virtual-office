@@ -68,7 +68,17 @@ Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 139 -> 140).
 
 Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 141 -> 142).
 
+Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 142 -> 143).
+
 ---
+
+### Ship-fix-avo-197-oneshot-animations-2026-09-20 (the one-shot animations actually play now) · AVO-197
+
+- Quick-win shipped: SIX one-shot SMIL animations in the office were dead. SMIL resolves `begin="0s"` against the DOCUMENT timeline, so an element mounted on a status change, a behaviour change or a poke is already past its active duration and snaps to its end value — no error, no warning, correct-looking markup, which is how it survived five features shipping. AVO-135's "one-shot celebratory flash" was mounted for 60 frames and visible on exactly 1. Found while building AVO-193 (whose steam uses CSS and was never affected).
+- **Fixed with `begin="indefinite"` + `beginElement()` on mount, deliberately NOT a CSS rewrite**, even though AVO-193 used CSS and CSS is easier to unit-test. AVO-136/158 are `additive="sum"` transforms on a root `<g>` already carrying `translate(x,y) scale(CHAR_SCALE)`: a CSS `transform` REPLACES that base transform, and the CSS `translate` property composes but applies OUTSIDE it, silently changing how far an agent bobs. Both CSS routes were measured working before being rejected on those grounds. No duration, curve or `values` list changed — a repair, not a re-tune.
+- Verified in a real browser, same instrument on both sides, counting distinct animated values (a snap gives 1-2; a real animation at 60fps gives tens): done flash 2→43, poke bob 2→21, desk-slam jitter 1→26, behaviour pop 2→19, reason pop 2→22, banner fade 1→24. The done flash went from **1 visible frame to 39**.
+- **Three of my own measurements were wrong first** and each would have produced a false claim: sampling `document.querySelector` while triggering a different agent; reading `getScreenCTM()`, which does not reflect SMIL transform animation at all; and a deterministic "DEAD" for the behaviour `thinking`, which has no case in `BehaviorIndicator` and renders null, so the instrument was measuring an empty box. All three were caught before any conclusion, each by re-validating against a known-playing control.
+- Tests: vitest **2512 passed / 133 files** (+10). The unit tests deliberately do NOT assert that the animations play — believing markup was the original mistake — they hold the wrapper contract plus a regression guard (with its own can-it-fail self-test) against any future unwrapped one-shot. Build, single-file build, render-smoke and panel smoke PASS. Owner approved the before/after frame strips before merge. PR #244.
 
 ### Ship-feat-avo-193-coffee-busy-feedback-2026-09-20 (the coffee machine says BUSY when it cannot serve you) · AVO-193
 

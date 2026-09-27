@@ -5,6 +5,81 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.10 — 2026-09-27 — The office only shows what is really happening, and the server stops falling over
+
+Thirteen pull requests since v1.6.9. Most come from a full-repo audit on 2026-09-26 (server,
+hooks, client runtime), worked branch by branch with a fresh reviewer each round; the rest finish
+the 2026-09-19 review and an external audit from 2026-09-24.
+
+> **Upgrade note — read this if you run the office behind a reverse proxy, in Docker, or reach it
+> by hostname.** The server now rejects requests whose `Host` header is not an allowed host (this
+> blocks DNS-rebinding pages from reading your agents' status). `localhost`, `*.localhost` and IP
+> addresses work as before. If you reach the office as e.g. `office.example.com` or `mypc.local`,
+> set `OFFICE_ALLOWED_HOSTS` (comma-separated; a leading dot like `.example.com` allows
+> subdomains) or every request gets `403`. `docker-compose.yml`, the nginx/systemd/PM2 examples and
+> `DEPLOYMENT.md` show where. Requests carrying a valid `OFFICE_API_TOKEN` are exempt, so CI
+> webhooks keep working. The same variable now applies to `npm run dev`. (#246, #252)
+
+### Fixed
+
+- **One malformed request could crash the server.** A request line like `GET http://[ HTTP/1.1`
+  threw inside the request handler and the process exited; it now gets `400` and the server keeps
+  running. (#246)
+- **The live status stream no longer drops about once a minute.** The server's own 30-second idle
+  timeout was racing the 30-second heartbeat, so the stream kept closing and reconnecting. (#246)
+- **An office event no longer plays with nobody in it.** A "deploy success" celebration could fire
+  while the ops agent was busy, and two-person scenes showed an empty banner for 20 seconds. Events
+  now fire only when everyone they need is genuinely free, and an agent who starts real work leaves
+  the scene instead of acting it out. (#251)
+- **A quiet agent keeps what it was doing.** When the office inferred "thinking" after a silent
+  stretch, it also wiped the agent's task and file and made it look freshly active; it now keeps the
+  real details and the real "since" time. (#251)
+- **Long tool calls stop turning idle.** A three-minute test run showed the agent as idle after two
+  minutes although it was still working; the office now trusts the server's "nothing changed"
+  answers and only clears an agent the server has also dropped (about five minutes). (#250)
+- **The live stream reconnects after an outage**, and the health dot no longer flickers offline
+  while polling is working fine. (#250)
+- **"Done today" survives closing the tab for a few hours.** (#250)
+- **Codex and Claude Code in the same project stop erasing each other.** They wrote the same status
+  file; Codex now writes its own (`office-status-codex-*.json`), and the Codex helper no longer
+  hangs when run from a terminal. The two now appear as two sessions. (#247)
+- **The Claude hook's file lock can no longer be taken twice**, and status writes retry when Windows
+  briefly locks the file instead of risking a half-written file. (#249)
+- **The dev server stops inventing agents.** It watched `~/.claude` too, so Claude's own transcript
+  files showed up as a working agent; it also overwrote a webhook's `blocked` state after 10 seconds.
+  Its CORS behaviour now matches production. (#248)
+- A speech bubble is not shown for a speaker you cannot see in the compact panel (except when that
+  agent is blocked and needs you). (#240)
+- The coffee machine says **BUSY** when every agent is working, instead of ignoring the click. (#241)
+- Every one-shot animation in the office actually plays (the done flash, poke bob, desk slam and
+  others were snapping straight to their last frame). (#244)
+
+### Changed
+
+- **Friday 15:00 is the team meeting, not tea.** Only one office event can run at a time now, and the
+  Friday tea break was always winning the slot, so the meeting never happened. (#251)
+- **Search text stays out of bubbles.** A web search shows "Searching" and a sub-agent without a
+  description shows the generic delegating label, instead of the raw query or prompt. (#249)
+
+### Housekeeping — not user-facing
+
+- vitest 4.1.11 for a dev-only advisory (GHSA-82fw-gwwq-j7x9); a cap on concurrent live streams
+  (`OFFICE_MAX_SSE_CLIENTS`); the dev server's single status clock and bridge-UI buttons from the
+  2026-09-24 audit (#245); `bridge.js` and the generic bridge no longer forward spoofable fields;
+  setup/uninstall keep a symlinked `settings.json`; render-smoke really kills a stuck server;
+  `.gitignore` for the single-file build (#242). (#245, #246, #249, #252, #242, #243)
+
+### What this release does not claim
+
+- A dead hook now takes up to about five minutes to clear (it was two). That is the trade for long
+  tool calls no longer looking idle.
+- With Claude Code and Codex in the same project, each session shows one representative agent, so a
+  second active role on one side can be hidden.
+- A "deploy success" can still fire shortly after ops stopped for a reason other than finishing; a
+  stricter check is planned.
+- The Claude hook's lock narrows, but cannot fully close, a race between three hooks and a crashed
+  one; the worst case is one lost status update, as before the lock existed.
+
 ## v1.6.9 — 2026-09-20 — Nothing gets cut off in the small window, and English gets whole sentences
 
 Three pull requests since v1.6.8, all answering an external review that was worked as untrusted
