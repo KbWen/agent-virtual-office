@@ -183,3 +183,36 @@ those belong to sibling remediation branches).
   interval does. Not implemented — would need its own design (sweep cadence, dev-only lifecycle)
   rather than a copy-paste, and no correctness bug was found from its absence (stale files are
   already excluded from `scanAndMerge` by `_seq` age, they just aren't deleted from disk).
+
+## 2026-09-27 Dev-Server Allowed-Hosts Follow-Up
+
+Routed from a re-audit of the 2026-09-26 Server Hardening Wave's `OFFICE_ALLOWED_HOSTS` addition
+(F3 above): that wave gated `server.mjs` (production) on the env var via `isAllowedHost`, but
+never touched `vite.config.mjs` (the dev server), which relies on Vite 8's own built-in
+`hostValidationMiddleware`/`server.allowedHosts` and never populated it — so a developer reaching
+the dev server by a custom hostname or reverse proxy got Vite's default 403 regardless of
+`OFFICE_ALLOWED_HOSTS`, and the env var silently had no effect in dev at all. Branch
+`fix/dev-allowed-hosts`; scope limited to a new shared parsing module and the two importers.
+
+- **Fix**: extracted the pure env-parsing step of `server.mjs`'s `ALLOWED_HOSTS_ENV` (port/bracket
+  stripping via `hostnameFromHeader`, leading-dot suffix preservation, blank/bare-`.` filtering)
+  into `src/utils/hostAllowlist.mjs` — the `.mjs` extension matches the existing
+  `normalizePost.mjs`/`statusContract.mjs` shared-module pattern needed because
+  `package.json` is `"type": "commonjs"`. `server.mjs` now imports `hostnameFromHeader` and
+  `parseAllowedHostsEnv` from it instead of defining them inline (behavior-preserving; the
+  per-request `isAllowedHost` matcher, `net.isIP`, and `SERVER_IPS` stay in `server.mjs`, since
+  Vite's own matcher already special-cases IP literals and `localhost` independently — see
+  `node_modules/vite/dist/node/chunks/node.js`'s `isHostAllowedInternal`, verified to implement
+  the identical leading-dot subdomain-wildcard rule natively). `vite.config.mjs` imports
+  `parseAllowedHostsEnv`, computes the same `ALLOWED_HOSTS_ENV` from `OFFICE_ALLOWED_HOSTS`, and
+  spreads `{ allowedHosts: ALLOWED_HOSTS_ENV }` into `server:` only when non-empty, so an unset
+  env var leaves Vite's own default (`[]`) untouched and `allowedHosts: true` (which would
+  disable Vite's Host validation entirely) is never produced.
+- **Tests**: `tests/hostAllowlist.test.js` (14 unit tests pinning the extracted parser's exact
+  behavior, red before the module existed) and `tests/viteAllowedHosts.test.js` (7 behavioral
+  tests booting the real `vite.config.mjs` via Vite's `createServer()`, raw-TCP Host-header
+  requests since `fetch` cannot override `Host`; 3 of 7 independently confirmed red against the
+  unwired config before the `server.allowedHosts` line was added, green after).
+- **Docs**: `README.md`'s 403-by-hostname troubleshooting entry and `docs/deployment/
+  DEPLOYMENT.md`'s `OFFICE_ALLOWED_HOSTS` row both now note the var also governs `npm run dev`,
+  not only `server.mjs`.
