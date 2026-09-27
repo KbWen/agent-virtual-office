@@ -7,6 +7,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { normalizePost, nextSeq, VALID_ROLES, VALID_STATUSES } from './src/utils/statusContract.mjs'
 import { scanAndMerge, getSessionStats, resolveProjectRoot, STALE_MS } from './src/server/scanSessions.mjs'
+import { parseAllowedHostsEnv } from './src/utils/hostAllowlist.mjs'
 
 // Middleware: Universal status API
 //   GET  /api/status → read current status (browser polls this)
@@ -90,6 +91,21 @@ function getServerIPs() {
 }
 
 const SERVER_IPS = getServerIPs()
+
+// fix/dev-allowed-hosts: OFFICE_ALLOWED_HOSTS (server.mjs's production Host allowlist, PR
+// #246) previously had no effect here — Vite 8 validates the Host header itself via its own
+// `server.allowedHosts`/hostValidationMiddleware, but this config never populated it, so a
+// developer reaching this dev server through a custom hostname or reverse proxy got Vite's
+// default 403 regardless of what OFFICE_ALLOWED_HOSTS said. Reuses the SAME env-parsing step
+// server.mjs uses (src/utils/hostAllowlist.mjs) so the two transports agree on what the env
+// var means: a bare entry matches exactly, a leading-dot entry (`.example.com`) matches that
+// host AND any subdomain — Vite's own `allowedHosts` wildcard shape (node_modules/vite/dist/
+// node/chunks/node.js: isHostAllowedInternal) already implements exactly this leading-dot
+// rule natively, and already always allows `localhost`/`*.localhost`/IP literals on its own,
+// so nothing else needs to be passed through here. Left unset (`[]`) when the env var is
+// empty, which is Vite's own default — this must never become `true` (that would disable
+// Vite's Host validation entirely).
+const ALLOWED_HOSTS_ENV = parseAllowedHostsEnv(process.env.OFFICE_ALLOWED_HOSTS)
 
 // Monotonic _seq: shared SINGLE counter imported from statusContract.mjs above.
 // /api/status (inside normalizePost) and /api/event (nextSeq) write the same status file and
@@ -832,6 +848,10 @@ export default defineConfig({
     // server.mjs (production). Disabling Vite's cors here makes the plugin logic the sole
     // authority in dev too, same as prod.
     cors: false,
+    // Maps OFFICE_ALLOWED_HOSTS into Vite's own Host-header check (see ALLOWED_HOSTS_ENV
+    // above). Omitted (not merely `[]`) when unset so Vite's own default is truly unchanged
+    // rather than an explicit empty array that happens to equal it.
+    ...(ALLOWED_HOSTS_ENV.length > 0 ? { allowedHosts: ALLOWED_HOSTS_ENV } : {}),
   },
   build: {
     rollupOptions: {

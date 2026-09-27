@@ -27,6 +27,10 @@ import { scanAndMerge, getSessionStats, resolveProjectRoot } from './src/server/
 // Uses the .mjs extension so Node.js can import it directly at runtime
 // (package "type":"commonjs" prevents importing .js ESM files without transpilation).
 import { normalizePost, nextSeq, VALID_ROLES, VALID_STATUSES } from './src/utils/normalizePost.mjs'
+// fix/dev-allowed-hosts: the env-parsing step of the Host allowlist below is now shared with
+// vite.config.mjs (the dev server) so OFFICE_ALLOWED_HOSTS means the same thing in both
+// transports — see src/utils/hostAllowlist.mjs for what is and isn't shared.
+import { hostnameFromHeader, parseAllowedHostsEnv } from './src/utils/hostAllowlist.mjs'
 
 // Count working/blocked agents — used by the /api/event webhook handler.
 function countActive(agents) {
@@ -210,31 +214,9 @@ const SERVER_IPS = getServerIPs()
 //     hasValidApiToken, defined further down) is allowed through anyway: a DNS-rebinding
 //     browser can send any Host it likes, but it has no way to know this server's secret
 //     token, so proof of the token is proof the caller isn't a rebinding browser.
-const ALLOWED_HOSTS_ENV = (process.env.OFFICE_ALLOWED_HOSTS || '')
-  .split(',').map(s => s.trim()).filter(Boolean)
-  .map(entry => {
-    // Reuse the same port/bracket stripping as a real Host header so
-    // `OFFICE_ALLOWED_HOSTS=mypc.local:5174` and `=mypc.local` behave identically, and a
-    // leading-dot suffix entry (`.example.com`) survives (no colon in it, so it passes
-    // through unchanged other than lowercasing).
-    return hostnameFromHeader(entry) ?? entry.toLowerCase()
-  })
-  // review round 3, LOW-5: a bare '.' entry (e.g. from a trailing/stray comma-separated
-  // ".") would make `host.endsWith('.')` true for EVERY trailing-dot FQDN
-  // (`evil.com.` is a valid absolute hostname), silently re-opening rebinding via
-  // `http://attacker.com.:<port>`. Never treat '.' as a usable suffix entry.
-  .filter(entry => entry && entry !== '.')
-
-// Host header may be `host`, `host:port`, or `[v6-literal]:port`. Strip the port and any
-// IPv6 brackets so the remainder can be compared as a bare hostname/IP.
-function hostnameFromHeader(hostHeader) {
-  if (typeof hostHeader !== 'string' || !hostHeader) return null
-  const bracketed = hostHeader.match(/^\[([^\]]+)\](?::\d+)?$/)
-  if (bracketed) return bracketed[1].toLowerCase()
-  const idx = hostHeader.lastIndexOf(':')
-  if (idx !== -1 && /^\d+$/.test(hostHeader.slice(idx + 1))) return hostHeader.slice(0, idx).toLowerCase()
-  return hostHeader.toLowerCase()
-}
+// Parsing (port/bracket stripping, leading-dot suffix survival, blank/bare-'.' filtering) now
+// lives in src/utils/hostAllowlist.mjs (parseAllowedHostsEnv), shared with vite.config.mjs.
+const ALLOWED_HOSTS_ENV = parseAllowedHostsEnv(process.env.OFFICE_ALLOWED_HOSTS)
 
 function isAllowedHost(hostHeader) {
   const host = hostnameFromHeader(hostHeader)
