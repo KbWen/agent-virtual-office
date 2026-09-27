@@ -1,6 +1,6 @@
 ---
 title: Client Runtime Hygiene
-status: frozen
+status: shipped
 classification: feature
 primary_domain: office-runtime
 date: 2026-09-26

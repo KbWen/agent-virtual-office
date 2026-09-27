@@ -62,7 +62,15 @@ Rotated 1 additional entry on 2026-09-26 (SSoT Update Sequence 136 -> 137).
 
 Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 137 -> 138).
 
+Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 139 -> 140).
+
 ---
+
+### Ship-chore-release-v1.6.9-2026-09-20 (nothing gets cut off in the small window, and English gets whole sentences) · release v1.6.9
+
+- Cuts the 3 PRs merged since `v1.6.8` (#236, #237, #238) as **v1.6.9**. They all answer the 2026-09-19 external review, which was worked as untrusted input: 10 findings, 7 fixed, 2 rejected on evidence, 1 = AVO-193. The release commit contains no app code: `package.json` 1.6.8 -> 1.6.9, **both** `package-lock.json` version fields (verified 0 `"version": "1.6.8"` strings left), the CHANGELOG narrative, and this entry.
+- **Two of the three are user-facing**: #236 (the panel-mode inspector and bubbles, no speech without a visible speaker, and relative times that keep counting) and #237 (bubble width fitting: English whole lines 52%→85%). #238 (the dev-server config as ESM, plus the manifest path guard) is under "Housekeeping — not user-facing". The notes carry a "does not claim" list: the panel inspector can cover the clicked agent, below-crop speakers are AVO-196, the north-door feet-anchor flip, and font-dependent line breaks.
+- Tests at the cut: vitest **2486 passed / 131 files**; build PASS; `bundle-budget` PASS at 499642 vs baseline 496504 (+0.63%); `render-smoke` PASS (4 viewports, 0 errors); `pack-smoke` ALL ASSERTIONS PASSED. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.9` tag on the release merge commit + `gh release create --latest`.
 
 ### Ship-fix-bubble-truncation-width-2026-09-19 (speech bubbles fit by width, so English stops getting cut mid-word) · REV-07
 
