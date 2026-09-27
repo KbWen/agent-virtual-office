@@ -18,6 +18,8 @@ Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 138 -> 139).
 
 Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 111 -> 112).
 
+Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 140 -> 141).
+
 Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 112 -> 113).
 
 Rotated 1 additional entry on 2026-07-31 (SSoT Update Sequence 113 -> 114).
@@ -62,7 +64,15 @@ Rotated 1 additional entry on 2026-09-26 (SSoT Update Sequence 136 -> 137).
 
 Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 137 -> 138).
 
+Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 139 -> 140).
+
 ---
+
+### Ship-chore-release-v1.6.9-2026-09-20 (nothing gets cut off in the small window, and English gets whole sentences) · release v1.6.9
+
+- Cuts the 3 PRs merged since `v1.6.8` (#236, #237, #238) as **v1.6.9**. They all answer the 2026-09-19 external review, which was worked as untrusted input: 10 findings, 7 fixed, 2 rejected on evidence, 1 = AVO-193. The release commit contains no app code: `package.json` 1.6.8 -> 1.6.9, **both** `package-lock.json` version fields (verified 0 `"version": "1.6.8"` strings left), the CHANGELOG narrative, and this entry.
+- **Two of the three are user-facing**: #236 (the panel-mode inspector and bubbles, no speech without a visible speaker, and relative times that keep counting) and #237 (bubble width fitting: English whole lines 52%→85%). #238 (the dev-server config as ESM, plus the manifest path guard) is under "Housekeeping — not user-facing". The notes carry a "does not claim" list: the panel inspector can cover the clicked agent, below-crop speakers are AVO-196, the north-door feet-anchor flip, and font-dependent line breaks.
+- Tests at the cut: vitest **2486 passed / 131 files**; build PASS; `bundle-budget` PASS at 499642 vs baseline 496504 (+0.63%); `render-smoke` PASS (4 viewports, 0 errors); `pack-smoke` ALL ASSERTIONS PASSED. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.9` tag on the release merge commit + `gh release create --latest`.
 
 ### Ship-fix-bubble-truncation-width-2026-09-19 (speech bubbles fit by width, so English stops getting cut mid-word) · REV-07
 
@@ -965,3 +975,10 @@ Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 137 -> 138).
 - Feature shipped: REV-05, the last open item of the 2026-09-19 review. It also closes the half of F-11 (2026-09-08) that was deferred. Every `vite`/`vitest`/`vite build` run printed MIXED_EXPORTS and two "ESM syntax in a file loaded as CommonJS" warnings. The cause was re-derived: Vite 8 bundles an ESM config inside a `"type": "commonjs"` package, and the review's claim that Node 22 was responsible is wrong. The tool's own warning says the native loader is planned as a future default, which would stop this config loading. `vite.config.js` is now `vite.config.mjs` (R099 rename) and imports `statusContract.mjs` directly. Every functional reference follows; historical records are untouched.
 - **A new guard makes path drift loud.** `tests/buildManifestPaths.test.js` checks that every Dockerfile COPY/ADD source and every package.json `files` entry exists. Both consumers drop a missing path silently: CI never builds the image, and `npm pack` skips a missing entry. After a bare rename the guard went red on exactly the two stale references. A fresh-context review (Sonnet) came back NOT READY in round 1: one live comment, plus guard-parser gaps for continuation lines, JSON-array COPY and ADD. Both were fixed and round 2 was READY. The reviewer also confirmed that `[...]` in Docker (Go filepath.Match) and npm (minimatch) globs is a character class, so the guard keeps it as one. Accepted: a future heredoc COPY would make the guard fail loudly rather than silently.
 - Tests: vitest **2486 passed / 131 files**, 0 warning lines. A live dev server booted from the new file: POST/GET /api/status and OFFICE_STATUS_DIR work. `npm pack` ships the file and pack-smoke passes. Bundle budget (app bundle byte-identical), render smoke and panel smoke PASS. Commit hygiene: the spec commit first swallowed the staged `git mv`. It was soft-reset before push, and a memory was added. PR #238.
+
+### Ship-fix-avo-196-offscreen-speaker-bubbles-2026-09-20 (no speech bubble for a speaker you cannot see) · AVO-196
+
+- Quick-win shipped: in the compact panel an agent standing below the visible crop (the lounge `stretch` (180,490) and `coffee` (80,475) spots) still rendered its bubble INSIDE the crop with nobody visible saying it. PR #236 closed the same defect above and to the sides and deliberately left this one as a design call. The owner chose the rule from rendered candidates (prototype in a scratch worktree, no repo edit before approval): hide the bubble when the speaker's ANCHOR is outside the crop, EXCEPT `blocked`/`awaiting-approval`.
+- **The exemption is the point.** ADR-007 D1 licenses `blocked` to seize the bubble as the message worth interrupting for, and the panel's control bar already says "Needs your attention: <name>", so nothing actionable is hidden. This corrects the backlog row's earlier claim that ADR-007 forbids suppressing voice — it does not; re-read at design time.
+- The test is the ANCHOR, matching the three sides #236 already guards. A first cut measured a ~44-unit sprite height and made the coffee spot "visible" by 4 units; the anchor rule is simpler and consistent, and one #236 render case changed meaning (a meeting-chair speaker now renders no bubble at all rather than an unflipped one) while the pure helpers still pin the flip/clamp geometry.
+- Tests: vitest **2495 passed / 131 files** (+9). Two mutations killed (drop the blocked exemption, never hide). Build, bundle-budget +0.68%, render-smoke and panel smoke PASS. Browser evidence on the staged scene: before, both an idle and a blocked speaker below the view showed bubbles inside the crop; after, only the blocked one. PR #240.

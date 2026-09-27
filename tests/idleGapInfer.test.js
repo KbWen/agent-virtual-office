@@ -220,6 +220,43 @@ describe('idleGapInfer — applyExternalStatus call meta', () => {
   })
 })
 
+// ─── rem-honest-office-events finding #2: carry externalStatus fields forward ──────────────
+// Production shape: task/label/reasonCode/etc. live on state.externalStatus[id], not
+// state.agents[id] (AVO-173). Before the fix, the inferred update sent only {agentId, status},
+// which store.js's buildExtEntry then wrote as `u[f] || null` for every carry field — wiping
+// task/label/reasonCode/activeFile/skill to null even though nothing about the real task changed.
+describe('idleGapInfer — carries externalStatus fields forward on inference (finding #2)', () => {
+  it('an inferred working→thinking update carries task/label/reasonCode/activeFile/skill forward', () => {
+    const apply = vi.fn()
+    const state = {
+      agents: { dev: { status: 'working' } },
+      externalStatus: { dev: { task: 'Bash', label: 'Running tests', reasonCode: 'permission-denied', activeFile: 'foo.js', skill: 'tdd' } },
+      applyExternalStatus: apply,
+    }
+    const listeners = new Set()
+    const store = {
+      getState: () => state,
+      subscribe: (l) => { listeners.add(l); return () => listeners.delete(l) },
+    }
+    const stop = startIdleGapInference(store, { intervalMs: 1000 })
+    vi.advanceTimersByTime(45000)
+    expect(apply).toHaveBeenCalledTimes(1)
+    expect(apply.mock.calls[0][0]).toEqual([{
+      agentId: 'dev', status: 'thinking',
+      task: 'Bash', label: 'Running tests', reasonCode: 'permission-denied', activeFile: 'foo.js', skill: 'tdd',
+    }])
+    stop()
+  })
+
+  it('an agent with no prior externalStatus entry infers {agentId, status} only (no crash, no phantom fields)', () => {
+    const store = makeStore({ dev: { status: 'working', task: 'Bash' } })  // no externalStatus at all
+    const stop = startIdleGapInference(store, { intervalMs: 1000 })
+    vi.advanceTimersByTime(45000)
+    expect(store.applyExternalStatus.mock.calls[0][0]).toEqual([{ agentId: 'dev', status: 'thinking' }])
+    stop()
+  })
+})
+
 // ─── Fix 3: stop() prunes evicted agent entries from lastUpdatedAt ────
 describe('idleGapInfer — stop() prunes evicted agents (fix #3)', () => {
   it('stop() removes Map entries for agents no longer in the store', () => {

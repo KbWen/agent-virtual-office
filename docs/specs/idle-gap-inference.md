@@ -88,3 +88,21 @@ useEffect. Agents stuck in extended thinking will visually freeze again
 - Pixel Agents project (upstream): publicly documented heuristic gap
 - Related: [[desktop-notifications]] (sister inference module),
   [[classifier-foundation]] (status family taxonomy)
+
+## 2026-09-26 remediation amendment (`docs/specs/honest-office-events.md`, finding #2)
+
+An audit found the inferred update — originally `{agentId, status}` only — was **not** carried
+against the agent's existing `externalStatus` entry: `store.js`'s `buildExtEntry` writes
+`u[f] || null` for every carry field, so `task`/`label`/`activeFile`/`reasonCode`/`skill`/`hint`
+were silently wiped to `null` on every inferred tick, and `changedAt` was bumped as if a fresh
+real signal had arrived — which a work-claim honesty gate could later misread as legitimate
+freshness.
+
+Fixed (no threshold/cadence change, this spec's ACs above are unaffected):
+- `idleGapInfer.js`'s `tick()` now carries the agent's prior `externalStatus` carry-fields
+  forward into the inferred update (`inferredUpdate()` helper).
+- `store.js`'s `buildExtEntry` takes an `isInferred` flag (true for `meta.source ===
+  'idle-gap-infer'`) and keeps `changedAt` unchanged for inferred updates — a heuristic
+  re-interpretation of silence is not a fresh signal.
+- `store.js`'s bubble-pop gate also skips inferred updates: the status ring + behavior pose
+  already carry the visualization; this spec never called for a bubble on top of that.

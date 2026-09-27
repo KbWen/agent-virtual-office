@@ -94,6 +94,18 @@ describe('triggerInteractiveEvent — honesty gate + neutral reaction', () => {
     expect(store.getState().agents.ops.bubble).toBeNull()           // untouched — real work is sacrosanct
   })
 
+  // rem-honest-office-events review round 2, finding #5: the prior guard only checked
+  // `agent.inGroupEvent` — a genuinely tracked-busy ops that simply isn't locked into any group
+  // event (the common real case — hook-driven status, not officeLife-driven) still got a
+  // fabricated "nothing to ship right now" bubble stamped over its real voice. Decision: prefer
+  // silence over a dedicated machine-side BUSY badge (recorded in docs/specs/honest-office-events.md).
+  it('R1-safe (finding #5): a gated click never overrides a genuinely-working ops even when NOT locked in a group event', () => {
+    const store = makeStore({ externalStatus: { ops: { status: 'working' } } })
+    const fired = triggerInteractiveEvent(store, 'deploy-success')
+    expect(fired).toBe(false)
+    expect(store.getState().agents.ops.bubble).toBeNull()
+  })
+
   it('social click (tea-break) is never gated — always reacts', () => {
     const store = makeStore({ externalStatus: {} })
     expect(triggerInteractiveEvent(store, 'tea-break')).toBe(true)

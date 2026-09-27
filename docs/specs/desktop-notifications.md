@@ -82,3 +82,14 @@ header layout (one button removed), no behavior change elsewhere.
 - Backlog row: `_shipped-log.md` #8
 - Related: [[idle-gap-inference]] (sister inference module, shares
   PixelOffice useEffect pattern)
+
+## 2026-09-26 hygiene update (client-runtime-hygiene)
+
+`tick()`'s per-agent loop only iterates `Object.keys(agents)` — an id that was *deleted* from
+`agents` (not merely set to a non-blocked status) was invisible to it, so `blockedSince` /
+`notifiedFor` / `recurringNotifiedFor` entries for evicted dynamic agents were pruned only when
+`stopDesktopNotifier()` ran, not on the ticks in between. A dynamic `slug~role` id reused by a
+fresh worktree session mid-run could inherit the old episode's `blockedSince` timestamp and fire
+an instant false "blocked 30+s" notification on its very first tick. Fixed: a new
+`pruneEvictedAgents()` helper now runs at the top of every `tick()` (and is reused by
+`stopDesktopNotifier()` as a final safety net). See `docs/specs/client-runtime-hygiene.md` AC5.

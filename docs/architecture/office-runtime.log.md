@@ -84,3 +84,76 @@ source_sha: 018ef1ef2225c4ebb53cf9aee05c3eae1bb5e1b2
 
 ### [office-runtime][2026-09-19][fix/review-2026-09-19]
 cross-ref: See [ui-rendering][2026-09-19][fix/review-2026-09-19] in docs/architecture/ui-rendering.log.md
+
+### [office-runtime][2026-09-27][fix/client-runtime-hygiene]
+source_spec: docs/specs/client-runtime-hygiene.md
+source_sha: 18943427e31be39bba1e24c5ac6350ec8a5b7c47
+
+- [DECISION] Refresh the client's existing 120s staleness timer on a confirmed-unchanged (304) poll response, rather than raising `STALENESS_TIMEOUT` itself — channels with no heartbeat backstop (hash-bridge, postMessage-only) keep their original fast-clear behavior; only channels that can actively confirm liveness get the extension.
+- [DECISION] Gate SSE-sourced failure probes behind the GET-polling channel's own last-known health (`pollProbeOk`), rather than resetting the poller to base cadence at retry-start — isolates the fix to the health SIGNAL and avoids perturbing the poller's own adaptive-backoff state, which the fast-poll-continuity fix (R1) already depends on staying untouched across a retry attempt.
+- [TRADEOFF] Did not unify the 3 dynamic-agent-eviction call sites (`applyExternalStatus`, `abortAgentMovement`, `clearExternalStatus`) into one shared prune helper beyond the local `pruneEvictedId` added for AC6 — smaller, safer diff now; leaves latent duplication risk if a 4th removal path is added later without copying the same three cleanup calls.
+- [CONSTRAINT] Every fix must be independently `git revert`-able — no schema/migration change, no new persisted-data shape, no new external API surface.
+
+### [office-runtime][2026-09-27][fix/honest-office-events]
+source_spec: docs/specs/honest-office-events.md
+source_sha: 8a9ab5d46615270dcafda3d759aedd8298e26182
+
+- [DECISION] `hasRequiredActors()` is a symmetric pre-fire refusal alongside the existing empty-cast
+  refusal (AVO-191) rather than a change to `pickParticipants` itself — it targets exactly the
+  "non-empty but missing a specific actor" gap without touching the participant-selection logic
+  Protected Surfaces guard.
+- [DECISION] `idleGapInfer.js` carries the agent's own prior `externalStatus` fields forward via a
+  new `inferredUpdate()` helper rather than changing `buildExtEntry`'s general carry-field loop —
+  the corruption is specific to the caller sending a partial payload, not to `buildExtEntry`'s
+  contract.
+- [DECISION] `store.js`'s `applyExternalStatus` releases `inGroupEvent`/`groupTarget` on ANY real
+  busy status (working/blocked/awaiting-approval/thinking), not only the exact status the
+  participant was picked for — becoming busy in a DIFFERENT way is just as dishonest to keep
+  grouped.
+- [TRADEOFF] Deferred handler steps that establish a first-time lock re-verify `isAgentAvailable`
+  synchronously against the CURRENT store state when the deferred `setTimeout` fires, rather than
+  re-running the original cast-selection algorithm — cheaper and sufficient, since the only failure
+  mode is "went busy since being cast," not "should now be re-shuffled." Similarly, the mid-event
+  abandonment auto-clear (round 2, finding #4) lives in `startOfficeLife`'s existing
+  `store.subscribe` callback (co-located with the other reactive/seeded checks) rather than as a
+  new dedicated subscription, gated on the round-3 epoch state
+  (`liveEventEpoch`/`liveEventHadParticipant`) to avoid a false-positive clear during a staggered
+  handler's pre-first-lock window.
+- [DECISION] evaluated tightening `deploy-success`/`ops-dev-deploy-check` eligibility to require live
+  `status === 'done'`; declined — `done` is a 10s-transient status by design, so the change would
+  make the gate almost never open, and conflicts with a currently-shipped test contract. See
+  Non-goals for the residual window and the `doneAt` follow-up candidate.
+- [TRADEOFF] `fireInteractionReaction`'s fix (finding #5) prefers silence over building a new
+  machine-side BUSY badge — the badge is a UI feature addition (Design Gate), out of this
+  state-honesty fix's scope. See Non-goals.
+- [DECISION] (round 3, N1/N2) a shared, module-level monotonic epoch counter — not a per-event
+  object clone or a WeakMap keyed on the catalog object — because `triggerInteractiveEvent` and
+  `fireWithCast` are independent entry points that must agree on ONE "what's live right now"
+  answer, and the catalog objects (`EVENT_BY_ID`) are intentionally reused across fires. A stale
+  epoch makes `endEventEpochIfLive`/every deferred step a FULL no-op — it does not even release its
+  own captured `participants` — because an agent released early from event A may since have been
+  picked up by event B, and touching it would clobber B. (Round 5, G1) `fireWithCast` itself — not
+  the epoch counter/state, which stays module-private — is now exported so the mutex is directly
+  unit-testable rather than only provable by tracing every call site — matching the existing
+  "exported for tests" precedent already set by `isAgentAvailable`/`eventEligible`/`floorTickAllowed`.
+- [DECISION] (round 4, F1) the event mutex lives as a single fresh `store.getState().activeEvent`
+  check inside `fireWithCast` itself, not as an extra check at each of its ~6 call sites — every
+  call site already believed it had this guarantee (the module's own prior comments assumed it),
+  so the bug was that the guarantee didn't actually exist yet, not that call sites were missing a
+  check they should each own individually.
+- [DECISION] (round 5, G2) Friday 15:00 hands its slot to `group-meeting` instead of firing both
+  or dropping either — the orchestrator's call, not re-litigated here. Implemented as a mutually
+  exclusive day-branch rather than a priority/ordering tweak inside one shared `if`, so the two
+  events' conditions are independently readable and the exclusivity is structural, not incidental
+  ordering that a future edit could quietly undo.
+- [TRADEOFF] (round 5, F3) the crew-reaction bubble-clear check keeps comparing TEXT and adds a
+  per-paint token alongside it, rather than switching to token-only or embedding a hidden marker
+  in the rendered string — the text check is the only part of this mechanism with visibility into
+  a fully external bubble overwrite (a real hook event, or a different call path), which a
+  local-only token map cannot see; an embedded marker risks the bubble-width-fitting measurement
+  code (canvas `measureText`) that a prior session hardened for exactly this class of string.
+- [DECISION] (ship-time correction) `primary_domain` in `docs/specs/honest-office-events.md` was
+  `frontend` at creation (inherited from parent `living-office-events.md`); corrected to
+  `office-runtime` before this consolidation — orchestrator-confirmed, matching every comparable
+  prior spec touching these same files (`client-runtime-hygiene`, `avo-187-temporal-doorway-claim`,
+  `blocked-reason-tags`, `standing-overlap-deconfliction`).

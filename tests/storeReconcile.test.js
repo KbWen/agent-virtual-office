@@ -394,6 +394,44 @@ describe('clearExternalStatus — behavior/group-event reset contract (R68)', ()
   })
 })
 
+describe('clearExternalStatus — evicted dynamic agent state cleanup (AVO-193 hygiene fix)', () => {
+  beforeEach(resetStore)
+
+  // Mirrors the AVO-180 assertion above, but for the two clearExternalStatus eviction sites
+  // (single-id expiry + clear-all staleness sweep) instead of applyExternalStatus's own
+  // multi-session reconciliation loop. Before this fix, only the multi-session path (and
+  // abortAgentMovement's removeAfterDoorAbort branch) pruned recurringFailureLog on eviction —
+  // clearExternalStatus deleted the agent but left its recurringFailureLog row behind.
+
+  it('prunes recurringFailureLog when the single-id branch deletes a dynamic agent', () => {
+    const { applyExternalStatus, clearExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'feat-a~dev', status: 'blocked', reasonCode: 'build-failed', task: null, label: null, session: 'feat-a' }],
+      { source: 'claude-cli' },
+    )
+    expect(useOfficeStore.getState().recurringFailureLog['feat-a~dev']).toBeTruthy()
+
+    clearExternalStatus('feat-a~dev')  // single-id expiry (expiryInterval / staleness sweep target)
+    const s = useOfficeStore.getState()
+    expect(s.agents['feat-a~dev']).toBeUndefined()                // dynamic agent deleted
+    expect(s.recurringFailureLog['feat-a~dev']).toBeUndefined()   // must not leak
+  })
+
+  it('prunes recurringFailureLog when the clear-all branch deletes a dynamic agent', () => {
+    const { applyExternalStatus, clearExternalStatus } = useOfficeStore.getState()
+    applyExternalStatus(
+      [{ agentId: 'feat-b~qa', status: 'blocked', reasonCode: 'test-run-failed', task: null, label: null, session: 'feat-b' }],
+      { source: 'claude-cli' },
+    )
+    expect(useOfficeStore.getState().recurringFailureLog['feat-b~qa']).toBeTruthy()
+
+    clearExternalStatus()  // clear-all staleness sweep
+    const s = useOfficeStore.getState()
+    expect(s.agents['feat-b~qa']).toBeUndefined()
+    expect(s.recurringFailureLog['feat-b~qa']).toBeUndefined()
+  })
+})
+
 describe('updateTime — daily-done ledger rollover (R71)', () => {
   beforeEach(resetStore)
 
