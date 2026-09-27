@@ -196,7 +196,10 @@ const SERVER_IPS = getServerIPs()
 // covered by Vite's internal hostValidationMiddleware; this closes the same class of gap in
 // the production server, but the two allowlists differ (see review round 2, 2026-09-26):
 //   - AVO supports a leading-dot suffix entry (`.example.com` matches `example.com` AND any
-//     `*.example.com` subdomain); Vite's own wildcard shape differs slightly.
+//     `*.example.com` subdomain) — verified identical to Vite's own wildcard rule
+//     (`isHostAllowedInternal` in `node_modules/vite/dist/node/chunks/node.js`), which is
+//     exactly why `vite.config.mjs` can map `OFFICE_ALLOWED_HOSTS` straight into Vite's
+//     `server.allowedHosts` via the shared parser below with no translation step.
 //   - AVO strips a trailing `:port` from env entries (`mypc.local:5174` behaves the same as
 //     `mypc.local`), since the port a request arrives on is deployment-specific and shouldn't
 //     have to be duplicated into the allowlist.

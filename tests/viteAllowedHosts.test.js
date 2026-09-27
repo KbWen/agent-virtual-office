@@ -41,26 +41,32 @@ async function bootDevServer(env = {}) {
     else process.env[k] = v
   }
 
-  const server = await createServer({
-    configFile: 'vite.config.mjs',
-    root: tempRoot,
-    logLevel: 'silent',
-    optimizeDeps: { noDiscovery: true, include: [] },
-    server: { port: 0, strictPort: false, host: '127.0.0.1' },
-  })
-  await server.listen()
+  // try/finally: if createServer()/listen() throws (e.g. a stale port or config load error),
+  // the ambient env must still be restored — otherwise a failed boot leaks OFFICE_ALLOWED_HOSTS
+  // (or another overridden var) into every later test in the same process, matching the
+  // restore-on-success path below.
+  try {
+    const server = await createServer({
+      configFile: 'vite.config.mjs',
+      root: tempRoot,
+      logLevel: 'silent',
+      optimizeDeps: { noDiscovery: true, include: [] },
+      server: { port: 0, strictPort: false, host: '127.0.0.1' },
+    })
+    await server.listen()
 
-  // Restore ambient env immediately — vite.config.mjs's ALLOWED_HOSTS_ENV is a module-level
-  // const captured at config-load time (inside createServer above), so later servers/tests
-  // are unaffected by this one's env, matching viteDevServerParity.test.js's pattern.
-  for (const k of keys) {
-    if (savedEnv[k] === undefined) delete process.env[k]
-    else process.env[k] = savedEnv[k]
+    const addr = server.httpServer.address()
+    servers.push(server)
+    return { server, port: addr.port }
+  } finally {
+    // Restore ambient env immediately — vite.config.mjs's ALLOWED_HOSTS_ENV is a module-level
+    // const captured at config-load time (inside createServer above), so later servers/tests
+    // are unaffected by this one's env, matching viteDevServerParity.test.js's pattern.
+    for (const k of keys) {
+      if (savedEnv[k] === undefined) delete process.env[k]
+      else process.env[k] = savedEnv[k]
+    }
   }
-
-  const addr = server.httpServer.address()
-  servers.push(server)
-  return { server, port: addr.port }
 }
 
 afterEach(async () => {
