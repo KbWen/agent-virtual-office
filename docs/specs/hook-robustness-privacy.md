@@ -1,9 +1,9 @@
 ---
-status: frozen
+status: shipped
 title: "Hook/bridge robustness + privacy remediation (2026-09-26 audit)"
 primary_domain: hook-io
 created: 2026-09-26
-last_updated: 2026-09-26
+last_updated: 2026-09-27
 signal_tier: none
 ---
 

@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-27T01:55:10+08:00
+- **Last Updated**: 2026-09-27T04:22:40+08:00
 - **Last Verified**: 2026-09-25
-- **Update Sequence**: 138
+- **Update Sequence**: 139
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -87,7 +87,7 @@
   - [ui-rendering] docs/specs/dialogue-interaction-layer.md [Frozen]  *(dialogue layer — ADR-007 channel separation + open-ended content + honesty gate; S1/S1b reduction commits, S2–5 killable hypotheses; red-team + expert/PM hardened)*
   - [ui-rendering] docs/specs/calm-stationery-palette.md [Shipped]  *(warm-oak floor/walls + paper inspector with role-tint header, owner-chosen from rendered candidates; all shell/sign/card colours are tokens in `src/systems/officePalette.js` with enforced legibility rules R1–R5)*
   - [ui-rendering] docs/specs/review-2026-09-19-remediation.md [Shipped]  *(2026-09-19 external review, wave 1 — REV-01/02/03/08/09: panel-mode overlays clamp to the live viewBox; no speech is moved into view for an off-crop speaker (both axes + the #47 clamp); dead page-title status channel deleted; relative times tick every 10 s; PR #236)*
-  - [hook-integration] docs/specs/vite-config-esm.md [Shipped]  *(REV-05 — dev-server config renamed to native ESM `vite.config.mjs`; three Vite config-loader warnings gone; Dockerfile/package.json path-drift guard; PR #238; closes F-11 of 2026-09-08)*
+  - [hook-io] docs/specs/hook-robustness-privacy.md [Shipped]  *(2026-09-26 audit remediation: lock TOCTOU identity-verified steal-close (token+mtime post-rename recheck) + orphan `.stale.*` cleanup; `atomicWriteJson` EPERM/EBUSY retry; `WebSearch`/`Agent` privacy-leak fixes (raw query/description no longer surfaced); `bridge.js` client-forgeable `source` field closed; `generic-llm-bridge.js` `--watch`-dir git-diff scope + anchored ignore regex + `--port=` support; `cli.js` symlink-safe settings write + null-guard uninstall)*
   - When reading specs: only open files tagged with the current task's module.
   - Older `[Shipped]` index lines are in `## Spec Index Archive` at the bottom of this file. Spec bodies stay in `docs/specs/` — only index lines rotate.
 - **Canonical Commands**:
@@ -156,6 +156,14 @@
 
 ## Ship History
 
+### Ship-fix-hook-robustness-privacy-2026-09-27 (the status lock can't be stolen twice, writes survive Windows file locks, and search text stays out of labels)
+
+- Feature shipped: remediated 6 audit findings (2026-09-26) across `office-status-hook.js`, `bridge.js`, `generic-llm-bridge.js`, `bin/cli.js`. Lock stale-steal race closed via identity-verified (token+mtime) post-rename recheck + EPERM/EBUSY retry (probes `toctou2.cjs`/`threeway.cjs`); `atomicWriteJson` retries tmp-write+rename internally before falling back to a direct write; `extractContext()` no longer returns raw `WebSearch` query text or `Agent` descriptions verbatim (both fall through to the existing generic-noun fallback label — user-visible: generic "Searching"/delegating label instead of leaked task text); `bridge.js` closes a client-forgeable `source` field; `generic-llm-bridge.js` scopes `getGitChangedFiles` to the `--watch` dir (was `process.cwd()`), anchors the ignore regex, and accepts `--port=N`; `bin/cli.js` gets symlink-safe settings write + null-guard uninstall + per-file unlink guard.
+- **3 rounds of implement/review**: round 1 review NOT READY (AC-1 disproven — two-stealer double-own via probe `toctou2.cjs`); round 2 closed HIGH/MEDIUM (identity-verified steal + EPERM/EBUSY retry), review PASS; round 3 corrected the residual description to the real move-aside/rename-back window (not the pre-rename gap the code already caught), added orphan-`.stale.*` cleanup + 3 mutant-kill/regression tests, review PASS at `9642509`.
+- **Accepted residual (documented, not eliminated)**: the lock's move-aside/rename-back window is bounded and self-healing (orphaned `.stale.*` dirs cleaned up on next acquire) — worst case one lost status update under adversarial concurrent-crash timing. Full root-cause: `docs/specs/hook-robustness-privacy.md` `## Domain Decisions`.
+- Merged `origin/main` (PR #246 server-hardening, #247 codex-hook-isolation, #248 dev-server-parity) before ship; one expected conflict in `office-status-hook.js`'s `module.exports` tail (both branches appended an export line), resolved by keeping both; `cleanupGhostAliases` `source === 'claude-cli'` gate confirmed intact post-merge.
+- Tests: full suite post-merge **142 files / 2633 tests**, all green (2 files hit load-contention 5000ms timeouts in the combined run on a heavily-loaded shared box, both untouched by this branch; isolated re-run: 2 files / 5 tests green, no regression). Build clean. `npm run smoke:pack` 4/4 PASS. `validate.sh` pass=114 warn=6 fail=0 skip=5 (all WARNs pre-existing/historical, none touching this branch). PR #249.
+
 ### Ship-fix-dev-server-parity-2026-09-26 (the dev server stops inventing agent status from ~/.claude and matches production CORS)
 
 - Quick-win shipped: remediated the remaining dev-only (`vite.config.mjs`) divergences from `server.mjs` (production) for the status transport, found in a 2026-09-26 re-audit that followed the 2026-09-24 wave's shared-clock fix. Scope: `vite.config.mjs`, the dev-start warning lines in `bin/cli.js`, and a one-line `STALE_MS` export from `src/server/scanSessions.mjs`.
@@ -220,12 +228,6 @@
 - **Two of the three are user-facing**: #236 (the panel-mode inspector and bubbles, no speech without a visible speaker, and relative times that keep counting) and #237 (bubble width fitting: English whole lines 52%→85%). #238 (the dev-server config as ESM, plus the manifest path guard) is under "Housekeeping — not user-facing". The notes carry a "does not claim" list: the panel inspector can cover the clicked agent, below-crop speakers are AVO-196, the north-door feet-anchor flip, and font-dependent line breaks.
 - Tests at the cut: vitest **2486 passed / 131 files**; build PASS; `bundle-budget` PASS at 499642 vs baseline 496504 (+0.63%); `render-smoke` PASS (4 viewports, 0 errors); `pack-smoke` ALL ASSERTIONS PASSED. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.9` tag on the release merge commit + `gh release create --latest`.
 
-### Ship-chore-vite-config-esm-2026-09-20 (the dev-server config becomes native ESM; three warnings gone) · REV-05
-
-- Feature shipped: REV-05, the last open item of the 2026-09-19 review. It also closes the half of F-11 (2026-09-08) that was deferred. Every `vite`/`vitest`/`vite build` run printed MIXED_EXPORTS and two "ESM syntax in a file loaded as CommonJS" warnings. The cause was re-derived: Vite 8 bundles an ESM config inside a `"type": "commonjs"` package, and the review's claim that Node 22 was responsible is wrong. The tool's own warning says the native loader is planned as a future default, which would stop this config loading. `vite.config.js` is now `vite.config.mjs` (R099 rename) and imports `statusContract.mjs` directly. Every functional reference follows; historical records are untouched.
-- **A new guard makes path drift loud.** `tests/buildManifestPaths.test.js` checks that every Dockerfile COPY/ADD source and every package.json `files` entry exists. Both consumers drop a missing path silently: CI never builds the image, and `npm pack` skips a missing entry. After a bare rename the guard went red on exactly the two stale references. A fresh-context review (Sonnet) came back NOT READY in round 1: one live comment, plus guard-parser gaps for continuation lines, JSON-array COPY and ADD. Both were fixed and round 2 was READY. The reviewer also confirmed that `[...]` in Docker (Go filepath.Match) and npm (minimatch) globs is a character class, so the guard keeps it as one. Accepted: a future heredoc COPY would make the guard fail loudly rather than silently.
-- Tests: vitest **2486 passed / 131 files**, 0 warning lines. A live dev server booted from the new file: POST/GET /api/status and OFFICE_STATUS_DIR work. `npm pack` ships the file and pack-smoke passes. Bundle budget (app bundle byte-identical), render smoke and panel smoke PASS. Commit hygiene: the spec commit first swallowed the staged `git mv`. It was soft-reset before push, and a memory was added. PR #238.
-
 ## Spec Index Archive
 
 > Rotated out of the live **Spec Index** on 2026-08-16 to satisfy the `check_ssot_caps.py`
@@ -233,6 +235,7 @@
 > `docs/specs/` path and is still validated for completeness (both validators union this
 > section with the live index; `validate.ps1:2243`). Never delete entries from here.
 
+  - [hook-integration] docs/specs/vite-config-esm.md [Shipped]  *(REV-05 — dev-server config renamed to native ESM `vite.config.mjs`; three Vite config-loader warnings gone; Dockerfile/package.json path-drift guard; PR #238; closes F-11 of 2026-09-08)*
   - [vibe-rebalance] docs/specs/control-bar-reduction.md [Shipped]  *(AVO-130 / #116 — 4 health pills→1 expandable health dot; lang/run/view/help/platform demoted into ⚙ menu / info popover)*
   - [feature] docs/specs/agent-inspector-info-enhancement.md [Shipped]
   - [architecture] docs/specs/codex-status-parity-and-done-count.md [Shipped]
