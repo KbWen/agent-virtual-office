@@ -343,3 +343,33 @@ The spec was reviewed by the same three lenses against the real code. Verdicts +
   cold-start L0→L2 ramp note.
 
 All findings folded in. Spec is implementation-ready pending owner approval.
+
+## 2026-09-26 remediation amendment (`docs/specs/honest-office-events.md`, findings #1 and #3)
+
+Two defects in this spec's implementation (`officeLife.js`/`store.js`) were found by a later audit,
+in the same class this spec's honesty gate (AC-2, `eventEligible`/`WORK_CLAIM_GATES`) exists to
+prevent — a real activeEvent (banner/confetti/feed entry) with no honest cast behind it:
+
+- **Finding #1 (phantom work-claim event)**: `fireWithCast`/`triggerInteractiveEvent` called
+  `setActiveEvent(event)` before a handler's own required-actor check (e.g. `deploy-success` needs
+  `ops`) could bail. A partially-filtered `"all"`/array cast that is non-empty but missing exactly
+  that actor slipped past the existing empty-cast guard (AVO-191) and produced a live event with
+  nobody performing it for its whole duration. Fixed with a `REQUIRED_ACTORS` map +
+  `hasRequiredActors()` predicate consulted before `setActiveEvent`, symmetric with the empty-cast
+  refusal. `eventEligible`/`WORK_CLAIM_GATES` themselves are unchanged (see the new spec's
+  Non-goals — a status-based tightening of `deploy-success` was evaluated and deferred).
+- **Finding #3 (stale group pose after real work starts)**: the `inGroup` guard in
+  `resolveAgentVisual` (officeLife owns behavior/expression during a group event) had no release
+  condition — a real tracked status (working/blocked/awaiting-approval/thinking) arriving for a
+  participant did not clear `inGroupEvent`, so the agent kept performing the group's pose after
+  genuinely starting real work. Fixed in `store.js`'s `applyExternalStatus`: a real busy status now
+  releases `inGroupEvent`/`groupTarget` for that agent. Several deferred handler steps that lock a
+  crew member for the FIRST time (not re-checking an existing lock) — `food-delivery`,
+  `coffee-spill`, `deploy-success` celebrate, `dog-visit`, `group-stretch`, `pm-all-meeting` stage 2
+  — now re-verify `isAgentAvailable` at the moment the deferred step runs.
+
+No change to event cadence beyond one later decision in the same remediation (round 5, G2): Friday
+15:00 now fires `group-meeting` instead of `tea-break` (a swap of WHICH existing event owns that
+slot — tea-break's real fix introduced a working mutex that otherwise let it win every Friday
+15:00 race, permanently starving group-meeting). No change to gather-spot coordinates or which
+events exist otherwise. Full detail: `docs/specs/honest-office-events.md`.

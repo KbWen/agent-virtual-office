@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-27T13:14:31+08:00
+- **Last Updated**: 2026-09-27T13:40:49+08:00
 - **Last Verified**: 2026-09-25
-- **Update Sequence**: 140
+- **Update Sequence**: 141
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -61,7 +61,6 @@
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
   - [maintenance] docs/specs/engineering-audit-remediation.md [Shipped]  *(2026-09-24 audit remediation: dev server monotonic clock parity F-01, bridge UI planning/awaiting-approval toggles F-05; 2026-09-26 server-hardening wave: malformed-request crash guard, SSE heartbeat/client cap, Host-header DNS-rebinding allowlist, vitest CVE bump; 2026-09-26 dev-server-parity wave: file-watcher fallback root-scoping + `.claude`-segment fix, STALE_MS-based overwrite window, add/unlink SSE watch, dev CORS parity, LAN/no-token warning parity)*
-  - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [ci-infra] docs/specs/avo-190-soak-target-identity.md [Shipped]  *(AVO-190 — fail-closed AVO identity preflight for soak and overlap recorder targets)*
   - [ci-infra] docs/specs/avo-189-reachable-raf-watchdog-diagnostic.md [Shipped]  *(AVO-189 — first proven focused lost-chain restart is observable)*
@@ -88,6 +87,7 @@
   - [ui-rendering] docs/specs/review-2026-09-19-remediation.md [Shipped]  *(2026-09-19 external review, wave 1 — REV-01/02/03/08/09: panel-mode overlays clamp to the live viewBox; no speech is moved into view for an off-crop speaker (both axes + the #47 clamp); dead page-title status channel deleted; relative times tick every 10 s; PR #236)*
   - [hook-io] docs/specs/hook-robustness-privacy.md [Shipped]  *(2026-09-26 audit remediation: lock TOCTOU identity-verified steal-close (token+mtime post-rename recheck) + orphan `.stale.*` cleanup; `atomicWriteJson` EPERM/EBUSY retry; `WebSearch`/`Agent` privacy-leak fixes (raw query/description no longer surfaced); `bridge.js` client-forgeable `source` field closed; `generic-llm-bridge.js` `--watch`-dir git-diff scope + anchored ignore regex + `--port=` support; `cli.js` symlink-safe settings write + null-guard uninstall)*
   - [office-runtime] docs/specs/client-runtime-hygiene.md [Shipped]  *(2026-09-26 audit remediation: confirmed-unchanged (304) poll refreshes the 120s staleness timer; SSE retries every 60s post-give-up, cadence-down gated on a genuine `open` event; persist dedupe key fixed (`_savedAt` excluded); same-day `dailyDoneLedger`/`dailyBlockedLedger` survive a >4h tab-closed gap; `desktopNotifier` per-tick eviction pruning; `clearExternalStatus` eviction parity with `applyExternalStatus`/`abortAgentMovement`)*
+  - [office-runtime] docs/specs/honest-office-events.md [Shipped]  *(2026-09-26 audit remediation: `hasRequiredActors()` symmetric pre-fire refusal for a non-empty-but-wrong cast (AVO-191 sibling); idle-gap inference preserves real carry-fields/`changedAt` instead of a synthetic-fresh signal; real work releases a stale group-event pose; `fireWithCast` exported + mutex/epoch-guarded against stale/aborted-fire races; owner-visible Friday-15:00 cadence swap to `group-meeting` (G2))*
   - When reading specs: only open files tagged with the current task's module.
   - Older `[Shipped]` index lines are in `## Spec Index Archive` at the bottom of this file. Spec bodies stay in `docs/specs/` — only index lines rotate.
 - **Canonical Commands**:
@@ -156,6 +156,14 @@
 
 ## Ship History
 
+### Ship-fix-honest-office-events-2026-09-27 (events only fire when someone can actually perform them, and inference stops faking fresh signals)
+
+- Feature shipped: remediated 3 audited honesty defects in office-life set-pieces (ADR-007/008), same class as AVO-191/AVO-194, across `src/systems/officeLife.js`, `src/systems/store.js`, `src/inference/idleGapInfer.js`: (1) `hasRequiredActors()` adds a symmetric pre-fire refusal for a non-empty-but-wrong cast, alongside the existing empty-cast refusal (AVO-191); (2) idle-gap inference now preserves real underlying fields and `changedAt` instead of stamping a synthetic fresh timestamp when inferring `thinking`/`awaiting-approval`; (3) an agent picked up by real work while holding a group-event pose now has that pose released instead of persisting a stale group-event visual. `fireWithCast` is exported and guarded by a mutex + per-fire epoch tokens, closing a stale/aborted-fire race.
+- **Owner-visible cadence change**: Friday 15:00 now fires `group-meeting` instead of `tea-break` (G2) — a deliberate swap of which existing event fires at that slot.
+- **5 review rounds**: R1-R4 NOT READY (epoch/mutex races, cadence regression, ADR-010 citation gap, LOW pre-ship items) → R5 PASS (AC-1..17 proven, 0 security findings) → r6 closed 4 LOW pre-ship items with 2 additional mutation-verified tests. Root-cause detail: `docs/specs/honest-office-events.md` `## Domain Decisions`, consolidated to `docs/architecture/office-runtime.log.md`.
+- Merged `origin/fix/client-runtime-hygiene` (PR #250, carries origin/main #246-#249) before ship; resolved one expected conflict in `store.js` (kept both branches' comment blocks + the `isInferred` param).
+- Tests: full suite post-merge **149 files / 2693 tests**, all green. Build clean. `npm run smoke` PASS. `npm run smoke:panel` PASS. `validate.sh` pass=114 warn=6 fail=0 skip=5. PR #251.
+
 ### Ship-fix-client-runtime-hygiene-2026-09-27 (long tool calls stop looking idle, the live stream reconnects, and "done today" survives a closed tab)
 
 - Feature shipped: remediated 6 client status-integration runtime-hygiene findings (2026-09-26 audit) in `src/inference/inferStatus.js`, `src/systems/store.js`, `src/inference/desktopNotifier.js`: (1) a long-running tool call with no intermediate hook writes fell into `idle` at the 120s staleness timeout even though the session was alive — a confirmed-unchanged (304) poll now refreshes that timer, deferring to the pre-existing 300s `expiresAt` backstop; (2) the SSE channel never retried after giving up (5 consecutive errors) — it now retries every 60s, switching back to the 10s heartbeat cadence ONLY on a genuine network `open` event (not merely on `startSSEListening` returning a cleanup function), so fast polling keeps `integrationHealth` from flapping offline on the retry's own transient errors; (3) `savePersistedState`'s dedupe key never actually matched (included `_savedAt`), so `localStorage` was written on every autosave tick regardless of content change; (4) closing the tab for >4h on the SAME calendar day wiped `dailyDoneLedger`/`dailyBlockedLedger` entirely instead of only discarding position/behavior; (5) `desktopNotifier`'s dedupe maps were pruned for evicted agent ids only on stop, not per-tick, so a reused dynamic id could inherit a stale `blockedSince` and fire an instant false notification; (6) `clearExternalStatus` skipped the eviction cleanup that `applyExternalStatus`/`abortAgentMovement` already do for `_storeRecentPicks`/`recurringFailureLog`.
@@ -222,13 +230,6 @@
 - The steam is a CSS `@keyframes`, NOT SMIL: an `<animate begin="0s">` mounted after page load counts from DOCUMENT start and renders already-finished, which is how the first prototype got invisible steam. Proof it plays: the three wisps read opacity 0.83 / 0.62 / 0.33 mid-run. Reduced motion keeps both signals and drops the movement (`animated: 0`, static opacity), like the pet-pop site.
 - Tests: vitest **2502 passed / 132 files** (+7, new `tests/coffeeBusyFeedback.test.jsx`, red first on 5 of 7). Four mutations killed, incl. showing the feedback without consulting the honesty gate. Build, single-file build, render-smoke and panel smoke PASS. PR #241. Closes the last open finding of the 2026-09-19 handoff review (REV-10).
 
-### Ship-fix-avo-196-offscreen-speaker-bubbles-2026-09-20 (no speech bubble for a speaker you cannot see) · AVO-196
-
-- Quick-win shipped: in the compact panel an agent standing below the visible crop (the lounge `stretch` (180,490) and `coffee` (80,475) spots) still rendered its bubble INSIDE the crop with nobody visible saying it. PR #236 closed the same defect above and to the sides and deliberately left this one as a design call. The owner chose the rule from rendered candidates (prototype in a scratch worktree, no repo edit before approval): hide the bubble when the speaker's ANCHOR is outside the crop, EXCEPT `blocked`/`awaiting-approval`.
-- **The exemption is the point.** ADR-007 D1 licenses `blocked` to seize the bubble as the message worth interrupting for, and the panel's control bar already says "Needs your attention: <name>", so nothing actionable is hidden. This corrects the backlog row's earlier claim that ADR-007 forbids suppressing voice — it does not; re-read at design time.
-- The test is the ANCHOR, matching the three sides #236 already guards. A first cut measured a ~44-unit sprite height and made the coffee spot "visible" by 4 units; the anchor rule is simpler and consistent, and one #236 render case changed meaning (a meeting-chair speaker now renders no bubble at all rather than an unflipped one) while the pure helpers still pin the flip/clamp geometry.
-- Tests: vitest **2495 passed / 131 files** (+9). Two mutations killed (drop the blocked exemption, never hide). Build, bundle-budget +0.68%, render-smoke and panel smoke PASS. Browser evidence on the staged scene: before, both an idle and a blocked speaker below the view showed bubbles inside the crop; after, only the blocked one. PR #240.
-
 ## Spec Index Archive
 
 > Rotated out of the live **Spec Index** on 2026-08-16 to satisfy the `check_ssot_caps.py`
@@ -259,3 +260,4 @@
   - [real-ai-behavior] docs/specs/skill-activation-badge.md [Shipped]  *(AVO-104 / #30 — transient skill bubble on SubagentStart via existing bubble cap (working-tier); panel Option B, honest no-over-head-element)*
   - [game-feel] docs/specs/event-juice-pass.md [Shipped]  *(AVO-136 / #117 — rare-event juice: deploy confetti + eureka sparkle + desk-slam local shake; pure juiceForEvent resolver, reduced-motion-safe, never occludes status)*
   - [multi-agent] docs/specs/review-gate-waiting.md [Shipped]  *(AVO-107 / #112 — honest reframe: gate-desk "waiting" in-tray driven by awaiting-approval only; no queue/type fabrication; complements AVO-105 arrows; panel-decided)*
+  - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
