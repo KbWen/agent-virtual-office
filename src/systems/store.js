@@ -83,6 +83,22 @@ export { _storeFallbackBubble as __storeFallbackBubble }
 // ─── Persistence helpers ───
 const PERSIST_KEY = 'office-state'
 let _lastPersistedSnapshot = null
+// R6 (low, hygiene-review follow-up): once the finding-3 dedup skips a write, `_savedAt` also
+// stops advancing for as long as content stays unchanged — so the 4h loadPersistedState cutoff
+// silently became "4h since the last CONTENT CHANGE" instead of "4h since the tab was last
+// open", and a long-quiet-but-open office could lose its agent positions on an unrelated reload.
+// Cheap fix: still write (refreshing only `_savedAt`) at least once per SAVEDAT_REFRESH_MS even
+// when content is unchanged, so a quiet tab's freshness clock keeps advancing with real time.
+const SAVEDAT_REFRESH_MS = 30 * 60 * 1000  // 30 min
+let _lastSavedAtWriteAt = 0
+
+// Pure decision extracted for testability (mirrors persistedSnapshotKey/salvageStalePersistedState
+// above): given the new snapshot's key, the last-written key, and elapsed time since the last
+// actual write, should savePersistedState write now?
+export function shouldWritePersistedSnapshot(key, lastKey, now, lastWriteAt, refreshMs = SAVEDAT_REFRESH_MS) {
+  if (key !== lastKey) return true
+  return now - lastWriteAt >= refreshMs
+}
 
 function getLocalDayKey(now = Date.now()) {
   const date = new Date(now)
@@ -154,15 +170,62 @@ export function createPersistedState(state) {
   return data
 }
 
+// Dedup key for change-detection: excludes `_savedAt`, which createPersistedState stamps
+// fresh (Date.now()) on every call even when agents/ledgers are byte-identical. Comparing
+// full JSON (including _savedAt) meant the "did anything actually change" guard in
+// savePersistedState never matched two calls, so every 2s autosave tick wrote to
+// localStorage regardless of whether office state had changed.
+export function persistedSnapshotKey(data) {
+  if (!data || typeof data !== 'object') return ''
+  const { _savedAt, ...content } = data
+  return JSON.stringify(content)
+}
+
+// Called when the persisted blob is older than the 4h staleness cutoff below. The cutoff
+// exists to stop a long-stale office layout (agent positions/behavior) from snapping back
+// after the tab was closed for hours — that part is intentionally dropped here. Daily
+// ledgers are NOT dropped: validatePersistedDailyDoneLedger / validatePersistedDailyBlockedLedger
+// already reset a ledger whose dayKey isn't today, so passing them through can only ever
+// preserve a genuinely SAME-DAY tally across the closed-tab gap — it can't resurrect an old one.
+// Without this, closing the tab for >4h on the same day silently reset "done today" to zero.
+export function salvageStalePersistedState(data) {
+  if (!data || typeof data !== 'object') return null
+  return {
+    dailyDoneLedger: data.dailyDoneLedger,
+    dailyBlockedLedger: data.dailyBlockedLedger,
+  }
+}
+
+// R4 fix (review follow-up): pure extraction of loadPersistedState's fresh/stale decision
+// (raw localStorage string + now → resolved data or null), so the stale branch is directly
+// unit-testable without a window/localStorage shim. A mutation that changed the stale branch
+// to `return null` (discarding same-day ledgers wholesale, reintroducing finding 4) is now
+// visible to a plain function-call test, not just to the DOM-dependent wrapper below.
+export function resolvePersisted(raw, now = Date.now()) {
+  if (!raw) return null
+  try {
+    const data = JSON.parse(raw)
+    const isStale = now - (data._savedAt || 0) > 4 * 60 * 60 * 1000
+    return isStale ? salvageStalePersistedState(data) : data
+  } catch { return null }
+}
+
 function loadPersistedState() {
   if (typeof window === 'undefined') return null
   try {
     const raw = localStorage.getItem(PERSIST_KEY)
-    if (!raw) return null
-    const data = JSON.parse(raw)
-    // Discard stale data (older than 4 hours)
-    if (Date.now() - (data._savedAt || 0) > 4 * 60 * 60 * 1000) return null
-    _lastPersistedSnapshot = raw
+    const data = resolvePersisted(raw)
+    // Only seed the dedup snapshot for a FRESH blob — `salvageStalePersistedState` never
+    // includes `agents` (see its own doc comment), while a fresh return always does (set
+    // unconditionally by createPersistedState). A salvaged/stale result's content differs from
+    // the raw blob, so the next savePersistedState call must persist rather than being deduped
+    // against the old save. Also seed `_lastSavedAtWriteAt` from the loaded `_savedAt` so the
+    // SAVEDAT_REFRESH_MS throttle continues counting across a reload instead of writing once
+    // immediately (its `_lastSavedAtWriteAt` would otherwise still be this module's initial 0).
+    if (data && 'agents' in data) {
+      _lastPersistedSnapshot = persistedSnapshotKey(data)
+      _lastSavedAtWriteAt = data._savedAt || 0
+    }
     return data
   } catch { return null }
 }
@@ -170,10 +233,13 @@ function loadPersistedState() {
 function savePersistedState(state) {
   if (typeof window === 'undefined') return
   try {
-    const snapshot = JSON.stringify(createPersistedState(state))
-    if (snapshot === _lastPersistedSnapshot) return
-    localStorage.setItem(PERSIST_KEY, snapshot)
-    _lastPersistedSnapshot = snapshot
+    const data = createPersistedState(state)
+    const key = persistedSnapshotKey(data)
+    const now = data._savedAt
+    if (!shouldWritePersistedSnapshot(key, _lastPersistedSnapshot, now, _lastSavedAtWriteAt)) return
+    localStorage.setItem(PERSIST_KEY, JSON.stringify(data))
+    _lastPersistedSnapshot = key
+    _lastSavedAtWriteAt = now
   } catch { /* quota exceeded — ignore */ }
 }
 
@@ -362,9 +428,18 @@ const ROLE_GROWTH_ITEMS = {
 // reasonCode all use `u.<field> || null` (same as the prior inline literals).
 //
 // expiresAt — working/blocked: 5 min (long-running tool calls can take >30s with no hook event
-// between PreToolUse and PostToolUse; a shorter expiry flickered the workflow banner). In practice
-// the 120s staleness sweep (inferStatus.js) clears a static external status first, so 5 min is a
-// rarely-reached backstop. done: 10s (brief celebration then back to idle).
+// between PreToolUse and PostToolUse; a shorter expiry flickered the workflow banner). done: 10s
+// (brief celebration then back to idle).
+//
+// 2026-09-26 correction: this used to say the 120s staleness sweep (inferStatus.js
+// STALENESS_TIMEOUT) "clears a static external status first, so 5 min is a rarely-reached
+// backstop" — that was true only when NO heartbeat/polling channel was confirming liveness.
+// Since the client-runtime-hygiene fix, a confirmed-unchanged (304) poll response refreshes
+// that 120s timer (see inferStatus.js `shouldRefreshStalenessOnProbe`), so in the common
+// SSE/heartbeat-active case the 120s sweep no longer fires while a session is genuinely alive —
+// THIS 5-min `expiresAt` is now the actual backstop that clears a truly-dead hook (independent
+// of the 120s timer; a 304 does not touch this field). The 120s sweep still fires first only
+// when no heartbeat channel is confirming liveness at all (e.g. every status channel silent).
 //
 // rem-honest-office-events finding #2: `isInferred` (true for meta.source === 'idle-gap-infer')
 // keeps `changedAt` UNCHANGED even though the status literally differs (working→thinking is a
@@ -1451,6 +1526,22 @@ export const useOfficeStore = create((set) => ({
       // roster is dynamic and must be DELETED on clear, regardless of `.session`.
       const staticRosterIds = new Set((characters[s.mode] || characters.agentcortex).map(c => c.id))
       const isDynamic = (id, a) => Boolean(a && a.session) || !staticRosterIds.has(id)
+      // AVO-193 hygiene fix: applyExternalStatus's multi-session eviction path and
+      // abortAgentMovement's removeAfterDoorAbort branch both prune _storeRecentPicks
+      // (bubble anti-repeat ring) and recurringFailureLog for every agent id they delete.
+      // clearExternalStatus's two eviction sites below did not — that leaked a stale
+      // recurringFailureLog row and bubble-cooldown entry per expired dynamic agent.
+      // Same cleanup, applied at delete-time here too.
+      let recurringFailureLog = s.recurringFailureLog || {}
+      const pruneEvictedId = (id) => {
+        pruneRecentPicks(id)
+        _storeRecentPicks.delete(id)
+        if (recurringFailureLog[id]) {
+          const next = { ...recurringFailureLog }
+          delete next[id]
+          recurringFailureLog = next
+        }
+      }
       // Drop a dangling inspector selection when its target dynamic agent is deleted —
       // a deleted id left in selectedAgent makes a future same-id click toggle the
       // panel off instead of open (see applyExternalStatus reconciliation for the
@@ -1478,6 +1569,7 @@ export const useOfficeStore = create((set) => ({
               delete agents[agentId]
               doorTraffic = releaseAllAgentDoorClaims(doorTraffic, agentId)
               if (s.selectedAgent === agentId) evictedSelected = true
+              pruneEvictedId(agentId)
             }
           } else {
             const queuedRelease = releaseQueuedDoorRequests(doorTraffic, agentId)
@@ -1490,9 +1582,9 @@ export const useOfficeStore = create((set) => ({
         if (Object.keys(ext).length === 0) {
           // Office went quiet → reset L2 scalars (updateStoreMood is NOT called on clear, so the
           // anchor would otherwise stay pinned in an idle office).
-          return { externalStatus: ext, agents, doorTraffic, statusSource: 'organic', integrationSource: null, activeWorkflow: null, teamPulse: 0, focusAnchor: null, reluctant: {}, ...selectionPatch }
+          return { externalStatus: ext, agents, doorTraffic, recurringFailureLog, statusSource: 'organic', integrationSource: null, activeWorkflow: null, teamPulse: 0, focusAnchor: null, reluctant: {}, ...selectionPatch }
         }
-        return { externalStatus: ext, agents, doorTraffic, ...selectionPatch }
+        return { externalStatus: ext, agents, doorTraffic, recurringFailureLog, ...selectionPatch }
       }
       // Clear all
       const agents = { ...s.agents }
@@ -1515,6 +1607,7 @@ export const useOfficeStore = create((set) => ({
               delete agents[id]
               doorTraffic = releaseAllAgentDoorClaims(doorTraffic, id)
               if (s.selectedAgent === id) evictedSelected = true
+              pruneEvictedId(id)
             }
           } else {
             const queuedRelease = releaseQueuedDoorRequests(doorTraffic, id)
@@ -1525,7 +1618,7 @@ export const useOfficeStore = create((set) => ({
         }
       }
       return {
-        externalStatus: {}, agents, doorTraffic, statusSource: 'organic', integrationSource: null, activeWorkflow: null,
+        externalStatus: {}, agents, doorTraffic, recurringFailureLog, statusSource: 'organic', integrationSource: null, activeWorkflow: null,
         teamPulse: 0, focusAnchor: null, reluctant: {},
         ...(evictedSelected ? { selectedAgent: null } : {}),
       }

@@ -14,6 +14,8 @@ Rotated 2 additional entries on 2026-08-16 (ship-history cap restored to 10).
 
 Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 110 -> 111).
 
+Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 138 -> 139).
+
 Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 111 -> 112).
 
 Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 112 -> 113).
@@ -54,7 +56,42 @@ Rotated 1 additional entry on 2026-09-24 (SSoT Update Sequence 133 -> 134).
 
 Rotated 1 additional entry on 2026-09-25 (SSoT Update Sequence 134 -> 135).
 
+Rotated 1 additional entry on 2026-09-26 (SSoT Update Sequence 135 -> 136).
+
+Rotated 1 additional entry on 2026-09-26 (SSoT Update Sequence 136 -> 137).
+
+Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 137 -> 138).
+
+Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 139 -> 140).
+
 ---
+
+### Ship-chore-release-v1.6.9-2026-09-20 (nothing gets cut off in the small window, and English gets whole sentences) · release v1.6.9
+
+- Cuts the 3 PRs merged since `v1.6.8` (#236, #237, #238) as **v1.6.9**. They all answer the 2026-09-19 external review, which was worked as untrusted input: 10 findings, 7 fixed, 2 rejected on evidence, 1 = AVO-193. The release commit contains no app code: `package.json` 1.6.8 -> 1.6.9, **both** `package-lock.json` version fields (verified 0 `"version": "1.6.8"` strings left), the CHANGELOG narrative, and this entry.
+- **Two of the three are user-facing**: #236 (the panel-mode inspector and bubbles, no speech without a visible speaker, and relative times that keep counting) and #237 (bubble width fitting: English whole lines 52%→85%). #238 (the dev-server config as ESM, plus the manifest path guard) is under "Housekeeping — not user-facing". The notes carry a "does not claim" list: the panel inspector can cover the clicked agent, below-crop speakers are AVO-196, the north-door feet-anchor flip, and font-dependent line breaks.
+- Tests at the cut: vitest **2486 passed / 131 files**; build PASS; `bundle-budget` PASS at 499642 vs baseline 496504 (+0.63%); `render-smoke` PASS (4 viewports, 0 errors); `pack-smoke` ALL ASSERTIONS PASSED. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.9` tag on the release merge commit + `gh release create --latest`.
+
+### Ship-fix-bubble-truncation-width-2026-09-19 (speech bubbles fit by width, so English stops getting cut mid-word) · REV-07
+
+- Quick-win shipped: REV-07 of the 2026-09-19 external review, held back from #236 because it changes how the office looks. Bubbles were cut at 16 CHARACTERS, and 16 CJK characters are ~1.7× as wide as 16 Latin ones, so 46% of English lines were cut mid-word ("forgot a semicol…") against 5% of zh-TW. The review under-stated this; it reads as an occasional cut.
+- Bubbles now fit a **width budget** (140). The width is measured with canvas `measureText` in the bubble's own font (one shared constant with the `<text>`), grapheme-safe, with a Latin word back-off and a trailing-punctuation trim. The budget was chosen by simulating five budgets against every locale line in a real browser. It shows more text with less clutter, because the old per-char estimate over-padded English by ~22%: whole lines en 52%→85%, zh 92%→95%; mean bubble narrower in both (108→101, 90→86); widest bubble in the office 187→158. The owner approved same-state en + zh-TW captures before commit.
+- Tests: vitest **2481 passed / 130 files** (+13). 4 mutations killed; one survived the first test set (its only case cut exactly at a space), and a mid-word case was added until it failed. Build, bundle-budget +0.63%, render + panel smoke PASS. PR #237.
+
+### Ship-fix-review-2026-09-19-2026-09-19 (an external review, re-derived — panel mode stops clipping and losing speech; waiting times keep counting)
+
+- Feature shipped: the Gemini handoff review (`docs/reviews/2026-09-19-handoff-review.md`, 10 findings against v1.6.8) was worked as **untrusted input**. Five are fixed (REV-01/02/03/08/09). REV-04 and REV-06 are rejected on evidence: an above-head bubble cannot be covered by a later-painted agent, and the extraction map the review cites says "not a refactor request". REV-10 is AVO-193, and REV-07/REV-05 get their own PRs. Two premises were wrong: the title channel could never see other tabs, and REV-05's warnings come from Vite 8 and Rolldown, not Node 22. Two findings were under-scoped: three surfaces froze their relative times, not one, and two comment sites were stale, not one.
+- **Panel mode clamps overlays to the live viewBox.** `store.sceneBounds` now carries `minY`/`h`. `placeInspector` keeps the card inside every crop (clipped 155px/20px before, 0 after, measured in a browser); in the full office it is numerically the old clamp, and the boxes measured identical. The bubble now flips against the crop's top.
+- **A fresh-context reviewer caught the first cut putting speech on screen with no speaker.** Meeting chairs (x 645–765) sit right of every panel crop. The new flip and the old #47 edge clamp together dragged their bubbles into view, and no capture had staged a meeting. It was then measured: `main` already leaked ~2.5 such bubbles into the tall panel. Now 0, because the orphan guard covers both axes and the clamp. Speakers just BELOW a crop are still shown; that is AVO-196 and a design decision under ADR-007.
+- **Relative times tick.** A local 10 s `useNowTick` drives the roster, the inspector's AVO-169 duration and the activity feed. In a real-browser A/B after a 22 s wait, `main` was 14–20 s stale and the branch was current. The dead `document.title` channel is deleted, and a src-wide guard test keeps it out.
+- Tests: vitest **2468 passed / 129 files** (+46 tests, +3 files net). 9 wiring mutations each fail a test. Build, bundle-budget +0.48%, render/panel/pack smoke all PASS. Two independent fresh reviews: round 1 NOT READY, round 2 READY. **Disclosed:** spec AC-2/6/11 were amended under the owner's standing delegation without the §4.2 draft→frozen flip. PR #236.
+
+### Ship-chore-release-v1.6.8-2026-09-14 (a calmer office, and waiting finally looks like waiting) · release v1.6.8
+
+- Cuts the 5 commits merged since `v1.6.7` (2026-09-02) — #230 through #234 — as **v1.6.8**. No app code in the release commit itself: `package.json` 1.6.7 -> 1.6.8, **both** `package-lock.json` version fields (root + `packages[""]`), CHANGELOG narrative, this entry. Verified zero `"version": "1.6.7"` strings remain in either file.
+- **Two of the five are user-facing**: the calm palette with its legibility rules (#234) and the external-audit sweep (#232 — the container that never started, the waiting agent that looked busy, the Codex hook that dropped agents, the pasted hook config missing the two events that make a denial an honest `blocked`). The soak stale-label warning (#231), the June work-log archive (#233) and the v1.6.7 chain record (#230) sit under "Housekeeping — not user-facing".
+- **The notes state what the palette rules do not certify.** R1 compares each status colour at full strength while rings render below full opacity, so it guards the floor rather than certifying ring contrast — written into "What this release does not claim" alongside the partly-closed F-11 and the two owner-accepted layout quirks, rather than letting "legibility rules" read as a guarantee.
+- Tests at the cut: vitest **2422 passed / 126 files**; build PASS; `bundle-budget` PASS at 498871 vs baseline 496504 (**+0.48%**, limit +10%); `pack-smoke` PASS. The oldest entry (AVO-195 backlog row) rotated verbatim into `archive/ship-history-2026.md` to hold the cap of 10. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.8` tag + `gh release create --latest`.
 
 ### Ship-feat-calm-stationery-palette-2026-09-13 (a warmer, calmer office, and a palette anyone can change without breaking legibility)
 
@@ -930,3 +967,9 @@ Rotated 1 additional entry on 2026-09-25 (SSoT Update Sequence 134 -> 135).
 - **Panel-rejected (NOT done, by design — empty calm-tech space is a feature, not a defect)**: A (condense idle rows — real waste is uniform card chrome; touches protected surfaces) · C (density-adaptive feed height — already flex-1; fake-liveliness risk) · uniform chrome trim (protected responsive/label/sprite surfaces, deferred). "Densify to fill room" framing rejected outright.
 - **Verify**: honesty unit test `tests/activityFeedHonesty.test.jsx` (5, test-the-test verified — reverting to activityLog fails the honesty assertions); headless Playwright visual proof (real browser) — office shows the floating feed, roster HIDES it + shows the inline rail, 0 console/page errors; fresh adversarial review = READY (all 6 claims PROVEN, 0 Crit/High/Med; fixed an L1 test-flake); full suite 2219 pass, render-smoke PASS (4 viewports), build clean.
 - Tests: Pass
+
+### Ship-chore-vite-config-esm-2026-09-20 (the dev-server config becomes native ESM; three warnings gone) · REV-05
+
+- Feature shipped: REV-05, the last open item of the 2026-09-19 review. It also closes the half of F-11 (2026-09-08) that was deferred. Every `vite`/`vitest`/`vite build` run printed MIXED_EXPORTS and two "ESM syntax in a file loaded as CommonJS" warnings. The cause was re-derived: Vite 8 bundles an ESM config inside a `"type": "commonjs"` package, and the review's claim that Node 22 was responsible is wrong. The tool's own warning says the native loader is planned as a future default, which would stop this config loading. `vite.config.js` is now `vite.config.mjs` (R099 rename) and imports `statusContract.mjs` directly. Every functional reference follows; historical records are untouched.
+- **A new guard makes path drift loud.** `tests/buildManifestPaths.test.js` checks that every Dockerfile COPY/ADD source and every package.json `files` entry exists. Both consumers drop a missing path silently: CI never builds the image, and `npm pack` skips a missing entry. After a bare rename the guard went red on exactly the two stale references. A fresh-context review (Sonnet) came back NOT READY in round 1: one live comment, plus guard-parser gaps for continuation lines, JSON-array COPY and ADD. Both were fixed and round 2 was READY. The reviewer also confirmed that `[...]` in Docker (Go filepath.Match) and npm (minimatch) globs is a character class, so the guard keeps it as one. Accepted: a future heredoc COPY would make the guard fail loudly rather than silently.
+- Tests: vitest **2486 passed / 131 files**, 0 warning lines. A live dev server booted from the new file: POST/GET /api/status and OFFICE_STATUS_DIR work. `npm pack` ships the file and pack-smoke passes. Bundle budget (app bundle byte-identical), render smoke and panel smoke PASS. Commit hygiene: the spec commit first swallowed the staged `git mv`. It was soft-reset before push, and a memory was added. PR #238.

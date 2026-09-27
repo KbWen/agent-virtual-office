@@ -4,7 +4,56 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, bashVibeLabel, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse, readLatestTokenUsage, effortLevel, activeFileForTool, helperHash, helperAdd, helperRemove } = await import('../public/hooks/office-status-hook.js')
+const { toolToRole, fileToRole, skillToRole, shortFile, shortCommand, bashVibeLabel, extractContext, shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse, readLatestTokenUsage, effortLevel, activeFileForTool, helperHash, helperAdd, helperRemove, rotateCaptureFileIfNeeded } = await import('../public/hooks/office-status-hook.js')
+
+// 2026-09-26 audit finding 3 (privacy/robustness): capture file rotation/cap.
+describe('rotateCaptureFileIfNeeded — bounded capture-file growth (finding 3)', () => {
+  it('does nothing when the capture file does not exist yet', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'avo-capture-rotate-'))
+    const capturePath = path.join(dir, 'office-hook-capture.jsonl')
+    expect(() => rotateCaptureFileIfNeeded(capturePath, 1024)).not.toThrow()
+    expect(fs.existsSync(capturePath)).toBe(false)
+    expect(fs.existsSync(capturePath + '.1')).toBe(false)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('does nothing when the capture file is under the size cap', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'avo-capture-rotate-'))
+    const capturePath = path.join(dir, 'office-hook-capture.jsonl')
+    fs.writeFileSync(capturePath, 'a'.repeat(100))
+    rotateCaptureFileIfNeeded(capturePath, 1024)
+    expect(fs.existsSync(capturePath)).toBe(true)
+    expect(fs.readFileSync(capturePath, 'utf-8').length).toBe(100)
+    expect(fs.existsSync(capturePath + '.1')).toBe(false)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('rotates to a single .1 generation once the live file exceeds the cap', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'avo-capture-rotate-'))
+    const capturePath = path.join(dir, 'office-hook-capture.jsonl')
+    fs.writeFileSync(capturePath, 'x'.repeat(2000))
+    rotateCaptureFileIfNeeded(capturePath, 1024)
+    // Rotation renames the over-cap file to .1; the live path no longer holds the old content.
+    expect(fs.existsSync(capturePath)).toBe(false)
+    expect(fs.existsSync(capturePath + '.1')).toBe(true)
+    expect(fs.readFileSync(capturePath + '.1', 'utf-8').length).toBe(2000)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('a second rotation overwrites the prior .1 (bounded to ~2x cap total, never unbounded)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'avo-capture-rotate-'))
+    const capturePath = path.join(dir, 'office-hook-capture.jsonl')
+    fs.writeFileSync(capturePath + '.1', 'old-generation'.repeat(200))
+    fs.writeFileSync(capturePath, 'y'.repeat(2000))
+    rotateCaptureFileIfNeeded(capturePath, 1024)
+    expect(fs.readFileSync(capturePath + '.1', 'utf-8')).toBe('y'.repeat(2000))
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('never throws (defensive — capture is best-effort, must not affect hook processing)', () => {
+    expect(() => rotateCaptureFileIfNeeded('/nonexistent/dir/that/cannot/exist/capture.jsonl', 1024)).not.toThrow()
+  })
+})
 
 describe('activeFileForTool — AVO-106 co-editing signal gate (Read excluded)', () => {
   it('publishes activeFile for write-class tools (Edit/Write)', () => {
@@ -417,6 +466,31 @@ describe('extractContext (hook)', () => {
   it('does not leak absolute path in Agent description (fix-4 invariant)', () => {
     const result = extractContext('Agent', { description: '/C:/Users/wen/project/src/App.jsx' })
     expect(result).not.toMatch(/C:\/Users\/wen/)
+  })
+
+  // 2026-09-26 audit finding 3 (privacy): Agent must NEVER fall back to the raw sub-agent
+  // prompt when no description is present — a prompt can carry arbitrary free text that a
+  // short, human-authored `description` does not.
+  it('does not fall back to raw prompt when Agent has no description (privacy fix)', () => {
+    const result = extractContext('Agent', { prompt: 'Investigate the customer refund for order #4471 and email finance@acme.example' })
+    expect(result).toBeNull()
+  })
+
+  it('still prefers description over prompt when both are present', () => {
+    const result = extractContext('Agent', { description: 'review auth', prompt: 'a much longer raw prompt with detail' })
+    expect(result).toBe('review auth')
+  })
+
+  // 2026-09-26 audit finding 3 (privacy): WebSearch must never surface the raw query — same
+  // "no raw text in a bubble" posture as Bash (AVO-126) and WebFetch (hostname-only).
+  it('never returns the raw search query for WebSearch (privacy fix)', () => {
+    const result = extractContext('WebSearch', { query: 'acme corp unreleased product roadmap 2027' })
+    expect(result).toBeNull()
+  })
+
+  it('returns null for WebSearch even when a url is present', () => {
+    const result = extractContext('WebSearch', { url: 'https://example.com/search?q=secret' })
+    expect(result).toBeNull()
   })
 
   it('handles string JSON input', () => {

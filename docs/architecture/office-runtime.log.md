@@ -84,3 +84,12 @@ source_sha: 018ef1ef2225c4ebb53cf9aee05c3eae1bb5e1b2
 
 ### [office-runtime][2026-09-19][fix/review-2026-09-19]
 cross-ref: See [ui-rendering][2026-09-19][fix/review-2026-09-19] in docs/architecture/ui-rendering.log.md
+
+### [office-runtime][2026-09-27][fix/client-runtime-hygiene]
+source_spec: docs/specs/client-runtime-hygiene.md
+source_sha: 18943427e31be39bba1e24c5ac6350ec8a5b7c47
+
+- [DECISION] Refresh the client's existing 120s staleness timer on a confirmed-unchanged (304) poll response, rather than raising `STALENESS_TIMEOUT` itself — channels with no heartbeat backstop (hash-bridge, postMessage-only) keep their original fast-clear behavior; only channels that can actively confirm liveness get the extension.
+- [DECISION] Gate SSE-sourced failure probes behind the GET-polling channel's own last-known health (`pollProbeOk`), rather than resetting the poller to base cadence at retry-start — isolates the fix to the health SIGNAL and avoids perturbing the poller's own adaptive-backoff state, which the fast-poll-continuity fix (R1) already depends on staying untouched across a retry attempt.
+- [TRADEOFF] Did not unify the 3 dynamic-agent-eviction call sites (`applyExternalStatus`, `abortAgentMovement`, `clearExternalStatus`) into one shared prune helper beyond the local `pruneEvictedId` added for AC6 — smaller, safer diff now; leaves latent duplication risk if a 4th removal path is added later without copying the same three cleanup calls.
+- [CONSTRAINT] Every fix must be independently `git revert`-able — no schema/migration change, no new persisted-data shape, no new external API surface.

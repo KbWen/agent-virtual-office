@@ -5,6 +5,7 @@ import {
   shouldSkipHintDismiss,
   isNumericSeq,
   stalenessSweepAction,
+  shouldRefreshStalenessOnProbe,
   sanitizeTokens,
   normalizeStatusMessage,
   buildHashStatusMessage,
@@ -90,6 +91,27 @@ describe('stalenessSweepAction — orphaned workflow-only banner fix', () => {
   it('does nothing when organic with no workflow (normal idle office)', () => {
     expect(stalenessSweepAction('organic', null)).toBe('noop')
     expect(stalenessSweepAction('organic', undefined)).toBe('noop')
+  })
+})
+
+describe('shouldRefreshStalenessOnProbe — finding 1 (long tool call showed idle after 120s)', () => {
+  it('refreshes on an unchanged (304) probe result', () => {
+    expect(shouldRefreshStalenessOnProbe({ ok: true, unchanged: true })).toBe(true)
+  })
+
+  it('does NOT refresh on a delivered message, a failure, or a skipped/empty probe', () => {
+    // A delivered message already refreshes staleness via applyMessage's own call —
+    // double-refreshing here is harmless but this pins the intended trigger to `unchanged` only.
+    expect(shouldRefreshStalenessOnProbe({ ok: true, delivered: true })).toBe(false)
+    expect(shouldRefreshStalenessOnProbe({ ok: false, networkError: true })).toBe(false)
+    expect(shouldRefreshStalenessOnProbe({ ok: false, status: 404 })).toBe(false)
+    expect(shouldRefreshStalenessOnProbe({ skipped: true, reason: 'in-flight' })).toBe(false)
+    expect(shouldRefreshStalenessOnProbe({})).toBe(false)
+  })
+
+  it('is null/undefined-safe', () => {
+    expect(shouldRefreshStalenessOnProbe(null)).toBe(false)
+    expect(shouldRefreshStalenessOnProbe(undefined)).toBe(false)
   })
 })
 

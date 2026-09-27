@@ -259,6 +259,8 @@ v1.4.0 started from one of these captures.
 
 **Colleagues can't see it (LAN)** → set `OFFICE_API_ALLOWED_ORIGINS=http://192.168.1.100:5174`, or use `--no-host` for localhost only.
 
+**403 Forbidden by hostname** (a LAN colleague at `http://mypc.local:5174`, **or `server.mjs` running behind the Nginx reverse proxy in `docs/deployment/nginx.conf`**) → reaching the office by IP already works; reaching it by *any* hostname needs that hostname in `OFFICE_ALLOWED_HOSTS` (Host-header validation guards against DNS rebinding) — e.g. `OFFICE_ALLOWED_HOSTS=mypc.local` for LAN, or `OFFICE_ALLOWED_HOSTS=office.example.com` to match the reverse proxy's `server_name`. See [DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md#environment-variables).
+
 **Windows Firewall prompt** → the dev server binds all interfaces; use `--no-host` to avoid it.
 
 **Node version error** → requires Node ≥ 22 (`node --version`).

@@ -23,8 +23,11 @@ const STATUS_FILE_RE = /^office-status(-[^.]+)?\.json$/
 const isWin = process.platform === 'win32'
 const VALID_ROLES = new Set(['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer'])
 
-// Shared TTL constants — keep in sync between scanAndMerge and getSessionStats
-const STALE_MS = 300_000   // sessions older than 5 min are stale
+// Shared TTL constants — keep in sync between scanAndMerge and getSessionStats.
+// STALE_MS is exported: vite.config.mjs's dev-only file-watcher fallback reuses it as the
+// overwrite-protection window against a webhook/API-set status, so a fallback write can never
+// clobber a real status before scanAndMerge itself would call it stale.
+export const STALE_MS = 300_000   // sessions older than 5 min are stale
 const FUTURE_MS = 300_000  // sessions more than 5 min in the future are implausible (NTP jump)
 // A fully-finished session's only representative is 'done'. Render that terminal "wrapping up"
 // beat for this long, then drop it — instead of letting the sprite loiter until STALE_MS (5 min)
