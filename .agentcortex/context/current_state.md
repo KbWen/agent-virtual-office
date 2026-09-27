@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-27T13:40:49+08:00
+- **Last Updated**: 2026-09-27T13:50:15+08:00
 - **Last Verified**: 2026-09-25
-- **Update Sequence**: 141
+- **Update Sequence**: 142
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -60,7 +60,7 @@
     - **Session closure** — final retro at `docs/reviews/2026-05-29-session-retro.md` (snapshot, not authoritative). 27 commits ahead of `origin/main`, 0 behind. `main` branch is the canonical state; `_product-backlog.md` lean (14 items: AVO-101..AVO-115 minus done + #20 deferred); `_shipped-log.md` holds 73 prior shipped rows; vitest 960/960; build 887ms clean. All work-log archives in place + INDEX.jsonl up to date. Push to origin pending human confirmation.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
-  - [maintenance] docs/specs/engineering-audit-remediation.md [Shipped]  *(2026-09-24 audit remediation: dev server monotonic clock parity F-01, bridge UI planning/awaiting-approval toggles F-05; 2026-09-26 server-hardening wave: malformed-request crash guard, SSE heartbeat/client cap, Host-header DNS-rebinding allowlist, vitest CVE bump; 2026-09-26 dev-server-parity wave: file-watcher fallback root-scoping + `.claude`-segment fix, STALE_MS-based overwrite window, add/unlink SSE watch, dev CORS parity, LAN/no-token warning parity)*
+  - [maintenance] docs/specs/engineering-audit-remediation.md [Shipped]  *(2026-09-24 audit remediation: dev server monotonic clock parity F-01, bridge UI planning/awaiting-approval toggles F-05; 2026-09-26 server-hardening wave: malformed-request crash guard, SSE heartbeat/client cap, Host-header DNS-rebinding allowlist, vitest CVE bump; 2026-09-26 dev-server-parity wave: file-watcher fallback root-scoping + `.claude`-segment fix, STALE_MS-based overwrite window, add/unlink SSE watch, dev CORS parity, LAN/no-token warning parity; 2026-09-27 follow-ups: `OFFICE_ALLOWED_HOSTS` also governs the dev server via shared `src/utils/hostAllowlist.mjs`, render-smoke exit-race teardown)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [ci-infra] docs/specs/avo-190-soak-target-identity.md [Shipped]  *(AVO-190 — fail-closed AVO identity preflight for soak and overlap recorder targets)*
   - [ci-infra] docs/specs/avo-189-reachable-raf-watchdog-diagnostic.md [Shipped]  *(AVO-189 — first proven focused lost-chain restart is observable)*
@@ -156,6 +156,12 @@
 
 ## Ship History
 
+### Ship-fix-followups-2026-09-27 (OFFICE_ALLOWED_HOSTS now governs the dev server too; render-smoke really escalates a stuck server)
+
+- Two quick-win follow-ups from the 2026-09-26 audit wave, reviewed on their own branches (`fix/dev-allowed-hosts`, `fix/pack-smoke-teardown`) and shipped bundled to save a CI + validator cycle. (1) PR #246 gave `server.mjs` a Host allowlist, but `npm run dev` ignored `OFFICE_ALLOWED_HOSTS`, so a dev server behind a custom hostname got Vite's own 403. The parser moved to `src/utils/hostAllowlist.mjs`; `server.mjs` imports it (fresh review: 480/480 identical responses main vs branch, 6 env configs x 48 Host cases) and `vite.config.mjs` maps it to `server.allowedHosts` only when set — unset keeps Vite's default, nothing can become `true`. (2) `render-smoke.mjs` escalation `if (!serverProc.killed) kill('SIGKILL')` never fired (`.killed` is true once the signal is SENT); it now waits on the real `exit` event (11 s, above the server's 10 s drain).
+- **Dropped on review, not shipped:** a pack-smoke cross-run "orphan reaper". The orphaned `node server.mjs --port=530x` processes seen during the wave were servers agents had started by hand for live probes, not a smoke-script leak; the reaper `taskkill /T /F`-ed any PID in a shared tmp marker with no identity check and would have killed unrelated processes. The premise came from the orchestrator and was disproved by a fresh reviewer.
+- Tests: combined branch build clean; vitest 144 files / 2654 tests; `npm run smoke` PASS. Mutation checks: removing the `.`-entry filter, entry port-stripping, or the Vite wiring each fails a test. PR #252.
+
 ### Ship-fix-honest-office-events-2026-09-27 (events only fire when someone can actually perform them, and inference stops faking fresh signals)
 
 - Feature shipped: remediated 3 audited honesty defects in office-life set-pieces (ADR-007/008), same class as AVO-191/AVO-194, across `src/systems/officeLife.js`, `src/systems/store.js`, `src/inference/idleGapInfer.js`: (1) `hasRequiredActors()` adds a symmetric pre-fire refusal for a non-empty-but-wrong cast, alongside the existing empty-cast refusal (AVO-191); (2) idle-gap inference now preserves real underlying fields and `changedAt` instead of stamping a synthetic fresh timestamp when inferring `thinking`/`awaiting-approval`; (3) an agent picked up by real work while holding a group-event pose now has that pose released instead of persisting a stale group-event visual. `fireWithCast` is exported and guarded by a mutex + per-fire epoch tokens, closing a stale/aborted-fire race.
@@ -222,13 +228,6 @@
 - Verified in a real browser, same instrument on both sides, counting distinct animated values (a snap gives 1-2; a real animation at 60fps gives tens): done flash 2→43, poke bob 2→21, desk-slam jitter 1→26, behaviour pop 2→19, reason pop 2→22, banner fade 1→24. The done flash went from **1 visible frame to 39**.
 - **Three of my own measurements were wrong first** and each would have produced a false claim: sampling `document.querySelector` while triggering a different agent; reading `getScreenCTM()`, which does not reflect SMIL transform animation at all; and a deterministic "DEAD" for the behaviour `thinking`, which has no case in `BehaviorIndicator` and renders null, so the instrument was measuring an empty box. All three were caught before any conclusion, each by re-validating against a known-playing control.
 - Tests: vitest **2512 passed / 133 files** (+10). The unit tests deliberately do NOT assert that the animations play — believing markup was the original mistake — they hold the wrapper contract plus a regression guard (with its own can-it-fail self-test) against any future unwrapped one-shot. Build, single-file build, render-smoke and panel smoke PASS. Owner approved the before/after frame strips before merge. PR #244.
-
-### Ship-feat-avo-193-coffee-busy-feedback-2026-09-20 (the coffee machine says BUSY when it cannot serve you) · AVO-193
-
-- Quick-win shipped: clicking the coffee machine while every agent is genuinely working did nothing at all. The silence was CORRECT — AVO-191 refuses to drag a working agent to the machine — but it reads as a broken click, and unlike the deploy button and the whiteboard, `tea-break` has no `INTERACTION_REACTOR` entry, so `fireInteractionReaction` returned on its first line. The machine now answers for itself: screen `CAFE` → `BUSY` plus three wisps of steam for 2s. Owner chose this from rendered candidates before any repo edit.
-- **The refusal is untouched, and that is the whole design.** The feedback hangs off the FALSY return of `triggerInteractiveEvent`; adding `tea-break` to `INTERACTION_REACTOR` would have been the tempting one-liner and is exactly what AVO-191 removed. Measured in a real browser with every agent `working`: positions identical, statuses identical, full id→bubble-text map identical before and after, `activeEvent` null throughout — compared as maps, not counted, since 8 agents already had ambient bubbles.
-- The steam is a CSS `@keyframes`, NOT SMIL: an `<animate begin="0s">` mounted after page load counts from DOCUMENT start and renders already-finished, which is how the first prototype got invisible steam. Proof it plays: the three wisps read opacity 0.83 / 0.62 / 0.33 mid-run. Reduced motion keeps both signals and drops the movement (`animated: 0`, static opacity), like the pet-pop site.
-- Tests: vitest **2502 passed / 132 files** (+7, new `tests/coffeeBusyFeedback.test.jsx`, red first on 5 of 7). Four mutations killed, incl. showing the feedback without consulting the honesty gate. Build, single-file build, render-smoke and panel smoke PASS. PR #241. Closes the last open finding of the 2026-09-19 handoff review (REV-10).
 
 ## Spec Index Archive
 

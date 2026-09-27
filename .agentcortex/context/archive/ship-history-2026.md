@@ -66,7 +66,16 @@ Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 137 -> 138).
 
 Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 139 -> 140).
 
+Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 141 -> 142).
+
 ---
+
+### Ship-feat-avo-193-coffee-busy-feedback-2026-09-20 (the coffee machine says BUSY when it cannot serve you) · AVO-193
+
+- Quick-win shipped: clicking the coffee machine while every agent is genuinely working did nothing at all. The silence was CORRECT — AVO-191 refuses to drag a working agent to the machine — but it reads as a broken click, and unlike the deploy button and the whiteboard, `tea-break` has no `INTERACTION_REACTOR` entry, so `fireInteractionReaction` returned on its first line. The machine now answers for itself: screen `CAFE` → `BUSY` plus three wisps of steam for 2s. Owner chose this from rendered candidates before any repo edit.
+- **The refusal is untouched, and that is the whole design.** The feedback hangs off the FALSY return of `triggerInteractiveEvent`; adding `tea-break` to `INTERACTION_REACTOR` would have been the tempting one-liner and is exactly what AVO-191 removed. Measured in a real browser with every agent `working`: positions identical, statuses identical, full id→bubble-text map identical before and after, `activeEvent` null throughout — compared as maps, not counted, since 8 agents already had ambient bubbles.
+- The steam is a CSS `@keyframes`, NOT SMIL: an `<animate begin="0s">` mounted after page load counts from DOCUMENT start and renders already-finished, which is how the first prototype got invisible steam. Proof it plays: the three wisps read opacity 0.83 / 0.62 / 0.33 mid-run. Reduced motion keeps both signals and drops the movement (`animated: 0`, static opacity), like the pet-pop site.
+- Tests: vitest **2502 passed / 132 files** (+7, new `tests/coffeeBusyFeedback.test.jsx`, red first on 5 of 7). Four mutations killed, incl. showing the feedback without consulting the honesty gate. Build, single-file build, render-smoke and panel smoke PASS. PR #241. Closes the last open finding of the 2026-09-19 handoff review (REV-10).
 
 ### Ship-chore-release-v1.6.9-2026-09-20 (nothing gets cut off in the small window, and English gets whole sentences) · release v1.6.9
 
