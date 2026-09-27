@@ -21,6 +21,37 @@ function childEnv() {
   return { ...process.env, OFFICE_PROJECT_ROOT: process.env.OFFICE_PROJECT_ROOT || process.cwd() }
 }
 
+// 2026-09-26 audit finding 6: `setup`'s atomic write (tmp + renameSync) used to target
+// `settingsPath` directly. On POSIX, renaming a file ONTO a path that is itself a symlink
+// replaces the symlink with a regular file — silently breaking any dotfile-symlink setup
+// (chezmoi, GNU stow, etc.) that points `~/.claude/settings.json` somewhere else. Resolve
+// through the symlink first so the write lands on its target instead. Non-symlink paths
+// (the common case) are returned unchanged — this never throws.
+function resolveWriteTarget(p) {
+  try {
+    if (fs.lstatSync(p).isSymbolicLink()) return fs.realpathSync(p)
+  } catch { /* doesn't exist yet, or lstat failed — write to the path as given */ }
+  return p
+}
+
+// Shared atomic-write helper for both `setup` and `uninstall`'s settings.json rewrite.
+// Resolves a symlinked target first (see resolveWriteTarget), then tmp-write + rename, with a
+// direct-write fallback for the rare rename failure (e.g. Windows EBUSY). NEVER throws;
+// returns true on success.
+function atomicWriteSettings(settingsPath, contents) {
+  const target = resolveWriteTarget(settingsPath)
+  const tmp = target + '.tmp.' + process.pid + '.' +
+    (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+  try {
+    fs.writeFileSync(tmp, contents)
+    fs.renameSync(tmp, target)
+    return true
+  } catch {
+    try { fs.unlinkSync(tmp) } catch {}
+    try { fs.writeFileSync(target, contents); return true } catch { return false }
+  }
+}
+
 // ─── setup: one-click Claude Code hook installation ───
 if (command === 'setup') {
   const claudeDir = path.join(os.homedir(), '.claude')
@@ -89,25 +120,15 @@ if (command === 'setup') {
     }
   }
 
-  // Write back atomically to prevent corruption on crash/disk-full.
-  // tmp name = pid + random suffix so two concurrent setup runs (or a leftover
-  // tmp from a prior crashed run) never collide on the same path — matches the
-  // atomicWrite convention in server.mjs / the hooks.
-  const settingsTmp = settingsPath + '.tmp.' + process.pid + '.' +
-    (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
-  try {
-    fs.writeFileSync(settingsTmp, JSON.stringify(settings, null, 2))
-    fs.renameSync(settingsTmp, settingsPath)
-  } catch (e) {
-    try { fs.unlinkSync(settingsTmp) } catch {}
-    // Fallback: direct write (e.g. Windows EBUSY on rename)
-    try {
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
-    } catch {
-      console.error('  Error: Cannot write to ' + settingsPath)
-      console.error('  Check file permissions for ~/.claude/')
-      process.exit(1)
-    }
+  // Write back atomically to prevent corruption on crash/disk-full. tmp name = pid + random
+  // suffix so two concurrent setup runs (or a leftover tmp from a prior crashed run) never
+  // collide on the same path — matches the atomicWrite convention in server.mjs / the hooks.
+  // atomicWriteSettings also resolves settingsPath through a symlink first (finding 6) so a
+  // dotfile-symlink setup pointing ~/.claude/settings.json elsewhere isn't silently broken.
+  if (!atomicWriteSettings(settingsPath, JSON.stringify(settings, null, 2))) {
+    console.error('  Error: Cannot write to ' + settingsPath)
+    console.error('  Check file permissions for ~/.claude/')
+    process.exit(1)
   }
 
   console.log(`
@@ -132,15 +153,21 @@ if (command === 'uninstall') {
   const hookDest = path.join(claudeDir, 'office-status-hook.js')
   const hookDestLegacy = path.join(claudeDir, 'office-status-hook.sh')
 
-  // Remove hook files (current + legacy .sh)
+  // Remove hook files (current + legacy .sh). Each unlink is independently guarded (finding 6):
+  // a locked/already-removed file must not abort cleanup of the rest.
   for (const f of [hookDest, hookDestLegacy]) {
     if (fs.existsSync(f)) {
-      fs.unlinkSync(f)
-      console.log('  Removed: ' + f)
+      try {
+        fs.unlinkSync(f)
+        console.log('  Removed: ' + f)
+      } catch (e) {
+        console.warn('  Warning: Could not remove ' + f + ' (' + (e && e.message) + ')')
+      }
     }
   }
 
-  // Clean up status, skill, and preference files
+  // Clean up status, skill, and preference files. Same per-file guard as above — one
+  // unlinkable file (permission, race with a live hook process) must not stop the rest.
   try {
     const files = fs.readdirSync(claudeDir)
     for (const file of files) {
@@ -148,8 +175,12 @@ if (command === 'uninstall') {
           /^office-skill-[^.]+\.json(\.tmp\.\d+\.[a-z0-9]+)?$/.test(file) ||
           /^office-lang(\.tmp\.\d+\.[a-z0-9]+)?$/.test(file)) {
         const filePath = path.join(claudeDir, file)
-        fs.unlinkSync(filePath)
-        console.log('  Removed: ' + filePath)
+        try {
+          fs.unlinkSync(filePath)
+          console.log('  Removed: ' + filePath)
+        } catch (e) {
+          console.warn('  Warning: Could not remove ' + filePath + ' (' + (e && e.message) + ')')
+        }
       }
     }
   } catch (e) {
@@ -163,15 +194,23 @@ if (command === 'uninstall') {
       if (settings.hooks) {
         for (const event of ['PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'UserPromptSubmit', 'Stop', 'PermissionDenied', 'StopFailure']) {
           if (settings.hooks[event]) {
+            // Null-guard both `h` and `hh` (finding 6) — a malformed/foreign settings entry
+            // (e.g. `null` sitting in the array, or a hooks-array element with no `command`)
+            // used to throw here and abort the ENTIRE uninstall, including the file cleanup
+            // that already ran above.
             settings.hooks[event] = settings.hooks[event].filter(h =>
-              !(h.hooks || []).some(hh => hh.command && hh.command.includes('office-status-hook'))
+              !(h && (h.hooks || []).some(hh => hh && hh.command && hh.command.includes('office-status-hook')))
             )
             if (settings.hooks[event].length === 0) delete settings.hooks[event]
           }
         }
         if (Object.keys(settings.hooks).length === 0) delete settings.hooks
       }
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
+      // Atomic write (finding 6) — matches `setup`'s tmp+rename convention (including
+      // symlink-aware target resolution) instead of a bare direct fs.writeFileSync.
+      if (!atomicWriteSettings(settingsPath, JSON.stringify(settings, null, 2))) {
+        throw new Error('write failed')
+      }
       console.log('  Cleaned: ' + settingsPath)
     } catch (e) {
       console.warn('  Warning: Could not update ' + settingsPath)

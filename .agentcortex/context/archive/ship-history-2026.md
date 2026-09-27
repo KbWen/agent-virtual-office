@@ -14,6 +14,8 @@ Rotated 2 additional entries on 2026-08-16 (ship-history cap restored to 10).
 
 Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 110 -> 111).
 
+Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 138 -> 139).
+
 Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 111 -> 112).
 
 Rotated 1 additional entry on 2026-07-30 (SSoT Update Sequence 112 -> 113).
@@ -957,3 +959,9 @@ Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 137 -> 138).
 - **Panel-rejected (NOT done, by design — empty calm-tech space is a feature, not a defect)**: A (condense idle rows — real waste is uniform card chrome; touches protected surfaces) · C (density-adaptive feed height — already flex-1; fake-liveliness risk) · uniform chrome trim (protected responsive/label/sprite surfaces, deferred). "Densify to fill room" framing rejected outright.
 - **Verify**: honesty unit test `tests/activityFeedHonesty.test.jsx` (5, test-the-test verified — reverting to activityLog fails the honesty assertions); headless Playwright visual proof (real browser) — office shows the floating feed, roster HIDES it + shows the inline rail, 0 console/page errors; fresh adversarial review = READY (all 6 claims PROVEN, 0 Crit/High/Med; fixed an L1 test-flake); full suite 2219 pass, render-smoke PASS (4 viewports), build clean.
 - Tests: Pass
+
+### Ship-chore-vite-config-esm-2026-09-20 (the dev-server config becomes native ESM; three warnings gone) · REV-05
+
+- Feature shipped: REV-05, the last open item of the 2026-09-19 review. It also closes the half of F-11 (2026-09-08) that was deferred. Every `vite`/`vitest`/`vite build` run printed MIXED_EXPORTS and two "ESM syntax in a file loaded as CommonJS" warnings. The cause was re-derived: Vite 8 bundles an ESM config inside a `"type": "commonjs"` package, and the review's claim that Node 22 was responsible is wrong. The tool's own warning says the native loader is planned as a future default, which would stop this config loading. `vite.config.js` is now `vite.config.mjs` (R099 rename) and imports `statusContract.mjs` directly. Every functional reference follows; historical records are untouched.
+- **A new guard makes path drift loud.** `tests/buildManifestPaths.test.js` checks that every Dockerfile COPY/ADD source and every package.json `files` entry exists. Both consumers drop a missing path silently: CI never builds the image, and `npm pack` skips a missing entry. After a bare rename the guard went red on exactly the two stale references. A fresh-context review (Sonnet) came back NOT READY in round 1: one live comment, plus guard-parser gaps for continuation lines, JSON-array COPY and ADD. Both were fixed and round 2 was READY. The reviewer also confirmed that `[...]` in Docker (Go filepath.Match) and npm (minimatch) globs is a character class, so the guard keeps it as one. Accepted: a future heredoc COPY would make the guard fail loudly rather than silently.
+- Tests: vitest **2486 passed / 131 files**, 0 warning lines. A live dev server booted from the new file: POST/GET /api/status and OFFICE_STATUS_DIR work. `npm pack` ships the file and pack-smoke passes. Bundle budget (app bundle byte-identical), render smoke and panel smoke PASS. Commit hygiene: the spec commit first swallowed the staged `git mv`. It was soft-reset before push, and a memory was added. PR #238.
