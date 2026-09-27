@@ -12,6 +12,13 @@ services:
       - "127.0.0.1:5174:5174"
     environment:
       OFFICE_API_TOKEN: ${OFFICE_API_TOKEN:-}
+      # REQUIRED if this container sits behind Nginx (or any reverse proxy) using a hostname:
+      # server.mjs validates the Host header (DNS-rebinding guard) and compose does NOT
+      # forward a shell var into the container unless it's listed here — an unset
+      # OFFICE_ALLOWED_HOSTS in your shell silently becomes an unset one in the container too,
+      # so "I set it in my .env" isn't enough on its own. Set it to your proxy's server_name,
+      # e.g.: OFFICE_ALLOWED_HOSTS=office.example.com docker compose up -d
+      OFFICE_ALLOWED_HOSTS: ${OFFICE_ALLOWED_HOSTS:-}
       NODE_ENV: production
     volumes:
       # :rw so the server can write office-status.json (POST /api/status).

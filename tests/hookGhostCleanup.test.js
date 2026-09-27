@@ -39,7 +39,11 @@ describe('cleanupGhostAliases — branch-hop alias removal', () => {
   })
 
   it('deletes a slugged sibling with the same suffix AND _cwd === process.cwd()', () => {
-    writeJson(dir, `office-status-old-branch-${SUFFIX}.json`, { _cwd: process.cwd(), agents: [] })
+    // AVO audit remediation (2026-09-26, finding #1): cleanupGhostAliases now also requires
+    // source === 'claude-cli' (the real hook always stamps this) — see
+    // tests/codexHookIsolation.test.js for the new source-gating coverage, including the
+    // regression guard that this exact scenario still deletes a genuine Claude-hook alias.
+    writeJson(dir, `office-status-old-branch-${SUFFIX}.json`, { _cwd: process.cwd(), source: 'claude-cli', agents: [] })
     cleanupGhostAliases()
     expect(fs.existsSync(path.join(dir, `office-status-old-branch-${SUFFIX}.json`))).toBe(false)
   })
@@ -82,7 +86,7 @@ describe('cleanupGhostAliases — branch-hop alias removal', () => {
   })
 
   it('end-to-end: a processEvent call removes the stranded pre-switch alias', () => {
-    writeJson(dir, `office-status-old-branch-${SUFFIX}.json`, { _cwd: process.cwd(), agents: [] })
+    writeJson(dir, `office-status-old-branch-${SUFFIX}.json`, { _cwd: process.cwd(), source: 'claude-cli', agents: [] })
     hook.processEvent({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'echo hi' } })
     expect(fs.existsSync(path.join(dir, `office-status-old-branch-${SUFFIX}.json`))).toBe(false)
   })
