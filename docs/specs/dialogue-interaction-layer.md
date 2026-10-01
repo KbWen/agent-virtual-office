@@ -1,9 +1,9 @@
 ---
-status: frozen
+status: shipped
 title: Dialogue & Interaction Layer
 feature: dialogue-interaction-layer
 created: 2026-06-15
-last_updated: 2026-06-15
+last_updated: 2026-10-01
 primary_domain: ui-rendering
 secondary_domains: [office-runtime]
 adr: docs/adr/ADR-007-dialogue-channel-separation-and-honesty-gate.md
