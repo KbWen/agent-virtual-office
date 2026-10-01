@@ -1,13 +1,13 @@
 {
   "characters": {
-    "pm": { "name": "PM", "personality": "Loves meetings, tidy desk, always checking Gantt charts" },
-    "arch": { "name": "Architect", "personality": "Wears a beret, loves whiteboards, often lost in thought" },
-    "dev": { "name": "Developer", "personality": "Twin tails, types lightning-fast, desk covered in coffee cups" },
-    "qa": { "name": "QA", "personality": "Carries a magnifier, often frowns, detail-oriented" },
-    "ops": { "name": "DevOps", "personality": "Wears a hard hat, decisive, loves the big red button" },
-    "res": { "name": "Researcher", "personality": "Piles of books, always reading, occasional eureka moments" },
-    "gate": { "name": "Gatekeeper", "personality": "Guards the gate, verifies with a shield, very serious" },
-    "designer": { "name": "Designer", "personality": "Wears earrings, iPad in hand, opinions on spacing, perfectionist" },
+    "pm": { "name": "PM", "personality": "Color-coded pen obsessive, pour-over enthusiast, fiercely protective of the team; loves off-grid camping, believes breathing room in schedules is an art" },
+    "arch": { "name": "Architect", "personality": "Beret-wearing whiteboard thinker, slow speaker lost in metaphysical musings; loves Go and woodworking, knows architecture is the art of timely compromise" },
+    "dev": { "name": "Developer", "personality": "Twin-tails, rhythm-game typing cadence, coffee cups everywhere; custom mechanical keyboard builder, believes there is no pain an extra cache layer cannot soothe" },
+    "qa": { "name": "QA", "personality": "Magnifier in hand, thoughtful frown, radar for anomalies; classic mystery novel devotee and escape-room solver, knows unverified code is just broken code in disguise" },
+    "ops": { "name": "DevOps", "personality": "Hard hat ready, decisive big-red-button pusher who inhales deeply before deploy; trail motorcycle and BBQ lover, knows green lights only mean outages haven't hit yet" },
+    "res": { "name": "Researcher", "personality": "Towering stacks of books, lost in white papers, speaks in citations; vintage bookstore browser and amateur stargazer, finds romance in obsolete RFC appendices" },
+    "gate": { "name": "Gatekeeper", "personality": "Guards the booth with shield held high, stalwart Zero-Trust disciple; ancient castle fortifications and cryptography solver, knows guarding principles is true kindness" },
+    "designer": { "name": "Designer", "personality": "Earrings, iPad in hand, 1px and color-temperature purist; 35mm film and vinyl collector, believes beauty is structural truth breathing naturally" },
     "planner": { "name": "Planner", "personality": "Loves sticky notes, always discussing with others" },
     "worker": { "name": "Worker", "personality": "Wears headphones, focused typing, scratches head sometimes" },
     "checker": { "name": "Checker", "personality": "Wears glasses, compares carefully, always checking off items" }
@@ -155,39 +155,39 @@
     "dev-bash": ["{ctx} go go go!", "{ctx} please don't explode brr", "running {ctx}... fingers and toes crossed", "{ctx}!!"],
     "dev-search": ["{ctx} where are youuu", "{ctx} must be around here~", "hunting {ctx}!", "searching {ctx}..."],
     "dev-delegate": ["dropping this off~", "teamwork! someone else's problem now brr", "delegating~"],
-    "dev-working": ["almost... almost~", "keyboard goes brr", "I know this bit!", "got it! ...wait no", "code first, think later!"],
+    "dev-working": ["almost... almost~", "keyboard goes brr", "I know this bit!", "got it! ...wait no", "code first, think later!", "this cache layer should make it smooth~", "rhythm game combo pace... tapping away!", "don't stall on doubt, try a line first..."],
     "dev-done": ["{ctx} out the door~ next!", "ok {ctx} looking decent now", "perfect~ onwards!", "{ctx} cleaner than before", "another one~"],
     "dev-error": ["{ctx} is crying...why", "ugh {ctx} blew up again!", "{ctx} throwing errors brr...", "help me {ctx} please~", "not {ctx} again..."],
 
     "qa-edit": ["adjusting test for {ctx}...", "{ctx} case still off"],
     "qa-search": ["checking {ctx} for cracks", "inspecting {ctx}...", "hmm {ctx} looks sus"],
     "qa-bash": ["running {ctx}...tell me it's green", "{ctx}... nervous.", "{ctx} should pass. right?"],
-    "qa-working": ["something's off here…", "hmm…let me look again", "…one more pass", "I smell a bug…", "told you."],
+    "qa-working": ["something's off here…", "hmm…let me look again", "…one more pass", "I smell a bug…", "told you.", "what about empty strings? zero? network drops...", "the quietest corner often hides the real puzzle...", "everyone watches features, while I gaze into the abyss..."],
     "qa-done": ["{ctx} passes. moving on.", "{ctx} clean — for now", "green. next.", "{ctx} OK."],
     "qa-error": ["{ctx} failed. told you.", "…knew it. {ctx}", "I said so. {ctx}", "{ctx} broke. paging Dev."],
 
     "ops-bash": ["{ctx} 3..2..1", "big red button — {ctx}", "{ctx} executing. tense.", "{ctx}. here we go."],
-    "ops-working": ["pre-flight. running.", "environment: OK", "containers up. watching.", "all green. for now."],
+    "ops-working": ["pre-flight. running.", "environment: OK", "containers up. watching.", "all green. for now.", "logs never lie; they just feel the pain before humans do.", "hard hat strapped tight, fire extinguisher ready...", "the fan roar... feels like a summer ocean breeze today."],
     "ops-done": ["{ctx} up. breathe.", "out. everyone relax.", "{ctx} nominal.", "live. watching logs."],
     "ops-error": ["{ctx} down. rollback.", "oh no. {ctx}.", "rollback! now.", "{ctx}. alert."],
 
     "res-read": ["into {ctx}...", "wait, {ctx} is interesting...", "hmm, let me dig into {ctx}", "deep in {ctx}..."],
     "res-search": ["looking into {ctx}", "what did others do with {ctx}...", "{ctx} related work..."],
     "res-web": ["checking {ctx} online...", "{ctx} — Stack Overflow rabbit hole", "searching {ctx}..."],
-    "res-working": ["hmm… wait.", "deeper and deeper…", "wait, this might be something…", "halfway through..."],
+    "res-working": ["hmm… wait.", "deeper and deeper…", "wait, this might be something…", "halfway through...", "that overlooked footnote on page 7... there's something there", "past pitfalls always look remarkably like shortcuts...", "a forum thread from ten years ago... so romantic back then."],
     "res-done": ["notes ready. interesting stuff.", "ok, got a direction~", "summary out", "data's all here~"],
     "res-error": ["can't find it...", "source is gone", "that link's dead..."],
 
     "pm-delegate": ["ok everyone, tasks out~", "distributing — Dev takes this, QA gets that", "we've got coverage now!", "let's make sure we're aligned~"],
-    "pm-working": ["where are we on this...", "adjusting the timeline — again", "syncing with the team", "ok let's re-prioritize everyone", "Gantt needs love~"],
+    "pm-working": ["where are we on this...", "adjusting the timeline — again", "syncing with the team", "ok let's re-prioritize everyone", "Gantt needs love~", "take a breath everyone... let's align our senses first", "this pour-over aroma is as clean as the Gantt chart...", "white space is also an art of scheduling..."],
     "pm-done": ["we're on track~", "schedule looks good now!", "team's in the loop~"],
     "pm-error": ["ok plans changed again...", "timeline's slipping — let's regroup everyone", "requirements shifted… let's adapt"],
 
-    "arch-working": ["mm… will it hold?", "this pattern might work better…", "thinking about the edges…", "hmm… what if we…", "tradeoffs everywhere…"],
+    "arch-working": ["mm… will it hold?", "this pattern might work better…", "thinking about the edges…", "hmm… what if we…", "tradeoffs everywhere…", "like wood grain... it holds best when following structure", "not a code issue, but a compromise across time scales...", "in Go the corners hold life... same for abstractions"],
     "arch-done": ["structure's there. build on it.", "handed off to dev.", "clear enough to proceed."],
     "arch-error": ["something doesn't hold here…", "need to rethink this…", "won't scale this way…"],
 
-    "gate-working": ["scanning.", "checking permissions.", "compliance pass — no shortcuts.", "each line reviewed.", "vulnerability scan: running."],
+    "gate-working": ["scanning.", "checking permissions.", "compliance pass — no shortcuts.", "each line reviewed.", "vulnerability scan: running.", "rules are not barriers, but guardrails against falling in the dark.", "winds are fierce outside, but there can be no breach behind me.", "verifying identity... principles know no casual acquaintances."],
     "gate-done": ["passed. no findings.", "clean. proceed.", "compliance: OK."],
     "gate-error": ["vulnerability confirmed.", "non-compliant. rejected.", "not cleared."],
 
@@ -196,7 +196,8 @@
     "designer-read": ["what is {ctx} trying to say visually...", "reading {ctx}, feeling its rhythm", "studying {ctx} — inspiration is borrowed, beauty is earned"],
     "designer-bash": ["building {ctx}, curious how it looks in the light", "{ctx} spinning up, waiting for that moment", "shipping {ctx} — letting the world see it"],
     "designer-search": ["looking through {ctx}, learning from the past", "so many beautiful possibilities in {ctx}...", "searching {ctx} — a designer is always collecting"],
-    "designer-working": ["this silence in the layout isn't right...", "the warmth of this color needs softening", "too much contrast — it's arguing with itself", "the eye doesn't know where to go", "let the composition breathe", "every pixel is a choice", "beauty is restraint", "balance isn't symmetry — it's tension"],
+    "designer-working": ["this silence in the layout isn't right...", "the warmth of this color needs softening", "too much contrast — it's arguing with itself", "the eye doesn't know where to go", "let the composition breathe", "every pixel is a choice", "beauty is restraint", "balance isn't symmetry — it's tension", "this negative space needs sunlight filtering through leaves...", "the button radius is the first gentle handshake with the user.", "grayscale is quiet, but let's give it tender depth..."],
+
     "designer-done": ["{ctx} is done — almost too beautiful to ship", "delivered, though design is never truly finished", "{ctx} complete — the next canvas waits", "I like this version~", "it's alive now, {ctx}"],
     "designer-error": ["{ctx} is crying out...", "the visual order has collapsed", "{ctx} lost its soul", "this isn't a bug — it's design in pain"],
 
@@ -233,7 +234,23 @@
       "my hands shake before every deploy",
       "time to write the weekly report...",
       "new coffee shop opened downstairs",
-      "anyone want to order delivery together"
+      "anyone want to order delivery together",
+      "Two degrees off on the water temp changes the whole brew aroma...",
+      "Time flows differently in the mountains without any signal...",
+      "The eye shape on this Go board... the corners are always hardest...",
+      "Planing along the wood grain prevents hidden splinters...",
+      "The clicky tactile bump on blue switches is the true soul of typing~",
+      "Wonder if anyone wants to challenge the spiciest hotpot tonight!",
+      "The last riddle in an escape room is always hidden in plain sight...",
+      "The world outside the boundary is stranger than expected...",
+      "The scent of motor oil and slow-smoked brisket... that's a real weekend.",
+      "The server exhaust breeze feels just like a summer ocean draft...",
+      "An obscure appendix from a 1995 RFC... people had such romantic ideas back then.",
+      "Found a vintage cryptography handbook in a used bookstore last night...",
+      "Ancient castle moats were calculated purely against bow ranges...",
+      "Zero-trust isn't coldness; it keeps everyone safe on their way home...",
+      "Pressing the shutter on a film camera traps light right into the grain...",
+      "An 8px grid is the invisible skeleton of a calm interface..."
     ]
   },
   "activityFeed": {

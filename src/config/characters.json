@@ -6,7 +6,7 @@
       "color": "#378ADD",
       "accessory": "neat-hair",
       "commands": ["/bootstrap", "/plan", "/spec"],
-      "personality": "愛開會、桌上整齊、常看甘特圖",
+      "personality": "多色筆強迫症、手沖咖啡狂、害怕冷場但極度保護團隊；熱愛露營遠離通知，深信留白也是時程的藝術",
       "deskItems": ["monitor", "gantt-chart", "sticky-notes"],
       "position": { "x": 160, "y": 180 }
     },
@@ -16,7 +16,7 @@
       "color": "#7F77DD",
       "accessory": "square-hat",
       "commands": ["/brainstorm", "/decide"],
-      "personality": "戴帽子、愛畫白板、常陷入沉思",
+      "personality": "戴帽子愛畫白板、講話極慢、常陷入形上學沉思；愛下圍棋與木工，堅信架構是特定時空的妥協藝術",
       "deskItems": ["monitor", "blueprint"],
       "position": { "x": 310, "y": 140 }
     },
@@ -26,7 +26,7 @@
       "color": "#1D9E75",
       "accessory": "twin-tails",
       "commands": ["/implement"],
-      "personality": "雙馬尾、打字飛快、桌上全是咖啡杯",
+      "personality": "雙馬尾、打字飛快如音遊連擊、桌上全是咖啡杯；熱愛改開源與客製機械鍵盤，深信沒有加一層快取解決不了的痛",
       "deskItems": ["monitor", "coffee-cup", "coffee-cup", "coffee-cup"],
       "position": { "x": 460, "y": 180 }
     },
@@ -36,7 +36,7 @@
       "color": "#BA7517",
       "accessory": "magnifier",
       "commands": ["/test", "/review", "/test-classify"],
-      "personality": "拿放大鏡、常皺眉、注重細節",
+      "personality": "拿放大鏡、常推眼鏡皺眉、天然異常感知雷達；本格推理狂熱與密室逃脫玩家，深信未經驗證的承諾都是潛在崩潰",
       "deskItems": ["monitor", "magnifier", "checklist"],
       "position": { "x": 160, "y": 310 }
     },
@@ -46,7 +46,7 @@
       "color": "#D85A30",
       "accessory": "hard-hat",
       "commands": ["/ship", "/handoff", "/retro"],
-      "personality": "戴安全帽、做事果斷、愛按大按鈕",
+      "personality": "戴安全帽、做事果斷、愛按大按鈕但按前深吸一口氣；越野摩托車與美式烤肉，深信綠燈只是故障還沒發生，隨時備妥Rollback",
       "deskItems": ["monitor", "deploy-button"],
       "position": { "x": 310, "y": 350 }
     },
@@ -56,7 +56,7 @@
       "color": "#5DCAA5",
       "accessory": "bangs",
       "commands": ["/research"],
-      "personality": "桌上書堆、常翻書、偶爾恍然大悟",
+      "personality": "桌上書堆比人高、常常翻到論文忘了時間、說話引經據典；愛逛二手舊書店與天文觀測，相信最冷門的RFC附錄藏著前人浪漫",
       "deskItems": ["monitor", "book-stack"],
       "position": { "x": 460, "y": 310 }
     },
@@ -66,7 +66,7 @@
       "color": "#E24B4A",
       "accessory": "shield",
       "commands": ["gate-engine"],
-      "personality": "站安全亭、驗證舉盾牌、很嚴肅",
+      "personality": "站安全亭、手持盾牌、嚴肅筆挺的零信任信徒；愛密碼學解謎與古城堡防禦史，相信放行只需一秒，守住原則才是慈悲",
       "deskItems": ["gate-booth"],
       "position": { "x": 80, "y": 420 }
     },
@@ -76,10 +76,11 @@
       "color": "#E8688A",
       "accessory": "long",
       "commands": ["/design", "/ui", "/style"],
-      "personality": "戴耳環、拿 iPad、對間距有意見、完美主義",
+      "personality": "戴耳環、拿 iPad、對 1px 與色溫極度敏感的完美主義；底片相機與黑膠收藏，相信美不是裝飾而是結構自然流露的呼吸感",
       "deskItems": ["monitor", "ipad", "color-swatch"],
       "position": { "x": 140, "y": 380 }
     }
+
   ],
   "lightweight": [
     {
