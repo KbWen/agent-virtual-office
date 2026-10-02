@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-09-27T15:12:27+08:00
-- **Last Verified**: 2026-09-25
-- **Update Sequence**: 143
+- **Last Updated**: 2026-10-02T00:25:00+08:00
+- **Last Verified**: 2026-10-02
+- **Update Sequence**: 145
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -82,7 +82,8 @@
   - [hook-io] docs/specs/hook-runtime-contract.md [Shipped]  *(AVO-153 / stability-wave W4 — live-captured fixtures + 143 contract tests; found the tool_response/tool_result divergence → AVO-154)*
   - [game-feel] docs/specs/cozy-micro-interactions.md [Shipped]  *(AVO-125 / chill-fun wave — night desk-lamp halos beneath the status layer; status-tinted monitor glow DROPPED on honesty (desk-fixed glow vs walking agents))*
   - [game-feel] docs/specs/ambient-soundscape.md [Shipped]  *(AVO-122 / chill-fun wave — off-by-default 0-KB procedural Web Audio; clatter∝teamPulse (silent@0) + double-gated rain; coffee gurgle DROPPED on honesty (tea-break is a clock event))*
-  - [ui-rendering] docs/specs/dialogue-interaction-layer.md [Frozen]  *(dialogue layer — ADR-007 channel separation + open-ended content + honesty gate; S1/S1b reduction commits, S2–5 killable hypotheses; red-team + expert/PM hardened)*
+  - [ui-rendering] docs/specs/dialogue-interaction-layer.md [Shipped]  *(dialogue layer — ADR-007 channel separation + open-ended content + honesty gate; S1/S1b reduction commits, S2–5 killable hypotheses; red-team + expert/PM hardened; Wave B shipped 2026-10-01)*
+  - [ui-rendering] docs/specs/character-roster-lore.md [Shipped]  *(character roster lore & interconnected storylines + automated visual preview asset)*
   - [ui-rendering] docs/specs/calm-stationery-palette.md [Shipped]  *(warm-oak floor/walls + paper inspector with role-tint header, owner-chosen from rendered candidates; all shell/sign/card colours are tokens in `src/systems/officePalette.js` with enforced legibility rules R1–R5)*
   - [ui-rendering] docs/specs/review-2026-09-19-remediation.md [Shipped]  *(2026-09-19 external review, wave 1 — REV-01/02/03/08/09: panel-mode overlays clamp to the live viewBox; no speech is moved into view for an off-crop speaker (both axes + the #47 clamp); dead page-title status channel deleted; relative times tick every 10 s; PR #236)*
   - [hook-io] docs/specs/hook-robustness-privacy.md [Shipped]  *(2026-09-26 audit remediation: lock TOCTOU identity-verified steal-close (token+mtime post-rename recheck) + orphan `.stale.*` cleanup; `atomicWriteJson` EPERM/EBUSY retry; `WebSearch`/`Agent` privacy-leak fixes (raw query/description no longer surfaced); `bridge.js` client-forgeable `source` field closed; `generic-llm-bridge.js` `--watch`-dir git-diff scope + anchored ignore regex + `--port=` support; `cli.js` symlink-safe settings write + null-guard uninstall)*
@@ -155,6 +156,16 @@
 - **Verification reality**: behavioral correctness = the **test suite** (vitest = real modules, no dup). Pixel/visual correctness = **owner only**. `preview_screenshot` must NOT be relied on (hangs).
 
 ## Ship History
+
+### Ship-docs-character-roster-lore-2026-10-02 (character lore book, interconnected storylines, and visual preview)
+
+- Feature shipped: Authored comprehensive 8-agent Character Lore & Office Life book (`docs/CHARACTER_LORE.md`) featuring full agent profiles, desk objects, habits, and 4 interconnected narrative threads weaving character bubbles into collective storylines. Added automated Playwright capture harness (`scripts/capture-office-lore-preview.mjs`) generating high-fidelity visual asset (`docs/assets/office-lore-preview.png`).
+- Tests: dialogueS2Lint 83/83 passed, validate.ps1 115 passed.
+
+### Ship-feat-avo-161-character-dialogue-depth-2026-10-01 (deepen character personalities, hobbies, and philosophies) · AVO-161 Wave B
+
+- Feature shipped: AVO-161 Wave B: Deepened and humanized character dialogues across 8 roles (PM, Arch, Dev, QA, Ops, Res, Gate, Designer) with distinct personalities, hobbies, life philosophies, and quirks in `src/config/characters.json`, `src/locales/en.json`, and `src/locales/zh-TW.json`. Context bubble pools expanded (+3 lines per role) and gossip pool expanded (+16 lines) adhering to ADR-007 channel separation and open-ended non-conclusive content rules (zero banned terminal completion stems).
+- Tests: 150 test suites passed (2,711 passed, 0 failed), dialogueS2Lint passed 83/83, 100% key parity (395/395 keys), smoke passed across 4 viewports.
 
 ### Ship-chore-release-v1.6.10-2026-09-27 (the office only shows what is really happening, and the server stops falling over) · release v1.6.10
 
