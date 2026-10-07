@@ -70,6 +70,17 @@ Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 141 -> 142).
 
 Rotated 1 additional entry on 2026-09-27 (SSoT Update Sequence 142 -> 143).
 
+Rotated 1 additional entry on 2026-10-07 (SSoT Update Sequence 145 -> 146).
+
+---
+
+### Ship-fix-audit-remediation-2026-09-24-2026-09-24 (dev server monotonic clock parity and bridge UI controls)
+
+- Quick-win shipped: remediated high-confidence findings F-01 (dev server clock parity) and F-05 (bridge UI interactive controls) from 2026-09-24 audit.
+- vite.config.mjs now imports canonical nextSeq from statusContract.mjs to maintain single-clock invariant under concurrent dev traffic.
+- public/bridge-ui.js & public/bridge.html updated with planning and awaiting-approval buttons and styles.
+- Tests: 132 test files passed (2511 passed, 1 skipped); render smoke PASS; panel smoke PASS; pack smoke PASS; bundle budget PASS. Branch fix/audit-remediation-2026-09-24.
+
 ---
 
 ### Ship-fix-avo-197-oneshot-animations-2026-09-20 (the one-shot animations actually play now) · AVO-197

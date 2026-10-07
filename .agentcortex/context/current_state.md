@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-02T00:25:00+08:00
-- **Last Verified**: 2026-10-02
-- **Update Sequence**: 145
+- **Last Updated**: 2026-10-07T17:58:48+08:00
+- **Last Verified**: 2026-10-07
+- **Update Sequence**: 146
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -157,6 +157,11 @@
 
 ## Ship History
 
+### Ship-fix-https-status-and-security-audit-2026-10-07 (fix HTTPS remote status polling and resolve source-map-js vulnerability)
+
+- Quick-win shipped: Remediated 2 verified defects: (1) Fixed HTTPS remote deployment status polling & SSE termination in src/inference/inferStatus.js where non-localhost HTTPS origins falsely skipped polling and SSE, and (2) pinned source-map-js to ^1.2.2 via package.json overrides, eliminating high-severity CVE (GHSA-68fv-2mgg-jv7q).
+- Tests: 151 test suites passed (2,714 passed, 0 failed), npm audit 0 vulnerabilities, pack-smoke 4/4 assertions PASS, render-smoke PASS across 4 viewports, validate.ps1 PASS (115/115).
+
 ### Ship-docs-character-roster-lore-2026-10-02 (character lore book, interconnected storylines, and visual preview)
 
 - Feature shipped: Authored comprehensive 8-agent Character Lore & Office Life book (`docs/CHARACTER_LORE.md`) featuring full agent profiles, desk objects, habits, and 4 interconnected narrative threads weaving character bubbles into collective storylines. Added automated Playwright capture harness (`scripts/capture-office-lore-preview.mjs`) generating high-fidelity visual asset (`docs/assets/office-lore-preview.png`).
@@ -230,13 +235,6 @@
 
 - Quick-win shipped: fixed regex `replace(/active-[\w-]+/g, '')` in `public/bridge-ui.js` to match kebab-case status names without leaving trailing `-approval` fragments; added URL param parsing support for `planning` and `awaiting-approval`.
 - Tests: 132 test files passed (2513 passed, 3 skipped); render-smoke and panel-smoke PASS. Branch fix/bridge-ui-status-toggle-regex merged into main (35cbfd5).
-
-### Ship-fix-audit-remediation-2026-09-24-2026-09-24 (dev server monotonic clock parity and bridge UI controls)
-
-- Quick-win shipped: remediated high-confidence findings F-01 (dev server clock parity) and F-05 (bridge UI interactive controls) from 2026-09-24 audit.
-- vite.config.mjs now imports canonical nextSeq from statusContract.mjs to maintain single-clock invariant under concurrent dev traffic.
-- public/bridge-ui.js & public/bridge.html updated with planning and awaiting-approval buttons and styles.
-- Tests: 132 test files passed (2511 passed, 1 skipped); render smoke PASS; panel smoke PASS; pack smoke PASS; bundle budget PASS. Branch fix/audit-remediation-2026-09-24.
 
 ## Spec Index Archive
 
