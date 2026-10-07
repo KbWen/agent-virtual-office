@@ -462,15 +462,10 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
 function startFilePolling(callback, baseIntervalMs = 1000, onProbe = null) {
   // Skip file polling when /api/status can't work:
   // - file:// protocol (no server)
-  // - HTTPS page can't fetch HTTP localhost (mixed content)
   if (typeof window !== 'undefined') {
     const proto = window.location.protocol
     if (proto === 'file:') {
       console.info('[Office] Skipping API polling (file:// protocol). Use URL hash or postMessage instead.')
-      return () => {}
-    }
-    if (proto === 'https:' && window.location.hostname !== 'localhost') {
-      console.info('[Office] Skipping API polling (HTTPS page cannot reach HTTP API). Use postMessage or hash instead.')
       return () => {}
     }
   }
@@ -520,7 +515,7 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null, onOpen = n
   if (typeof EventSource === 'undefined') return null
   if (typeof window !== 'undefined') {
     const proto = window.location.protocol
-    if (proto === 'file:' || (proto === 'https:' && window.location.hostname !== 'localhost')) return null
+    if (proto === 'file:') return null
   }
 
   let es = null
