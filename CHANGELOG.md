@@ -5,6 +5,34 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.11 — 2026-10-11 — Live status over HTTPS, and the characters get a little more personality
+
+Three pull requests since v1.6.10. Two were done by another agent (Gemini, in Antigravity); the
+third is a review of those two that fixed what they got wrong.
+
+### Fixed
+
+- **An office served over HTTPS from a real hostname now shows live status.** Behind a TLS reverse
+  proxy (e.g. `https://office.example.com`), the page skipped status polling and the live stream on
+  the false assumption that HTTPS could not reach the API, so the office stayed empty. Both requests
+  are same-origin, so they now run. An HTTPS page with no server behind it backs off the same way it
+  already did over HTTP. (#255)
+
+### Changed
+
+- **More things for the characters to say.** Each of the eight roles gets a few new working lines
+  and there is new idle chatter, in English and Traditional Chinese, drawn from hobbies the roles now
+  have (pour-over coffee, Go, mechanical keyboards, film cameras…). The lines are short enough to fit
+  in a bubble; the first version was not, and every new line showed cut off. (#254, #256)
+- **New doc: `docs/CHARACTER_LORE.md`**, a character book for the eight roles (in Chinese). Its
+  quoted lines describe how each character talks; they are not lines the office shows. (#254, #256)
+
+### Housekeeping / not user-facing
+
+- A dev-only dependency override (`source-map-js` ^1.2.2) clears an `npm audit` advisory
+  (GHSA-68fv-2mgg-jv7q) in build tooling. It is not part of the shipped app. (#255)
+- A test now fails if new bubble lines push up the number of lines that get cut off. (#256)
+
 ## v1.6.10 — 2026-09-27 — The office only shows what is really happening, and the server stops falling over
 
 Thirteen pull requests since v1.6.9. Most come from a full-repo audit on 2026-09-26 (server,

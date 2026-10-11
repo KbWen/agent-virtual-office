@@ -74,6 +74,18 @@ Rotated 1 additional entry on 2026-10-07 (SSoT Update Sequence 145 -> 146).
 
 ---
 
+Rotated 1 additional entry on 2026-10-11 (SSoT Update Sequence 147 -> 148).
+
+### Ship-fix-dev-server-parity-2026-09-26 (the dev server stops inventing agent status from ~/.claude and matches production CORS)
+
+- Quick-win shipped: remediated the remaining dev-only (`vite.config.mjs`) divergences from `server.mjs` (production) for the status transport, found in a 2026-09-26 re-audit that followed the 2026-09-24 wave's shared-clock fix. Scope: `vite.config.mjs`, the dev-start warning lines in `bin/cli.js`, and a one-line `STALE_MS` export from `src/server/scanSessions.mjs`.
+- **The file-watcher fallback fabricated status from outside the project.** `officeStatusPlugin` extends the shared chokidar watcher to also cover `OFFICE_STATUS_DIR`, but the fallback's `'change'` handler had no project-root check — any write under the shared status dir (a Claude Code transcript, a `debug/*.txt` log) was misread as a source edit and produced a fake, `_cwd`-less agent status visible in *any* project's office. Fixed: resolves `server.config.root` and ignores anything outside it, plus the status dir itself and `.claude/`, matched as path **segments** relative to the root — not an absolute-path substring, which two review rounds each caught breaking something new (round 1: any foreign project's hook file silenced this project's fallback for 5 minutes; round 2: the substring form silenced every `.claude/worktrees/**` worktree, including this repo's own convention, and could false-match `distance.js`).
+- Also closed in the same wave: the fallback's overwrite-protection window now imports the real `STALE_MS` instead of a hardcoded 10s; the SSE watcher binds `'add'`/`'unlink'` alongside `'change'`; two unguarded `scanAndMerge` call sites got the same try/catch every other call site already has; `bin/cli.js` now prints the same LAN/no-token warning `server.mjs` prints. `server.cors: false` makes the plugin's own origin-allowlist logic the sole authority in dev, matching production (Vite's own permissive-loopback CORS middleware previously answered every OPTIONS first).
+- **Disclosure**: under `bin/cli.js`/npx, `server.config.root` resolves to the installed package directory, not the end user's project — so the zero-config fallback is effectively inert for that install path after this fix (it previously appeared to "work" there only via the `~/.claude` leak this closes). Fully functional for in-repo `npm run dev`.
+- Two of two `/review` rounds came back NOT READY before PASS (R-1 hook-file guard regression, R2-1 `.claude`-segment false-silencing) — both re-derived and fixed test-first on the same branch.
+- Merged `origin/main` (PR #246 `fix/server-hardening`, PR #247 `fix/codex-hook-isolation`) before ship; one expected conflict in `docs/specs/engineering-audit-remediation.md` (both branches appended a same-day wave section), resolved by keeping both in full.
+- Tests: full suite post-merge **139 files / 2579 tests**, all green. Build clean. `SMOKE_PORT=5701 npm run smoke` PASS (4 viewports, 0 errors). `PANEL_PORT=5711 npm run smoke:panel` PASS (first attempt hit Vite's documented one-time dependency-reoptimization cache-bust after the config edit, not a regression; retry green). `validate.sh` pass=113 warn=7 fail=0 skip=5 (all warnings pre-existing/historical, unrelated to this branch). PR #248.
+
 Rotated 3 additional entries on 2026-10-11 (SSoT Update Sequence 146 -> 147).
 
 ### Ship-fix-codex-hook-isolation-2026-09-26 (Codex and Claude stop overwriting each other's status file; the Codex helper no longer hangs)
