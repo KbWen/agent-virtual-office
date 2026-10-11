@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-10T23:59:06Z
+- **Last Updated**: 2026-10-11T00:09:51Z
 - **Last Verified**: 2026-10-11
-- **Update Sequence**: 147
+- **Update Sequence**: 148
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -156,6 +156,11 @@
 
 ## Ship History
 
+### Ship-chore-release-v1.6.11-2026-10-11 (live status over HTTPS, and the characters get a little more personality) · release v1.6.11
+
+- Cuts the 3 PRs merged since `v1.6.10` (#254, #255, #256) as **v1.6.11** (patch). #254/#255 were done by Gemini (Antigravity); #256 is the post-merge review that fixed their cut-off bubble lines and the lore book's false "100% aligned" claim. The release commit contains no app code: `package.json` 1.6.10 -> 1.6.11, **both** `package-lock.json` root version fields (0 `"version": "1.6.10"` strings left), the CHANGELOG narrative, and this entry.
+- CHANGELOG under-sells: one Fixed (HTTPS-hosted office now polls/streams status, #255), one Changed (new short character lines + lore book, explicitly not runtime lines), Housekeeping (dev-only `source-map-js` override for GHSA-68fv-2mgg-jv7q — verified via GitHub advisory API; the ratchet test). Post-merge: **annotated** `v1.6.11` tag on the release merge commit + `gh release create --latest`.
+
 ### Ship-fix-dialogue-bubble-fit-2026-10-11 (the new character lines fit their bubbles; the lore book stops claiming its quotes are bubble lines) · AVO-161 Wave B follow-up
 
 - Quick-win shipped: every bubble line #254 added was wider than the 140 px bubble budget (real-font measure: 40/40 en, 38/40 zh-TW rendered cut off, e.g. "日誌不會騙人，它只是…"). All 80 rewritten shorter in the same voice (max 128 / 110 px); owner approved a rendered before/after. New ratchet in `tests/bubbleTextFit.test.jsx` caps cut-off pool lines at 58 en / 14 zh-TW (red on #254 pools, green after). `docs/CHARACTER_LORE.md` + spec AC-2 corrected: 1 of 58 quoted lore lines is a real pool line, so the book now says its quotes are character-voice flavor text. Dead fabricated-bubble staging removed from `scripts/capture-office-lore-preview.mjs`.
@@ -210,16 +215,6 @@
 - **Accepted residual (documented, not eliminated)**: the lock's move-aside/rename-back window is bounded and self-healing (orphaned `.stale.*` dirs cleaned up on next acquire) — worst case one lost status update under adversarial concurrent-crash timing. Full root-cause: `docs/specs/hook-robustness-privacy.md` `## Domain Decisions`.
 - Merged `origin/main` (PR #246 server-hardening, #247 codex-hook-isolation, #248 dev-server-parity) before ship; one expected conflict in `office-status-hook.js`'s `module.exports` tail (both branches appended an export line), resolved by keeping both; `cleanupGhostAliases` `source === 'claude-cli'` gate confirmed intact post-merge.
 - Tests: full suite post-merge **142 files / 2633 tests**, all green (2 files hit load-contention 5000ms timeouts in the combined run on a heavily-loaded shared box, both untouched by this branch; isolated re-run: 2 files / 5 tests green, no regression). Build clean. `npm run smoke:pack` 4/4 PASS. `validate.sh` pass=114 warn=6 fail=0 skip=5 (all WARNs pre-existing/historical, none touching this branch). PR #249.
-
-### Ship-fix-dev-server-parity-2026-09-26 (the dev server stops inventing agent status from ~/.claude and matches production CORS)
-
-- Quick-win shipped: remediated the remaining dev-only (`vite.config.mjs`) divergences from `server.mjs` (production) for the status transport, found in a 2026-09-26 re-audit that followed the 2026-09-24 wave's shared-clock fix. Scope: `vite.config.mjs`, the dev-start warning lines in `bin/cli.js`, and a one-line `STALE_MS` export from `src/server/scanSessions.mjs`.
-- **The file-watcher fallback fabricated status from outside the project.** `officeStatusPlugin` extends the shared chokidar watcher to also cover `OFFICE_STATUS_DIR`, but the fallback's `'change'` handler had no project-root check — any write under the shared status dir (a Claude Code transcript, a `debug/*.txt` log) was misread as a source edit and produced a fake, `_cwd`-less agent status visible in *any* project's office. Fixed: resolves `server.config.root` and ignores anything outside it, plus the status dir itself and `.claude/`, matched as path **segments** relative to the root — not an absolute-path substring, which two review rounds each caught breaking something new (round 1: any foreign project's hook file silenced this project's fallback for 5 minutes; round 2: the substring form silenced every `.claude/worktrees/**` worktree, including this repo's own convention, and could false-match `distance.js`).
-- Also closed in the same wave: the fallback's overwrite-protection window now imports the real `STALE_MS` instead of a hardcoded 10s; the SSE watcher binds `'add'`/`'unlink'` alongside `'change'`; two unguarded `scanAndMerge` call sites got the same try/catch every other call site already has; `bin/cli.js` now prints the same LAN/no-token warning `server.mjs` prints. `server.cors: false` makes the plugin's own origin-allowlist logic the sole authority in dev, matching production (Vite's own permissive-loopback CORS middleware previously answered every OPTIONS first).
-- **Disclosure**: under `bin/cli.js`/npx, `server.config.root` resolves to the installed package directory, not the end user's project — so the zero-config fallback is effectively inert for that install path after this fix (it previously appeared to "work" there only via the `~/.claude` leak this closes). Fully functional for in-repo `npm run dev`.
-- Two of two `/review` rounds came back NOT READY before PASS (R-1 hook-file guard regression, R2-1 `.claude`-segment false-silencing) — both re-derived and fixed test-first on the same branch.
-- Merged `origin/main` (PR #246 `fix/server-hardening`, PR #247 `fix/codex-hook-isolation`) before ship; one expected conflict in `docs/specs/engineering-audit-remediation.md` (both branches appended a same-day wave section), resolved by keeping both in full.
-- Tests: full suite post-merge **139 files / 2579 tests**, all green. Build clean. `SMOKE_PORT=5701 npm run smoke` PASS (4 viewports, 0 errors). `PANEL_PORT=5711 npm run smoke:panel` PASS (first attempt hit Vite's documented one-time dependency-reoptimization cache-bust after the config edit, not a regression; retry green). `validate.sh` pass=113 warn=7 fail=0 skip=5 (all warnings pre-existing/historical, unrelated to this branch). PR #248.
 
 ## Spec Index Archive
 
