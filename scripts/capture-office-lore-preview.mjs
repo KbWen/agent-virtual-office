@@ -67,27 +67,9 @@ async function run() {
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' })
     await page.waitForSelector('svg', { timeout: 10000 })
 
-    // Allow office characters, furniture and layout to render
-    await page.waitForTimeout(1500)
-
-    // Trigger rich, lively character behaviors and dialogue bubbles
-    await page.evaluate(() => {
-      try {
-        const store = window.__office_store || window.useOfficeStore
-        if (store && typeof store.getState === 'function') {
-          const s = store.getState()
-          if (s.setAgentBehavior) {
-            s.setAgentBehavior('pm', 'working', 'focused', '這批耶加雪菲的烘焙度抓得剛剛好，香氣都出來了。')
-            s.setAgentBehavior('dev', 'working', 'happy', '橡皮鴨點了點頭，這邏輯肯定沒毛病。')
-            s.setAgentBehavior('gate', 'idle', 'calm', '修剪雜枝不是為了處罰，是為了讓主幹長得更挺拔。')
-          }
-        }
-      } catch (e) {
-        console.warn('Store bubble trigger skipped:', e)
-      }
-    })
-
-    await page.waitForTimeout(1000)
+    // Allow office characters, furniture, layout and the office's own bubbles to render.
+    // The shot shows the real idle office; nothing is staged into the store.
+    await page.waitForTimeout(2500)
 
     await page.screenshot({ path: OUT_PATH, fullPage: false })
     console.log(`Saved screenshot to ${OUT_PATH}`)

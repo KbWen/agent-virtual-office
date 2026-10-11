@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-07T17:58:48+08:00
-- **Last Verified**: 2026-10-07
-- **Update Sequence**: 146
+- **Last Updated**: 2026-10-10T23:59:06Z
+- **Last Verified**: 2026-10-11
+- **Update Sequence**: 147
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -69,7 +69,6 @@
   - [office-runtime] docs/specs/avo-187-temporal-doorway-claim.md [Shipped]  *(AVO-187 — atomic full-route physical-door claims; FIFO, fencing, lifecycle release, all-door forced evidence)*
   - [ui-rendering] docs/specs/shareable-daily-card.md [Shipped]  *(AVO-115 / #31 — cozy pixel-art postcard share card; weather/mood hero + 1 number + warm caption; client-side canvas→PNG, opt-in ⚙ Share; honest (no event counting — Option C, derived from done+mood); store.js untouched)*
   - [ui-rendering] docs/specs/poke-acknowledge.md [Shipped]  *(AVO-158 — Poke / acknowledge micro-interaction (Model A, layered on existing click); honest in-place bob + real-status quip; ZERO position/status write; replaces rejected AVO-142 per ADR-005)*
-  - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*
   - [office-runtime] docs/specs/blocked-reason-tags.md [Shipped]  *(AVO-110 / #29 — honest-narrow blocked-reason badge; reasonCode contract)*
   - [office-runtime] docs/specs/recurring-failure-detection.md [Shipped]  *(AVO-117 — recurring blocked-reason detection; downstream of AVO-110)*
   - [multi-agent] docs/specs/pair-programming-huddle.md [Shipped]  *(AVO-106 — co-editing pair OVERLAY (desk-to-desk link); per-agent activeFile, edit-only; redesigned from a huddle per expert panel)*
@@ -157,6 +156,11 @@
 
 ## Ship History
 
+### Ship-fix-dialogue-bubble-fit-2026-10-11 (the new character lines fit their bubbles; the lore book stops claiming its quotes are bubble lines) · AVO-161 Wave B follow-up
+
+- Quick-win shipped: every bubble line #254 added was wider than the 140 px bubble budget (real-font measure: 40/40 en, 38/40 zh-TW rendered cut off, e.g. "日誌不會騙人，它只是…"). All 80 rewritten shorter in the same voice (max 128 / 110 px); owner approved a rendered before/after. New ratchet in `tests/bubbleTextFit.test.jsx` caps cut-off pool lines at 58 en / 14 zh-TW (red on #254 pools, green after). `docs/CHARACTER_LORE.md` + spec AC-2 corrected: 1 of 58 quoted lore lines is a real pool line, so the book now says its quotes are character-voice flavor text. Dead fabricated-bubble staging removed from `scripts/capture-office-lore-preview.mjs`.
+- Tests: vitest 152 files / 2719 passed; build, bundle-budget (+2.83%), pack-smoke, npm audit 0. Also rotated 3 Ship History entries and 1 Spec Index line — both caps were over after #254/#255.
+
 ### Ship-fix-https-status-and-security-audit-2026-10-07 (fix HTTPS remote status polling and resolve source-map-js vulnerability)
 
 - Quick-win shipped: Remediated 2 verified defects: (1) Fixed HTTPS remote deployment status polling & SSE termination in src/inference/inferStatus.js where non-localhost HTTPS origins falsely skipped polling and SSE, and (2) pinned source-map-js to ^1.2.2 via package.json overrides, eliminating high-severity CVE (GHSA-68fv-2mgg-jv7q).
@@ -217,25 +221,6 @@
 - Merged `origin/main` (PR #246 `fix/server-hardening`, PR #247 `fix/codex-hook-isolation`) before ship; one expected conflict in `docs/specs/engineering-audit-remediation.md` (both branches appended a same-day wave section), resolved by keeping both in full.
 - Tests: full suite post-merge **139 files / 2579 tests**, all green. Build clean. `SMOKE_PORT=5701 npm run smoke` PASS (4 viewports, 0 errors). `PANEL_PORT=5711 npm run smoke:panel` PASS (first attempt hit Vite's documented one-time dependency-reoptimization cache-bust after the config edit, not a regression; retry green). `validate.sh` pass=113 warn=7 fail=0 skip=5 (all warnings pre-existing/historical, unrelated to this branch). PR #248.
 
-### Ship-fix-codex-hook-isolation-2026-09-26 (Codex and Claude stop overwriting each other's status file; the Codex helper no longer hangs)
-
-- Quick-win shipped: remediated 3 findings from a 2026-09-26 audit of the Codex/Claude status-file hook adapters, worked test-first over 3 implement/review rounds in an isolated worktree. (1) `office-status-codex.js` (Codex CLI helper) and `office-status-hook.js` (Claude Code hook) wrote the identical `office-status-{slug}.json` filename with no provenance tag — a Codex write could clobber the Claude hook's read-modify-write state, and `cleanupGhostAliases` could delete a live Codex file sharing a cwd-hash slug suffix; slug slice/strip order also diverged between the two mirrors. Fixed: Codex now writes its own `office-status-codex-{slug}.json` namespace; `cleanupGhostAliases` requires `source === 'claude-cli'`; slug ordering aligned. (2) `office-status-codex.js`'s `main()` blocked reading stdin to EOF before checking `argv[2]`, hanging the documented single-arg usage on a TTY/open pipe; fixed to only read stdin when no JSON arg is given. (3) `normalizeCodexStatusPayload` under-sanitized `workflow`/`source`, and (found only in round-2 review) accepted a caller-supplied `_seq` — `codex-cli` is a client `HOOK_ORIGIN` source sharing the client's own clock high-water mark, so a caller-set future `_seq` (server tolerates up to 5 min ahead) poisons that mark and freezes the session's own next real write for the window (reviewer measured a 239989ms freeze); fixed: `_seq` is always this process's own `nextSeq()`, never caller-honored, and `source` is pinned to the constant `'codex-cli'`.
-- **Two of three review rounds came back NOT READY.** Round 1 found the `_seq` freeze plus an undocumented multi-session tradeoff and estimated timestamps; round 2 found that the regression test's own "future" `_seq` value was actually in the past (Nov 2023 epoch ms), so a mutant honoring only a genuinely-future caller `_seq` — the exact poisoning shape — survived. Round 3 added a `Date.now()+240_000` case and confirmed it kills that mutant; round 3 review PASS.
-- **Known tradeoff, documented, not fixed here**: Claude Code and Codex CLI active in the SAME checkout now render as two sessions to `scanSessions.mjs`'s multi-session merge, which shows only one representative (most-urgent) agent per session file — a real active role on either side can be hidden. Strictly better than the pre-fix silent clobber, not full multi-role parity across sources. Documented in `docs/INTEGRATIONS.md`. Codex still does not participate in the Claude hook's write-lock (namespace isolation removes the clobber vector without needing a shared lock); two Codex invocations racing each other on the SAME file remain possible (pre-existing, unchanged, out of scope).
-- Tests: merged `origin/main` (already carrying PR #246, `fix/server-hardening`) cleanly, no conflicts. `npx vitest run` full suite green post-merge — 137 files / 2565 tests (2 files hit a load-induced 5000ms timeout in the combined run, both untouched by this branch per `git diff --name-only`; re-run alone: 2 files / 5 tests green, confirming no regression). Build clean. `npm run smoke:pack` 4/4 assertions PASS. `validate.sh` pass=114 warn=5 fail=0 skip=5 (all WARNs pre-existing historical-archive advisories, unrelated to this branch). PR #247.
-
-### Ship-fix-server-hardening-2026-09-26 (a malformed request can no longer crash the server; SSE stays up; DNS-rebinding reads blocked)
-
-- Hotfix shipped: remediated 4 findings from a 2026-09-26 `server.mjs` audit, test-first in an isolated worktree over 4 review rounds. (1) `new URL(req.url, 'http://x')` in the main listener + `serveStatic` had no try/catch — one crafted malformed request-target threw synchronously inside `http.createServer`'s callback, outside any `'error'` handler, crashing the process; now scoped in `safeParseUrl()` with a 400 fallback. (2) SSE connections dropped ~every 60s — not a Node default, but the server's own explicit `server.setTimeout(30000)` racing the (then also 30s) heartbeat interval, so roughly every other cycle the idle-socket timeout won and destroyed the stream first; disabled the per-socket timeout for SSE sockets (accepted long-lived-by-design) and bounded by a new `OFFICE_MAX_SSE_CLIENTS` cap + 15s heartbeat. (3) No Host-header validation — any DNS-rebinding request could read office status; `isAllowedHost()` now gates on `OFFICE_ALLOWED_HOSTS`. (4) vitest/@vitest/mocker CVE GHSA-82fw-gwwq-j7x9 (dev-only) — bumped to vitest 4.1.11.
-- **Behavior change (owner-relevant)**: Host-header checking is ON by default. Reverse-proxy/Docker deployments MUST set `OFFICE_ALLOWED_HOSTS` (comma-separated externally-visible host[:port] values) or every proxied request 403s. A request carrying a valid `OFFICE_API_TOKEN` bypasses the Host check (same secret already gates every write endpoint). `docker-compose.yml` now forwards `OFFICE_ALLOWED_HOSTS`; documented in README/DEPLOYMENT.md.
-- **Two of four `/review` rounds came back NOT READY** on deployment-compat gaps a fresh reviewer found — reverse-proxy 403s (nginx) and Docker unable to pass the new env var — both closed same-branch before round-3/4 PASS (0 CRITICAL/HIGH/MEDIUM outstanding; 3 LOW advisory cleared in round 4).
-- Tests: full suite 2553/2553 (136 files); build 464ms; bundle-budget PASS (+0.90%, limit +10%); `npm run smoke` + `smoke:pack` PASS; `npm audit` 0 vulnerabilities. Live isolated prod-server smoke: malformed request-target -> 400, process survives, `/api/health` 200 right after; `Host: localhost` -> 200, `Host: evil.example` -> 403; `/api/status/stream` -> 200 text/event-stream, stays open. `validate.sh` pass=114 warn=5 fail=0 skip=5. PR #246.
-
-### Ship-fix-bridge-ui-status-toggle-regex-2026-09-25 (support kebab-case status classes in active button toggle regex)
-
-- Quick-win shipped: fixed regex `replace(/active-[\w-]+/g, '')` in `public/bridge-ui.js` to match kebab-case status names without leaving trailing `-approval` fragments; added URL param parsing support for `planning` and `awaiting-approval`.
-- Tests: 132 test files passed (2513 passed, 3 skipped); render-smoke and panel-smoke PASS. Branch fix/bridge-ui-status-toggle-regex merged into main (35cbfd5).
-
 ## Spec Index Archive
 
 > Rotated out of the live **Spec Index** on 2026-08-16 to satisfy the `check_ssot_caps.py`
@@ -267,3 +252,4 @@
   - [game-feel] docs/specs/event-juice-pass.md [Shipped]  *(AVO-136 / #117 — rare-event juice: deploy confetti + eureka sparkle + desk-slam local shake; pure juiceForEvent resolver, reduced-motion-safe, never occludes status)*
   - [multi-agent] docs/specs/review-gate-waiting.md [Shipped]  *(AVO-107 / #112 — honest reframe: gate-desk "waiting" in-tray driven by awaiting-approval only; no queue/type fabrication; complements AVO-105 arrows; panel-decided)*
   - [brand] docs/specs/office-theme-selector.md [Shipped]  *(AVO-123 / #41 — lightweight overlay-grade theme tint beneath status layer; Default/Winter/Autumn light tints; contrast-guarded; Dark/Retro/Cyberpunk deferred)*
+  - [game-feel] docs/specs/office-pet-barometer.md [Shipped]  *(#39 / AVO-121 — signal-driven office pet)*

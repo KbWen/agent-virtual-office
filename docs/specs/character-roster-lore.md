@@ -3,7 +3,7 @@ status: shipped
 title: Character Roster Lore & Interconnected Storylines
 feature: character-roster-lore
 created: 2026-10-02
-last_updated: 2026-10-02
+last_updated: 2026-10-11
 primary_domain: ui-rendering
 secondary_domains: [game-feel]
 adr: docs/adr/ADR-007-dialogue-channel-separation-and-honesty-gate.md
@@ -36,7 +36,7 @@ Enhance user immersion and emotional connection ("生活感") by revealing that 
 ## Acceptance Criteria
 
 - **AC-1**: 100% alignment with `src/config/characters.json` role definitions and traits.
-- **AC-2**: 100% alignment with `src/locales/zh-TW.json` and `src/locales/en.json` dialogue pools.
+- **AC-2**: Personality traits align with the dialogue pools in `src/locales/zh-TW.json` and `src/locales/en.json`. Quoted lore lines are character-voice flavor text, NOT runtime pool lines, and the book says so (corrected 2026-10-11: the original "100% alignment" claim was false — 1 of 58 quoted lines exists in the pools).
 - **AC-3 (ADR-007)**: Strict adherence to voice-only bubble separation (no false completion status).
 - **AC-4**: High-resolution, unoccluded visual preview asset generated in `docs/assets/office-lore-preview.png`.
 

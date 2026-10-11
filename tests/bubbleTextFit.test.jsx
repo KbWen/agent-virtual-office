@@ -108,3 +108,21 @@ describe('one font, two uses (REV-07 risk R2)', () => {
     expect(BUBBLE_FONT).toBe(`${m[3]} ${m[1]}px ${family}`)
   })
 })
+
+// AVO-161 Wave B (PR #254) added 40 lines per locale that were all wider than the bubble, so the
+// office showed "logs never lie; they…" with the point cut off. They were shortened to fit. This is
+// a ratchet, not a rule: the pre-existing pools still have long lines (some read fine cut), but a
+// new line must not push the count of cut lines up. Lower the ceilings when lines are shortened.
+describe('locale bubble pools do not grow more cut-off lines (AVO-161 Wave B)', () => {
+  const CUT_CEILING = { en: 58, 'zh-TW': 14 }
+  for (const [loc, ceiling] of Object.entries(CUT_CEILING)) {
+    it(`${loc}: at most ${ceiling} contextBubbles lines exceed the width budget`, async () => {
+      const { default: dict } = await import(`../src/locales/${loc}.json`)
+      const cut = Object.values(dict.contextBubbles)
+        .filter(Array.isArray)
+        .flat()
+        .filter((line) => fitBubbleText(line, BUBBLE_TEXT_BUDGET, measure) !== line)
+      expect(cut.length).toBeLessThanOrEqual(ceiling)
+    })
+  }
+})
