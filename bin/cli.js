@@ -52,6 +52,338 @@ function atomicWriteSettings(settingsPath, contents) {
   }
 }
 
+const GEMINI_EVENTS = ['BeforeAgent', 'BeforeTool', 'AfterTool', 'AfterAgent', 'Notification', 'SessionEnd']
+const GEMINI_HOOK_TIMEOUT = 2000
+const GEMINI_HOOK_DESCRIPTION = 'Publish private Agent Virtual Office status from Gemini CLI.'
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function shellQuotePowerShell(value) {
+  return "'" + value.replace(/'/g, "''") + "'"
+}
+
+function shellQuotePosix(value) {
+  return "'" + value.replace(/'/g, "'\\''") + "'"
+}
+
+function geminiHookCommand(scriptPath) {
+  if (process.platform === 'win32') {
+    return `& ${shellQuotePowerShell(process.execPath)} ${shellQuotePowerShell(scriptPath)}`
+  }
+  return `${shellQuotePosix(process.execPath)} ${shellQuotePosix(scriptPath)}`
+}
+
+function readGeminiSettings(settingsPath) {
+  let settings = {}
+  let exists = false
+  try {
+    fs.lstatSync(settingsPath)
+    exists = true
+  } catch (error) {
+    if (!error || error.code !== 'ENOENT') throw error
+  }
+  if (exists) {
+    settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
+    if (!isPlainObject(settings)) throw new Error('settings.json root must be an object')
+  }
+  if (settings.hooks !== undefined && !isPlainObject(settings.hooks)) {
+    throw new Error('settings.json hooks must be an object')
+  }
+  for (const event of GEMINI_EVENTS) {
+    if (settings.hooks && settings.hooks[event] !== undefined && !Array.isArray(settings.hooks[event])) {
+      throw new Error(`settings.json hooks.${event} must be an array`)
+    }
+  }
+  return { settings, exists }
+}
+
+function geminiOwnedHookName(event) {
+  return `avo-office-status-gemini-${event}`
+}
+
+function geminiHookConfig(event, command) {
+  return {
+    name: geminiOwnedHookName(event),
+    type: 'command',
+    command,
+    timeout: GEMINI_HOOK_TIMEOUT,
+    description: GEMINI_HOOK_DESCRIPTION,
+  }
+}
+
+function hasExactKeys(value, expectedKeys) {
+  return isPlainObject(value) && Object.keys(value).length === expectedKeys.length &&
+    expectedKeys.every(key => Object.prototype.hasOwnProperty.call(value, key))
+}
+
+function isGeminiOwnedHook(hook, event, command) {
+  return hasExactKeys(hook, ['name', 'type', 'command', 'timeout', 'description']) &&
+    hook.name === geminiOwnedHookName(event) &&
+    hook.type === 'command' && hook.command === command &&
+    hook.timeout === GEMINI_HOOK_TIMEOUT && hook.description === GEMINI_HOOK_DESCRIPTION
+}
+
+function isGeminiOwnedGroup(group, event, command) {
+  return hasExactKeys(group, ['matcher', 'hooks']) && group.matcher === '*' &&
+    Array.isArray(group.hooks) && group.hooks.some(hook => isGeminiOwnedHook(hook, event, command))
+}
+
+function hasEditedGeminiRegistration(settings, command) {
+  if (!settings.hooks) return false
+  return GEMINI_EVENTS.some(event => (settings.hooks[event] || []).some(group =>
+    isPlainObject(group) && Array.isArray(group.hooks) && group.hooks.some(hook =>
+      isPlainObject(hook) && hook.name === geminiOwnedHookName(event) &&
+      (!isGeminiOwnedHook(hook, event, command) || !isGeminiOwnedGroup(group, event, command)),
+    ),
+  ))
+}
+
+function mergeGeminiHook(settings, event, hookConfig) {
+  if (!settings.hooks) settings.hooks = {}
+  const groups = settings.hooks[event] || []
+  const name = hookConfig.name
+  let inserted = false
+  const merged = []
+
+  for (const group of groups) {
+    if (!isPlainObject(group) || !Array.isArray(group.hooks)) {
+      merged.push(group)
+      continue
+    }
+    const owned = isGeminiOwnedGroup(group, event, hookConfig.command)
+    if (!owned) {
+      merged.push(group)
+      continue
+    }
+    const remainingHooks = []
+    for (const hook of group.hooks) {
+      if (isGeminiOwnedHook(hook, event, hookConfig.command)) {
+        if (!inserted) {
+          remainingHooks.push({ ...hook, ...hookConfig, name })
+          inserted = true
+        }
+      } else {
+        remainingHooks.push(hook)
+      }
+    }
+    if (remainingHooks.length) merged.push({ ...group, hooks: remainingHooks })
+  }
+  if (!inserted) merged.push({ matcher: '*', hooks: [hookConfig] })
+  settings.hooks[event] = merged
+}
+
+function removeGeminiHooks(settings, command) {
+  if (!settings.hooks) return
+  for (const event of GEMINI_EVENTS) {
+    const groups = settings.hooks[event]
+    if (!Array.isArray(groups)) continue
+    const kept = []
+    for (const group of groups) {
+      if (!isPlainObject(group) || !Array.isArray(group.hooks)) {
+        kept.push(group)
+        continue
+      }
+      const hooks = group.hooks.filter(hook => !isGeminiOwnedGroup(group, event, command) ||
+        !isGeminiOwnedHook(hook, event, command))
+      if (hooks.length) kept.push(hooks.length === group.hooks.length ? group : { ...group, hooks })
+    }
+    if (kept.length) settings.hooks[event] = kept
+    else delete settings.hooks[event]
+  }
+  if (Object.keys(settings.hooks).length === 0) delete settings.hooks
+}
+
+function hasGeminiScriptReference(settings, scriptPath) {
+  if (!settings.hooks) return false
+  return Object.values(settings.hooks).some(groups => Array.isArray(groups) && groups.some(group =>
+    isPlainObject(group) && Array.isArray(group.hooks) && group.hooks.some(hook =>
+      isPlainObject(hook) && typeof hook.command === 'string' && hook.command.includes(scriptPath),
+    ),
+  ))
+}
+
+function atomicWriteGeminiSettings(target, contents) {
+  const tmp = target + '.tmp.' + process.pid + '.' +
+    (Math.random().toString(36).slice(2) + '000000').slice(0, 6)
+  try {
+    fs.writeFileSync(tmp, contents)
+    fs.renameSync(tmp, target)
+    return true
+  } catch {
+    try { fs.unlinkSync(tmp) } catch {}
+    return false
+  }
+}
+
+function parsePlatformSelector(argv) {
+  const equalsArg = argv.find(arg => arg.startsWith('--platform='))
+  const flagIndex = argv.indexOf('--platform')
+  if (equalsArg) return { selected: true, value: equalsArg.slice('--platform='.length) }
+  if (flagIndex !== -1) return { selected: true, value: argv[flagIndex + 1] }
+  return { selected: false, value: undefined }
+}
+
+function runGeminiProjectCommand(action) {
+  const projectRoot = process.cwd()
+  const geminiDir = path.join(projectRoot, '.gemini')
+  const hooksDir = path.join(geminiDir, 'hooks')
+  const settingsPath = path.join(geminiDir, 'settings.json')
+  const hookDest = path.join(hooksDir, 'office-status-gemini.js')
+  const hookSrc = path.join(root, 'public', 'hooks', 'office-status-gemini.js')
+
+  let parsed
+  try {
+    parsed = readGeminiSettings(settingsPath)
+  } catch (error) {
+    console.error(`  Error: Cannot safely read ${settingsPath} (invalid JSON or unsupported structure).`)
+    console.error('  No project files were changed.')
+    process.exit(1)
+  }
+
+  let sourceBytes = null
+  if (action === 'setup') {
+    try {
+      sourceBytes = fs.readFileSync(hookSrc)
+    } catch {
+      console.error('  Error: Gemini hook source not found at ' + hookSrc)
+      console.error('  Your installation may be corrupted. Reinstall the package and retry.')
+      process.exit(1)
+    }
+  }
+
+  const hookCommand = geminiHookCommand(hookDest)
+  if (action === 'setup' && hasEditedGeminiRegistration(parsed.settings, hookCommand)) {
+    console.error('  Error: An AVO Gemini hook entry was edited in settings.json; it was preserved.')
+    console.error('  Restore the AVO entry before retrying setup.')
+    process.exit(1)
+  }
+  let scriptExists = false
+  try {
+    const st = fs.lstatSync(hookDest)
+    scriptExists = true
+    if (st.isSymbolicLink() || !st.isFile()) {
+      if (action === 'setup') {
+        console.error('  Error: Refusing to replace a non-regular Gemini hook path: ' + hookDest)
+        process.exit(1)
+      }
+    } else if (action === 'setup' && !fs.readFileSync(hookDest).equals(sourceBytes)) {
+      console.error('  Error: Existing Gemini hook differs from the package source: ' + hookDest)
+      console.error('  Preserve or move the file manually before retrying setup.')
+      process.exit(1)
+    }
+  } catch (error) {
+    if (!error || error.code !== 'ENOENT') {
+      console.error('  Error: Cannot inspect Gemini hook path ' + hookDest)
+      process.exit(1)
+    }
+  }
+
+  const settings = parsed.settings
+  if (action === 'setup') {
+    for (const event of GEMINI_EVENTS) {
+      mergeGeminiHook(settings, event, geminiHookConfig(event, hookCommand))
+    }
+  } else {
+    removeGeminiHooks(settings, hookCommand)
+  }
+
+  let settingsChanged = false
+  let settingsContents = ''
+  if (parsed.exists || action === 'setup') {
+    settingsContents = JSON.stringify(settings, null, 2)
+    settingsChanged = !parsed.exists
+    // Compare parsed values to avoid changing an already-installed file's bytes on repeat setup.
+    if (parsed.exists) {
+      try { settingsChanged = JSON.stringify(JSON.parse(fs.readFileSync(settingsPath, 'utf8'))) !== JSON.stringify(settings) } catch { settingsChanged = true }
+    }
+  }
+
+  let installedScript = false
+  let createdBackup = false
+  let createdGeminiDir = false
+  let createdHooksDir = false
+  const settingsTarget = resolveWriteTarget(settingsPath)
+  const backupPath = settingsTarget + '.avo-gemini-backup'
+  try {
+    if (action === 'setup') {
+      const hadGeminiDir = fs.existsSync(geminiDir)
+      const hadHooksDir = fs.existsSync(hooksDir)
+      fs.mkdirSync(hooksDir, { recursive: true })
+      createdGeminiDir = !hadGeminiDir
+      createdHooksDir = !hadHooksDir
+      if (!scriptExists) {
+        const stagedScript = hookDest + '.tmp.' + process.pid + '.' + Math.random().toString(36).slice(2, 8)
+        fs.writeFileSync(stagedScript, sourceBytes)
+        try { fs.renameSync(stagedScript, hookDest) } catch (error) {
+          try { fs.unlinkSync(stagedScript) } catch {}
+          throw error
+        }
+        installedScript = true
+      }
+
+      if (parsed.exists && settingsChanged && !fs.existsSync(backupPath)) {
+        // Keep the settings target present while preserving the exact pre-install inode.
+        fs.linkSync(settingsTarget, backupPath)
+        createdBackup = true
+      }
+      if (settingsChanged && !atomicWriteGeminiSettings(settingsTarget, settingsContents)) {
+        throw new Error('atomic settings write failed')
+      }
+    } else {
+      if (settingsChanged && !atomicWriteGeminiSettings(settingsTarget, settingsContents)) {
+        throw new Error('atomic settings write failed')
+      }
+    }
+  } catch (error) {
+    if (installedScript) {
+      try {
+        if (fs.readFileSync(hookDest).equals(sourceBytes)) fs.unlinkSync(hookDest)
+      } catch {}
+    }
+    if (createdBackup) {
+      try { fs.unlinkSync(backupPath) } catch {}
+    }
+    if (createdHooksDir) {
+      try { fs.rmdirSync(hooksDir) } catch {}
+    }
+    if (createdGeminiDir) {
+      try { fs.rmdirSync(geminiDir) } catch {}
+    }
+    console.error(`  Error: Gemini ${action} failed (${error && error.message}).`)
+    console.error('  No hook commands were executed.')
+    process.exit(1)
+  }
+
+  if (action === 'uninstall' && scriptExists && sourceBytes === null &&
+      !hasGeminiScriptReference(settings, hookDest)) {
+    try { sourceBytes = fs.readFileSync(hookSrc) } catch {}
+    if (sourceBytes) {
+      try {
+        const st = fs.lstatSync(hookDest)
+        if (st.isFile() && !st.isSymbolicLink() && fs.readFileSync(hookDest).equals(sourceBytes)) {
+          fs.unlinkSync(hookDest)
+          console.log('  Removed: ' + hookDest)
+        }
+      } catch {}
+    }
+  }
+
+  console.log(`\n  Gemini project hook ${action} complete.\n  Settings: ${settingsPath}\n`)
+  process.exit(0)
+}
+
+const platformSelector = parsePlatformSelector(args.slice(1))
+if ((command === 'setup' || command === 'uninstall') && platformSelector.selected) {
+  if (platformSelector.value === 'gemini') {
+    runGeminiProjectCommand(command)
+  } else if (platformSelector.value !== 'claude') {
+    console.error(`  Error: Unsupported platform "${platformSelector.value || ''}". Supported platforms: claude, gemini.`)
+    process.exit(1)
+  }
+}
+
 // ─── setup: one-click Claude Code hook installation ───
 if (command === 'setup') {
   const claudeDir = path.join(os.homedir(), '.claude')
@@ -298,7 +630,11 @@ if (help) {
   Usage:
     npx agent-virtual-office [options]
     npx agent-virtual-office setup       Install Claude Code hooks (one-time)
-    npx agent-virtual-office uninstall   Remove hooks
+    npx agent-virtual-office setup --platform gemini
+                                         Install Gemini CLI hooks in this project
+    npx agent-virtual-office uninstall   Remove Claude Code hooks
+    npx agent-virtual-office uninstall --platform gemini
+                                         Remove this project's Gemini CLI hooks
     npx agent-virtual-office serve       Serve production build (no Vite needed)
 
   Options:

@@ -1,0 +1,9 @@
+{
+  "session_id": "fixture-session-001",
+  "cwd": "/synthetic/project",
+  "hook_event_name": "Notification",
+  "timestamp": "2026-10-20T06:00:01.000Z",
+  "notification_type": "ToolPermission",
+  "message": "SYNTHETIC_SECRET_NOTIFICATION_SENTINEL",
+  "details": { "query": "SYNTHETIC_SECRET_SEARCH_SENTINEL" }
+}
