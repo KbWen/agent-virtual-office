@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-10-01
+last_updated: 2026-10-20
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -34,6 +34,7 @@ last_updated: 2026-10-01
 | AVO-141 | Comms / vertical (☰ roster) deeper optimization — "still lots of room" | product | vibe-rebalance | P2 | docs/specs/living-office-events.md | quick-win | Shipped | **Reframed by a 4-expert panel** to comms-feed honesty + dedup (the rail was already mature; "densify to fill room" rejected). Shipped: floating ActivityFeed → real-events `eventFeed` only + self-hide in roster mode. Idle-condense / adaptive-height / chrome-trim panel-rejected. |
 | AVO-161 | Dialogue & interaction layer (台詞/文字) — Wave A & Wave B SHIPPED | product | game-feel | P1 | docs/specs/dialogue-interaction-layer.md | feature | Shipped | ADR-007. **Wave A SHIPPED 2026-06-15 (PR #166)**: S1 quiet-worker reduction + rng seam · S1b de-fabricate generateCrossReaction · S2 5 voice archetypes (en+zh) + open-ended pools + AC-O2 lint. **Wave B SHIPPED 2026-10-01**: Deepened 8 agent roles with distinct personalities, hobbies, life philosophies, and daily quirks; expanded contextBubbles and gossip pools with 1:1 en/zh parity and strict non-terminal honesty validation. |
 
+| AVO-198 | Antigravity passive observer + independent Gemini CLI hook adapter | product | real-ai-behavior | P2 | docs/specs/antigravity-gemini-hook-integration.md | feature | Shipped | PR #258: isolated adapters and setup; full2809 PASS; owner-approved remaining live-validation limits documented. |
 | AVO-187 | Door-crossing stack — agents pausing at a door are ALWAYS visually overlapped | product | office-runtime | **P1** | [Spec](avo-187-temporal-doorway-claim.md) | feature | Shipped | Atomic full-route physical-door claims now serialize both directions with stable FIFO tickets, fencing, and rendered-truth lifecycle release. Commit `018ef1e`; AC1–AC13 include all-door forced contention and a 10-minute visual cold-watch. |
 | AVO-188 | Abort sites leave a stale `isMoving: true` on a standing agent | product | data-path | P2 | [Spec](avo-188-abort-movement-in-place.md) | quick-win | Shipped | Abort paths now atomically copy the last rendered position into `position` and `targetPosition`, clear motion/journey truth, and preserve live teardown restoration. Commit `ac07a4d`. |
 | AVO-189 | `shouldRecordRafWatchdogRestart` is structurally dead — reads 0 on a broken build | product | ci-infra | P3 | [Spec](avo-189-reachable-raf-watchdog-diagnostic.md) | quick-win | Shipped | The first focused lost-chain restart is now observable while pending-frame and unfocused noise gates remain unchanged. Commit `feb23ef`. |

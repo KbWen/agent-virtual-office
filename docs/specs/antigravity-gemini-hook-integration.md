@@ -1,19 +1,19 @@
 ---
 title: "AVO-198 — Antigravity and Gemini CLI Status Adapters"
-status: frozen
+status: shipped
 created: 2026-10-18
 last_updated: 2026-10-20
 primary_domain: hook-integration
 classification: feature
 planning_state: implementation-ready
-implementation_state: not-started
+implementation_state: completed
 ---
 
 # AVO-198 — Antigravity and Gemini CLI Status Adapters
 
 ## Goal
 
-Observe real activity from Antigravity and Gemini CLI through separate producers feeding the existing office-status pipeline. The owner selected both adapters on 2026-10-19. Claude will implement; this is a verified plan, not evidence of a working integration. Freeze this draft when approved or on implementation entry, before code changes.
+Observe real activity from Antigravity and Gemini CLI through separate producers feeding the existing office-status pipeline. The owner selected both adapters on 2026-10-19. Implementation and delivery review are complete; the owner-approved validation limits below remain explicit.
 
 File Relationship: INDEPENDENT feature spec, governed by ADR-002 project/session isolation, ADR-003 transport parity and ADR-007/008 honesty. Current code and accepted ADRs govern current behavior; shipped specs remain historical references.
 
@@ -205,4 +205,4 @@ All steps are sequential checkpoints, split into independently verifiable 2–5 
 
 ## Claude Resume
 
-Ready for /implement subject to normal phase-entry gates and freezing this draft. No application code changed. Branch feat/antigravity-gemini-hook, baseline 460d71d. Preserve all inherited dirty files. Active evidence: .agentcortex/context/work/kbwen-feat-antigravity-gemini-hook.md. The Gemini work log is historical evidence and cannot authorize skipping plan/tests. Acquire the branch lock for the implementing session. This planning checkpoint is not formal post-test handoff or permission to ship.
+Implementation delivered for PR #258. Code checkpoint 79c2e869a056b6d9c3b4acc663734ffd06b1b762. Review: docs/reviews/2026-10-20-avo-198-review.md. Automated Windows/Linux CI and Antigravity read->idle evidence are recorded; authenticated Gemini/additional device scenarios remain owner-accepted unverified limits. Preserve unrelated planning files and existing user settings.

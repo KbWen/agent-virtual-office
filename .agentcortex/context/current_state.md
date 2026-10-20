@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-11T00:09:51Z
+- **Last Updated**: 2026-10-20T15:12:19.079276Z
 - **Last Verified**: 2026-10-11
-- **Update Sequence**: 148
+- **Update Sequence**: 150
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -60,6 +60,7 @@
     - **Session closure** — final retro at `docs/reviews/2026-05-29-session-retro.md` (snapshot, not authoritative). 27 commits ahead of `origin/main`, 0 behind. `main` branch is the canonical state; `_product-backlog.md` lean (14 items: AVO-101..AVO-115 minus done + #20 deferred); `_shipped-log.md` holds 73 prior shipped rows; vitest 960/960; build 887ms clean. All work-log archives in place + INDEX.jsonl up to date. Push to origin pending human confirmation.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
+  - [hook-integration] docs/specs/antigravity-gemini-hook-integration.md [Shipped] [Updated: 2026-10-20] *(AVO-198: passive Antigravity observer and separate Gemini CLI hooks; owner-approved live-validation limits documented)*
   - [maintenance] docs/specs/engineering-audit-remediation.md [Shipped]  *(2026-09-24 audit remediation: dev server monotonic clock parity F-01, bridge UI planning/awaiting-approval toggles F-05; 2026-09-26 server-hardening wave: malformed-request crash guard, SSE heartbeat/client cap, Host-header DNS-rebinding allowlist, vitest CVE bump; 2026-09-26 dev-server-parity wave: file-watcher fallback root-scoping + `.claude`-segment fix, STALE_MS-based overwrite window, add/unlink SSE watch, dev CORS parity, LAN/no-token warning parity; 2026-09-27 follow-ups: `OFFICE_ALLOWED_HOSTS` also governs the dev server via shared `src/utils/hostAllowlist.mjs`, render-smoke exit-race teardown)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
   - [ci-infra] docs/specs/avo-190-soak-target-identity.md [Shipped]  *(AVO-190 — fail-closed AVO identity preflight for soak and overlap recorder targets)*
@@ -156,6 +157,12 @@
 
 ## Ship History
 
+### Ship-feat-antigravity-gemini-hook-2026-10-20
+
+- Feature shipped: AVO-198 read-only Antigravity observer and project-local Gemini CLI hooks, PR #258; existing producers/UI preserved.
+- Tests: full2809 PASS,3existing skips; Linux Node22/24 CI green; build/budget/render/panel/pack pass.
+- Acceptance: owner excluded further real-device tests; Gemini authenticated sessions/native Linux live scenarios remain unverified, not claimed proven.
+
 ### Ship-chore-release-v1.6.11-2026-10-11 (live status over HTTPS, and the characters get a little more personality) · release v1.6.11
 
 - Cuts the 3 PRs merged since `v1.6.10` (#254, #255, #256) as **v1.6.11** (patch). #254/#255 were done by Gemini (Antigravity); #256 is the post-merge review that fixed their cut-off bubble lines and the lore book's false "100% aligned" claim. The release commit contains no app code: `package.json` 1.6.10 -> 1.6.11, **both** `package-lock.json` root version fields (0 `"version": "1.6.10"` strings left), the CHANGELOG narrative, and this entry.
@@ -208,13 +215,6 @@
 - Merged `origin/main` (PR #246 server-hardening, #247 codex-hook-isolation, #248 dev-server-parity, #249 hook-robustness-privacy) before ship; one expected conflict in `docs/specs/codex-status-parity-and-done-count.md` (both branches appended a same-day addendum section), resolved by keeping both in full, Codex filename-namespace-isolation addendum first, this branch's hygiene update appended after.
 - Tests: full suite post-merge **144 files / 2658 tests**, all green. Build clean (501.99 kB, +1.11% vs baseline, within +10% budget). `SMOKE_PORT=5721 npm run smoke` PASS (4 viewports, 0 errors). `PANEL_PORT=5731 npm run smoke:panel` PASS (0 errors, scoped cyan ring/pill + inspector durations render). `validate.sh` run in parallel by the shipping coordinator (0 FAIL observed through 132+ lines at ship time). PR #250.
 
-### Ship-fix-hook-robustness-privacy-2026-09-27 (the status lock can't be stolen twice, writes survive Windows file locks, and search text stays out of labels)
-
-- Feature shipped: remediated 6 audit findings (2026-09-26) across `office-status-hook.js`, `bridge.js`, `generic-llm-bridge.js`, `bin/cli.js`. Lock stale-steal race closed via identity-verified (token+mtime) post-rename recheck + EPERM/EBUSY retry (probes `toctou2.cjs`/`threeway.cjs`); `atomicWriteJson` retries tmp-write+rename internally before falling back to a direct write; `extractContext()` no longer returns raw `WebSearch` query text or `Agent` descriptions verbatim (both fall through to the existing generic-noun fallback label — user-visible: generic "Searching"/delegating label instead of leaked task text); `bridge.js` closes a client-forgeable `source` field; `generic-llm-bridge.js` scopes `getGitChangedFiles` to the `--watch` dir (was `process.cwd()`), anchors the ignore regex, and accepts `--port=N`; `bin/cli.js` gets symlink-safe settings write + null-guard uninstall + per-file unlink guard.
-- **3 rounds of implement/review**: round 1 review NOT READY (AC-1 disproven — two-stealer double-own via probe `toctou2.cjs`); round 2 closed HIGH/MEDIUM (identity-verified steal + EPERM/EBUSY retry), review PASS; round 3 corrected the residual description to the real move-aside/rename-back window (not the pre-rename gap the code already caught), added orphan-`.stale.*` cleanup + 3 mutant-kill/regression tests, review PASS at `9642509`.
-- **Accepted residual (documented, not eliminated)**: the lock's move-aside/rename-back window is bounded and self-healing (orphaned `.stale.*` dirs cleaned up on next acquire) — worst case one lost status update under adversarial concurrent-crash timing. Full root-cause: `docs/specs/hook-robustness-privacy.md` `## Domain Decisions`.
-- Merged `origin/main` (PR #246 server-hardening, #247 codex-hook-isolation, #248 dev-server-parity) before ship; one expected conflict in `office-status-hook.js`'s `module.exports` tail (both branches appended an export line), resolved by keeping both; `cleanupGhostAliases` `source === 'claude-cli'` gate confirmed intact post-merge.
-- Tests: full suite post-merge **142 files / 2633 tests**, all green (2 files hit load-contention 5000ms timeouts in the combined run on a heavily-loaded shared box, both untouched by this branch; isolated re-run: 2 files / 5 tests green, no regression). Build clean. `npm run smoke:pack` 4/4 PASS. `validate.sh` pass=114 warn=6 fail=0 skip=5 (all WARNs pre-existing/historical, none touching this branch). PR #249.
 
 ## Spec Index Archive
 
