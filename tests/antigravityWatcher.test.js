@@ -633,24 +633,20 @@ describe('Antigravity passive watcher', () => {
     const dirs = await makeRoots()
     const transcripts = []
     for (let index = 0; index < 33; index += 1) transcripts.push(await transcriptFor(dirs, `session-${String(index).padStart(2, '0')}`))
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
-    await flushTicks()
-    await realDelay(300)
-    await fs.appendFile(transcripts[0], row({ step: 1, time: new Date(Date.now() + 1000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'private' } }))
-    await flushTicks()
-    const outputPath = path.join(dirs.statusDir, sessionFile(await fs.realpath(dirs.projectRoot), 'session-00'))
-    const first = JSON.parse(await fs.readFile(outputPath, 'utf8'))
-    for (let tick = 0; tick < 20; tick += 1) {
-      await vi.advanceTimersByTimeAsync(1000)
-      await realDelay(30)
-    }
-    await realDelay(300)
-    await fs.appendFile(transcripts[0], row({ step: 2, time: new Date(Date.now() + 1000).toISOString(), name: 'view_file', args: {} }))
-    await flushTicks()
-    const after = JSON.parse(await fs.readFile(outputPath, 'utf8'))
-    expect(after._sourceEventKey).not.toBe(first._sourceEventKey)
-    expect(after.agents[0].status).toBe('working')
-    watcher.stop()
+    const { watcher, tick } = steppedWatcher({ ...dirs, mode: 'auto' })
+    try {
+      await tick()
+      await fs.appendFile(transcripts[0], row({ step: 1, time: new Date(Date.now() + 1000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'private' } }))
+      await tick()
+      const outputPath = path.join(dirs.statusDir, sessionFile(await fs.realpath(dirs.projectRoot), 'session-00'))
+      const first = JSON.parse(await fs.readFile(outputPath, 'utf8'))
+      for (let second = 0; second < 20; second++) await tick()
+      await fs.appendFile(transcripts[0], row({ step: 2, time: new Date(Date.now() + 1000).toISOString(), name: 'view_file', args: {} }))
+      await tick()
+      const after = JSON.parse(await fs.readFile(outputPath, 'utf8'))
+      expect(after._sourceEventKey).not.toBe(first._sourceEventKey)
+      expect(after.agents[0].status).toBe('working')
+    } finally { watcher.stop() }
   })
 
   it('neutralizes a quiet tail session even while four earlier sources use the read budget', async () => {

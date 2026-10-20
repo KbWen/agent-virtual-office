@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest'
 import { createRequire } from 'node:module'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -351,7 +351,10 @@ describe('Gemini hook isolated atomic publication', () => {
   it('does not rename a completed temp file after the shared deadline expires during its write', async () => {
     const io = Object.create(fs)
     let tempFd = null
+    let tempWrites = 0
     let renameCalls = 0
+    let clock = now
+    const sampledClock = vi.spyOn(Date, 'now').mockImplementation(() => clock)
     const originalOpen = fs.openSync
     io.openSync = (filePath, ...args) => {
       const fd = originalOpen(filePath, ...args)
@@ -360,37 +363,41 @@ describe('Gemini hook isolated atomic publication', () => {
     }
     io.writeFileSync = (fd, ...args) => {
       if (fd === tempFd) {
-        const end = Date.now() + 100
-        while (Date.now() < end) {}
+        tempWrites++
+        clock += 100
       }
       return fs.writeFileSync(fd, ...args)
     }
     io.renameSync = (...args) => { renameCalls++; return fs.renameSync(...args) }
     let diagnostic = null
-    const deadlineAt = Date.now() + 50
-    expect(await hook.runHook(event('BeforeAgent'), { ...options(), io, deadlineAt, onDiagnostic: (code) => { diagnostic = code } })).toBe(false)
-    expect(diagnostic).toBe('deadline')
-    expect(renameCalls).toBe(0)
-    expect(outputFiles()).toHaveLength(0)
+    const deadlineAt = now + 50
+    try {
+      expect(await hook.runHook(event('BeforeAgent'), { ...options(), io, deadlineAt, onDiagnostic: (code) => { diagnostic = code } })).toBe(false)
+      expect(diagnostic).toBe('deadline')
+      expect(tempWrites).toBe(1)
+      expect(renameCalls).toBe(0)
+      expect(outputFiles()).toHaveLength(0)
+    } finally { sampledClock.mockRestore() }
   })
 
   it('stops EBUSY rename retries when the shared deadline expires during backoff', async () => {
     const io = Object.create(fs)
     let renameCalls = 0
+    const sampledClock = vi.spyOn(Date, 'now').mockImplementation(() => now + (renameCalls > 0 ? 80 : 0))
     io.renameSync = () => {
       renameCalls++
-      const end = Date.now() + 80
-      while (Date.now() < end) {}
       const error = new Error('synthetic contention')
       error.code = 'EBUSY'
       throw error
     }
     let diagnostic = null
-    const deadlineAt = Date.now() + 50
-    expect(await hook.runHook(event('BeforeAgent'), { ...options(), io, deadlineAt, onDiagnostic: (code) => { diagnostic = code } })).toBe(false)
-    expect(diagnostic).toBe('deadline')
-    expect(renameCalls).toBe(1)
-    expect(outputFiles()).toHaveLength(0)
+    const deadlineAt = now + 50
+    try {
+      expect(await hook.runHook(event('BeforeAgent'), { ...options(), io, deadlineAt, onDiagnostic: (code) => { diagnostic = code } })).toBe(false)
+      expect(diagnostic).toBe('deadline')
+      expect(renameCalls).toBe(1)
+      expect(outputFiles()).toHaveLength(0)
+    } finally { sampledClock.mockRestore() }
   })
 
   it('discards corrupt previous roles and implausible sequence values on neutralization', async () => {
