@@ -8,6 +8,7 @@ import { setTimeout as realTimeout } from 'node:timers'
 import { startAntigravityWatcher } from '../src/server/antigravityWatcher.mjs'
 
 const roots = []
+const observedWatchers = new Set()
 async function makeRoots() {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'avo-antigravity-'))
   roots.push(base)
@@ -36,11 +37,34 @@ function sessionFile(projectRoot, sessionId) {
   return `office-status-antigravity-${slug}.json`
 }
 
-async function flushTicks() {
-  for (let tick = 0; tick < 3; tick += 1) {
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(25)
-  }
+function observedWatcher(options) {
+  const state = { active: true, waiters: [] }
+  observedWatchers.add(state)
+  const suppliedTimer = options.setTimeout
+  const watcher = startAntigravityWatcher({ ...options, setTimeout(callback, ms) {
+    const schedule = suppliedTimer ?? setTimeout
+    if (ms < 1000) return (suppliedTimer ?? realTimeout)(callback, ms)
+    const timer = schedule(callback, ms)
+    const waiter = state.waiters.splice(0)
+    if (waiter.length) queueMicrotask(() => waiter.forEach(resolve => resolve()))
+    return timer
+  } })
+  return { ...watcher, stop() {
+    state.active = false
+    watcher.stop()
+    observedWatchers.delete(state)
+  }, state }
+}
+
+async function advanceObservedTick() {
+  const states = [...observedWatchers].filter(state => state.active)
+  const completions = states.map(state => new Promise(resolve => state.waiters.push(resolve)))
+  await vi.advanceTimersByTimeAsync(1000)
+  await Promise.all(completions)
+}
+
+async function flushTicks(count = 3) {
+  for (let tick = 0; tick < count; tick += 1) await advanceObservedTick()
 }
 
 function steppedWatcher(options) {
@@ -62,6 +86,7 @@ function steppedWatcher(options) {
 
 afterEach(async () => {
   await realDelay(100)
+  observedWatchers.clear()
   vi.useRealTimers()
   await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })))
 })
@@ -73,7 +98,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(now)
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, row({ time: new Date(now - 60_000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'private startup command' } }))
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     expect((await fs.readdir(dirs.statusDir))).toEqual([])
 
@@ -94,7 +119,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(now)
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     await fs.appendFile(dirs.transcript,
       row({ step: 1, time: new Date(now).toISOString(), args: { Cwd: path.join(dirs.base, 'elsewhere'), CommandLine: 'secret' } }) +
@@ -116,7 +141,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(now)
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     const live = row({ step: 8, time: new Date(now).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'secret' } })
     await fs.appendFile(dirs.transcript, live)
@@ -126,10 +151,7 @@ describe('Antigravity passive watcher', () => {
     const liveOutput = JSON.parse(await fs.readFile(path.join(dirs.statusDir, file), 'utf8'))
     expect(liveOutput.agents[0].status).toBe('working')
     await fs.appendFile(dirs.transcript, live)
-    for (let tick = 0; tick < 16; tick += 1) {
-      await vi.advanceTimersByTimeAsync(1000)
-      await realDelay(5)
-    }
+    await flushTicks(16)
     const idleOutput = JSON.parse(await fs.readFile(path.join(dirs.statusDir, file), 'utf8'))
     expect(idleOutput.agents[0]).toMatchObject({ status: 'idle', task: null, label: null, activeFile: null })
     expect(idleOutput._seq).not.toBe(liveOutput._seq)
@@ -142,7 +164,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(now)
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
 
     const record = row({ time: new Date(now + 1000).toISOString(), name: 'run_command', args: { Cwd: dirs.projectRoot, CommandLine: `echo café ${'x'.repeat(5000)}` } })
@@ -168,13 +190,10 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     await fs.appendFile(dirs.transcript, `{"oversized":"${'s'.repeat(1024 * 1024 + 32)}"}\n`)
-    for (let tick = 0; tick < 20; tick += 1) {
-      await vi.advanceTimersByTimeAsync(1000)
-      await realDelay(5)
-    }
+    await flushTicks(20)
     const liveTime = new Date(Date.now()).toISOString()
     await fs.appendFile(dirs.transcript, row({ step: 44, time: liveTime, args: { Cwd: dirs.projectRoot, CommandLine: 'private sentinel' } }))
     await flushTicks()
@@ -192,7 +211,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(clock)
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto', now: () => clock })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto', now: () => clock })
     await flushTicks()
     const observedAt = clock + 1000
     await fs.appendFile(dirs.transcript,
@@ -200,15 +219,13 @@ describe('Antigravity passive watcher', () => {
       row({ step: 2, time: new Date(observedAt - 15_001).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'secret' } }) +
       row({ step: 3, time: new Date(observedAt + 5001).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'secret' } }))
     clock = observedAt
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(50)
+    await flushTicks(1)
     const file = (await fs.readdir(dirs.statusDir)).find((name) => name.startsWith('office-status-antigravity-'))
     expect(file).toBeTruthy()
     const output = JSON.parse(await fs.readFile(path.join(dirs.statusDir, file), 'utf8'))
     expect(output._sourceEventKey).toBeTruthy()
     expect(output.agents[0].status).toBe('working')
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(50)
+    await flushTicks(1)
     const after = JSON.parse(await fs.readFile(path.join(dirs.statusDir, file), 'utf8'))
     expect(after._sourceEventKey).toBe(output._sourceEventKey)
     watcher.stop()
@@ -219,19 +236,17 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     const firstObserved = Date.now() + 1000
     await fs.appendFile(dirs.transcript, row({ step: 20, time: new Date(firstObserved + 5000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'secret' } }))
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(50)
+    await flushTicks(1)
     const file = path.join(dirs.statusDir, sessionFile(await fs.realpath(dirs.projectRoot), 'session-a'))
     const accepted = JSON.parse(await fs.readFile(file, 'utf8'))
     expect(accepted.agents[0].status).toBe('working')
     const rejectedAt = Date.now() + 1000
     await fs.appendFile(dirs.transcript, row({ step: 21, time: new Date(rejectedAt + 5001).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'secret' } }))
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(10)
+    await flushTicks(1)
     const after = JSON.parse(await fs.readFile(file, 'utf8'))
     expect(after._sourceEventKey).toBe(accepted._sourceEventKey)
     watcher.stop()
@@ -242,7 +257,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    let watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    let watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     const same = row({ step: 7, time: new Date(Date.now() + 1000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'private' } })
     await fs.appendFile(dirs.transcript, same)
@@ -254,7 +269,7 @@ describe('Antigravity passive watcher', () => {
     const repeated = JSON.parse(await fs.readFile(outputPath, 'utf8'))
     expect(repeated._sourceEventKey).toBe(first._sourceEventKey)
     watcher.stop()
-    watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     await fs.appendFile(dirs.transcript, same)
     await flushTicks()
@@ -262,8 +277,7 @@ describe('Antigravity passive watcher', () => {
     expect(afterRestart._sourceEventKey).toBe(first._sourceEventKey)
     expect(afterRestart._seq).toBe(first._seq)
     await fs.writeFile(dirs.transcript, '')
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(10)
+    await flushTicks(1)
     await fs.appendFile(dirs.transcript, row({ step: 8, time: new Date(Date.now() + 1000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'new generation' } }))
     await flushTicks()
     const recovered = JSON.parse(await fs.readFile(outputPath, 'utf8'))
@@ -292,11 +306,10 @@ describe('Antigravity passive watcher', () => {
         return typeof value === 'function' ? value.bind(target) : value
       },
     })
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto', fs: fsWithStall })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto', fs: fsWithStall })
     await flushTicks()
     await fs.appendFile(dirs.transcript, row({ step: 1, time: new Date(Date.now() + 1000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'secret' } }))
     await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(10)
     await writeStarted
     watcher.stop()
     releaseWrite()
@@ -310,7 +323,7 @@ describe('Antigravity passive watcher', () => {
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
     const target = path.join(dirs.projectRoot, 'src', 'tests', 'new.test.js')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     await fs.appendFile(dirs.transcript, row({ step: 1, name: 'write_to_file', args: { TargetFile: target } }))
     await flushTicks()
@@ -318,8 +331,7 @@ describe('Antigravity passive watcher', () => {
     expect(file).toBeTruthy()
     const first = JSON.parse(await fs.readFile(path.join(dirs.statusDir, file), 'utf8'))
     expect(first.agents[0]).toMatchObject({ role: 'qa', activeFile: 'src/tests/new.test.js' })
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(10)
+    await flushTicks(1)
     await fs.appendFile(dirs.transcript, row({ step: 2, name: 'view_file', args: {} }))
     await flushTicks()
     const second = JSON.parse(await fs.readFile(path.join(dirs.statusDir, file), 'utf8'))
@@ -332,7 +344,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     await fs.appendFile(dirs.transcript, row({ step: 1, time: new Date(Date.now()).toISOString(), tools: [
       { name: 'write_to_file', args: { TargetFile: path.join(dirs.projectRoot, 'tests', 'first.test.js') } },
@@ -353,7 +365,7 @@ describe('Antigravity passive watcher', () => {
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
     const relative = `${'a'.repeat(110)}/${'b'.repeat(110)}.js`
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     await fs.appendFile(dirs.transcript, row({ step: 1, time: new Date(Date.now()).toISOString(), name: 'write_to_file', args: { TargetFile: path.join(dirs.projectRoot, relative) } }))
     await flushTicks()
@@ -370,7 +382,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     const absolutePath = path.join(dirs.projectRoot, 'src', 'reader.js')
     const encodedPath = JSON.stringify(absolutePath)
@@ -388,7 +400,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     const outputPath = path.join(dirs.statusDir, sessionFile(await fs.realpath(dirs.projectRoot), 'session-a'))
     const encodedTarget = JSON.stringify(path.join(dirs.projectRoot, 'tests', 'aliased.test.js'))
@@ -409,7 +421,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     const outputPath = path.join(dirs.statusDir, sessionFile(await fs.realpath(dirs.projectRoot), 'session-a'))
     await fs.appendFile(dirs.transcript, row({ step: 1, time: new Date(Date.now() + 1000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'private' } }))
@@ -434,7 +446,7 @@ describe('Antigravity passive watcher', () => {
     await fs.writeFile(dirs.transcript,
       row({ step: 1, time: new Date(now - 2000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'private' } }) +
       row({ step: 2, time: new Date(now - 1000).toISOString(), name: 'read_file', args: { Path: foreignPath } }))
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     await fs.appendFile(dirs.transcript, row({ step: 3, time: new Date(Date.now()).toISOString(), name: 'run_command', args: { CommandLine: 'private' } }))
     await flushTicks()
@@ -449,7 +461,7 @@ describe('Antigravity passive watcher', () => {
     const dirs = await makeRoots()
     const projectFile = JSON.stringify(path.join(dirs.projectRoot, 'docs', 'startup.md'))
     await fs.writeFile(dirs.transcript, row({ step: 1, time: new Date(now - 1000).toISOString(), name: 'read_file', args: { Path: projectFile } }))
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     await fs.appendFile(dirs.transcript, row({ step: 2, time: new Date(Date.now()).toISOString(), name: 'run_command', args: { CommandLine: 'private' } }))
     await flushTicks()
@@ -462,7 +474,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     const malformed = String.raw`"C:\bad\q"`
     await fs.appendFile(dirs.transcript,
@@ -482,7 +494,7 @@ describe('Antigravity passive watcher', () => {
     await fs.writeFile(dirs.transcript,
       row({ step: 1, time: new Date(now - 2000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'private' } }) +
       row({ step: 2, time: new Date(now - 1000).toISOString(), name: 'view_file', args: { AbsolutePath: path.join(dirs.base, 'foreign', 'secret.txt') } }))
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     await fs.appendFile(dirs.transcript, row({ step: 3, time: new Date(Date.now()).toISOString(), name: 'view_file', args: {} }))
     await flushTicks()
@@ -496,7 +508,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(now)
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     await fs.appendFile(dirs.transcript,
       row({ step: 1, time: new Date(now).toISOString(), tools: [
@@ -515,15 +527,14 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(now)
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     const exact = row({ step: 1, time: new Date(now).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'private' } })
     await fs.appendFile(dirs.transcript, exact)
     await flushTicks()
     const outputPath = path.join(dirs.statusDir, sessionFile(await fs.realpath(dirs.projectRoot), 'session-a'))
     const first = JSON.parse(await fs.readFile(outputPath, 'utf8'))
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(10)
+    await flushTicks(1)
     await fs.appendFile(dirs.transcript,
       row({ step: 1, time: new Date(now).toISOString(), name: 'view_file', args: { AbsolutePath: path.join(dirs.base, 'foreign', 'private.txt') } }) +
       row({ step: 2, time: new Date(now).toISOString(), name: 'view_file', args: {} }))
@@ -543,7 +554,7 @@ describe('Antigravity passive watcher', () => {
       tool_calls: [{ name: 'run_command', args: { Cwd: dirs.projectRoot } }],
     }) + '\n'
     await fs.writeFile(dirs.transcript, malformed)
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     await fs.appendFile(dirs.transcript, row({ step: 2, time: new Date(Date.now()).toISOString(), name: 'view_file', args: {} }))
     await flushTicks()
@@ -556,7 +567,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     const eventTime = new Date(Date.now() + 4000).toISOString()
     const firstRow = row({ step: 1, time: eventTime, args: { Cwd: dirs.projectRoot, CommandLine: 'private' } })
@@ -569,11 +580,7 @@ describe('Antigravity passive watcher', () => {
     })).join('')
     await fs.appendFile(dirs.transcript, laterRows)
     await flushTicks()
-    await realDelay(1000)
-    for (let tick = 0; tick < 3; tick += 1) {
-      await vi.advanceTimersByTimeAsync(1000)
-      await realDelay(100)
-    }
+    await flushTicks(4)
     const later = JSON.parse(await fs.readFile(outputPath, 'utf8'))
     await fs.appendFile(dirs.transcript, firstRow)
     await flushTicks()
@@ -590,14 +597,9 @@ describe('Antigravity passive watcher', () => {
     const dirs = await makeRoots()
     const transcripts = []
     for (let index = 0; index < 33; index += 1) transcripts.push(await transcriptFor(dirs, `session-${String(index).padStart(2, '0')}`))
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
-    await realDelay(300)
-    for (let tick = 0; tick < 25; tick += 1) {
-      await vi.advanceTimersByTimeAsync(1000)
-      await realDelay(30)
-    }
-    await realDelay(300)
+    await flushTicks(25)
     await fs.appendFile(transcripts[32], row({ step: 99, time: new Date(Date.now() + 1000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'secret' } }))
     await flushTicks()
     const names = (await fs.readdir(dirs.statusDir)).filter((name) => name.startsWith('office-status-antigravity-') && name.endsWith('.json'))
@@ -611,14 +613,9 @@ describe('Antigravity passive watcher', () => {
     const dirs = await makeRoots()
     const transcripts = []
     for (let index = 0; index < 33; index += 1) transcripts.push(await transcriptFor(dirs, `session-${String(index).padStart(2, '0')}`))
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
-    await realDelay(300)
-    for (let tick = 0; tick < 20; tick += 1) {
-      await vi.advanceTimersByTimeAsync(1000)
-      await realDelay(30)
-    }
-    await realDelay(300)
+    await flushTicks(20)
     await fs.appendFile(transcripts[0], row({ step: 999, time: new Date(Date.now() + 1000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'private' } }))
     await flushTicks()
     const expected = sessionFile(await fs.realpath(dirs.projectRoot), 'session-00')
@@ -656,9 +653,9 @@ describe('Antigravity passive watcher', () => {
     const dirs = await makeRoots()
     const transcripts = []
     for (let index = 0; index < 31; index += 1) transcripts.push(await transcriptFor(dirs, `session-${String(index).padStart(2, '0')}`))
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
-    await realDelay(300)
+    await flushTicks(1)
     await fs.appendFile(transcripts[30], row({ step: 99, time: new Date(Date.now()).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'private' } }))
     await flushTicks()
     const outputPath = path.join(dirs.statusDir, sessionFile(await fs.realpath(dirs.projectRoot), 'session-30'))
@@ -668,8 +665,7 @@ describe('Antigravity passive watcher', () => {
     const saturated = fullBudgetChunk.repeat(16)
     for (let index = 0; index < 4; index += 1) await fs.appendFile(transcripts[index], saturated)
     for (let tick = 0; tick < 16; tick += 1) {
-      await vi.advanceTimersByTimeAsync(1000)
-      await realDelay(50)
+      await flushTicks(1)
     }
     const idle = JSON.parse(await fs.readFile(outputPath, 'utf8'))
     expect(idle.agents[0]).toMatchObject({ status: 'idle', task: null, activeFile: null })
@@ -683,8 +679,8 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(now)
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const firstWatcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
-    const secondWatcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const firstWatcher = observedWatcher({ ...dirs, mode: 'auto' })
+    const secondWatcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     await fs.appendFile(dirs.transcript, row({ step: 1, time: new Date(Date.now() + 1000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'secret' } }))
     await flushTicks()
@@ -699,8 +695,7 @@ describe('Antigravity passive watcher', () => {
     expect(Number(newer._seq)).toBeGreaterThan(Number(highSequence))
     const injectedNewer = { ...newer, _sourceEventKey: 'newer-event', _sourceTimestamp: Date.now(), agents: [{ role: 'res', status: 'working', task: 'Read', label: 'Read file' }] }
     await fs.writeFile(outputPath, JSON.stringify(injectedNewer))
-    await vi.advanceTimersByTimeAsync(16_000)
-    for (let tick = 0; tick < 2; tick += 1) await realDelay(10)
+    await flushTicks(16)
     const preserved = JSON.parse(await fs.readFile(outputPath, 'utf8'))
     expect(preserved._sourceEventKey).toBe('newer-event')
     firstWatcher.stop()
@@ -712,7 +707,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     const outputPath = path.join(dirs.statusDir, sessionFile(await fs.realpath(dirs.projectRoot), 'session-a'))
     const cases = [
@@ -725,16 +720,13 @@ describe('Antigravity passive watcher', () => {
     for (let index = 0; index < cases.length; index += 1) {
       const [relative, role] = cases[index]
       await fs.appendFile(dirs.transcript, row({ step: 100 + index, time: new Date(Date.now() + 1000).toISOString(), name: 'write_to_file', args: { TargetFile: path.join(dirs.projectRoot, relative) } }))
-      await vi.advanceTimersByTimeAsync(1000)
-      await realDelay(50)
+      await flushTicks(1)
       const output = JSON.parse(await fs.readFile(outputPath, 'utf8'))
       expect(output.agents[0]).toMatchObject({ role, activeFile: relative.replace(/\\/g, '/') })
-      await vi.advanceTimersByTimeAsync(1000)
-      await realDelay(50)
+      await flushTicks(1)
     }
     await fs.appendFile(dirs.transcript, row({ step: 200, time: new Date(Date.now() + 1000).toISOString(), name: 'view_file', args: { AbsolutePath: path.join(dirs.projectRoot, 'tests/unit.test.js') } }))
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(50)
+    await flushTicks(1)
     const readOutput = JSON.parse(await fs.readFile(outputPath, 'utf8'))
     expect(readOutput.agents[0]).toMatchObject({ role: 'res', activeFile: null })
     watcher.stop()
@@ -745,25 +737,20 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     const outputPath = path.join(dirs.statusDir, sessionFile(await fs.realpath(dirs.projectRoot), 'session-a'))
     await fs.appendFile(dirs.transcript, row({ step: 1, time: new Date(Date.now() + 1000).toISOString(), args: { Cwd: dirs.projectRoot, CommandLine: 'private' } }))
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(50)
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(50)
+    await flushTicks(1)
+    await flushTicks(1)
     await fs.appendFile(dirs.transcript, row({ step: 2, time: new Date(Date.now() + 1000).toISOString(), name: 'invoke_subagent', args: { prompt: 'secret prompt' } }))
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(50)
+    await flushTicks(1)
     const delegated = JSON.parse(await fs.readFile(outputPath, 'utf8'))
     expect(delegated.agents[0]).toMatchObject({ role: 'dev', status: 'working', task: 'Task', label: 'Delegate work' })
     expect(JSON.stringify(delegated)).not.toContain('secret prompt')
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(50)
+    await flushTicks(1)
     await fs.appendFile(dirs.transcript, row({ step: 3, time: new Date(Date.now() + 1000).toISOString(), name: 'ask_question', args: { question: 'private question' } }))
-    await vi.advanceTimersByTimeAsync(1000)
-    await realDelay(50)
+    await flushTicks(1)
     const question = JSON.parse(await fs.readFile(outputPath, 'utf8'))
     expect(question.agents[0]).toMatchObject({ role: 'dev', status: 'awaiting-approval', task: 'AskUserQuestion' })
     expect(JSON.stringify(question)).not.toContain('private question')
@@ -783,7 +770,7 @@ describe('Antigravity passive watcher', () => {
         return typeof value === 'function' ? value.bind(target) : value
       },
     })
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto', fs: realFs })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto', fs: realFs })
     await flushTicks()
     expect((await fs.readdir(dirs.statusDir)).filter((name) => name.startsWith('office-status-antigravity-') && name.endsWith('.json'))).toHaveLength(0)
     watcher.stop()
@@ -946,7 +933,7 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
-    const watcher = startAntigravityWatcher({ ...dirs, mode: 'auto' })
+    const watcher = observedWatcher({ ...dirs, mode: 'auto' })
     await flushTicks()
     const lockPath = path.join(dirs.statusDir, `${sessionFile(await fs.realpath(dirs.projectRoot), 'session-a')}.antigravity-lock`)
     await fs.writeFile(lockPath, 'another-owner')
