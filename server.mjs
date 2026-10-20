@@ -21,6 +21,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 import { scanAndMerge, getSessionStats, resolveProjectRoot } from './src/server/scanSessions.mjs'
+import { startAntigravityWatcher } from './src/server/antigravityWatcher.mjs'
 // AVO-146: replaced inline normalizePost copy with the canonical src module.
 // This also fixes the #52 divergence: the old inline copy dropped agents with
 // invalid status; the canonical src module coerces them to 'idle' instead.
@@ -100,6 +101,9 @@ try {
   process.exit(1)
 }
 
+// Passive observation is independent of HTTP requests and never registers source hooks.
+const antigravityWatcher = startAntigravityWatcher({ projectRoot: PROJECT_ROOT, statusDir: STATUS_DIR })
+
 // Atomic write: write to a temp file then rename so concurrent readers
 // never see a partial file. Falls back to direct write on Windows EBUSY.
 // Returns true on success, false if both paths fail.
@@ -137,6 +141,12 @@ function safeParseUrl(reqUrl) {
 // ─── SSE clients ──────────────────────────────────────────────────────────────
 const sseClients = new Set()
 
+// Producer replay fences are persisted locally, outside the browser-facing contract.
+function publicStatusJson(value) {
+  return JSON.stringify(value, (key, field) =>
+    ['_geminiOrder', '_sourceEventKey', '_sourceTimestamp', '_sourceIdle'].includes(key) ? undefined : field)
+}
+
 // LOW-4 (review round 2, 2026-09-26): with the per-socket idle timeout now disabled on SSE
 // connections (F2 above), a client (or a `--host` LAN peer) can hold sockets open
 // indefinitely. Cap concurrent SSE clients so that can never grow unbounded; configurable
@@ -150,7 +160,7 @@ const MAX_SSE_CLIENTS = (() => {
 
 function broadcastSSE(merged) {
   if (sseClients.size === 0) return
-  const payload = `event: status\ndata: ${JSON.stringify(merged)}\n\n`
+  const payload = `event: status\ndata: ${publicStatusJson(merged)}\n\n`
   for (const client of [...sseClients]) {
     try { client.write(payload) } catch { sseClients.delete(client) }
   }
@@ -370,7 +380,7 @@ function handleStatus(req, res) {
       const clientEtag = req.headers['if-none-match']
       const merged = scanAndMerge(path.dirname(STATUS_PATH), PROJECT_ROOT)
       if (!merged) return res.end('null')
-      const data = JSON.stringify(merged)
+      const data = publicStatusJson(merged)
       const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
       if (clientEtag === etag) { res.statusCode = 304; return res.end() }
       res.setHeader('ETag', etag)
@@ -648,7 +658,7 @@ const server = http.createServer((req, res) => {
     let snapshot = null
     try { snapshot = scanAndMerge(path.dirname(STATUS_PATH), PROJECT_ROOT) } catch {}
     if (snapshot) {
-      try { res.write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`) }
+      try { res.write(`event: status\ndata: ${publicStatusJson(snapshot)}\n\n`) }
       catch { sseClients.delete(res) }
     }
     return
@@ -801,6 +811,7 @@ let _shuttingDown = false
 function gracefulShutdown(signal) {
   if (_shuttingDown) return
   _shuttingDown = true
+  antigravityWatcher.stop()
   console.log(`\n  ${signal} received — draining in-flight requests...`)
 
   // M1: stop SSE heartbeat; M2: stop file watcher and pending debounce
@@ -837,6 +848,7 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 // Sync last-resort cleanup for Windows where SIGTERM doesn't fire
 // (PM2, taskkill, nssm kill the process without emitting SIGTERM).
 process.on('exit', () => {
+  antigravityWatcher.stop()
   try { _watcherHandle?.close() } catch {}
   try { if (_watchDebounce) clearTimeout(_watchDebounce) } catch {}
 })

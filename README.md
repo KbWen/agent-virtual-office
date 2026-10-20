@@ -149,7 +149,51 @@ curl -X POST http://localhost:5174/api/event -d '{"event":"deploy-success"}'
 ```
 
 - **Claude Code** → `npx agent-virtual-office setup`, and every tool call routes itself. Done.
-- **Codex CLI / Codex App / Gemini CLI / GitHub Actions / any CI** → see the **[Integration guide](docs/INTEGRATIONS.md)**.
+- **Gemini CLI** → run `npx agent-virtual-office setup --platform gemini` from the same project root as the office. This installs project-local hooks; see the requirements below.
+- **Antigravity desktop** → the office passively observes compatible local transcripts; see the limits below.
+- **Codex CLI / Codex App / GitHub Actions / any CI** → see the **[Integration guide](docs/INTEGRATIONS.md)**.
+
+### Antigravity and Gemini CLI adapters
+
+Both adapters require Node.js ≥ 22 and feed the existing project-scoped status path. They use generic
+action labels and do not publish prompts, responses, command text, search text, or file contents.
+Neither adapter reports successful completion; idle means only that no activity is currently observed.
+
+**Antigravity desktop:** both `serve` and the Vite dev server observe the compatible local
+`~/.gemini/antigravity/brain/<session>/.system_generated/logs/transcript.jsonl` layout in read-only mode.
+Set `OFFICE_ANTIGRAVITY_MODE=off` to disable it, or `OFFICE_ANTIGRAVITY_ROOT` to select an explicitly
+available data root. No hooks are installed into Antigravity. Opening the office establishes an EOF
+boundary, so work already in progress can initially be invisible. Only fresh, project-bound tool
+records count; 15 seconds without another accepted record produces one neutral idle update. Silent
+long-running work can therefore appear idle. Missing/incompatible sources degrade to no observation.
+File tools accept absolute `TargetFile`, `AbsolutePath`, `Path`, or `path` (including one JSON string
+layer). File evidence applies only to that record; a command without `Cwd` needs a prior exact-root
+command binding and otherwise remains unobserved.
+The transcript format is private and version-dependent; no general supported-version range is claimed.
+Docker/remote use needs an explicitly mounted compatible root; the observer never discovers remote data.
+
+**Gemini CLI:** from your project's exact root, run:
+
+```bash
+npx agent-virtual-office setup --platform gemini
+# Remove only the owned project registrations and unchanged owned script:
+npx agent-virtual-office uninstall --platform gemini
+```
+
+Setup merges six uniquely named lifecycle/tool hooks into `.gemini/settings.json` and copies the
+standalone script into `.gemini/hooks/`. Review the local pre-install backup before restoring settings.
+The project must be trusted and hooks enabled in Gemini CLI; disabled project hooks are a supported
+no-observation state. Launch Gemini and the office from the same root; ambiguous subdirectory launches
+are intentionally not mapped to a guessed parent project. See the official
+[hook reference](https://geminicli.com/docs/hooks/reference/) and
+[trusted-folder guidance](https://geminicli.com/docs/cli/trusted-folders/).
+
+The hook bounds its processing and emits an empty JSON result on recoverable failures. A missing Node
+executable, external termination, or platform hook latency can still prevent observation. Missed exit
+callbacks rely on the existing five-minute session TTL. Both adapters honor `OFFICE_STATUS_DIR`; set
+the same override for the office and Gemini process. Bare `setup`/`uninstall` retain Claude behavior;
+the manual API/Gemini bridge remains available.
+Authenticated Gemini CLI sessions and native Linux execution have not been live-verified for this release.
 
 ### Hook events registered by `setup`
 

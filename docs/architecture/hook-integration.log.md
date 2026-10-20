@@ -87,3 +87,17 @@ source_sha: e3199900f26649a5ccec77e0afb29068319e273c
 - [TRADEOFF] `releaseStatusLock`'s read-token-then-`rmSync` residual (LOW #4) is documented, not
   closed with a rename-verify release — the window is narrower than the acquire-side one and its
   severity (LOW) does not currently justify the added machinery.
+
+
+### [hook-integration][2026-10-20][feat/antigravity-gemini-hook]
+source_spec: docs/specs/antigravity-gemini-hook-integration.md
+source_sha: 79c2e869a056b6d9c3b4acc663734ffd06b1b762
+
+- [DECISION] One feature delivers two platform-specific adapters; shared branding does not imply shared protocol.
+- [DECISION] Antigravity desktop uses passive observation; Gemini CLI uses explicit project hook installation.
+- [CONSTRAINT] Existing contract/scanner own the UI-facing path; no fabricated done/planning/workflow/approval signals.
+- [CONSTRAINT] Identity includes platform, canonical project root and source session.
+- [TRADEOFF] Bounded observation and 15s neutralization can miss silent work; honest neutral wins over manufactured freshness.
+- [CONSTRAINT] Raw source text is neither persisted nor executed; fixtures are synthetic.
+- [TRADEOFF] Standalone Gemini mirrors small rules under parity tests to avoid side-effectful hook imports and premature abstractions.
+- [CONSTRAINT] Both server paths and packed runtime need automated evidence before delivery; unavailable live-source/platform validation stays explicitly unverified under the owner-approved delivery scope.

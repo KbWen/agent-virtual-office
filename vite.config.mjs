@@ -7,6 +7,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { normalizePost, nextSeq, VALID_ROLES, VALID_STATUSES } from './src/utils/statusContract.mjs'
 import { scanAndMerge, getSessionStats, resolveProjectRoot, STALE_MS } from './src/server/scanSessions.mjs'
+import { startAntigravityWatcher } from './src/server/antigravityWatcher.mjs'
 import { parseAllowedHostsEnv } from './src/utils/hostAllowlist.mjs'
 
 // Middleware: Universal status API
@@ -176,6 +177,12 @@ export function isAuthorizedOfficeRequest(req, config = getOfficeApiConfig()) {
 function officeStatusPlugin() {
   const statusPath = STATUS_PATH
   const apiConfig = getOfficeApiConfig()
+  let stopAntigravity = () => {}
+  // Keep source replay fences on disk; the browser sees the existing status contract.
+  function publicStatusJson(value) {
+    return JSON.stringify(value, (key, field) =>
+      ['_geminiOrder', '_sourceEventKey', '_sourceTimestamp', '_sourceIdle'].includes(key) ? undefined : field)
+  }
 
   // Simple rate limiter: max 30 POST requests per 10 seconds per IP
   const postCounts = new Map()
@@ -187,7 +194,7 @@ function officeStatusPlugin() {
 
   function broadcastSSE(merged) {
     if (sseClients.size === 0) return
-    const payload = `event: status\ndata: ${JSON.stringify(merged)}\n\n`
+    const payload = `event: status\ndata: ${publicStatusJson(merged)}\n\n`
     for (const client of [...sseClients]) {
       try { client.write(payload) } catch { sseClients.delete(client) }
     }
@@ -208,7 +215,17 @@ function officeStatusPlugin() {
 
   return {
     name: 'office-status-api',
+    closeBundle() { stopAntigravity() },
     configureServer(server) {
+      const observer = startAntigravityWatcher({ projectRoot: PROJECT_ROOT, statusDir: STATUS_DIR })
+      stopAntigravity = () => {
+        observer.stop()
+        process.off('SIGTERM', stopAntigravity)
+        process.off('exit', stopAntigravity)
+      }
+      server.httpServer?.once('close', stopAntigravity)
+      process.once('SIGTERM', stopAntigravity)
+      process.once('exit', stopAntigravity)
       server.middlewares.use('/api/status', (req, res, next) => {
         // Pass sub-paths (e.g. /stream) to their own handlers registered below.
         // Gate on pathname only — connect strips the mount prefix so /api/status?t=1
@@ -245,7 +262,7 @@ function officeStatusPlugin() {
             const clientEtag = req.headers['if-none-match']
             const merged = scanAndMerge(path.dirname(statusPath), PROJECT_ROOT)
             if (!merged) { res.end('null'); return }
-            const data = JSON.stringify(merged)
+            const data = publicStatusJson(merged)
             const etag = '"' + createHash('md5').update(data).digest('hex').slice(0, 12) + '"'
             if (clientEtag === etag) { res.statusCode = 304; res.end(); return }
             res.setHeader('ETag', etag)
@@ -362,7 +379,7 @@ function officeStatusPlugin() {
         let snapshot = null
         try { snapshot = scanAndMerge(path.dirname(statusPath), PROJECT_ROOT) } catch {}
         if (snapshot) {
-          try { res.write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`) }
+          try { res.write(`event: status\ndata: ${publicStatusJson(snapshot)}\n\n`) }
           catch { sseClients.delete(res) }
         }
       })
