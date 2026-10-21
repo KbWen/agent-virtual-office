@@ -26,6 +26,25 @@ export const VALID_ROLES    = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 
 export const VALID_STATUSES = ['idle', 'working', 'blocked', 'done', 'planning', 'awaiting-approval']
 export const VALID_MOODS    = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
 export const MAX_MOOD_DURATION = 3_600_000  // 1 hour in ms
+// Observations expire with the source session's existing five-minute stale window.
+export const OBSERVED_ACTIVITY_TTL_MS = 300_000
+
+/** Sanitize the optional server-owned observed-activity summary. */
+export function sanitizeObservedActivity(value, now = Date.now()) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  if (Object.getPrototypeOf(value) !== Object.prototype) return null
+  const keys = Reflect.ownKeys(value)
+  if (keys.length !== 2 || !keys.includes('state') || !keys.includes('expiresAt')) return null
+  const stateDescriptor = Object.getOwnPropertyDescriptor(value, 'state')
+  const expiryDescriptor = Object.getOwnPropertyDescriptor(value, 'expiresAt')
+  if (!stateDescriptor?.enumerable || !('value' in stateDescriptor) ||
+    !expiryDescriptor?.enumerable || !('value' in expiryDescriptor)) return null
+  const { state, expiresAt } = value
+  if (!['all-idle', 'not-idle', 'unknown'].includes(state)) return null
+  if (!Number.isSafeInteger(expiresAt) || !Number.isFinite(now)) return null
+  if (expiresAt <= now || expiresAt > now + OBSERVED_ACTIVITY_TTL_MS) return null
+  return { state, expiresAt }
+}
 
 // ─── Blocked-reason codes (was: keys of classify.js BLOCKED_REASON_TABLE) ─────
 // ORDERED to match the canonical BLOCKED_REASON_TABLE key order in classify.js, which
@@ -101,17 +120,31 @@ export function nextSeq() {
  */
 export function normalizePost(body) {
   if (body == null || typeof body !== 'object') body = {}
+  const hasUntrustedHelpers = Object.prototype.hasOwnProperty.call(body, 'helpers') &&
+    (!Array.isArray(body.helpers) || body.helpers.length > 0)
   if (body.type === 'office-status') {
     const seen = new Set()
-    const agents = (Array.isArray(body.agents) ? body.agents : [])
+    let postStatusInvalid = !Array.isArray(body.agents) || hasUntrustedHelpers
+    const rawAgents = Array.isArray(body.agents) ? body.agents : []
+    const agents = rawAgents
       .filter(a => {
-        if (!a || typeof a !== 'object') return false
+        if (!a || typeof a !== 'object' || Array.isArray(a)) {
+          postStatusInvalid = true
+          return false
+        }
         // Role is the agent's IDENTITY — no safe fallback for an unknown role, so an
         // invalid/unknown role is dropped. Status degrades safely (see map): #52 — a
         // valid-role agent with a missing/null/invalid status is kept and coerced to 'idle'.
-        if (!VALID_ROLES.includes(a.role)) return false
-        if (seen.has(a.role)) return false
+        if (!VALID_ROLES.includes(a.role)) {
+          postStatusInvalid = true
+          return false
+        }
+        if (seen.has(a.role)) {
+          postStatusInvalid = true
+          return false
+        }
         seen.add(a.role)
+        if (!VALID_STATUSES.includes(a.status)) postStatusInvalid = true
         return true
       })
       .slice(0, 50)
@@ -126,6 +159,7 @@ export function normalizePost(body) {
         }
       })
     const mood = VALID_MOODS.includes(body.mood) ? body.mood : null
+    if (rawAgents.length > 50) postStatusInvalid = true
     return {
       type: 'office-status',
       agents,
@@ -135,14 +169,19 @@ export function normalizePost(body) {
       moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
       source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
       _seq: nextSeq(),
+      ...(postStatusInvalid ? { _postStatusInvalid: true } : {}),
     }
   }
   const agents = []
+  let postStatusInvalid = hasUntrustedHelpers
   for (const key of VALID_ROLES) {
     const val = body[key]
     if (val == null) continue
     const isStatus = VALID_STATUSES.includes(val)
-    if (!isStatus && typeof val !== 'string') continue
+    if (!isStatus && typeof val !== 'string') {
+      postStatusInvalid = true
+      continue
+    }
     // task is set specially (the role value when not a status); activeFile is applied post-loop.
     const carry = {}
     for (const f of AGENT_CARRY_FIELDS) {
@@ -172,5 +211,6 @@ export function normalizePost(body) {
     source: typeof body.source === 'string' ? body.source.slice(0, 50) : 'api',
     mood,
     moodDuration: mood == null ? null : clampMoodDuration(body.moodDuration),
+    ...(postStatusInvalid ? { _postStatusInvalid: true } : {}),
   }
 }

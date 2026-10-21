@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-20T15:25:48.772301Z
+- **Last Updated**: 2026-10-21T02:58:10.427329Z
 - **Last Verified**: 2026-10-11
-- **Update Sequence**: 151
+- **Update Sequence**: 153
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -26,6 +26,7 @@
   - docs/adr/ADR-008-no-fabricated-need-ambient-honesty.md — ambient/companion honesty rule: no fabricated need/engagement/emotional-state (N1–N7 checklist: anti decay/streak/loot-for-time-open; pet hides on blocker incl. awaiting-approval; no unbound decorative channel; degrade to honest neutral; real-clock-only variety; no engagement notification); consolidates ADR-004/005/006/007; closes backlog AVO-166
   - docs/adr/ADR-009-no-in-repo-portable-core-extraction.md — portable status-core extraction stays OUT of AVO (deferred to a clean-room NEW repo; AVO untouched, unpublished). `codex/product-action-strip` PR #195 Phase-1 UI polish ships; Phase-2 in-repo package API (34 subpaths / .mjs mirrors / manifest) parked-not-merged. YAGNI/REDUCE + no npm consumer + 88-byte bundle headroom; preserves Phase-2 findings F1–F9 for the future extraction (F1/F4 honesty-critical). Re-open: a concrete consumer project is ready to depend on the core
   - docs/adr/ADR-010-atomic-door-route-claims.md — AVO-187 shipped atomic full-route physical-door claims with FIFO fairness and fenced lifecycle; extends ADR-004; applies_to: movementSystem, store, AgentCharacter, doorway tests and soak
+  - docs/adr/ADR-011-signal-driven-planning-location.md — Accepted 2026-10-19: narrowly scoped real-planning location intent; applies_to: planningPod/store/movementSystem/AgentCharacter
   - .agentcortex/adr/ADR-001-vnext-self-managed-architecture.md — framework scaffold mirror of ADR-001
 - **Active Backlog**: `docs/specs/_product-backlog.md`
   - **As of 2026-06-15 cleanup** — **no-"Deferred" hygiene rule**: every item is DO / REFINE / CLOSE, never parked. **3 open on-mission items**: AVO-160 (sprite-asset pipeline, P3) · AVO-124 (sprite cosmetics, P3) · AVO-141 (comms rail optimization, P2). 54 Done/Shipped rows rotated to `_shipped-log.md` (AVO-101+ wave). **11 items Cancelled**: 7 off-mission per **ADR-006** (cost/observability/analytics out of scope) + AVO-142/144 (rejected by ADR-005/004) + AVO-112 (eureka cascade — honesty flaw: real eureka can't cluster in 10s) + AVO-137 (density-layer — glance-default already shipped, zen far-view not a target). Drift reconciled: AVO-147 stale-"In Progress"→Done, AVO-120 stale-"Pending"→Cancelled. The highest next-value work (sprite ART, dialogue/text 台詞文字) is intentionally **unticketed** until scoped — do not backfill busywork (REDUCE-not-add). Pre-AVO historical notes below retained for provenance only.
@@ -60,6 +61,7 @@
     - **Session closure** — final retro at `docs/reviews/2026-05-29-session-retro.md` (snapshot, not authoritative). 27 commits ahead of `origin/main`, 0 behind. `main` branch is the canonical state; `_product-backlog.md` lean (14 items: AVO-101..AVO-115 minus done + #20 deferred); `_shipped-log.md` holds 73 prior shipped rows; vitest 960/960; build 887ms clean. All work-log archives in place + INDEX.jsonl up to date. Push to origin pending human confirmation.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
+  - [office-runtime] docs/specs/avo-199-all-quiet-calm-state.md [Shipped] [Updated: 2026-10-21] *(AVO-199: honest observed-idle calm; visual acceptance and automatic gates passed; enabled)*
   - [hook-integration] docs/specs/antigravity-gemini-hook-integration.md [Shipped] [Updated: 2026-10-20] *(AVO-198: passive Antigravity observer and separate Gemini CLI hooks; owner-approved live-validation limits documented)*
   - [maintenance] docs/specs/engineering-audit-remediation.md [Shipped]  *(2026-09-24 audit remediation: dev server monotonic clock parity F-01, bridge UI planning/awaiting-approval toggles F-05; 2026-09-26 server-hardening wave: malformed-request crash guard, SSE heartbeat/client cap, Host-header DNS-rebinding allowlist, vitest CVE bump; 2026-09-26 dev-server-parity wave: file-watcher fallback root-scoping + `.claude`-segment fix, STALE_MS-based overwrite window, add/unlink SSE watch, dev CORS parity, LAN/no-token warning parity; 2026-09-27 follow-ups: `OFFICE_ALLOWED_HOSTS` also governs the dev server via shared `src/utils/hostAllowlist.mjs`, render-smoke exit-race teardown)*
   - [ci-infra] docs/specs/sim-soak-gate.md [Shipped]  *(AVO-157 — nightly world-invariant soak: teleport/stack/frozen/off-floor; test-the-test 11 pins)*
@@ -157,6 +159,19 @@
 
 ## Ship History
 
+### Ship-hotfix-avo-199-vite-security-2026-10-21
+
+- Owner-approved Vite8.2.1->8.2.4 security patch clears PR259 dependency audit; only existing Vite requirement/package metadata changed, all other locked versions retained. Runtime dependency placement is preserved.
+- Verification: audit0; full2897PASS/3existing skips; build/budget, browser7views45captures0errors and render/panel smoke PASS; independent manifest/lock review PASS. CI final status is tracked on PR259; no merge claim.
+
+
+### Ship-feat-avo-199-all-quiet-2026-10-21
+
+- AVO-199: trusted expiring session observation drives transient30s calm; only existing health detail and authorized audio graph change. Empty sprites never prove idle; source/transport validity and lifecycle races fail closed.
+- Owner accepted actual C1-C4 captures and enabling calm; offHours/planningPod flags remain false. PR merge is separate from this delivery checkpoint.
+- Validation:2897PASS/3existing skips; build514383bytes within546154budget; browser7views/45captures/0errors; render/panel smoke PASS; independent review PASS. Review: docs/reviews/2026-10-21-avo-199-review.md.
+
+
 ### Ship-test-antigravity-watcher-sync-2026-10-20
 
 - Quick-win: test-only completion barriers replace fixed wall sleeps; all38cases and exact freshness/skew assertions preserved. Production unchanged.
@@ -198,20 +213,6 @@
 - Cuts the 13 PRs merged since `v1.6.9` (#240–#252) as **v1.6.10** (patch, per the repo's lean-patch practice). The release commit contains no app code: `package.json` 1.6.9 -> 1.6.10, **both** `package-lock.json` root version fields (0 `"version": "1.6.9"` strings left), the CHANGELOG narrative, and this entry.
 - **The CHANGELOG leads with an upgrade note**: the Host allowlist (#246, extended to `npm run dev` by #252) is ON by default, so reverse-proxy / Docker / hostname users must set `OFFICE_ALLOWED_HOSTS` or get `403`; valid-token requests are exempt. Other owner-visible changes listed under Changed: Friday 15:00 runs the group meeting instead of tea (#251), search text no longer shown in bubbles (#249). "Does not claim" list: ~5-min dead-hook clear, one-agent-per-session with Claude+Codex in one project, the deploy-success `doneAt` gap, the bounded hook-lock residual.
 - Every included PR shipped with its own Ship History entry, work-log archive and INDEX chain entry; each merged with CI 8/8 green and a `validate.sh` fail=0 run. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.10` tag on the release merge commit + `gh release create --latest`.
-
-### Ship-fix-followups-2026-09-27 (OFFICE_ALLOWED_HOSTS now governs the dev server too; render-smoke really escalates a stuck server)
-
-- Two quick-win follow-ups from the 2026-09-26 audit wave, reviewed on their own branches (`fix/dev-allowed-hosts`, `fix/pack-smoke-teardown`) and shipped bundled to save a CI + validator cycle. (1) PR #246 gave `server.mjs` a Host allowlist, but `npm run dev` ignored `OFFICE_ALLOWED_HOSTS`, so a dev server behind a custom hostname got Vite's own 403. The parser moved to `src/utils/hostAllowlist.mjs`; `server.mjs` imports it (fresh review: 480/480 identical responses main vs branch, 6 env configs x 48 Host cases) and `vite.config.mjs` maps it to `server.allowedHosts` only when set — unset keeps Vite's default, nothing can become `true`. (2) `render-smoke.mjs` escalation `if (!serverProc.killed) kill('SIGKILL')` never fired (`.killed` is true once the signal is SENT); it now waits on the real `exit` event (11 s, above the server's 10 s drain).
-- **Dropped on review, not shipped:** a pack-smoke cross-run "orphan reaper". The orphaned `node server.mjs --port=530x` processes seen during the wave were servers agents had started by hand for live probes, not a smoke-script leak; the reaper `taskkill /T /F`-ed any PID in a shared tmp marker with no identity check and would have killed unrelated processes. The premise came from the orchestrator and was disproved by a fresh reviewer.
-- Tests: combined branch build clean; vitest 144 files / 2654 tests; `npm run smoke` PASS. Mutation checks: removing the `.`-entry filter, entry port-stripping, or the Vite wiring each fails a test. PR #252.
-
-### Ship-fix-honest-office-events-2026-09-27 (events only fire when someone can actually perform them, and inference stops faking fresh signals)
-
-- Feature shipped: remediated 3 audited honesty defects in office-life set-pieces (ADR-007/008), same class as AVO-191/AVO-194, across `src/systems/officeLife.js`, `src/systems/store.js`, `src/inference/idleGapInfer.js`: (1) `hasRequiredActors()` adds a symmetric pre-fire refusal for a non-empty-but-wrong cast, alongside the existing empty-cast refusal (AVO-191); (2) idle-gap inference now preserves real underlying fields and `changedAt` instead of stamping a synthetic fresh timestamp when inferring `thinking`/`awaiting-approval`; (3) an agent picked up by real work while holding a group-event pose now has that pose released instead of persisting a stale group-event visual. `fireWithCast` is exported and guarded by a mutex + per-fire epoch tokens, closing a stale/aborted-fire race.
-- **Owner-visible cadence change**: Friday 15:00 now fires `group-meeting` instead of `tea-break` (G2) — a deliberate swap of which existing event fires at that slot.
-- **5 review rounds**: R1-R4 NOT READY (epoch/mutex races, cadence regression, ADR-010 citation gap, LOW pre-ship items) → R5 PASS (AC-1..17 proven, 0 security findings) → r6 closed 4 LOW pre-ship items with 2 additional mutation-verified tests. Root-cause detail: `docs/specs/honest-office-events.md` `## Domain Decisions`, consolidated to `docs/architecture/office-runtime.log.md`.
-- Merged `origin/fix/client-runtime-hygiene` (PR #250, carries origin/main #246-#249) before ship; resolved one expected conflict in `store.js` (kept both branches' comment blocks + the `isInferred` param).
-- Tests: full suite post-merge **149 files / 2693 tests**, all green. Build clean. `npm run smoke` PASS. `npm run smoke:panel` PASS. `validate.sh` pass=114 warn=6 fail=0 skip=5. PR #251.
 
 ## Spec Index Archive
 

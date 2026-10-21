@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import characters from '../config/characters.json'
+import officeExperience from '../config/officeExperience.json'
+import { sanitizeObservedActivity } from '../utils/statusContract.mjs'
 import { HOME_POSITIONS, OVERFLOW_POSITIONS, OVERFLOW_SLOT_BY_XY, clampToFloor, avoidOverlap, visuallyOverlapping } from './movementSystem.js'
 import { randomBubble, setNameResolver, behaviorLabel, t as i18nT } from '../i18n'
 import { generateContextBubble } from './contextBubble'
@@ -1116,6 +1118,16 @@ export const useOfficeStore = create((set) => ({
   endWorkflow: () => set({ showWorkflow: false }),
 
   // ─── External status integration ───
+  // AVO-199: all experience state is transient and outside the persistence whitelist.
+  experienceFlags: { ...officeExperience },
+  officeCalm: { mode: 'unknown', eligibleSince: null },
+  observedActivity: null,
+  setObservedActivity: (value) => set((s) => {
+    const next = sanitizeObservedActivity(value)
+    const prev = s.observedActivity
+    return prev?.state === next?.state && prev?.expiresAt === next?.expiresAt
+      ? {} : { observedActivity: next }
+  }),
   externalStatus: {},          // { [agentId]: { status, task, label, expiresAt, reasonCode, activeFile, activeFileAt } }
   // AVO-106: pair-overlay — { a, b, file } when two distinct agents are co-EDITING the byte-identical
   // file (derived by officeLife from externalStatus), else null. PURE OVERLAY: the renderer draws a
@@ -1582,9 +1594,9 @@ export const useOfficeStore = create((set) => ({
         if (Object.keys(ext).length === 0) {
           // Office went quiet → reset L2 scalars (updateStoreMood is NOT called on clear, so the
           // anchor would otherwise stay pinned in an idle office).
-          return { externalStatus: ext, agents, doorTraffic, recurringFailureLog, statusSource: 'organic', integrationSource: null, activeWorkflow: null, teamPulse: 0, focusAnchor: null, reluctant: {}, ...selectionPatch }
+          return { externalStatus: ext, observedActivity: null, agents, doorTraffic, recurringFailureLog, statusSource: 'organic', integrationSource: null, activeWorkflow: null, teamPulse: 0, focusAnchor: null, reluctant: {}, ...selectionPatch }
         }
-        return { externalStatus: ext, agents, doorTraffic, recurringFailureLog, ...selectionPatch }
+        return { externalStatus: ext, observedActivity: null, agents, doorTraffic, recurringFailureLog, ...selectionPatch }
       }
       // Clear all
       const agents = { ...s.agents }
@@ -1618,7 +1630,7 @@ export const useOfficeStore = create((set) => ({
         }
       }
       return {
-        externalStatus: {}, agents, doorTraffic, recurringFailureLog, statusSource: 'organic', integrationSource: null, activeWorkflow: null,
+        externalStatus: {}, observedActivity: null, agents, doorTraffic, recurringFailureLog, statusSource: 'organic', integrationSource: null, activeWorkflow: null,
         teamPulse: 0, focusAnchor: null, reluctant: {},
         ...(evictedSelected ? { selectedAgent: null } : {}),
       }
@@ -1706,9 +1718,10 @@ export const useOfficeStore = create((set) => ({
       const failures = ok ? 0 : Math.min(h.consecutiveFailures + 1, 3)
       const nextState = ok ? 'online' : (failures >= 3 ? 'offline' : 'degraded')
       // Skip update when nothing material changed — avoids re-rendering ControlPanel on
-      // every SSE event or every failed probe once the server is already offline.
-      if (nextState === h.state && failures === h.consecutiveFailures) return {}
+      // failed probes once already offline; successful checks renew freshness even on304.
       const now = Date.now()
+      if (nextState === h.state && failures === h.consecutiveFailures
+        && (!ok || h.lastSuccessAt === now)) return {}
       return {
         integrationHealth: {
           state: nextState,

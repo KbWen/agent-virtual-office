@@ -15,6 +15,29 @@ import { routeExternalAgents, distributeFallbackCount, routeTaskToAgent } from '
 import { pushEventBatch, setMoodOverride, resetMood } from '../systems/moodEngine.js'
 import { VALID_ROLES, VALID_STATUSES, VALID_MOODS, EFFORT_LEVELS, STATUS_POLL_INTERVAL } from '../systems/constants.js'
 import { sanitizeCarryFields } from '../utils/statusFields.js'
+import { sanitizeObservedActivity } from '../utils/statusContract.mjs'
+
+// Only this module's actual same-origin API callbacks can mint this capability.
+// It is deliberately not represented by a payload field or source string.
+const API_TRANSPORT = Symbol('api-transport')
+const TRANSPORT_META = Symbol('api-transport-meta')
+let transportGeneration = 0
+
+function nextTransportGeneration() { return ++transportGeneration }
+
+function apiTransportContext(generation) {
+  return { [API_TRANSPORT]: true, generation }
+}
+
+function attachTransportMeta(msg, context, observedActivity) {
+  if (!msg || !context?.[API_TRANSPORT]) return msg
+  Object.defineProperty(msg, TRANSPORT_META, {
+    value: { generation: context.generation, observedActivity },
+    configurable: true,
+  })
+  if (observedActivity) msg.observedActivity = observedActivity
+  return msg
+}
 
 // ─── Message normalization ─────────────────────────────────────────────
 
@@ -110,7 +133,7 @@ export function sanitizeHelpers(raw) {
 /**
  * Normalize any incoming message to the unified office-status format
  */
-export function normalizeStatusMessage(raw) {
+export function normalizeStatusMessage(raw, transportContext = null) {
   if (!raw || typeof raw !== 'object') return null
 
   // New protocol — validate envelope so untrusted in-browser channels (postMessage,
@@ -161,7 +184,16 @@ export function normalizeStatusMessage(raw) {
     if (validated.tokens === undefined) delete validated.tokens
     if (validated.effort === undefined) delete validated.effort
     if (validated.helpers === undefined) delete validated.helpers
-    return withStatusEnvelope(validated)
+    // Raw metadata is always removed, including unknown fields copied through by spread.
+    // The API sanitizer can restore only its exact safe shape when invoked with the
+    // unforgeable context held by the actual same-origin poll/SSE callbacks below.
+    delete validated.observedActivity
+    const msg = withStatusEnvelope(validated)
+    if (transportContext?.[API_TRANSPORT]) {
+      return attachTransportMeta(msg, transportContext,
+        sanitizeObservedActivity(raw.observedActivity) || null)
+    }
+    return msg
   }
 
   // Legacy office-vibe → convert (uses agentRouter for command→role mapping).
@@ -408,12 +440,22 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
   }
 
   state.inFlight = true
+  const transportContext = apiTransportContext(nextTransportGeneration())
+  const clearObservation = () => {
+    try { callback(null, transportContext) } catch {
+      console.warn('[Office] Status polling callback failed', {
+        operation: 'clear-observation',
+        code: 'STATUS_OBSERVATION_CLEAR_CALLBACK_FAILED',
+      })
+    }
+  }
   try {
     const headers = {}
     if (state.lastEtag) headers['If-None-Match'] = state.lastEtag
     const resp = await fetchImpl('/api/status', { headers })
     if (resp.status === 304) { state.consecutive404 = 0; state.skipTick = 0; return { ok: true, unchanged: true } }
     if (!resp.ok) {
+      clearObservation()
       if (resp.status === 404) {
         state.consecutive404 = Math.min(state.consecutive404 + 1, 30)
       } else {
@@ -436,9 +478,10 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
       // is re-fetched on the next poll. An unchanged malformed body harmlessly yields
       // 304 — but if the server recovers, the hash differs and no 304 occurs.
       state.lastEtag = prevEtag
+      clearObservation()
       return { ok: false, parseError: true }
     }
-    if (!data) return { ok: true, empty: true }
+    if (!data) { clearObservation(); return { ok: true, empty: true } }
     // Dedup: prefer ETag (server-authoritative), then raw body text (mirrors SSE wire-byte
     // dedup — guards against same-ms _seq collision when ETag is intermittently absent).
     const etagChanged = state.lastEtag && state.lastEtag !== prevEtag
@@ -446,12 +489,14 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
 
     state.lastBody = rawBody
     state.lastSeq = data._seq || null
-    const msg = normalizeStatusMessage(data)
+    const msg = normalizeStatusMessage(data, transportContext)
     // Invoke callback OUTSIDE the main catch so store/rendering exceptions don't
     // masquerade as network failures and trip the consecutive404 backoff counter.
-    if (msg) { try { callback(msg) } catch {} }
+    if (msg) { try { callback(msg, transportContext) } catch {} }
+    else clearObservation()
     return { ok: true, delivered: Boolean(msg) }
   } catch {
+    clearObservation()
     state.consecutive404 = Math.min(state.consecutive404 + 1, 30)
     return { ok: false, networkError: true }
   } finally {
@@ -478,12 +523,13 @@ function startFilePolling(callback, baseIntervalMs = 1000, onProbe = null) {
   function schedulePoll() {
     if (stopped) return
     timer = setTimeout(async () => {
-      const result = await pollFileStatusOnce(fetch, pollingState, (m) => { if (!stopped) callback(m) })
-      if (onProbe && result) onProbe(result)
+      const result = await pollFileStatusOnce(fetch, pollingState, (m, context) => { if (!stopped) callback(m, context) })
+      if (!stopped && onProbe && result) onProbe(result)
       // Adaptive interval: double after 5 consecutive idle polls, reset on activity.
       // Idle = unchanged (304/dup/parse-error), active = delivered a new message.
       // parseError counts as idle so a server persistently returning malformed JSON
       // doesn't get hammered at 1s rate indefinitely.
+      if (stopped) return
       if (result?.delivered) {
         pollingState.idlePolls = 0
         currentIntervalMs = baseIntervalMs
@@ -559,6 +605,7 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null, onOpen = n
     })
 
     es.addEventListener('status', (e) => {
+      const context = apiTransportContext(nextTransportGeneration())
       try {
         // Dedup: server fires broadcastSSE on both POST and file-watcher; the same
         // merged payload can arrive twice with identical wire bytes. Dedup on the raw
@@ -567,14 +614,19 @@ function startSSEListening(callback, onProbe = null, onGiveUp = null, onOpen = n
         if (e.data === lastSseData) return
         lastSseData = e.data
         const data = JSON.parse(e.data)
-        const msg = normalizeStatusMessage(data)
-        if (msg) callback(msg)
+        const msg = normalizeStatusMessage(data, context)
+        if (msg) callback(msg, context)
+        else callback(null, context)
         if (onProbe) onProbe({ ok: true, delivered: Boolean(msg) })
-      } catch {}
+      } catch {
+        callback(null, context)
+      }
     })
 
     es.onerror = () => {
       clearTimeout(stabilityTimer)
+      const failureContext = apiTransportContext(nextTransportGeneration())
+      callback(null, failureContext)
       // Capture and null-out es before closing — onerror can fire multiple times
       // for the same connection; calling .close() on a nulled variable throws TypeError.
       const dead = es
@@ -694,6 +746,7 @@ export function startStatusIntegration(store) {
   let debounceTimer = null
   let stalenessTimer = null
   let pendingMsg = null
+  let latestTransportGeneration = 0
   let lastAppliedSeq = null  // cross-channel stale-drop: tracks highest numeric _seq applied
 
   function applyMessage(msg) {
@@ -703,6 +756,16 @@ export function startStatusIntegration(store) {
     // and would poison the guard if their _seq were treated as comparable to hook seqs.
     if (msg._seq && /^\d+$/.test(String(msg._seq)) && isHookOrigin(msg.source) && !isAuthoritativeSnapshotSource(msg.source)) lastAppliedSeq = msg._seq
     const s = store.getState()
+    const transportMeta = msg[TRANSPORT_META]
+    if (transportMeta) {
+      // The generation is assigned when a poll starts or an SSE event is delivered.
+      // Never let an older in-flight poll restore proof superseded by newer transport data.
+      if (transportMeta.generation >= latestTransportGeneration) {
+        s.setObservedActivity?.(transportMeta.observedActivity)
+      }
+    } else {
+      s.setObservedActivity?.(null)
+    }
 
     // Set mood override BEFORE feeding events so pushEventBatch's updateStoreMood sees it
     if (msg.mood) {
@@ -809,8 +872,36 @@ export function startStatusIntegration(store) {
     resetStalenessTimer()
   }
 
-  function handleIncoming(msg) {
-    if (torn || !msg) return
+  function handleIncoming(msg, transportContext = null) {
+    if (torn) return
+    const trustedTransport = transportContext?.[API_TRANSPORT] === true
+    if (trustedTransport) {
+      latestTransportGeneration = Math.max(latestTransportGeneration, transportContext.generation)
+      if (!msg) {
+        if (transportContext.generation >= latestTransportGeneration) {
+          store.getState().setObservedActivity?.(null)
+        }
+        return
+      }
+    } else if (msg) {
+      // A browser-origin update invalidates proof immediately, and invalidates any
+      // older pending or in-flight API receipt so it cannot resurrect that proof.
+      latestTransportGeneration = Math.max(latestTransportGeneration, nextTransportGeneration())
+      store.getState().setObservedActivity?.(null)
+      if (pendingMsg?.[TRANSPORT_META]) {
+        delete pendingMsg[TRANSPORT_META]
+        delete pendingMsg.observedActivity
+      }
+    }
+    if (!msg) return
+    const incomingTransportMeta = msg[TRANSPORT_META]
+    const pendingTransportMeta = pendingMsg?.[TRANSPORT_META]
+    // Preserve a newer API observation already waiting in the debounce slot. A poll
+    // can have started before an SSE delivery and finish after it; multi-session
+    // snapshots intentionally permit decreasing _seq, so seq ordering cannot protect
+    // this pending proof from being evicted.
+    if (incomingTransportMeta && pendingTransportMeta &&
+      incomingTransportMeta.generation < pendingTransportMeta.generation) return
     // Drop cross-channel stale deliveries. Compare against both lastAppliedSeq (already
     // committed to the store) AND pendingMsg._seq (queued but not yet applied). Without
     // the pendingMsg check, a burst of 3 messages in the 150ms window lets a stale
@@ -873,7 +964,7 @@ export function startStatusIntegration(store) {
   // Polling is unconditionally authoritative for health when it's the one reporting — every
   // result (success or failure) is forwarded to markIntegrationProbe.
   function handlePollProbe(result) {
-    if (result.skipped) return
+    if (torn || result.skipped) return
     if (shouldRefreshStalenessOnProbe(result)) resetStalenessTimer()
     pollProbeOk = Boolean(result.ok)
     store.getState().markIntegrationProbe({ ok: pollProbeOk })
@@ -888,7 +979,7 @@ export function startStatusIntegration(store) {
   // currently confirming health (no poller running, or the poller's own last result also
   // failed) — offline still fires correctly when both channels are actually down.
   function handleSSEProbe(result) {
-    if (result.skipped) return
+    if (torn || result.skipped) return
     if (result.ok) {
       store.getState().markIntegrationProbe({ ok: true })
       return
@@ -967,9 +1058,16 @@ export function startStatusIntegration(store) {
   // `pollProbeOk` on EVERY result (not just forwarded failures) — R2-1's SSE gate needs to know
   // this poller's true last-known state even for results this function itself doesn't forward.
   function heartbeatProbe(result) {
-    if (result.skipped) return
+    if (torn || result.skipped) return
     if (shouldRefreshStalenessOnProbe(result)) resetStalenessTimer()
     pollProbeOk = Boolean(result.ok)
+    if (result.ok) {
+      // A successful heartbeat confirms the server is still reachable even when the
+      // body is unchanged (304). Refresh health freshness without touching observation
+      // metadata; only a new trusted body can replace or clear that summary.
+      store.getState().markIntegrationProbe({ ok: true })
+      return
+    }
     if (result.networkError || result.status === 404) store.getState().markIntegrationProbe({ ok: false })
   }
 

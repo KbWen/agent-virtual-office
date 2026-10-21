@@ -101,3 +101,10 @@ source_sha: 79c2e869a056b6d9c3b4acc663734ffd06b1b762
 - [CONSTRAINT] Raw source text is neither persisted nor executed; fixtures are synthetic.
 - [TRADEOFF] Standalone Gemini mirrors small rules under parity tests to avoid side-effectful hook imports and premature abstractions.
 - [CONSTRAINT] Both server paths and packed runtime need automated evidence before delivery; unavailable live-source/platform validation stays explicitly unverified under the owner-approved delivery scope.
+
+
+### [hook-integration][2026-10-21][codex/avo-199-all-quiet]
+source_spec: docs/specs/avo-199-all-quiet-calm-state.md
+source_sha: 41b81c7c8b9f72ec24366ab9d2d7c4e385c043ef
+
+- Cross-reference: docs/architecture/office-runtime.log.md, AVO-199 entry dated 2026-10-21; authoritative decisions are consolidated there.

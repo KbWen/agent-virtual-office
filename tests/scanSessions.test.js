@@ -11,6 +11,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { scanAndMerge, getSessionStats } from '../src/server/scanSessions.mjs'
+import { normalizePost } from '../src/utils/normalizePost.js'
+import { OBSERVED_ACTIVITY_TTL_MS } from '../src/utils/statusContract.mjs'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -726,5 +728,100 @@ describe('fallback pass _cwd filtering', () => {
     const result = scanAndMerge(dir, dir)
     expect(result).not.toBeNull()
     expect(result._hint).toBeUndefined()
+  })
+})
+
+describe('server observed activity summary', () => {
+  let dir
+  beforeEach(() => { dir = tmpDir() })
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+
+  const idleAgent = { role: 'dev', status: 'idle', task: null, label: null }
+  const scoped = (agents, extra = {}) => ({
+    type: 'office-status', _seq: freshSeq(), _cwd: dir, source: 'hook', agents, ...extra,
+  })
+
+  it('reports a single explicitly scoped idle session without changing its representatives', () => {
+    writeSession(dir, 'office-status.json', scoped([idleAgent]))
+    const result = scanAndMerge(dir, dir)
+    expect(result.observedActivity.state).toBe('all-idle')
+    expect(result.observedActivity.expiresAt).toBeGreaterThan(Date.now())
+    expect(result.agents).toEqual([idleAgent])
+  })
+
+  it('reports two explicitly scoped idle sessions while preserving the empty multi-session representatives', () => {
+    writeSession(dir, 'office-status-alpha.json', scoped([idleAgent]))
+    writeSession(dir, 'office-status-beta.json', scoped([{ ...idleAgent, role: 'qa' }]))
+    const result = scanAndMerge(dir, dir)
+    expect(result.observedActivity.state).toBe('all-idle')
+    expect(result.agents).toEqual([])
+    expect(result.activeCount).toBe(0)
+  })
+
+  it.each(['working', 'thinking', 'done'])('reports %s as not-idle', status => {
+    writeSession(dir, 'office-status.json', scoped([{ ...idleAgent, status }]))
+    expect(scanAndMerge(dir, dir).observedActivity.state).toBe('not-idle')
+  })
+
+  it('does not infer all-idle from helpers or malformed agent data', () => {
+    writeSession(dir, 'office-status-helper.json', scoped([idleAgent], {
+      helpers: [{ id: 'helper-1', parentRole: 'dev' }],
+    }))
+    expect(scanAndMerge(dir, dir).observedActivity.state).toBe('not-idle')
+    fs.rmSync(path.join(dir, 'office-status-helper.json'))
+    writeSession(dir, 'office-status-bad.json', scoped([{ role: 'dev', status: 'mystery' }]))
+    expect(scanAndMerge(dir, dir).observedActivity.state).toBe('unknown')
+  })
+
+  it.each([{ unexpected: true }, 'active'])('treats malformed helpers as unknown evidence: %j', helpers => {
+    writeSession(dir, 'office-status.json', scoped([idleAgent], { helpers }))
+    expect(scanAndMerge(dir, dir).observedActivity.state).toBe('unknown')
+  })
+
+  it('does not let absent, unscoped, fallback, or future-sequenced sessions prove idle', () => {
+    writeSession(dir, 'office-status.json', {
+      type: 'office-status', _seq: freshSeq(), source: 'hook', agents: [idleAgent],
+    })
+    expect(scanAndMerge(dir, dir).observedActivity?.state).not.toBe('all-idle')
+    fs.rmSync(path.join(dir, 'office-status.json'))
+    writeSession(dir, 'office-status.json', scoped([idleAgent], { source: 'file-watcher' }))
+    expect(scanAndMerge(dir, '/different-project')?.observedActivity?.state).not.toBe('all-idle')
+    fs.rmSync(path.join(dir, 'office-status.json'))
+    const fixedNow = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
+    try {
+      writeSession(dir, 'office-status.json', scoped([idleAgent], { _seq: String(fixedNow + 1) }))
+      expect(scanAndMerge(dir, dir).observedActivity).toBeUndefined()
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+
+  it('expires from the oldest source sequence and ignores a forged source summary', () => {
+    const oldestSeq = Date.now() - 20
+    writeSession(dir, 'office-status-alpha.json', {
+      ...scoped([idleAgent]), _seq: String(oldestSeq),
+      observedActivity: { state: 'all-idle', expiresAt: Date.now() + OBSERVED_ACTIVITY_TTL_MS },
+    })
+    writeSession(dir, 'office-status-beta.json', {
+      ...scoped([{ ...idleAgent, role: 'qa' }]), _seq: String(oldestSeq + 10),
+    })
+    expect(scanAndMerge(dir, dir).observedActivity.expiresAt).toBe(oldestSeq + OBSERVED_ACTIVITY_TTL_MS)
+  })
+
+  it('does not emit an observation past the source stale TTL', () => {
+    writeSession(dir, 'office-status.json', scoped([idleAgent], {
+      _seq: String(Date.now() - OBSERVED_ACTIVITY_TTL_MS - 1),
+    }))
+    expect(scanAndMerge(dir, dir)).toBeNull()
+  })
+
+  it('keeps a normalized POST idle fallback display-only when the original status was missing', () => {
+    const normalized = normalizePost({ type: 'office-status', agents: [{ role: 'dev' }] })
+    writeSession(dir, 'office-status.json', { ...normalized, _cwd: dir })
+    const result = scanAndMerge(dir, dir)
+    expect(result.agents[0].status).toBe('idle')
+    expect(result.observedActivity.state).toBe('unknown')
+    expect(result._postStatusInvalid).toBeUndefined()
   })
 })

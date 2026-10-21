@@ -29,7 +29,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest'
 import { createServer } from 'vite'
-import { mkdtempSync, writeFileSync, appendFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, appendFileSync, mkdirSync, unlinkSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -103,6 +103,38 @@ afterEach(async () => {
     try { rmSync(d, { recursive: true, force: true }) } catch {}
   }
 }, 30_000)
+
+describe('POST status provenance survives dev-server persistence without changing display status', () => {
+  it('keeps invalid POST evidence unknown, while valid idle ignores a forged marker', async () => {
+    const { base, tempStatus } = await bootDevServer({ OFFICE_DISABLE_FILE_WATCHER: '1' })
+    const statusFile = join(tempStatus, 'office-status.json')
+    for (const body of [
+      { type: 'office-status', agents: [{ role: 'dev' }] },
+      { type: 'office-status', agents: [
+        { role: 'dev', status: 'idle' }, { role: 'hacker', status: 'working' }, null,
+      ] },
+    ]) {
+      const response = await fetch(`${base}/api/status`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      expect(response.status).toBe(200)
+      const persisted = JSON.parse(readFileSync(statusFile, 'utf8'))
+      expect(persisted._postStatusInvalid).toBe(true)
+      const merged = await (await fetch(`${base}/api/status`)).json()
+      expect(merged.agents[0].status).toBe('idle')
+      expect(merged.observedActivity?.state).toBe('unknown')
+      expect(merged._postStatusInvalid).toBeUndefined()
+    }
+
+    const valid = await fetch(`${base}/api/status`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'office-status', agents: [{ role: 'dev', status: 'idle' }], _postStatusInvalid: true }),
+    })
+    expect(valid.status).toBe(200)
+    expect(JSON.parse(readFileSync(statusFile, 'utf8'))._postStatusInvalid).toBeUndefined()
+    expect((await (await fetch(`${base}/api/status`)).json()).observedActivity?.state).toBe('all-idle')
+  }, 25_000)
+})
 
 // ─── F-1: fallback must not react to files under OFFICE_STATUS_DIR ────────────
 

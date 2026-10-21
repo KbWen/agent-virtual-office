@@ -292,6 +292,70 @@ describe('AC-3 behavioral spine checks', () => {
     expect(devAgent.status).toBe('idle')
   })
 
+  it('invalid POST status stays display-idle but cannot mint an all-idle observation', async () => {
+    // Keep these cases on a fresh real server so they cannot consume the main transport
+    // harness's shared 30-POST/10-second rate-limit budget and mask later assertions.
+    const isolatedHome = mkdtempSync(join(tmpdir(), 'avo-199-provenance-e2e-'))
+    const isolatedStatusDir = join(isolatedHome, '.claude')
+    mkdirSync(isolatedStatusDir, { recursive: true })
+    const isolatedStatusPath = join(isolatedStatusDir, 'office-status.json')
+    const isolatedPort = await freePort()
+    const isolatedBase = `http://127.0.0.1:${isolatedPort}`
+    const isolatedProc = spawn(process.execPath, [join(ROOT, 'server.mjs'), `--port=${isolatedPort}`, '--no-open'], {
+      cwd: ROOT,
+      env: { ...process.env, HOME: isolatedHome, USERPROFILE: isolatedHome, OFFICE_STATUS_DIR: isolatedStatusDir,
+        OFFICE_API_TOKEN: '', OFFICE_PROJECT_ROOT: ROOT },
+      stdio: ['ignore', 'ignore', 'pipe'],
+    })
+    try {
+      expect(await waitForServer(isolatedBase), 'isolated provenance server should start').toBe(true)
+      const isolatedPost = body => fetch(`${isolatedBase}/api/status`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      const isolatedGet = async () => {
+        const response = await fetch(`${isolatedBase}/api/status`)
+        expect(response.status).toBe(200)
+        return response.json()
+      }
+      for (const statusAgent of [{ role: 'dev' }, { role: 'dev', status: 'INVALID_STATUS_VALUE' }]) {
+        const res = await isolatedPost({ type: 'office-status', agents: [statusAgent], _postStatusInvalid: false })
+        expect(res.status).toBe(200)
+        const raw = JSON.parse(readFileSync(isolatedStatusPath, 'utf-8'))
+        expect(raw.agents[0].status).toBe('idle')
+        expect(raw._postStatusInvalid).toBe(true)
+        const merged = await isolatedGet()
+        expect(merged.agents[0].status).toBe('idle')
+        expect(merged.observedActivity?.state).toBe('unknown')
+        expect(merged._postStatusInvalid).toBeUndefined()
+      }
+
+      const malformed = await isolatedPost({ type: 'office-status', agents: [
+        { role: 'dev', status: 'idle' }, { role: 'dev', status: 'done' },
+        { role: 'hacker', status: 'working' }, null,
+      ] })
+      expect(malformed.status).toBe(200)
+      const malformedRaw = JSON.parse(readFileSync(isolatedStatusPath, 'utf-8'))
+      expect(malformedRaw.agents).toHaveLength(1)
+      expect(malformedRaw._postStatusInvalid).toBe(true)
+      expect((await isolatedGet()).observedActivity?.state).toBe('unknown')
+
+      const helperInput = await isolatedPost({ type: 'office-status', agents: [{ role: 'dev', status: 'idle' }], helpers: [{ id: 'helper' }] })
+      expect(helperInput.status).toBe(200)
+      expect(JSON.parse(readFileSync(isolatedStatusPath, 'utf-8'))._postStatusInvalid).toBe(true)
+      expect((await isolatedGet()).observedActivity?.state).toBe('unknown')
+
+      const valid = await isolatedPost({
+        type: 'office-status', agents: [{ role: 'dev', status: 'idle' }], _postStatusInvalid: true,
+      })
+      expect(valid.status).toBe(200)
+      const raw = JSON.parse(readFileSync(isolatedStatusPath, 'utf-8'))
+      expect(raw._postStatusInvalid).toBeUndefined()
+      expect((await isolatedGet()).observedActivity?.state).toBe('all-idle')
+    } finally {
+      try { isolatedProc.kill('SIGTERM') } catch {}
+    }
+  }, 30_000)
+
   it('awaiting-approval survives the real server path', async () => {
     const res = await postStatus({
       type: 'office-status',

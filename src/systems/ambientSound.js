@@ -90,6 +90,17 @@ let storeRef = null
 let unsub = null
 let gestureCleanup = null
 let visListener = null
+let suspendTimer = null
+let lifecycleEpoch = 0
+
+function isQuiet(state) {
+  return !!state?.experienceFlags?.calmEnabled && state?.officeCalm?.mode === 'quiet'
+}
+
+function cancelSuspend() {
+  lifecycleEpoch++
+  if (suspendTimer) { clearTimeout(suspendTimer); suspendTimer = null }
+}
 
 function hasWebAudio() {
   return typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)
@@ -207,14 +218,42 @@ function rampMaster(to, seconds) {
   master.gain.linearRampToValueAtTime(to, ctx.currentTime + seconds)
 }
 
+function reportResumeFailure() {
+  console.warn('[Office] Audio operation failed', { operation: 'resume', code: 'AUDIO_RESUME_FAILED' })
+}
+
 /** Build (first time) or resume the audio graph. MUST be called from a user gesture. */
 function activate() {
   if (!hasWebAudio()) return
+  const state = storeRef?.getState()
+  if (!state || !shouldRun(state) || (typeof document !== 'undefined' && document.hidden)) return
+  cancelSuspend()
   if (!ctx) {
     const AC = window.AudioContext || window.webkitAudioContext
     ctx = new AC()
   }
-  ctx.resume?.()
+  const activeCtx = ctx
+  const resumeEpoch = lifecycleEpoch
+  try {
+    const resuming = activeCtx.resume?.()
+    if (resuming?.then) resuming.then(() => {
+      // A delayed resume from an older lifecycle must not wake a hidden, disabled,
+      // or quiet graph after the user has already changed state.
+      if (activeCtx !== ctx || !storeRef) return
+      const stillAuthorized = shouldRun(storeRef.getState()) && !(typeof document !== 'undefined' && document.hidden)
+      if (resumeEpoch !== lifecycleEpoch) {
+        // A stale completion may clean up a now-disallowed context, but it cannot
+        // interfere with a newer active lifecycle.
+        if (!stillAuthorized) { try { activeCtx.suspend?.() } catch { /* noop */ } }
+        return
+      }
+      if (!stillAuthorized) {
+        try { activeCtx.suspend?.() } catch { /* noop */ }
+      }
+    }).catch(reportResumeFailure)
+  } catch {
+    reportResumeFailure()
+  }
   if (!graphBuilt) buildGraph(ctx)
   lastSmoothTs = 0
   rampMaster(MASTER_CENTER, ENABLE_RAMP)
@@ -224,14 +263,21 @@ function activate() {
 
 /** Ramp to silence and suspend (keep the graph for instant re-enable). */
 function deactivate() {
+  cancelSuspend()
   if (clatterTimer) { clearTimeout(clatterTimer); clatterTimer = null }
   if (!ctx || !graphBuilt) return
   rampMaster(0, DISABLE_RAMP)
-  setTimeout(() => { try { if (ctx && ctx.state === 'running') ctx.suspend?.() } catch { /* noop */ } }, (DISABLE_RAMP * 1000) + 80)
+  const activeCtx = ctx
+  const epoch = lifecycleEpoch
+  suspendTimer = setTimeout(() => {
+    suspendTimer = null
+    if (epoch !== lifecycleEpoch || activeCtx !== ctx || !storeRef || shouldRun(storeRef.getState())) return
+    try { if (activeCtx.state === 'running') activeCtx.suspend?.() } catch { /* noop */ }
+  }, (DISABLE_RAMP * 1000) + 80)
 }
 
 function shouldRun(state) {
-  return !!state.soundscapeEnabled && !state.reducedMotion
+  return !!state.soundscapeEnabled && !state.reducedMotion && !isQuiet(state)
 }
 
 // `isToggleGesture` = the soundscapeEnabled flag just transitioned false→true. That only ever
@@ -240,15 +286,29 @@ function shouldRun(state) {
 // Any OTHER change (mood / weather / teamPulse) must NEVER create a context, or a gesture-less
 // page mutation would trip the browser autoplay policy. It may only retarget an already-blessed
 // context; when none exists yet (persisted-on at load) we stay dormant until the pointerdown listener.
-function handleChange(state, isToggleGesture) {
+function handleChange(state, isToggleGesture, quietExit = false) {
+  if (typeof document !== 'undefined' && document.hidden) {
+    cancelSuspend()
+    if (clatterTimer) { clearTimeout(clatterTimer); clatterTimer = null }
+    try { if (ctx?.state === 'running') ctx.suspend?.() } catch { /* noop */ }
+    return
+  }
   if (!shouldRun(state)) {
     if (ctx && ctx.state === 'running') deactivate()
+    else cancelSuspend()
     return
   }
   if (ctx) {
     // Context already exists (was created by a gesture) — resume/retarget is autoplay-safe.
     if (ctx.state !== 'running') activate()
-    else applyRain()
+    else {
+      cancelSuspend()
+      if (isToggleGesture || quietExit) {
+        rampMaster(MASTER_CENTER, ENABLE_RAMP)
+        if (!clatterTimer) scheduleNextTap()
+      }
+      applyRain()
+    }
   } else if (isToggleGesture) {
     activate() // false→true via the toggle click = the user gesture
   }
@@ -269,14 +329,19 @@ export function startAmbientSound(store) {
   // Track the prior enabled flag so we can tell the toggle-CLICK transition (a user gesture, the
   // only place we may create the AudioContext) apart from mood/weather changes.
   let prevEnabled = !!store.getState().soundscapeEnabled
+  let prevQuiet = isQuiet(store.getState())
   let prevSig = ''
   unsub = store.subscribe((state) => {
-    const sig = `${state.soundscapeEnabled ? 1 : 0}|${state.reducedMotion ? 1 : 0}|${state.weatherEffects ? 1 : 0}|${state.mood}`
+    const quiet = isQuiet(state)
+    const sig = `${state.soundscapeEnabled ? 1 : 0}|${state.reducedMotion ? 1 : 0}|${state.weatherEffects ? 1 : 0}|${state.mood}|${quiet ? 1 : 0}`
     if (sig === prevSig) return
     prevSig = sig
     const isToggleGesture = !!state.soundscapeEnabled && !prevEnabled
     prevEnabled = !!state.soundscapeEnabled
-    handleChange(state, isToggleGesture)
+    const wasQuiet = prevQuiet
+    prevQuiet = quiet
+    const quietExit = wasQuiet && !quiet
+    handleChange(state, isToggleGesture, quietExit)
   })
 
   // Persisted-on at load: stay dormant (no ctx) until the first user gesture, so a
@@ -297,12 +362,17 @@ export function startAmbientSound(store) {
   // Suspend on tab blur (≈0 CPU); resume when visible if still enabled.
   visListener = () => {
     if (!ctx) return
-    if (document.hidden) { try { ctx.suspend?.() } catch { /* noop */ } }
+    cancelSuspend()
+    if (document.hidden) {
+      if (clatterTimer) { clearTimeout(clatterTimer); clatterTimer = null }
+      try { ctx.suspend?.() } catch { /* noop */ }
+    }
     else if (shouldRun(store.getState())) activate()
   }
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', visListener)
 
   return function stopAmbientSound() {
+    cancelSuspend()
     if (unsub) { unsub(); unsub = null }
     if (gestureCleanup) gestureCleanup()
     if (visListener && typeof document !== 'undefined') document.removeEventListener('visibilitychange', visListener)
@@ -318,11 +388,15 @@ export function startAmbientSound(store) {
 // HMR: tear the engine down on hot-replacement so orphaned AudioContexts/timers don't leak.
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
+    cancelSuspend()
     if (clatterTimer) clearTimeout(clatterTimer)
     if (unsub) unsub()
     if (gestureCleanup) gestureCleanup()
     if (visListener && typeof document !== 'undefined') document.removeEventListener('visibilitychange', visListener)
     try { if (ctx) ctx.close?.() } catch { /* noop */ }
-    ctx = null; graphBuilt = false
+    ctx = master = clatterBus = noiseBuffer = rainGainNode = rainFilter = null
+    breatheLFO = rainSource = rainShimmer = null
+    clatterTimer = null; storeRef = null; unsub = null; gestureCleanup = null; visListener = null
+    graphBuilt = false; smoothedPulse = 0; lastSmoothTs = 0
   })
 }

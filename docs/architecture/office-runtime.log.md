@@ -157,3 +157,17 @@ source_sha: 8a9ab5d46615270dcafda3d759aedd8298e26182
   `office-runtime` before this consolidation — orchestrator-confirmed, matching every comparable
   prior spec touching these same files (`client-runtime-hygiene`, `avo-187-temporal-doorway-claim`,
   `blocked-reason-tags`, `standing-overlap-deconfliction`).
+
+
+### [office-runtime][2026-10-21][codex/avo-199-all-quiet]
+source_spec: docs/specs/avo-199-all-quiet-calm-state.md
+source_sha: 41b81c7c8b9f72ec24366ab9d2d7c4e385c043ef
+
+- [DECISION] Quiet describes observed session idleness, never task completion.
+- [CONSTRAINT] Unknown/disconnected/blocked inputs cannot be promoted to a reassuring positive.
+- [TRADEOFF] Thirty-second entry and immediate exit favor calm without hiding new work.
+- [CONSTRAINT] One derived state owns downstream audio/night decisions; no independent conflicting idle heuristics.
+- [CONSTRAINT] No movement, fake rest poses, rewards or engagement prompts.
+- [DECISION] Server-derived expiring observation metadata is independent of the renderer's active-only representatives; zero sprites never proves idle by itself.
+- [CONSTRAINT] Only actual API polling/SSE callback provenance may establish the summary; browser payload claims and heartbeat freshness cannot forge/extend it.
+- [CONSTRAINT] Quiet audio uses a cancellable, epoch-fenced graph lifecycle; zero base gain with a connected LFO is not a silence proof.

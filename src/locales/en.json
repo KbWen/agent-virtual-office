@@ -321,6 +321,7 @@
     "retry": "Retry"
   },
   "status": {
+    "observedIdle": "Observed sessions idle",
     "offline": "offline",
     "apiOffline": "status api offline",
     "apiRetrying": "status api retrying",

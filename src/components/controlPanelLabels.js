@@ -141,6 +141,13 @@ export function healthDotState({ statusSource, integrationHealth, externalCount 
   }
 }
 
+// AVO-199 changes only the existing detail, never the dot severity/color contract.
+export function healthDotDetail(dot, translate, calm = {}) {
+  const detail = translate(dot.labelKey, dot.level).replace('{0}', dot.labelVal == null ? '' : String(dot.labelVal))
+  if (dot.trouble || !calm.enabled || calm.mode !== 'quiet') return detail
+  return `${detail} · ${translate('status.observedIdle', 'Observed sessions idle')}`
+}
+
 // #28 — opt-in debug flag for the RAF-watchdog diagnostic chip. The chip is non-actionable for
 // everyone except a dev actively chasing a walk-loop stall, so it is OFF by default even in dev and
 // only renders when explicitly opted in: `?debug=raf` in the URL or localStorage `avo.debug.raf=on`
