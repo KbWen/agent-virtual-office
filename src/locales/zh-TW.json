@@ -321,6 +321,7 @@
     "retry": "重試"
   },
   "status": {
+    "observedIdle": "目前觀察到的工作階段皆閒置",
     "offline": "離線",
     "apiOffline": "狀態 API 離線",
     "apiRetrying": "狀態 API 重試中",

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createFilePollingState, pollFileStatusOnce, _globalPayloadSig, normalizeStatusMessage } from '../src/inference/inferStatus.js'
+import { createFilePollingState, pollFileStatusOnce, _globalPayloadSig, normalizeStatusMessage, startStatusIntegration } from '../src/inference/inferStatus.js'
 
 function makeResponse({ ok = true, status = 200, etag = null, jsonData = null, rawBody = null }) {
   const body = rawBody ?? (jsonData !== null ? JSON.stringify(jsonData) : 'null')
@@ -97,7 +97,8 @@ describe('pollFileStatusOnce', () => {
     expect(result).toMatchObject({ ok: false, parseError: true })
     expect(state.lastEtag).toBe('prev-etag')   // restored — not 'new-etag'
     expect(state.lastSeq).toBeNull()            // unchanged
-    expect(callback).not.toHaveBeenCalled()
+    expect(callback).toHaveBeenCalledOnce()
+    expect(callback.mock.calls[0][0]).toBeNull()
   })
 
   it('resets backoff and skipTick after a 304 Not Modified response', async () => {
@@ -114,6 +115,36 @@ describe('pollFileStatusOnce', () => {
     expect(state.consecutive404).toBe(0)   // server is alive — clear backoff
     expect(state.skipTick).toBe(0)         // also reset so next outage starts fresh
     expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('carries only a sanitized observation through the actual file-poll callback', async () => {
+    const summary = { state: 'all-idle', expiresAt: Date.now() + 60_000 }
+    const state = createFilePollingState()
+    const fetchImpl = vi.fn().mockResolvedValueOnce(makeResponse({
+      etag: 'idle-1', jsonData: { type: 'office-status', agents: [], observedActivity: summary },
+    }))
+    const callback = vi.fn()
+
+    await pollFileStatusOnce(fetchImpl, state, callback)
+
+    const [msg, context] = callback.mock.calls[0]
+    expect(msg.observedActivity).toEqual(summary)
+    expect(Object.keys(msg)).not.toContain('_trusted')
+    expect(context).toBeDefined()
+  })
+
+  it('clears through the actual file-poll callback for no-data and malformed responses', async () => {
+    for (const rawBody of ['null', '{bad json}']) {
+      const state = createFilePollingState()
+      const callback = vi.fn()
+      const fetchImpl = vi.fn().mockResolvedValueOnce(makeResponse({ rawBody }))
+
+      await pollFileStatusOnce(fetchImpl, state, callback)
+
+      expect(callback).toHaveBeenCalledOnce()
+      expect(callback.mock.calls[0][0]).toBeNull()
+      expect(callback.mock.calls[0][1]).toBeDefined()
+    }
   })
 
   it('resets backoff after a successful fetch', async () => {
@@ -379,5 +410,170 @@ describe('helpers field in pollFileStatusOnce delivery', () => {
     const msg = callback.mock.calls[0][0]
     expect(msg.helpers).toHaveLength(1)
     expect(msg.helpers[0].parentRole).toBe('dev')
+  })
+})
+
+describe('trusted observation through the real transport callbacks', () => {
+  let originalWindow
+  let originalEventSource
+  let originalFetch
+  let listeners
+  let source
+  let clean
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    originalWindow = globalThis.window
+    originalEventSource = globalThis.EventSource
+    originalFetch = globalThis.fetch
+    listeners = {}
+    globalThis.window = {
+      location: { protocol: 'http:', origin: 'http://localhost', search: '', hash: '' },
+      parent: {},
+      addEventListener: vi.fn((name, fn) => { (listeners[name] ||= []).push(fn) }),
+      removeEventListener: vi.fn(),
+    }
+    globalThis.EventSource = class {
+      constructor() { source = this; this.handlers = {} }
+      addEventListener(name, fn) { this.handlers[name] = fn }
+      close() {}
+    }
+  })
+
+  afterEach(() => {
+    if (clean) clean()
+    clean = null
+    globalThis.window = originalWindow
+    globalThis.EventSource = originalEventSource
+    globalThis.fetch = originalFetch
+    vi.useRealTimers()
+  })
+
+  function makeStore() {
+    const actions = {
+      setObservedActivity: vi.fn(), markIntegrationProbe: vi.fn(),
+      applyExternalStatus: vi.fn(), setActiveWorkflow: vi.fn(),
+      setTokens: vi.fn(), setEffort: vi.fn(), setHelpers: vi.fn(),
+      clearExternalStatus: vi.fn(), pruneHelpers: vi.fn(), externalStatus: {},
+    }
+    return { actions, store: { getState: () => actions } }
+  }
+
+  it('rejects a late poll observation after newer SSE even when the merged seq is lower', async () => {
+    let resolveFetch
+    globalThis.fetch = vi.fn(() => new Promise(resolve => { resolveFetch = resolve }))
+    const { actions, store } = makeStore()
+    clean = startStatusIntegration(store)
+    await vi.advanceTimersByTimeAsync(1000) // start the in-flight GET poll
+
+    const newer = { state: 'all-idle', expiresAt: Date.now() + 90_000 }
+    source.handlers.status({ data: JSON.stringify({
+      type: 'office-status', source: 'multi-session', _seq: '900', agents: [], observedActivity: newer,
+    }) })
+
+    const older = { state: 'not-idle', expiresAt: Date.now() + 80_000 }
+    resolveFetch(makeResponse({ etag: 'poll-old', jsonData: {
+      type: 'office-status', source: 'multi-session', _seq: '100', agents: [], observedActivity: older,
+    } }))
+    await vi.runAllTicks()
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(actions.setObservedActivity).toHaveBeenCalledTimes(1)
+    expect(actions.setObservedActivity).toHaveBeenLastCalledWith(newer)
+  })
+
+  it('drops forged browser observation and clears a pending API proof on browser override', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(makeResponse({ etag: 'poll-1', jsonData: {
+      type: 'office-status', source: 'multi-session', agents: [],
+      observedActivity: { state: 'all-idle', expiresAt: Date.now() + 90_000 },
+    } }))
+    const { actions, store } = makeStore()
+    clean = startStatusIntegration(store)
+    await vi.advanceTimersByTimeAsync(1000)
+
+    const forged = { type: 'office-status', source: 'external', agents: [],
+      observedActivity: { state: 'all-idle', expiresAt: Date.now() + 90_000 } }
+    listeners.message.forEach(fn => fn({ data: forged, origin: 'http://localhost', source: {} }))
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(actions.setObservedActivity).toHaveBeenCalledWith(null)
+    expect(actions.setObservedActivity).not.toHaveBeenCalledWith(forged.observedActivity)
+  })
+
+  it('applies an SSE summary-only change with empty representatives', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 304, headers: { get: () => null } })
+    const { actions, store } = makeStore()
+    clean = startStatusIntegration(store)
+    const first = { state: 'all-idle', expiresAt: Date.now() + 70_000 }
+    const second = { state: 'all-idle', expiresAt: first.expiresAt + 1_000 }
+
+    for (const observation of [first, second]) {
+      source.handlers.status({ data: JSON.stringify({
+        type: 'office-status', source: 'multi-session', agents: [], observedActivity: observation,
+      }) })
+      await vi.advanceTimersByTimeAsync(150)
+    }
+
+    expect(actions.setObservedActivity.mock.calls.map(([value]) => value)).toEqual([first, second])
+  })
+
+  it('clears observation immediately when the SSE connection fails', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 304, headers: { get: () => null } })
+    const { actions, store } = makeStore()
+    clean = startStatusIntegration(store)
+    const observation = { state: 'all-idle', expiresAt: Date.now() + 70_000 }
+    source.handlers.status({ data: JSON.stringify({
+      type: 'office-status', source: 'multi-session', agents: [], observedActivity: observation,
+    }) })
+    await vi.advanceTimersByTimeAsync(150)
+
+    source.onerror()
+
+    expect(actions.setObservedActivity.mock.calls.map(([value]) => value)).toEqual([observation, null])
+  })
+
+  it('refreshes health on the 10-second heartbeat 304 without recreating observation', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 304, headers: { get: () => null } })
+    const { actions, store } = makeStore()
+    clean = startStatusIntegration(store)
+    const observation = { state: 'all-idle', expiresAt: Date.now() + 70_000 }
+    source.handlers.status({ data: JSON.stringify({
+      type: 'office-status', source: 'multi-session', agents: [], observedActivity: observation,
+    }) })
+    await vi.advanceTimersByTimeAsync(150)
+    actions.markIntegrationProbe.mockClear()
+
+    source.handlers.open()
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(globalThis.fetch).toHaveBeenCalledOnce()
+    expect(actions.markIntegrationProbe).toHaveBeenCalledWith({ ok: true })
+    expect(actions.setObservedActivity.mock.calls.map(([value]) => value)).toEqual([observation])
+  })
+
+  it('ignores a deferred heartbeat response after integration cleanup', async () => {
+    let resolveFetch
+    globalThis.fetch = vi.fn(() => new Promise(resolve => { resolveFetch = resolve }))
+    const { actions, store } = makeStore()
+    clean = startStatusIntegration(store)
+    const observation = { state: 'all-idle', expiresAt: Date.now() + 70_000 }
+    source.handlers.status({ data: JSON.stringify({
+      type: 'office-status', source: 'multi-session', agents: [], observedActivity: observation,
+    }) })
+    await vi.advanceTimersByTimeAsync(150)
+    source.handlers.open()
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(globalThis.fetch).toHaveBeenCalledOnce()
+
+    actions.markIntegrationProbe.mockClear()
+    clean()
+    clean = null
+    expect(vi.getTimerCount()).toBe(0)
+    resolveFetch({ ok: true, status: 304, headers: { get: () => null } })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(actions.markIntegrationProbe).not.toHaveBeenCalled()
+    expect(actions.setObservedActivity.mock.calls.map(([value]) => value)).toEqual([observation])
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

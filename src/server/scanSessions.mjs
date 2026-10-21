@@ -18,10 +18,12 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { OBSERVED_ACTIVITY_TTL_MS } from '../utils/statusContract.mjs'
 
 const STATUS_FILE_RE = /^office-status(-[^.]+)?\.json$/
 const isWin = process.platform === 'win32'
 const VALID_ROLES = new Set(['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer'])
+const VALID_SOURCE_STATUSES = new Set(['idle', 'working', 'thinking', 'blocked', 'done', 'planning', 'awaiting-approval'])
 
 // Shared TTL constants — keep in sync between scanAndMerge and getSessionStats.
 // STALE_MS is exported: vite.config.mjs's dev-only file-watcher fallback reuses it as the
@@ -66,6 +68,52 @@ function hasValidBaseRole(role) {
   const sep = role.lastIndexOf('~')
   const base = sep === -1 ? role : role.slice(sep + 1)
   return VALID_ROLES.has(base)
+}
+
+function deriveObservedActivity(sessions, resolvedRoot, fromFallback, now) {
+  if (fromFallback || sessions.length === 0) return null
+  let oldestSeq = Infinity
+  let sawUnknown = false
+  let sawNotIdle = false
+
+  for (const { data } of sessions) {
+    if (typeof data._cwd !== 'string' || !data._cwd.trim() ||
+      !pathsEqual(path.resolve(data._cwd), resolvedRoot) ||
+      typeof data.source !== 'string' || !data.source || data.source === 'file-watcher') return null
+
+    const rawSeq = data._seq
+    const seqText = typeof rawSeq === 'number' ? String(rawSeq) : rawSeq
+    if (typeof seqText !== 'string' || !/^\d+$/.test(seqText)) return null
+    const seq = Number(seqText)
+    if (!Number.isSafeInteger(seq) || seq <= 0 || seq > now) return null
+    const expiresAt = seq + OBSERVED_ACTIVITY_TTL_MS
+    if (!Number.isSafeInteger(expiresAt) || expiresAt <= now) return null
+    if (seq < oldestSeq) oldestSeq = seq
+
+    if (Object.prototype.hasOwnProperty.call(data, 'helpers')) {
+      if (!Array.isArray(data.helpers)) sawUnknown = true
+      else if (data.helpers.length > 0) sawNotIdle = true
+    }
+    if (!Array.isArray(data.agents) || data.agents.length === 0) {
+      sawUnknown = true
+      continue
+    }
+    for (const agent of data.agents) {
+      if (!agent || typeof agent !== 'object' || !hasValidBaseRole(agent.role) ||
+        !VALID_SOURCE_STATUSES.has(agent.status)) {
+        sawUnknown = true
+        continue
+      }
+      if (agent.status !== 'idle') sawNotIdle = true
+    }
+  }
+
+  const expiresAt = oldestSeq + OBSERVED_ACTIVITY_TTL_MS
+  if (!Number.isSafeInteger(expiresAt) || expiresAt <= now || expiresAt > now + OBSERVED_ACTIVITY_TTL_MS) return null
+  return {
+    state: sawNotIdle ? 'not-idle' : sawUnknown ? 'unknown' : 'all-idle',
+    expiresAt,
+  }
 }
 
 // ─── mtime-based parse cache ──────────────────────────────────────────────
@@ -201,6 +249,11 @@ export function scanAndMerge(dir, projectRoot) {
   // (fs.readdirSync order is platform-dependent — unstable order → different JSON hash → no 304)
   sessions.sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0))
 
+  // Derive trust separately from representative selection: multi-session rendering may
+  // intentionally produce no sprites for idle agents, while the source snapshot remains
+  // useful evidence when every contributing file is explicitly scoped and fresh.
+  const observedActivity = deriveObservedActivity(sessions, resolvedRoot, fromFallback, now)
+
   let merged
   if (sessions.length === 1) {
     merged = { ...sessions[0].data }
@@ -317,6 +370,11 @@ export function scanAndMerge(dir, projectRoot) {
   if (fromFallback && sessions.every(s => s.data.source === 'file-watcher')) {
     merged._hint = 'no-hooks'
   }
+
+  // A source file is never allowed to supply this server-owned summary. Recompute it
+  // from the accepted scan inputs and attach it only when those inputs support a claim.
+  delete merged.observedActivity
+  if (observedActivity) merged.observedActivity = observedActivity
 
   return merged
 }

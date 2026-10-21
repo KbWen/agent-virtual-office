@@ -26,6 +26,24 @@ export const VALID_ROLES    = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 
 export const VALID_STATUSES = ['idle', 'working', 'blocked', 'done', 'planning', 'awaiting-approval']
 export const VALID_MOODS    = ['normal', 'rushing', 'frustrated', 'stuck', 'smooth', 'intense', 'idle']
 export const MAX_MOOD_DURATION = 3_600_000  // 1 hour in ms
+export const OBSERVED_ACTIVITY_TTL_MS = 120_000
+
+/** Sanitize the optional server-owned observed-activity summary. */
+export function sanitizeObservedActivity(value, now = Date.now()) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  if (Object.getPrototypeOf(value) !== Object.prototype) return null
+  const keys = Reflect.ownKeys(value)
+  if (keys.length !== 2 || !keys.includes('state') || !keys.includes('expiresAt')) return null
+  const stateDescriptor = Object.getOwnPropertyDescriptor(value, 'state')
+  const expiryDescriptor = Object.getOwnPropertyDescriptor(value, 'expiresAt')
+  if (!stateDescriptor?.enumerable || !('value' in stateDescriptor) ||
+    !expiryDescriptor?.enumerable || !('value' in expiryDescriptor)) return null
+  const { state, expiresAt } = value
+  if (!['all-idle', 'not-idle', 'unknown'].includes(state)) return null
+  if (!Number.isSafeInteger(expiresAt) || !Number.isFinite(now)) return null
+  if (expiresAt <= now || expiresAt > now + OBSERVED_ACTIVITY_TTL_MS) return null
+  return { state, expiresAt }
+}
 
 // ─── Blocked-reason codes (was: keys of classify.js BLOCKED_REASON_TABLE) ─────
 // ORDERED to match the canonical BLOCKED_REASON_TABLE key order in classify.js, which

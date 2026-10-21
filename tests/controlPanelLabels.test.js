@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatTokens, blockedReasonLabel, agentLineLabel, taskChipLabel, attentionStripState, controlPanelPresenceRows, healthDotState } from '../src/components/controlPanelLabels.js'
+import { formatTokens, blockedReasonLabel, agentLineLabel, taskChipLabel, attentionStripState, controlPanelPresenceRows, healthDotState, healthDotDetail } from '../src/components/controlPanelLabels.js'
 
 // These pure helpers were extracted out of ControlPanel.jsx (god-component cleanup) so they can be
 // tested without importing the React module. `formatTokens`/`blockedReasonLabel`/`agentLineLabel`
@@ -165,5 +165,29 @@ describe('healthDotState (AVO-130)', () => {
   it('defaults to idle on empty / missing input', () => {
     expect(healthDotState().level).toBe('idle')
     expect(healthDotState({}).level).toBe('idle')
+  })
+})
+
+
+describe('AVO-199 existing health detail', () => {
+  const translate = (key, fallback) => ({ 'ui.live': 'Live', 'status.local': 'Local', 'status.observedIdle': 'Observed sessions idle', 'status.apiOffline': 'Offline', 'status.apiRetrying': 'Retrying', 'ui.fallbackAgents': '{0} fallback agents' }[key] ?? fallback)
+  it('appends only the honest quiet detail while preserving baseline severity and color', () => {
+    const dot = healthDotState({ statusSource: 'external', integrationHealth: { state: 'online' } })
+    expect(healthDotDetail(dot, translate, { enabled: true, mode: 'quiet' })).toBe('Live · Observed sessions idle')
+    expect(dot).toEqual(healthDotState({ statusSource: 'external', integrationHealth: { state: 'online' } }))
+    for (const mode of ['unknown', 'active', 'settling']) expect(healthDotDetail(dot, translate, { enabled: true, mode })).toBe('Live')
+    expect(healthDotDetail(dot, translate, { enabled: false, mode: 'quiet' })).toBe('Live')
+  })
+  it('keeps organic-with-proof neutral and never replaces trouble explanations', () => {
+    const calm = { enabled: true, mode: 'quiet' }
+    const organic = healthDotState({ statusSource: 'organic', integrationHealth: { state: 'online' } })
+    expect(organic.tone).toBe('gray')
+    expect(healthDotDetail(organic, translate, calm)).toBe('Local · Observed sessions idle')
+    for (const state of ['offline', 'degraded']) {
+      const dot = healthDotState({ statusSource: 'external', integrationHealth: { state } })
+      expect(healthDotDetail(dot, translate, calm)).toBe(healthDotDetail(dot, translate))
+    }
+    const fallback = healthDotState({ statusSource: 'fallback', externalCount: 3 })
+    expect(healthDotDetail(fallback, translate, calm)).toBe('3 fallback agents')
   })
 })

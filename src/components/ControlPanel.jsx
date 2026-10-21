@@ -15,8 +15,8 @@ const statusOptions = ['idle', 'working', 'blocked', 'done']
 // existing importers (NarrowRoster, tests). NOTE: `export { x } from './m'` alone re-exports without
 // binding x into THIS module's scope — the component's internal calls would then crash with
 // "x is not defined" (regression caught only by actually loading the page).
-import { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, attentionStripState, controlPanelPresenceRows, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState } from './controlPanelLabels.js'
-export { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, attentionStripState, controlPanelPresenceRows, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState }
+import { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, attentionStripState, controlPanelPresenceRows, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState, healthDotDetail } from './controlPanelLabels.js'
+export { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, attentionStripState, controlPanelPresenceRows, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState, healthDotDetail }
 
 // #39 types: emoji shown on the "change pet" button per current skin.
 const PET_TYPE_EMOJI = { cat: '🐈', vacuum: '🤖', dog: '🐕', rabbit: '🐇', bird: '🐦', hamster: '🐹' }
@@ -32,9 +32,9 @@ const HEALTH_TONE = {
   emerald: { bg: 'bg-emerald-500',              text: 'text-emerald-600 dark:text-emerald-400' },
   gray:    { bg: 'bg-gray-400 dark:bg-gray-500', text: 'text-gray-500 dark:text-gray-400' },
 }
-function HealthDot({ dot, reducedMotion }) {
+function HealthDot({ dot, reducedMotion, calm }) {
   const tone = HEALTH_TONE[dot.tone] || HEALTH_TONE.gray
-  const detail = t(dot.labelKey, dot.level).replace('{0}', dot.labelVal == null ? '' : String(dot.labelVal))
+  const detail = healthDotDetail(dot, t, calm)
   const summary = `${t('aria.health', 'Connection status')}: ${detail}`
   return (
     <div className="relative group shrink-0">
@@ -93,6 +93,8 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const statusSource = useOfficeStore((s) => s.statusSource)
   const tokens = useOfficeStore(useShallow((s) => s.tokens))  // AVO-108
   const integrationHealth = useOfficeStore(useShallow((s) => s.integrationHealth))
+  const calmMode = useOfficeStore((s) => s.officeCalm.mode)
+  const calmEnabled = useOfficeStore((s) => s.experienceFlags.calmEnabled)
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
   // Subscribe to ledger objects (clone-on-write — identity only changes on actual
   // increment or day rollover). Sum in useMemo so the reduction doesn't re-run on
@@ -238,7 +240,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             })}
           </div>
           {/* AVO-130: one health dot (was separate live + offline pills). */}
-          <HealthDot dot={dotState} reducedMotion={reducedMotion} />
+          <HealthDot dot={dotState} reducedMotion={reducedMotion} calm={{ mode: calmMode, enabled: calmEnabled }} />
           {/* AVO-129: ✓/✗ KPI removed from the persistent bar (the day's rhythm is felt
               through events, not read off a tally). Data path (ledgers) is unchanged. */}
           <button onClick={togglePause} className="px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={isPaused ? t('aria.resume', 'Resume') : t('aria.pause', 'Pause')}>
@@ -464,7 +466,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         {/* AVO-130: one health dot replaces the 2–4 connection/integration pills that used to
             render side-by-side. Trouble auto-shows its inline label; calm states reveal detail
             on hover/focus. */}
-        <HealthDot dot={dotState} reducedMotion={reducedMotion} />
+        <HealthDot dot={dotState} reducedMotion={reducedMotion} calm={{ mode: calmMode, enabled: calmEnabled }} />
 
         {/* AVO-129 + AVO-127: the ✓/✗ KPI and 🪙 token meter live on-demand in the info popover
             (opened from the ⚙ menu). AVO-130: language, list-view, run-workflow, help, and the

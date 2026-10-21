@@ -18,6 +18,17 @@ describe('normalizeStatusMessage', () => {
   })
 
   describe('office-status protocol', () => {
+    it('always removes observedActivity from general and forged browser payloads', () => {
+      const summary = { state: 'all-idle', expiresAt: Date.now() + 60_000 }
+      const msg = normalizeStatusMessage({
+        type: 'office-status', agents: [], observedActivity: summary,
+        _trusted: true, source: 'api',
+      })
+      expect(msg).not.toHaveProperty('observedActivity')
+      // A spread-through unknown field cannot smuggle the raw summary back out.
+      expect(normalizeStatusMessage({ ...msg, observedActivity: summary })).not.toHaveProperty('observedActivity')
+    })
+
     it('normalizes office-status messages with stable source metadata', () => {
       const msg = { type: 'office-status', agents: [{ role: 'dev', status: 'working' }] }
       expect(normalizeStatusMessage(msg)).toMatchObject({

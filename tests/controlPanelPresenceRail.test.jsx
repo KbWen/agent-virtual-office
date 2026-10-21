@@ -23,6 +23,8 @@ async function renderControlPanelWithMockStore(overrides = {}) {
       },
     },
     isPaused: false,
+    officeCalm: { mode: "unknown", eligibleSince: null },
+    experienceFlags: { calmEnabled: false },
     togglePause: () => {},
     rosterMode: false,
     toggleRosterMode: () => {},

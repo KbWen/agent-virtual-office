@@ -87,6 +87,14 @@ describe('normalizePost canonical — behavioral cases (AC-5 regression guard)',
   }
 })
 
+describe('normalizePost ignores client observed-activity claims', () => {
+  it('drops a forged all-idle summary from the normalized server payload', () => {
+    const forged = { state: 'all-idle', expiresAt: Date.now() + 60_000 }
+    expect(canonical({ type: 'office-status', agents: [], observedActivity: forged })).not.toHaveProperty('observedActivity')
+    expect(serverRuntime({ type: 'office-status', agents: [], observedActivity: forged })).not.toHaveProperty('observedActivity')
+  })
+})
+
 // ── AC-3: #52 regression — server path now coerces invalid status → 'idle' ──────────────
 // The old server.mjs inline copy dropped agents whose status was missing/invalid; the
 // canonical src module keeps them and coerces to 'idle'. This test proves the unification.
