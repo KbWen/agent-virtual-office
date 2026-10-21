@@ -6,6 +6,7 @@ import { scanAndMerge } from '../src/server/scanSessions.mjs'
 import { useOfficeStore } from '../src/systems/store.js'
 import { startStatusIntegration, normalizeStatusMessage } from '../src/inference/inferStatus.js'
 import { startOfficeCalm } from '../src/systems/officeCalm.js'
+import { OBSERVED_ACTIVITY_TTL_MS } from '../src/utils/statusContract.mjs'
 
 const BASE = 1_800_000_000_000
 let dir, original, stopIntegration, stopCalm, source
@@ -50,7 +51,7 @@ describe('AVO-199 real scanner -> normalizer -> transport -> store -> controller
     expect(normalizeStatusMessage(raw).observedActivity).toBeUndefined()
     start()
     await vi.advanceTimersByTimeAsync(1200)
-    expect(useOfficeStore.getState().observedActivity).toEqual({ state: 'all-idle', expiresAt: BASE + 120_000 })
+    expect(useOfficeStore.getState().observedActivity).toEqual({ state: 'all-idle', expiresAt: BASE + OBSERVED_ACTIVITY_TTL_MS })
     expect(useOfficeStore.getState().officeCalm.mode).toBe('settling')
     const since = useOfficeStore.getState().officeCalm.eligibleSince
     await vi.advanceTimersByTimeAsync(since + 29_999 - Date.now())
@@ -61,7 +62,7 @@ describe('AVO-199 real scanner -> normalizer -> transport -> store -> controller
       expect(useOfficeStore.getState().statusSource).toBe('organic')
       expect(useOfficeStore.getState().externalStatus).toEqual({})
     }
-    await vi.advanceTimersByTimeAsync(BASE + 120_000 - Date.now())
+    await vi.advanceTimersByTimeAsync(BASE + OBSERVED_ACTIVITY_TTL_MS - Date.now())
     expect(useOfficeStore.getState().officeCalm.mode).toBe('unknown')
   })
   it.each(['working', 'done', 'unexpected'])('a second %s source never proves quiet despite empty/filtered representatives', async status => {
@@ -75,7 +76,7 @@ describe('AVO-199 real scanner -> normalizer -> transport -> store -> controller
     await vi.advanceTimersByTimeAsync(32_000)
     expect(useOfficeStore.getState().officeCalm.mode).toBe('quiet')
     const event = new Event('message')
-    Object.assign(event, { origin: 'http://localhost', source: {}, data: { type: 'office-status', source: 'multi-session', agents: [], observedActivity: { state: 'all-idle', expiresAt: BASE + 120_000 } } })
+    Object.assign(event, { origin: 'http://localhost', source: {}, data: { type: 'office-status', source: 'multi-session', agents: [], observedActivity: { state: 'all-idle', expiresAt: BASE + OBSERVED_ACTIVITY_TTL_MS } } })
     window.dispatchEvent(event)
     expect(useOfficeStore.getState().observedActivity).toBeNull()
     expect(useOfficeStore.getState().officeCalm.mode).toBe('unknown')

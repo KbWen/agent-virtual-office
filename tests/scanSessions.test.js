@@ -11,6 +11,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { scanAndMerge, getSessionStats } from '../src/server/scanSessions.mjs'
+import { normalizePost } from '../src/utils/normalizePost.js'
+import { OBSERVED_ACTIVITY_TTL_MS } from '../src/utils/statusContract.mjs'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -799,18 +801,27 @@ describe('server observed activity summary', () => {
     const oldestSeq = Date.now() - 20
     writeSession(dir, 'office-status-alpha.json', {
       ...scoped([idleAgent]), _seq: String(oldestSeq),
-      observedActivity: { state: 'all-idle', expiresAt: Date.now() + 120_000 },
+      observedActivity: { state: 'all-idle', expiresAt: Date.now() + OBSERVED_ACTIVITY_TTL_MS },
     })
     writeSession(dir, 'office-status-beta.json', {
       ...scoped([{ ...idleAgent, role: 'qa' }]), _seq: String(oldestSeq + 10),
     })
-    expect(scanAndMerge(dir, dir).observedActivity.expiresAt).toBe(oldestSeq + 120_000)
+    expect(scanAndMerge(dir, dir).observedActivity.expiresAt).toBe(oldestSeq + OBSERVED_ACTIVITY_TTL_MS)
   })
 
-  it('does not emit an observation past the 120-second source TTL', () => {
+  it('does not emit an observation past the source stale TTL', () => {
     writeSession(dir, 'office-status.json', scoped([idleAgent], {
-      _seq: String(Date.now() - 121_000),
+      _seq: String(Date.now() - OBSERVED_ACTIVITY_TTL_MS - 1),
     }))
-    expect(scanAndMerge(dir, dir).observedActivity).toBeUndefined()
+    expect(scanAndMerge(dir, dir)).toBeNull()
+  })
+
+  it('keeps a normalized POST idle fallback display-only when the original status was missing', () => {
+    const normalized = normalizePost({ type: 'office-status', agents: [{ role: 'dev' }] })
+    writeSession(dir, 'office-status.json', { ...normalized, _cwd: dir })
+    const result = scanAndMerge(dir, dir)
+    expect(result.agents[0].status).toBe('idle')
+    expect(result.observedActivity.state).toBe('unknown')
+    expect(result._postStatusInvalid).toBeUndefined()
   })
 })

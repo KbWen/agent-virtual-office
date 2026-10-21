@@ -442,7 +442,12 @@ export async function pollFileStatusOnce(fetchImpl, state, callback) {
   state.inFlight = true
   const transportContext = apiTransportContext(nextTransportGeneration())
   const clearObservation = () => {
-    try { callback(null, transportContext) } catch {}
+    try { callback(null, transportContext) } catch {
+      console.warn('[Office] Status polling callback failed', {
+        operation: 'clear-observation',
+        code: 'STATUS_OBSERVATION_CLEAR_CALLBACK_FAILED',
+      })
+    }
   }
   try {
     const headers = {}

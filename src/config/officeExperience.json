@@ -1,5 +1,5 @@
 {
-  "calmEnabled": false,
+  "calmEnabled": true,
   "offHoursEnabled": false,
   "planningPodEnabled": false
 }

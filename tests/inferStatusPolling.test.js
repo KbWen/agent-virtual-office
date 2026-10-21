@@ -147,6 +147,28 @@ describe('pollFileStatusOnce', () => {
     }
   })
 
+  it('reports a fixed redacted warning when clearing observation throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const state = createFilePollingState()
+    const callback = vi.fn(() => { throw new Error('private store details') })
+    const fetchImpl = vi.fn().mockResolvedValueOnce(makeResponse({ ok: false, status: 503 }))
+
+    try {
+      const result = await pollFileStatusOnce(fetchImpl, state, callback)
+
+      expect(result).toMatchObject({ ok: false, status: 503 })
+      expect(callback).toHaveBeenCalledOnce()
+      expect(callback.mock.calls[0][0]).toBeNull()
+      expect(warn).toHaveBeenCalledWith('[Office] Status polling callback failed', {
+        operation: 'clear-observation',
+        code: 'STATUS_OBSERVATION_CLEAR_CALLBACK_FAILED',
+      })
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('private store details')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('resets backoff after a successful fetch', async () => {
     // At consecutive404=11, skipTick advances each call; every 3rd tick allows a real poll.
     // Tick 1 (skipTick→1): skip. Tick 2 (skipTick→2): skip. Tick 3 (skipTick→3, 3%3=0): runs.

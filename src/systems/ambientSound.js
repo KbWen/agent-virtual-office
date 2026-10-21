@@ -218,6 +218,10 @@ function rampMaster(to, seconds) {
   master.gain.linearRampToValueAtTime(to, ctx.currentTime + seconds)
 }
 
+function reportResumeFailure() {
+  console.warn('[Office] Audio operation failed', { operation: 'resume', code: 'AUDIO_RESUME_FAILED' })
+}
+
 /** Build (first time) or resume the audio graph. MUST be called from a user gesture. */
 function activate() {
   if (!hasWebAudio()) return
@@ -246,8 +250,10 @@ function activate() {
       if (!stillAuthorized) {
         try { activeCtx.suspend?.() } catch { /* noop */ }
       }
-    }).catch(() => {})
-  } catch { /* browser may reject resume outside an allowed gesture */ }
+    }).catch(reportResumeFailure)
+  } catch {
+    reportResumeFailure()
+  }
   if (!graphBuilt) buildGraph(ctx)
   lastSmoothTs = 0
   rampMaster(MASTER_CENTER, ENABLE_RAMP)

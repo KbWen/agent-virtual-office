@@ -89,7 +89,11 @@ try {
     const errors = []
     diagnostics = errors
     const networkDiagnostics = []
+    const statusResponses = []
     page.on('requestfailed', request => networkDiagnostics.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText}`))
+    page.on('response', response => {
+      if (new URL(response.url()).pathname === '/api/status') statusResponses.push(response.status())
+    })
     page.on('pageerror', error => errors.push(error.message))
     page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
     // Test-only native graph observation. Nothing is added to the production app.
@@ -104,24 +108,39 @@ try {
     await page.clock.install({ time: new Date() })
     await page.goto(`${BASE}/?lang=en${view.panel ? '&mode=panel' : ''}`, { waitUntil: 'domcontentloaded' })
     const storeHandle = await page.evaluateHandle(async () => (await import('/src/systems/store.js')).useOfficeStore)
-    await page.waitForFunction(store => store.getState().observedActivity?.state === 'all-idle', storeHandle)
     const read = () => page.evaluate(async () => {
       const state = (await import('/src/systems/store.js')).useOfficeStore.getState()
       return { calm: state.officeCalm, observation: state.observedActivity, source: state.statusSource,
         health: state.integrationHealth, flags: state.experienceFlags, sound: state.soundscapeEnabled,
         external: state.externalStatus, contexts: window.__calmAudioContexts.map(ctx => ctx.state) }
     })
-    assert.equal((await read()).calm.mode, 'unknown', 'disabled flag must reproduce baseline')
+    try {
+      await page.waitForFunction(store => store.getState().observedActivity?.state === 'all-idle', storeHandle)
+    } catch (error) {
+      console.log(JSON.stringify({ view: view.name, startup: await read(), networkDiagnostics, statusResponses }))
+      throw error
+    }
+    const startup = await read()
+    assert.deepEqual(startup.flags, { calmEnabled: true, offHoursEnabled: false, planningPodEnabled: false },
+      'production startup must honor the approved calm-only config')
+    assert(['settling', 'quiet'].includes(startup.calm.mode), 'enabled startup must react to trusted idle evidence')
+    await page.evaluate(async () => {
+      const store = (await import('/src/systems/store.js')).useOfficeStore
+      store.setState({ experienceFlags: { ...store.getState().experienceFlags, calmEnabled: false } })
+    })
+    await page.waitForFunction(store => store.getState().officeCalm.mode === 'unknown', storeHandle)
+    assert.deepEqual((await read()).flags, { calmEnabled: false, offHoursEnabled: false, planningPodEnabled: false },
+      'disabled baseline must change only the calm flag')
+    if (view.roster) {
+      await page.getByRole('button', { name: 'Settings', exact: true }).click()
+      await page.getByRole('button', { name: 'Show list view', exact: true }).click()
+    }
     const shot = name => page.screenshot({ path: path.join(OUT, `${view.name}-${name}.png`), animations: 'disabled' })
     await shot('baseline')
     await page.evaluate(async () => {
       const store = (await import('/src/systems/store.js')).useOfficeStore
       store.setState({ experienceFlags: { ...store.getState().experienceFlags, calmEnabled: true } })
     })
-    if (view.roster) {
-      await page.getByRole('button', { name: 'Settings', exact: true }).click()
-      await page.getByRole('button', { name: 'Show list view', exact: true }).click()
-    }
     const audio = view.name === 'full'
     if (audio) {
       await page.getByRole('button', { name: 'Settings', exact: true }).click()

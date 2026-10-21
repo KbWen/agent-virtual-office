@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore } from 'zustand/vanilla'
+import officeExperience from '../src/config/officeExperience.json'
 import { useOfficeStore } from '../src/systems/store.js'
 import { resolveOfficeCalm, startOfficeCalm } from '../src/systems/officeCalm.js'
+import { OBSERVED_ACTIVITY_TTL_MS } from '../src/utils/statusContract.mjs'
 
 const BASE = 1_800_000_000_000
 function eligible(overrides = {}) {
   return { experienceFlags: { calmEnabled: true }, officeCalm: { mode: 'unknown', eligibleSince: null },
-    observedActivity: { state: 'all-idle', expiresAt: BASE + 120_000 },
+    observedActivity: { state: 'all-idle', expiresAt: BASE + OBSERVED_ACTIVITY_TTL_MS },
     integrationHealth: { state: 'online', lastSuccessAt: BASE }, integrationSource: 'multi-session',
     statusSource: 'organic', externalStatus: {}, helpers: [], isPaused: false, ...overrides }
 }
@@ -32,7 +34,7 @@ describe('AVO-199 honest quiet resolver', () => {
   it.each([
     { observedActivity: null }, { observedActivity: { state: 'unknown', expiresAt: BASE + 100_000 } },
     { observedActivity: { state: 'all-idle', expiresAt: BASE } },
-    { observedActivity: { state: 'all-idle', expiresAt: BASE + 120_001 } },
+    { observedActivity: { state: 'all-idle', expiresAt: BASE + OBSERVED_ACTIVITY_TTL_MS + 1 } },
     { observedActivity: { state: 'all-idle', expiresAt: BASE + 100_000, forged: true } },
     { integrationHealth: { state: 'offline', lastSuccessAt: BASE } },
     { integrationHealth: { state: 'degraded', lastSuccessAt: BASE } },
@@ -70,7 +72,7 @@ describe('AVO-199 single-deadline controller', () => {
     await vi.advanceTimersByTimeAsync(20_000)
     store.setState({ agents: { dev: { position: { x: 20, y: 30 } } },
       integrationHealth: { state: 'online', lastSuccessAt: Date.now() },
-      observedActivity: { state: 'all-idle', expiresAt: BASE + 120_000 } })
+      observedActivity: { state: 'all-idle', expiresAt: BASE + OBSERVED_ACTIVITY_TTL_MS } })
     expect(store.getState().officeCalm.eligibleSince).toBe(BASE)
     await vi.advanceTimersByTimeAsync(9999)
     expect(store.getState().officeCalm.mode).toBe('settling')
@@ -87,7 +89,7 @@ describe('AVO-199 single-deadline controller', () => {
     expect(store.getState().officeCalm.mode).toBe('quiet')
     await vi.advanceTimersByTimeAsync(5000)
     expect(store.getState().officeCalm.mode).toBe('unknown')
-    store.setState({ observedActivity: { state: 'all-idle', expiresAt: Date.now() + 120_000 }, integrationHealth: { state: 'online', lastSuccessAt: Date.now() } })
+    store.setState({ observedActivity: { state: 'all-idle', expiresAt: Date.now() + OBSERVED_ACTIVITY_TTL_MS }, integrationHealth: { state: 'online', lastSuccessAt: Date.now() } })
     expect(store.getState().officeCalm).toEqual({ mode: 'settling', eligibleSince: Date.now() })
     stop()
   })
@@ -114,7 +116,7 @@ describe('AVO-199 single-deadline controller', () => {
     expect(updateTime).toHaveBeenCalledTimes(1)
     expect(store.getState().officeCalm.mode).toBe('unknown')
     stop(); stop(); expect(vi.getTimerCount()).toBe(0)
-    store.setState({ observedActivity: { state: 'all-idle', expiresAt: Date.now() + 120_000 } })
+    store.setState({ observedActivity: { state: 'all-idle', expiresAt: Date.now() + OBSERVED_ACTIVITY_TTL_MS } })
     doc.dispatchEvent(new Event('visibilitychange'))
     expect(updateTime).toHaveBeenCalledTimes(1)
     expect(store.getState().officeCalm.mode).toBe('unknown')
@@ -133,10 +135,11 @@ describe('AVO-199 single-deadline controller', () => {
 
 
 describe('AVO-199 actual store boundaries', () => {
-  it('keeps experience flags disabled by default and clears proof even without representatives', () => {
+  it('loads the approved experience flags and clears proof even without representatives', () => {
     const original = useOfficeStore.getState()
     try {
-      expect(original.experienceFlags).toEqual({ calmEnabled: false, offHoursEnabled: false, planningPodEnabled: false })
+      expect(officeExperience).toEqual({ calmEnabled: true, offHoursEnabled: false, planningPodEnabled: false })
+      expect(original.experienceFlags).toEqual(officeExperience)
       useOfficeStore.setState({ externalStatus: {} })
       original.setObservedActivity({ state: 'all-idle', expiresAt: BASE + 100_000 })
       expect(useOfficeStore.getState().observedActivity?.state).toBe('all-idle')

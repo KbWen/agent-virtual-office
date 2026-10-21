@@ -153,6 +153,7 @@ describe('startAmbientSound — subscribed quiet lifecycle', () => {
   afterEach(() => {
     stop?.()
     stop = null
+    vi.restoreAllMocks()
     vi.useRealTimers()
     delete window.AudioContext
     delete window.webkitAudioContext
@@ -246,5 +247,37 @@ describe('startAmbientSound — subscribed quiet lifecycle', () => {
     await vi.advanceTimersByTimeAsync(2000)
     expect(ctx.suspend).toHaveBeenCalledTimes(suspendsAtTeardown)
     expect(ctx.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports rejected resume with a fixed redacted warning', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const h = makeAudioHarness(() => Promise.reject(new Error('private device or source details')))
+    globalThis.window = h.win
+    globalThis.document = h.doc
+    const store = makeStore(activeAudioState)
+    stop = startAmbientSound(store)
+    store.set({ soundscapeEnabled: true })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(warn).toHaveBeenCalledWith('[Office] Audio operation failed', {
+      operation: 'resume',
+      code: 'AUDIO_RESUME_FAILED',
+    })
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('private device or source details')
+  })
+
+  it('reports synchronous resume throws with the same fixed redacted warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const h = makeAudioHarness(() => { throw new Error('private synchronous details') })
+    globalThis.window = h.win
+    globalThis.document = h.doc
+    const store = makeStore(activeAudioState)
+    stop = startAmbientSound(store)
+    store.set({ soundscapeEnabled: true })
+    expect(warn).toHaveBeenCalledWith('[Office] Audio operation failed', {
+      operation: 'resume',
+      code: 'AUDIO_RESUME_FAILED',
+    })
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('private synchronous details')
   })
 })

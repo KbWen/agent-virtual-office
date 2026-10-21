@@ -95,6 +95,43 @@ describe('normalizePost ignores client observed-activity claims', () => {
   })
 })
 
+describe('normalizePost preserves invalid status provenance for server scans', () => {
+  const IMPLS = [['canonical .js', canonical], ['server-runtime .mjs', serverRuntime]]
+
+  for (const [name, impl] of IMPLS) {
+    it(`[${name}] marks missing and invalid full-format statuses while preserving idle display fallback`, () => {
+      for (const agent of [{ role: 'dev' }, { role: 'dev', status: null }, { role: 'dev', status: 'UNKNOWN' }]) {
+        const result = impl({ type: 'office-status', agents: [agent], _postStatusInvalid: false })
+        expect(result.agents[0].status).toBe('idle')
+        expect(result._postStatusInvalid).toBe(true)
+      }
+    })
+
+    it(`[${name}] ignores a caller-supplied invalidity marker for valid statuses`, () => {
+      const result = impl({ type: 'office-status', agents: [{ role: 'dev', status: 'idle' }], _postStatusInvalid: true })
+      expect(result.agents[0].status).toBe('idle')
+      expect(result._postStatusInvalid).toBeUndefined()
+    })
+
+    it(`[${name}] marks dropped malformed or invalid-role entries conservatively`, () => {
+      const result = impl({ type: 'office-status', agents: [
+        { role: 'dev', status: 'idle' }, { role: 'dev', status: 'done' },
+        { role: 'hacker', status: 'working' }, null,
+      ] })
+      expect(result.agents).toHaveLength(1)
+      expect(result.agents[0].status).toBe('idle')
+      expect(result._postStatusInvalid).toBe(true)
+    })
+
+    it(`[${name}] keeps dropped helper activity from proving idle`, () => {
+      const result = impl({ type: 'office-status', agents: [{ role: 'dev', status: 'idle' }], helpers: [{ id: 'helper' }] })
+      expect(result.agents[0].status).toBe('idle')
+      expect(result.helpers).toBeUndefined()
+      expect(result._postStatusInvalid).toBe(true)
+    })
+  }
+})
+
 // ── AC-3: #52 regression — server path now coerces invalid status → 'idle' ──────────────
 // The old server.mjs inline copy dropped agents whose status was missing/invalid; the
 // canonical src module keeps them and coerces to 'idle'. This test proves the unification.
