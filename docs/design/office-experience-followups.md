@@ -68,3 +68,7 @@ Owner reviews visual fidelity and feel. Automated checks prove state truth, unch
 
 ## Approval Scope
 The owner approved this baseline and ADR-011 on 2026-10-19, and authorized limited implementation-time unfreeze of shared specifications ux-vibe-rebalance.md and subagent-helper-huddle.md for the new features' shared-file alignment only. Preserve control demotion/deletion and helper semantics; re-freeze after alignment. Those files are unchanged in this planning session. No broad rewrite or already-shipped behavior change is authorized. Actual implemented visual/movement capture approval remains a separate acceptance step.
+
+
+## Implemented Acceptance — AVO-199
+The owner accepted AVO-199 C1-C4 captures on 2026-10-21 (7 views, 45 captures) and authorized enabling calm. Existing health detail carries the quiet wording with no new badge or pose. This acceptance applies only to AVO-199; AVO-200 movement and AVO-201 lighting captures remain separate gates.

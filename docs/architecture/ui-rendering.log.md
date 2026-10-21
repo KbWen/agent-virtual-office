@@ -83,3 +83,10 @@ source_sha: 94e3d5a
 source: PR #237 (quick-win, REV-07)
 
 - [CONSTRAINT] Speech-bubble text is fitted by WIDTH (budget 140, `BUBBLE_TEXT_BUDGET`), measured with canvas `measureText` in the exact font the `<text>` renders (one shared constant, pinned by a test) — never by character count. Character caps are script-biased: 16 CJK ≈ 1.7× the width of 16 Latin. Change the budget only from a re-run of the per-line simulation (whole-line % and mean/max box per locale), not by feel.
+
+
+### [ui-rendering][2026-10-21][codex/avo-199-all-quiet]
+source_spec: docs/specs/avo-199-all-quiet-calm-state.md
+source_sha: 41b81c7c8b9f72ec24366ab9d2d7c4e385c043ef
+
+- Cross-reference: docs/architecture/office-runtime.log.md, AVO-199 entry dated 2026-10-21; authoritative decisions are consolidated there.

@@ -1,6 +1,6 @@
 ---
 title: "AVO-199 — Honest All-Quiet Office"
-status: frozen
+status: shipped
 amended: 2026-10-19
 approved: 2026-10-19
 created: 2026-10-19
@@ -8,7 +8,7 @@ primary_domain: office-runtime
 secondary_domains: [ui-rendering, hook-integration]
 classification: feature
 planning_state: implementation-ready
-implementation_state: in-progress
+implementation_state: completed
 ---
 
 # AVO-199 — Honest All-Quiet Office
@@ -22,7 +22,7 @@ Make a genuinely quiet observed office feel intentionally restful without claimi
 File Relationship: INDEPENDENT new feature; realizes the AVO-164 candidate without duplicating it. ADR-007/008 govern truth and attention. Existing ambientSound already silences keyboard grains at teamPulse=0, so do not describe this as adding sound support or background music.
 
 ## Design
-DSoT: ../design/office-experience-followups.md, C1-C4 and shared layer/accessibility rules. Design baseline approved by the owner on 2026-10-19; implemented captures still need visual acceptance. Existing health button/detail carries the explanation; no scene text or new persistent control. Existing sound and lighting preferences retain authority.
+DSoT: ../design/office-experience-followups.md, C1-C4 and shared layer/accessibility rules. Design baseline approved by the owner on 2026-10-19; implemented C1-C4 captures accepted by the owner on 2026-10-21. Existing health button/detail carries the explanation; no scene text or new persistent control. Existing sound and lighting preferences retain authority.
 
 ## State Contract
 Add a pure resolver plus a single start/stop controller in src/systems/officeCalm.js. Store only transient officeCalm={mode:"unknown"|"active"|"settling"|"quiet", eligibleSince:null|number}; do not persist it or modify statuses, mood, changedAt, workflow, ledgers or source health.
@@ -90,10 +90,10 @@ npx vitest run tests/officeCalm.test.js src/systems/ambientSound.test.js — zer
 npx vitest run tests/scanSessions.test.js tests/normalizeStatusMessage.test.js tests/normalizePost.server.test.js tests/inferStatusPolling.test.js — zero failures; include true scanner-to-client multi-idle and trusted/untrusted callback integration, not independently mocked halves.
 node scripts/verify-office-calm.mjs — real-browser startup wiring, health-detail and audio lifecycle/capture checks against an isolated dev server; use the existing import('/src/systems/store.js') technique from panel-features-verify.mjs. Vitest's pure/fake-audio tests alone do not prove React effects run. No new jsdom dependency is needed.
 npm test; npm run build; node scripts/bundle-budget.mjs; npm run smoke; npm run smoke:panel; pwsh -File .agentcortex/bin/validate.ps1 — zero failures, no relaxed assertions/skips. Use isolated status and disable live source observers for deterministic visual captures. Record raw check summaries only, never source text.
-No runtime acceptance is claimed by this planning document.
+Delivery evidence: docs/reviews/2026-10-21-avo-199-review.md and the archived work log. Local browser verification uses synthetic status files, not authenticated CLI workload claims.
 
 ## Risks and Rollback
-Biggest risk is confusing no data with idle. Default unknown, conservative evidence gates and immediate exit prevent that. Reuse existing audio ramps; do not rebuild the graph per mode. Rollback calmEnabled=false; revert only feature hunks, preserve inherited dirty files and user localStorage/preferences. On 2026-10-19 the owner authorized limited implementation-time unfreeze of ux-vibe-rebalance.md and subagent-helper-huddle.md for shared-file alignment only; preserve control demotion/helper semantics and re-freeze after alignment. Those files remain unchanged in this planning session.
+Biggest risk is confusing no data with idle. Default unknown, conservative evidence gates and immediate exit prevent that. Reuse existing audio ramps; do not rebuild the graph per mode. Rollback calmEnabled=false; revert only feature hunks, preserve inherited dirty files and user localStorage/preferences. On 2026-10-19 the owner authorized limited implementation-time unfreeze of ux-vibe-rebalance.md and subagent-helper-huddle.md for shared-file alignment only; preserve control demotion/helper semantics and re-freeze after alignment. Those shared files remain unchanged by this implementation.
 
 ## Domain Decisions
 - [DECISION] Quiet describes observed session idleness, never task completion.
@@ -106,4 +106,4 @@ Biggest risk is confusing no data with idle. Default unknown, conservative evide
 - [CONSTRAINT] Quiet audio uses a cancellable, epoch-fenced graph lifecycle; zero base gain with a connected LFO is not a silence proof.
 
 ## Claude Resume
-Implement as its own feature branch/work log after bootstrap; this spec is frozen and the DSoT baseline is approved. Preserve both and use the normal amendment process for scope changes. Run review->test->handoff->ship; actual rendered visual acceptance is still pending. Do not count this planning-only checkpoint as a runtime gate. AVO-201 consumes this state without copying its predicate.
+AVO-199 delivery is complete on codex/avo-199-all-quiet; owner accepted actual C1-C4 captures and calmEnabled=true. Review/test/handoff/ship evidence is archived. PR merge is separate from this delivery checkpoint. Next: AVO-201 consumes the shared state without copying its predicate; its runtime and AVO-200 remain unimplemented.
