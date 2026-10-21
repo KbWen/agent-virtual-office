@@ -5,6 +5,19 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.12 — 2026-10-21 — More agents, and a calmer quiet office
+
+Two pull requests since v1.6.11 (#258 and #259).
+
+### Added
+
+- **Antigravity and Gemini CLI join the office.** Antigravity is observed passively from compatible local transcripts; Gemini CLI uses separately installed project hooks (`setup --platform gemini`). Antigravity’s transcript format is private and version-dependent. Authenticated Gemini CLI sessions and native Linux CLI execution have not been live-verified.
+- **The office recognizes quiet honestly.** After 30 seconds of fresh, project-scoped idle observations with healthy integration, the existing detail reads “Observed sessions idle” and an already-enabled ambient soundscape fades and suspends. Unknown evidence or new activity exits quiet immediately. This describes observed idleness, not task completion.
+
+### Housekeeping — not user-facing
+
+- **Vite 8.2.4** patches launch-editor security advisories. Existing locked transitive dependency versions are retained.
+
 ## v1.6.11 — 2026-10-11 — Live status over HTTPS, and the characters get a little more personality
 
 Three pull requests since v1.6.10. Two were done by another agent (Gemini, in Antigravity); the
