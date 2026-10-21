@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-19",
+  "purpose": "Approved planning checkpoint; verify before implementation in an isolated checkout.",
+  "hash_algorithm": "SHA-256",
+  "normalization": "UTF-8 text with CRLF/CR normalized to LF; preserve final newline",
+  "runtime_implementation": "not-started",
+  "files": [
+    {
+      "path": "docs/specs/avo-199-all-quiet-calm-state.md",
+      "sha256": "1d79773a2f54c0030f8d258e5669dcfbca3ada503a12c57412a0708d7c24655f"
+    },
+    {
+      "path": "docs/specs/avo-201-real-clock-off-hours.md",
+      "sha256": "3d8712eba7c807dd634099764e964986423dbf98fb1b089e0b8738a428a2ae1e"
+    },
+    {
+      "path": "docs/specs/avo-200-planning-pod-meeting-room.md",
+      "sha256": "5df409b34d7b6cce2d35d8cd2d6f103dc8b5425d70b4fa98df6c244b5eab9a61"
+    },
+    {
+      "path": "docs/design/office-experience-followups.md",
+      "sha256": "fc9b972f7004f5f48c95d16495c699e046329b371a4f35dbe6b0514e5e2fe875"
+    },
+    {
+      "path": "docs/adr/ADR-011-signal-driven-planning-location.md",
+      "sha256": "91f8402f6735fcac0ebb2a1f71f59499c40f0b7c4e87131a21790aed8d95f75e"
+    }
+  ]
+}
