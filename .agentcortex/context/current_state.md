@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-21T02:58:10.427329Z
+- **Last Updated**: 2026-10-21T04:43:20.633993Z
 - **Last Verified**: 2026-10-11
-- **Update Sequence**: 153
+- **Update Sequence**: 154
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -159,6 +159,14 @@
 
 ## Ship History
 
+### Ship-chore-release-v1.6.12-2026-10-21 (more agents, and a calmer quiet office) · release v1.6.12
+
+- Cuts merged PR258/259 as v1.6.12 under the established patch-release convention: Antigravity passive observation, separate Gemini CLI project hooks, trusted observed-idle calm and Vite8.2.4 security patch. AVO201/200 remain pending; accepted authenticated Gemini/native Linux live-validation limits remain explicit.
+- This release cut changes only package version, both lock root versions, CHANGELOG and delivery metadata; dependency graph/application code are unchanged. Source features already merged with CI8/8PASS.
+- Validation: full2897PASS/3existing skips; build514383bytes within546154budget; pack-smokePASS; audit0; independent release-notes/version/diff reviewPASS. Final governance evidence is in the release work-log archive.
+- After the release-cut PR is green and merged: annotated v1.6.12 tag at the exact release merge commit, push the tag, then create the latest GitHub Release. Publication is not claimed by this pre-merge metadata checkpoint.
+
+
 ### Ship-hotfix-avo-199-vite-security-2026-10-21
 
 - Owner-approved Vite8.2.1->8.2.4 security patch clears PR259 dependency audit; only existing Vite requirement/package metadata changed, all other locked versions retained. Runtime dependency placement is preserved.
@@ -207,12 +215,6 @@
 
 - Feature shipped: AVO-161 Wave B: Deepened and humanized character dialogues across 8 roles (PM, Arch, Dev, QA, Ops, Res, Gate, Designer) with distinct personalities, hobbies, life philosophies, and quirks in `src/config/characters.json`, `src/locales/en.json`, and `src/locales/zh-TW.json`. Context bubble pools expanded (+3 lines per role) and gossip pool expanded (+16 lines) adhering to ADR-007 channel separation and open-ended non-conclusive content rules (zero banned terminal completion stems).
 - Tests: 150 test suites passed (2,711 passed, 0 failed), dialogueS2Lint passed 83/83, 100% key parity (395/395 keys), smoke passed across 4 viewports.
-
-### Ship-chore-release-v1.6.10-2026-09-27 (the office only shows what is really happening, and the server stops falling over) · release v1.6.10
-
-- Cuts the 13 PRs merged since `v1.6.9` (#240–#252) as **v1.6.10** (patch, per the repo's lean-patch practice). The release commit contains no app code: `package.json` 1.6.9 -> 1.6.10, **both** `package-lock.json` root version fields (0 `"version": "1.6.9"` strings left), the CHANGELOG narrative, and this entry.
-- **The CHANGELOG leads with an upgrade note**: the Host allowlist (#246, extended to `npm run dev` by #252) is ON by default, so reverse-proxy / Docker / hostname users must set `OFFICE_ALLOWED_HOSTS` or get `403`; valid-token requests are exempt. Other owner-visible changes listed under Changed: Friday 15:00 runs the group meeting instead of tea (#251), search text no longer shown in bubbles (#249). "Does not claim" list: ~5-min dead-hook clear, one-agent-per-session with Claude+Codex in one project, the deploy-success `doneAt` gap, the bounded hook-lock residual.
-- Every included PR shipped with its own Ship History entry, work-log archive and INDEX chain entry; each merged with CI 8/8 green and a `validate.sh` fail=0 run. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.10` tag on the release merge commit + `gh release create --latest`.
 
 ## Spec Index Archive
 
