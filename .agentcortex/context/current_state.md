@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-21T02:37:05.217456Z
+- **Last Updated**: 2026-10-21T02:58:10.427329Z
 - **Last Verified**: 2026-10-11
-- **Update Sequence**: 152
+- **Update Sequence**: 153
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -159,6 +159,12 @@
 
 ## Ship History
 
+### Ship-hotfix-avo-199-vite-security-2026-10-21
+
+- Owner-approved Vite8.2.1->8.2.4 security patch clears PR259 dependency audit; only existing Vite requirement/package metadata changed, all other locked versions retained. Runtime dependency placement is preserved.
+- Verification: audit0; full2897PASS/3existing skips; build/budget, browser7views45captures0errors and render/panel smoke PASS; independent manifest/lock review PASS. CI final status is tracked on PR259; no merge claim.
+
+
 ### Ship-feat-avo-199-all-quiet-2026-10-21
 
 - AVO-199: trusted expiring session observation drives transient30s calm; only existing health detail and authorized audio graph change. Empty sprites never prove idle; source/transport validity and lifecycle races fail closed.
@@ -207,12 +213,6 @@
 - Cuts the 13 PRs merged since `v1.6.9` (#240–#252) as **v1.6.10** (patch, per the repo's lean-patch practice). The release commit contains no app code: `package.json` 1.6.9 -> 1.6.10, **both** `package-lock.json` root version fields (0 `"version": "1.6.9"` strings left), the CHANGELOG narrative, and this entry.
 - **The CHANGELOG leads with an upgrade note**: the Host allowlist (#246, extended to `npm run dev` by #252) is ON by default, so reverse-proxy / Docker / hostname users must set `OFFICE_ALLOWED_HOSTS` or get `403`; valid-token requests are exempt. Other owner-visible changes listed under Changed: Friday 15:00 runs the group meeting instead of tea (#251), search text no longer shown in bubbles (#249). "Does not claim" list: ~5-min dead-hook clear, one-agent-per-session with Claude+Codex in one project, the deploy-success `doneAt` gap, the bounded hook-lock residual.
 - Every included PR shipped with its own Ship History entry, work-log archive and INDEX chain entry; each merged with CI 8/8 green and a `validate.sh` fail=0 run. Post-merge per `repo-gotchas` §12: **annotated** `v1.6.10` tag on the release merge commit + `gh release create --latest`.
-
-### Ship-fix-followups-2026-09-27 (OFFICE_ALLOWED_HOSTS now governs the dev server too; render-smoke really escalates a stuck server)
-
-- Two quick-win follow-ups from the 2026-09-26 audit wave, reviewed on their own branches (`fix/dev-allowed-hosts`, `fix/pack-smoke-teardown`) and shipped bundled to save a CI + validator cycle. (1) PR #246 gave `server.mjs` a Host allowlist, but `npm run dev` ignored `OFFICE_ALLOWED_HOSTS`, so a dev server behind a custom hostname got Vite's own 403. The parser moved to `src/utils/hostAllowlist.mjs`; `server.mjs` imports it (fresh review: 480/480 identical responses main vs branch, 6 env configs x 48 Host cases) and `vite.config.mjs` maps it to `server.allowedHosts` only when set — unset keeps Vite's default, nothing can become `true`. (2) `render-smoke.mjs` escalation `if (!serverProc.killed) kill('SIGKILL')` never fired (`.killed` is true once the signal is SENT); it now waits on the real `exit` event (11 s, above the server's 10 s drain).
-- **Dropped on review, not shipped:** a pack-smoke cross-run "orphan reaper". The orphaned `node server.mjs --port=530x` processes seen during the wave were servers agents had started by hand for live probes, not a smoke-script leak; the reaper `taskkill /T /F`-ed any PID in a shared tmp marker with no identity check and would have killed unrelated processes. The premise came from the orchestrator and was disproved by a fresh reviewer.
-- Tests: combined branch build clean; vitest 144 files / 2654 tests; `npm run smoke` PASS. Mutation checks: removing the `.`-entry filter, entry port-stripping, or the Vite wiring each fails a test. PR #252.
 
 ## Spec Index Archive
 

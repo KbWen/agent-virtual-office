@@ -216,3 +216,11 @@ the dev server by a custom hostname or reverse proxy got Vite's default 403 rega
 - **Docs**: `README.md`'s 403-by-hostname troubleshooting entry and `docs/deployment/
   DEPLOYMENT.md`'s `OFFICE_ALLOWED_HOSTS` row both now note the var also governs `npm run dev`,
   not only `server.mjs`.
+
+
+## Vite security patch — 2026-10-21
+PR259 dependency audit identified the unchanged Vite8.2.1 baseline as affected by GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw and GHSA-587h-7wmj-h5pm. The owner approved a bounded8.2.4 patch; Vite remains a runtime dependency. The lock retains every other resolved package version and updates only Vite package metadata plus the root requirement.
+
+Implementation checkpoint: 63ade0cd160614f602c4afb35876cd1638a4ae47. Verification: npm audit0vulnerabilities; full2897PASS/3existing skips; build/budget, render/panel smoke and7-view45-capture local browser pipeline pass. Detailed evidence: .agentcortex/context/archive/codex-codex-avo-199-all-quiet-ci-security-20261021.md. This maintenance change adds no application behavior and does not replace the original AVO199 review/visual acceptance.
+
+Official patch: https://github.com/vitejs/vite/releases/tag/v8.2.4; advisories are linked from the CI report.
