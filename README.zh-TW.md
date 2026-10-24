@@ -6,15 +6,13 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
 [![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev)
 
-**一個讓你的 coding agent 活過來的迷你像素辦公室。**
+**AI 忙著寫程式，小辦公室也開張了。**
 
-![Agent Virtual Office — 本機辦公室已連線至 live session，擷取當下八位角色都在閒置](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.jpg)
+![Agent Virtual Office — 本機辦公室畫面，擷取時八位角色都在閒置](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.jpg)
 
-<sub><i>這張擷取畫面已連上本機 session；當下八位角色都在閒置。</i></sub>
+<sub><i>擷取時本機工作階段已連線，八位角色都在閒置。</i></sub>
 
-當 Claude Code 在你的 codebase 裡埋頭苦幹，一個像素版的它正坐在桌前做一樣的事 —— 打字、卡關、氣呼呼地跑去跟
-QA 吵那到底算不算 bug。把它接上你的 Claude Code / Codex / CI session，你的 agent 就真的來上班了 —— `working`、
-`blocked`、出貨、鬥嘴，即時上演。它不是儀表板，對工作毫無幫助，但你就是會一整天開著它。
+接上 Claude Code、Codex、Gemini CLI 或 CI，就能在像素辦公室裡看見工作中、卡關與閒置。休息時，捏捏紙星星，或把明信片拿下來看看。
 
 [快速開始](#快速開始) · [他們在幹嘛](#他們在幹嘛) · [常見問答](#常見問答) · [English](README.md)
 
@@ -27,68 +25,62 @@ QA 吵那到底算不算 bug。把它接上你的 Claude Code / Codex / CI sessi
 <table>
 <tr>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.jpg" alt="本機辦公室已連線至 live session，擷取當下八位角色都在閒置" /><br>
-<sub><b>辦公室一覽。</b>這張擷取畫面已連線，角色當下都在閒置。</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.jpg" alt="像素辦公室畫面" /><br>
+<sub><b>辦公室一覽。</b>看看角色與空間配置。</sub>
 </td>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.gif" alt="動畫：戳一下小人，他會晃一下並冒出目前狀態的對話泡泡" /><br>
-<sub><b>戳一下小人</b>，他會晃一下並冒出目前狀態。位置和狀態都不會被改動。</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.gif" alt="動畫：戳一下角色，他會晃一下並顯示目前狀態" /><br>
+<sub><b>戳一下角色</b>就能看目前在做什麼，位置不會改變。</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" align="center">
 <img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/cozy-postcard.jpg" alt="已選用小貓咪貼紙的辦公室明信片預覽" /><br>
-<sub><b>辦公室明信片。</b>從佈告欄拿起來，可加本機限定貼紙，再下載 PNG。</sub>
+<sub><b>辦公室明信片。</b>從佈告欄拿起來，可加貼紙，再下載 PNG。</sub>
 </td>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.jpg" alt="已連線的英文介面辦公室畫面，角色當下都在閒置" /><br>
-<sub><b>英文介面也能切換。</b>此畫面顯示本機 session 已連線，八位角色都在閒置。</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.jpg" alt="英文介面的像素辦公室畫面" /><br>
+<sub><b>也有英文介面。</b>可在應用程式中切換語言。</sub>
 </td>
 </tr>
 </table>
 
 ## 他們在幹嘛？
 
-| 小人 | 個性 | 通常會看到他… |
-|------|------|-----------------|
-| **PM** | 開會是一種愛的語言 | 把根本不用調的甘特圖再調一次 |
-| **建築師** | 貝雷帽。意見很多。 | 講到一半突然衝去白板大喊「有了！」 |
-| **開發者** | 雙馬尾、咖啡續命 | 桌上五個空杯，正在沖第六杯 |
-| **QA** | 什麼都不信、放大鏡隨身 | 跟 Dev 說這 bug 是真的。它就是真的。 |
-| **DevOps** | 安全帽一戴、天不怕地不怕 | 深吸一口氣，然後按下那顆大紅按鈕 |
-| **研究員** | 住在書堆後面 | 一直疊書，疊到某個瞬間突然懂了 |
-| **門神** | 你 pipeline 的保鑣 | 盾牌一舉：「前置條件不夠。」重來。 |
-| **設計師** | 粉紅頭髮、對 padding 很有意見 | 把一個色票往左移 2px，這是第三次了 |
+| 角色 | 小小個性 |
+|------|----------|
+| **PM** | 把根本不用調的甘特圖再調一次 |
+| **建築師** | 貝雷帽，意見很多，講到一半就衝去白板 |
+| **開發者** | 雙馬尾，五個空杯，正在沖第六杯咖啡 |
+| **QA** | 放大鏡一拿：這個 bug 千真萬確 |
+| **DevOps** | 戴好安全帽，深呼吸，再按下大紅按鈕 |
+| **研究員** | 躲在書堆後面，再添一本書 |
+| **門神** | 盾牌一舉：「前置條件不夠。」重來。 |
+| **設計師** | 對 padding 很有意見，色票再往左兩格 |
+
+各角色會依工具動作呈現不同動畫：Bash 會讓 QA 拿出放大鏡、讓 Ops 走向部署按鈕；Edit 會讓設計師走到白板。只有工具有回報時，辦公室才會顯示卡關原因，例如測試、建置或安裝失敗；沒有回報就維持未知。重複失敗會出現記號；45 秒沒有新訊號時，工作中的角色可能轉為思考。八位角色都是手繪 SVG，不需 canvas 或 GPU。
 
 ## 辦公室日常
 
-開著放著，事情就自己發生了。有些事件由你 session 的**真實訊號**觸發 —— 真的部署成功才放煙火、卡關連續發生才開吵；
-社交橋段則照計時器出現，而且 live session 忙碌時會自動降頻，不會蓋過真實工作：
+工作中與卡關狀態依工具回報顯示。日常小演出按時間出現，忙碌時會減少；部分演出也會回應工作階段事件。顏色環與工作符號呈現狀態，對話泡泡則是角色碎念。
 
-- **茶歇時間** — 幾個人溜去咖啡機旁，聊其他人的八卦
-- **站立會議** — PM 把所有人趕到白板前。沒人逃得掉。
-- **外送到了** — 有人舉著紙袋進來。生產力結束。
-- **Review 開吵** — Dev：「沒 bug。」QA：「你看這裡。」Dev：「…好啦。」
-- **部署成功** — Ops 一巴掌拍下按鈕，全場炸開
-- **靈感時刻** — 建築師定格三秒，然後衝去白板
+- **茶歇時間** — 有人溜去咖啡機旁
+- **站立會議** — PM 把大家叫到白板前
+- **外送到了** — 紙袋一進門，工作先等等
+- **Review 開吵** — Dev 和 QA 對 bug 各有看法
+- **靈感時刻** — 建築師衝向白板
 
-…還有稀有的：有人帶狗來上班、冷氣掛了全場搧風、老闆來巡視、全辦公室*瞬間看起來超忙*。
+從 IDE 側欄到完整視窗，辦公室都會填滿可用寬度。按 **☰** 打開名冊，查看工作中、卡關的角色與最近活動。
 
-辦公室會填滿你停靠的任何寬度 —— IDE 側欄、半螢幕、全視窗，左右不留死白。按 **☰** 切換直式名冊：誰在工作、誰卡關，
-還有一條「剛剛發生了什麼」的即時動態。
+## 場景互動
 
-## 為什麼它很療癒
+- **角色：** 點一下查看目前動作；按 `Space` 再戳一次，右鍵直接戳、不開啟檢視窗。
+- **紙星星：**在休息區桌上；短按、稍微按住和長按各有不同反應。
+- **明信片：**從佈告欄拿下來，可加小盆栽或小貓咪貼紙，再按「下載 PNG」。貼紙只會套用在明信片上。
 
-- **純 SVG 像素藝術** — 8 個手繪角色。不用 canvas、不吃 GPU、bundle 不肥。
-- **角色感知動畫** — 同一工具、不同角色、不同場景：`qa + Bash` → 放大鏡、`ops + Bash` → 部署按鈕、`designer + Edit` → 白板。
-- **誠實、由訊號驅動的生命力** — 事件由你的*真實* session 觸發，角色的真實狀態永遠不造假。
-- **每個角色有自己的口吻** — 對話氣泡只放聲音（懷疑的 QA、俐落的 PM、埋頭的研究員各有腔調），狀態一律走顏色環 + 工作符號。有個性，但不假造它們其實沒有的對話或交情。
-- **以「安靜」為設計** — 情緒驅動天氣、閒置推論（`working+45s` → thinking）、減少動態 + a11y，以及永不卡死的行為看門狗。
-- **直接玩場景互動** — 點角色可查看目前動作；捏休息區桌上的紙星星，短按、稍微按住或長按紙星星，都會有不同反應。摸摸小夥伴、盆栽互動與閒置揮手都是選用設定，預設關閉，可在設定中開啟。
+摸摸小夥伴、盆栽互動與閒置揮手都是選用功能，預設關閉，可在設定中開啟。
 
-點一下佈告欄上的明信片即可預覽，再選「下載 PNG」匯出。小盆栽與小貓咪是選用貼紙，只會套用在這張明信片；卡片內容會反映當日活動。
-
-→ 完整內部機制（分類器層級、移動、行為引擎、天氣、推論）在 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**。
+→ 分類器、移動與行為引擎的說明：**[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**。
 
 ---
 
