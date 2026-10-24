@@ -25,8 +25,8 @@
 <table>
 <tr>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.jpg" alt="像素辦公室畫面" /><br>
-<sub><b>辦公室一覽。</b>看看角色與空間配置。</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/marketing/paper-star.gif" alt="動畫：長按紙星星，再看它彈回來" /><br>
+<sub>捏住紙星星，放開看看它怎麼彈回來。</sub>
 </td>
 <td width="50%" align="center">
 <img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.gif" alt="動畫：戳一下角色，他會晃一下並顯示目前狀態" /><br>
@@ -35,8 +35,8 @@
 </tr>
 <tr>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/cozy-postcard.jpg" alt="已選用小貓咪貼紙的辦公室明信片預覽" /><br>
-<sub><b>辦公室明信片。</b>從佈告欄拿起來，可加貼紙，再下載 PNG。</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/marketing/postcard.gif" alt="動畫：打開明信片、選小貓貼紙，再關閉預覽" /><br>
+<sub><b>辦公室明信片。</b>打開明信片，選一張貼紙。</sub>
 </td>
 <td width="50%" align="center">
 <img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.jpg" alt="英文介面的像素辦公室畫面" /><br>
@@ -44,6 +44,8 @@
 </td>
 </tr>
 </table>
+
+[宣傳圖與 GIF 素材](docs/assets/marketing/README.md)
 
 ## 他們在幹嘛？
 
