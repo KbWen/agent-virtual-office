@@ -1,0 +1,305 @@
+{
+  "baseHead": "564b96a86326ccf389527d9614c8e799f5119b9b",
+  "rootHead": "3d8ae35599a2b72eb05e1049d2c290412180428d",
+  "candidateHead": "564b96a86326ccf389527d9614c8e799f5119b9b",
+  "count": 32,
+  "expectedMainDifferencePaths": [
+    "src/components/ControlPanel.jsx",
+    "src/components/PixelOffice.jsx",
+    "src/locales/en.json",
+    "src/locales/zh-TW.json"
+  ],
+  "unexpectedHashMismatches": [],
+  "files": [
+    {
+      "path": "src/App.jsx",
+      "rootSha256": "ACF78D264D8F106983BE913B98268BBAC1F83E5D4BE7FF59E75B38B8F51712E1",
+      "candidateSha256": "ACF78D264D8F106983BE913B98268BBAC1F83E5D4BE7FF59E75B38B8F51712E1",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "28fc28bc6e93cfd83762f39a707b81eebd103b1e3fbbb0cc8f71d95ec02a2863"
+    },
+    {
+      "path": "src/components/AgentCharacter.jsx",
+      "rootSha256": "DC2A7D0FCA8DC45B628BA193BA7120FC9A2BAFF6669EAF48242B3B895F2F9984",
+      "candidateSha256": "DC2A7D0FCA8DC45B628BA193BA7120FC9A2BAFF6669EAF48242B3B895F2F9984",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "abaf2febae0cb128e193dc2b699e3a953c9fe5a8de6baf8af39154b04f1c2037"
+    },
+    {
+      "path": "src/components/ControlPanel.jsx",
+      "rootSha256": "E89A4B0E6C6849C4913209B0A8978E7B3390A99E84825E55E8A0702409A416BC",
+      "candidateSha256": "04E8745111965D8E0097FC9FBC55762B8B7BC4B44DF822DB5FCADB8C97938F8D",
+      "candidateMatchesRoot": false,
+      "expectedMainDifference": true,
+      "differenceNote": "origin/main AVO-199 healthDotDetail/calm health props and subscriptions",
+      "gitBlobSha256": "264e8d56a2b0c0741839819f90afba280867bae0b977ecb1ec2ec1e56f399c98"
+    },
+    {
+      "path": "src/components/OfficePet.jsx",
+      "rootSha256": "D1B48BD41FA64C32F2B318BC2C5DD93758384A10FBB677DE1BFBE6766885DCDA",
+      "candidateSha256": "D1B48BD41FA64C32F2B318BC2C5DD93758384A10FBB677DE1BFBE6766885DCDA",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "d9197bce2ab9e98599de10d60b0d5b437752751811db4f6005652d12e242a49a"
+    },
+    {
+      "path": "src/components/PixelOffice.jsx",
+      "rootSha256": "D31B0686F269BCBD74070E5D5A1C281F221345CD44DE4830A7B2AD3514BB4F9D",
+      "candidateSha256": "7E0C600848AD45A870684C2D6E12024E00DE196874A5489AB518447109A1AD3D",
+      "candidateMatchesRoot": false,
+      "expectedMainDifference": true,
+      "differenceNote": "origin/main AVO-199 startOfficeCalm startup effect",
+      "gitBlobSha256": "a7f00f3077a5bbf0f157d41d8c0cc13076ad94572c988f3cb470b93974ce0ca6"
+    },
+    {
+      "path": "src/components/TopDownFurniture.jsx",
+      "rootSha256": "397D99CE0B2AB2D091E4FBE40C10DB98CD8E684C36487F8D9A1CDF19F19BCD3C",
+      "candidateSha256": "397D99CE0B2AB2D091E4FBE40C10DB98CD8E684C36487F8D9A1CDF19F19BCD3C",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "bcc6eb12e3d52b28deb00a18e149c4f144da490425cc1953dd5b74488b89ff2a"
+    },
+    {
+      "path": "src/components/petSprites.jsx",
+      "rootSha256": "52682ACE8C13EA30711C9905E66D87032C0E0CFDB0277A2304793A398D7D4A09",
+      "candidateSha256": "52682ACE8C13EA30711C9905E66D87032C0E0CFDB0277A2304793A398D7D4A09",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "9585819342c94783a8193236cb8c0f5c168e98a69e3993f71094d5a70079f6fe"
+    },
+    {
+      "path": "src/index.css",
+      "rootSha256": "E04FF887C0DE06BCCD2279D404B767C6983507EF91277B60B0972C02873AA7E4",
+      "candidateSha256": "E04FF887C0DE06BCCD2279D404B767C6983507EF91277B60B0972C02873AA7E4",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "5148d12ff7af9ee7ad831a629fde101a15e47db6ad3f28fe333d3c6321c075df"
+    },
+    {
+      "path": "src/locales/en.json",
+      "rootSha256": "22237EC2B1CA03913E701C01C79A1801CEEF2FFFE87B08F96FFF811F3595DF14",
+      "candidateSha256": "011EC384CABB0771B105B24421495F55D244AA6684475F027BC4C1D273DC03E2",
+      "candidateMatchesRoot": false,
+      "expectedMainDifference": true,
+      "differenceNote": "origin/main AVO-199 status.observedIdle locale key (also CRLF normalization)",
+      "gitBlobSha256": "011ec384cabb0771b105b24421495f55d244aa6684475f027bc4c1d273dc03e2"
+    },
+    {
+      "path": "src/locales/zh-TW.json",
+      "rootSha256": "96302A47A6DE84855972754C9185F31E75FBD784D63B9B0629F9371159E11A9E",
+      "candidateSha256": "8FAD3153CFCB0BC6F1D8C4E35A36BDD087380C46DCEC2EAD8957A6E74F21C87E",
+      "candidateMatchesRoot": false,
+      "expectedMainDifference": true,
+      "differenceNote": "origin/main AVO-199 status.observedIdle locale key (also CRLF normalization)",
+      "gitBlobSha256": "8fad3153cfcb0bc6f1d8c4e35a36bdd087380c46dcec2ead8957a6e74f21c87e"
+    },
+    {
+      "path": "src/systems/dailyCard.js",
+      "rootSha256": "DCB272EA43F37E08F850C3772B58DD52525163EB1610855F081CDA67305E150E",
+      "candidateSha256": "DCB272EA43F37E08F850C3772B58DD52525163EB1610855F081CDA67305E150E",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "cba4b30c790ab3deb3ab6d780349d409868f20468d6b8a68dc0e617848816044"
+    },
+    {
+      "path": "src/components/CozyCardPreview.jsx",
+      "rootSha256": "926847943D86FD63901C559797B46C2D6D341206AC0CD2F535EE5C28C9DC6915",
+      "candidateSha256": "926847943D86FD63901C559797B46C2D6D341206AC0CD2F535EE5C28C9DC6915",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "3c55a104712b821e045301eeebeea6e69d6c4134f500f748a7a2e87125dff3c6"
+    },
+    {
+      "path": "src/components/ScenePaperStar.jsx",
+      "rootSha256": "47F78A59E39C3D3727DEC250B5A555DAEF483164C6E2B203C296B864CC46F99F",
+      "candidateSha256": "47F78A59E39C3D3727DEC250B5A555DAEF483164C6E2B203C296B864CC46F99F",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "47f78a59e39c3d3727dec250b5a555daef483164c6e2b203c296b864cc46f99f"
+    },
+    {
+      "path": "src/components/ScenePostcard.jsx",
+      "rootSha256": "229945E2774477267A13177513059E0A83EDE9D4DCD43FC4A2AE03E97037518D",
+      "candidateSha256": "229945E2774477267A13177513059E0A83EDE9D4DCD43FC4A2AE03E97037518D",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "229945e2774477267a13177513059e0a83ede9d4dcd43fc4a2ae03e97037518d"
+    },
+    {
+      "path": "src/components/cozyCardPreview.js",
+      "rootSha256": "2515592ED328746F0725E047CD10AC8004BF3FCE354B944316684B74E3DFE155",
+      "candidateSha256": "2515592ED328746F0725E047CD10AC8004BF3FCE354B944316684B74E3DFE155",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "2515592ed328746f0725e047cd10ac8004bf3fce354b944316684b74e3dfe155"
+    },
+    {
+      "path": "src/components/cozyCardPreview.test.js",
+      "rootSha256": "C0F8261C62D107BB5D4C209DD07411233428ED6DA73FFB5A8A8643A9C59384D9",
+      "candidateSha256": "C0F8261C62D107BB5D4C209DD07411233428ED6DA73FFB5A8A8643A9C59384D9",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "c0f8261c62d107bb5d4c209dd07411233428ed6da73ffb5a8a8643a9c59384d9"
+    },
+    {
+      "path": "src/components/useCozyInteractions.js",
+      "rootSha256": "D41FF988F3FE49413C046C19369CAA2A7D8EC411DEE5F2669CDA0D7024FABA0B",
+      "candidateSha256": "D41FF988F3FE49413C046C19369CAA2A7D8EC411DEE5F2669CDA0D7024FABA0B",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "d41ff988f3fe49413c046c19369caa2a7d8ec411dee5f2669cda0d7024faba0b"
+    },
+    {
+      "path": "src/components/useCozyPopover.js",
+      "rootSha256": "6D5623A58A5F00719E7E3B1A168E86343FC1BE0AC2B9D29EA8433BA2458AC68A",
+      "candidateSha256": "6D5623A58A5F00719E7E3B1A168E86343FC1BE0AC2B9D29EA8433BA2458AC68A",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "6d5623a58a5f00719e7e3b1a168e86343fc1be0ac2b9d29ea8433ba2458ac68a"
+    },
+    {
+      "path": "src/systems/cozyPreferences.js",
+      "rootSha256": "1B35A43456C2784D693CA4A6E459BEE22384E3AE41FA14C3FE17B806306B2CB5",
+      "candidateSha256": "1B35A43456C2784D693CA4A6E459BEE22384E3AE41FA14C3FE17B806306B2CB5",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "1b35a43456c2784d693ca4a6e459bee22384e3ae41fa14c3fe17b806306b2cb5"
+    },
+    {
+      "path": "src/systems/idleWave.js",
+      "rootSha256": "827C0DF6970540780F46AF719D4D6EE6AA7D3E0844D7C77DC14B7D965902E9D2",
+      "candidateSha256": "827C0DF6970540780F46AF719D4D6EE6AA7D3E0844D7C77DC14B7D965902E9D2",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "827c0df6970540780f46af719d4d6ee6aa7d3e0844d7c77dc14b7d965902e9d2"
+    },
+    {
+      "path": "src/systems/idleWave.test.js",
+      "rootSha256": "D83C06EDA92524F1F4EE782D52C04787B42F993DE8C0DB484DF73BD6D79777E1",
+      "candidateSha256": "D83C06EDA92524F1F4EE782D52C04787B42F993DE8C0DB484DF73BD6D79777E1",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "d83c06eda92524f1f4ee782d52c04787b42f993de8c0db484df73bd6d79777e1"
+    },
+    {
+      "path": "src/systems/sceneCozy.js",
+      "rootSha256": "12BC2E82F5447F38479BAC70FDC2CC53AF4B7E86AFA528132A66CCE7BD1A397C",
+      "candidateSha256": "12BC2E82F5447F38479BAC70FDC2CC53AF4B7E86AFA528132A66CCE7BD1A397C",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "12bc2e82f5447f38479bac70fdc2cc53af4b7e86afa528132a66cce7bd1a397c"
+    },
+    {
+      "path": "tests/cozyCardControls.test.jsx",
+      "rootSha256": "334AA18EFDE6DE6087C3C8485BD3DC8319B625D3432953E57E1F38C1B9EF59A3",
+      "candidateSha256": "334AA18EFDE6DE6087C3C8485BD3DC8319B625D3432953E57E1F38C1B9EF59A3",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "334aa18efde6de6087c3c8485bd3dc8319b625d3432953e57e1f38c1b9ef59a3"
+    },
+    {
+      "path": "tests/cozyCardSticker.test.js",
+      "rootSha256": "E1AAE4309F8C2AEDE8D3F13772F8D841F4290DB07A4AADBAA6715B55DEA364DF",
+      "candidateSha256": "E1AAE4309F8C2AEDE8D3F13772F8D841F4290DB07A4AADBAA6715B55DEA364DF",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "e1aae4309f8c2aede8d3f13772f8d841f4290db07a4aadbaa6715b55dea364df"
+    },
+    {
+      "path": "tests/cozyKeyboardIsolation.test.jsx",
+      "rootSha256": "3DAB9D691F8ADBCBABA5C55B4D9B508D8C0235577B7F6A92CE76CE0049E1847F",
+      "candidateSha256": "3DAB9D691F8ADBCBABA5C55B4D9B508D8C0235577B7F6A92CE76CE0049E1847F",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "3dab9d691f8adbcbaba5c55b4d9b508d8c0235577b7f6a92ce76ce0049e1847f"
+    },
+    {
+      "path": "tests/cozyPreferences.test.js",
+      "rootSha256": "EFC81BF9557045A6B0CBF712E3ECDCC4A1464FF835B53F8FD2CAF534970D48E9",
+      "candidateSha256": "EFC81BF9557045A6B0CBF712E3ECDCC4A1464FF835B53F8FD2CAF534970D48E9",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "efc81bf9557045a6b0cbf712e3ecdcc4a1464ff835b53f8fd2caf534970d48e9"
+    },
+    {
+      "path": "tests/cozySceneReactions.test.jsx",
+      "rootSha256": "C4ECE74B44F5799B94B6A06069F83F9C75CEF31797B3B89CF1B41271705A6439",
+      "candidateSha256": "C4ECE74B44F5799B94B6A06069F83F9C75CEF31797B3B89CF1B41271705A6439",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "c4ece74b44f5799b94b6a06069f83f9c75cef31797b3b89cf1b41271705a6439"
+    },
+    {
+      "path": "tests/idleWaveSprite.test.jsx",
+      "rootSha256": "900EB1B87FB642D663BA8C17BEF093C8D6E1C629FC4FCDD73A83B49E11D7D036",
+      "candidateSha256": "900EB1B87FB642D663BA8C17BEF093C8D6E1C629FC4FCDD73A83B49E11D7D036",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "900eb1b87fb642d663ba8c17bef093c8d6e1c629fc4fcdd73a83b49e11d7d036"
+    },
+    {
+      "path": "tests/sceneCozy.test.jsx",
+      "rootSha256": "C124E17C3D573D62FCD6F999D142244C56389174CB7ABE511E058631A34679F6",
+      "candidateSha256": "C124E17C3D573D62FCD6F999D142244C56389174CB7ABE511E058631A34679F6",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "c124e17c3d573d62fcd6f999d142244c56389174cb7abe511e058631a34679f6"
+    },
+    {
+      "path": "tests/scenePaperStar.test.jsx",
+      "rootSha256": "099B008DC8D9F8A0A4736A8AB058FCE6EACD3ED10BB1798CBBFAAECAF2FDF6BD",
+      "candidateSha256": "099B008DC8D9F8A0A4736A8AB058FCE6EACD3ED10BB1798CBBFAAECAF2FDF6BD",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "099b008dc8d9f8a0a4736a8ab058fce6eacd3ed10bb1798cbbfaaecaf2fdf6bd"
+    },
+    {
+      "path": "tests/scenePostcardInput.test.jsx",
+      "rootSha256": "27CA145C1F1EF49F7A97E807C2EF0C5E2A54803060BF2F5C86928F2C59D84F67",
+      "candidateSha256": "27CA145C1F1EF49F7A97E807C2EF0C5E2A54803060BF2F5C86928F2C59D84F67",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "27ca145c1f1ef49f7a97e807c2ef0c5e2a54803060bf2f5c86928f2c59d84f67"
+    },
+    {
+      "path": "scripts/render-smoke.mjs",
+      "rootSha256": "804926121ECA5E2560D0BB691DDCC4EAEC2DC24AD936640508E0F53378468098",
+      "candidateSha256": "804926121ECA5E2560D0BB691DDCC4EAEC2DC24AD936640508E0F53378468098",
+      "candidateMatchesRoot": true,
+      "expectedMainDifference": false,
+      "differenceNote": null,
+      "gitBlobSha256": "9c7b09d90b2b69486d29396b0bdf3031b15528d677dd1e1e9526b24de6f4383a"
+    }
+  ],
+  "reviewedCodeCommit": "5a08b584b0513f6f35351a33653eab469b0d7185",
+  "hashFormat": "rootSha256/candidateSha256 capture reviewed Windows worktree bytes; gitBlobSha256 is canonical portable committed content"
+}
