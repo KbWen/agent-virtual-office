@@ -460,5 +460,36 @@
   },
   "pairLink": {
     "coediting": "同時在編輯"
+  },
+  "cozy": {
+    "sceneCardHint": "點一下，拿近看看",
+    "sceneCardAria": "拿起佈告欄上的明信片",
+    "sceneStarHint": "短按、按住，看看不同反應",
+    "sceneStarHoldshort": "輕輕捏～",
+    "sceneStarHoldmedium": "快變扁扁了～",
+    "sceneStarHoldlong": "蓄滿了，放開吧！",
+    "sceneStarReleaseshort": "啵！",
+    "sceneStarReleasemedium": "扁扁～晃一下",
+    "sceneStarReleaselong": "呼～彈回來！",
+    "sceneStarAria": "捏捏休息區桌上的紙星星",
+    "enable": "療癒小互動",
+    "openToy": "玩一下紙星星",
+    "plantAria": "輕輕碰一下盆栽",
+    "petAria": "摸摸辦公室小夥伴",
+    "close": "關閉",
+    "toyTitle": "一顆紙星星",
+    "toyHint": "按住，再輕輕放開。留一個小小的休息給自己。",
+    "toyStar": "捏捏紙星星",
+    "cardTitle": "今天的辦公室明信片",
+    "cardAlt": "辦公室明信片預覽",
+    "cardLoading": "正在製作明信片…",
+    "cardError": "明信片暫時無法製作，請再試一次。",
+    "retry": "再試一次",
+    "decoration": "加一點小裝飾",
+    "stickerNone": "不加裝飾",
+    "stickerPlant": "小盆栽",
+    "stickerCat": "小貓咪",
+    "download": "下載 PNG",
+    "downloadError": "下載暫時無法開始，請再試一次。"
   }
 }

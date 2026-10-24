@@ -239,6 +239,27 @@ try {
       )
       exitCode = 1
     }
+
+    // 8. AC-5: the pinned postcard opens only after its image is decoded, then
+    // Escape closes it and returns focus to the scene object at every viewport.
+    try {
+      await page.locator('[data-scene-cozy="postcard"]').click({ timeout: SVG_TIMEOUT_MS })
+      await page.waitForFunction(() => {
+        const card = document.querySelector('[data-cozy-card="true"]')
+        const image = card?.querySelector('img')
+        return !!card && !card.querySelector('[role="status"], [role="alert"]') &&
+          !!image && image.complete && image.naturalWidth === 760
+      }, null, { timeout: SVG_TIMEOUT_MS })
+      await page.keyboard.press('Escape')
+      await page.waitForFunction(() => !document.querySelector('[data-cozy-card="true"]'), null,
+        { timeout: SVG_TIMEOUT_MS })
+      const focusReturned = await page.locator('[data-scene-cozy="postcard"]')
+        .evaluate(element => element === document.activeElement)
+      if (!focusReturned) throw new Error('Escape did not return focus to the pinned postcard')
+    } catch (err) {
+      diagnostics.push(`AC-5 FAIL [${viewport.name}]: postcard image, close, or focus check failed (${err.message})`)
+      exitCode = 1
+    }
   }
 
   // 7. AC-1: zero pageerrors

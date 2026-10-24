@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-10-21
+last_updated: 2026-10-24
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -36,6 +36,7 @@ last_updated: 2026-10-21
 
 | AVO-198 | Antigravity passive observer + independent Gemini CLI hook adapter | product | real-ai-behavior | P2 | docs/specs/antigravity-gemini-hook-integration.md | feature | Shipped | PR #258: isolated adapters and setup; full2809 PASS; owner-approved remaining live-validation limits documented. |
 | AVO-199 | Honest all-quiet office: observed-idle state and calm presentation | product | game-feel | P2 | docs/specs/avo-199-all-quiet-calm-state.md | feature | Shipped | Delivered 2026-10-21: trusted source observation, transient calm and existing health/audio integration; actual visuals accepted; calm enabled; full2897PASS plus browser/build/smoke/governance evidence archived. PR merge is separate. |
+| AVO-206 | Scene-native cozy gestures and duration-sensitive paper star / postcard export | product | game-feel | P3 | docs/specs/cozy-interactions.md | feature | Shipped | Owner-authorized agent verification;2972PASS/3existing skips; production preview/export,4viewport and panel checks PASS; preserves AVO-199 calm runtime. |
 | AVO-200 | Signal-driven single planning seat in the existing meeting room | product | real-ai-behavior | P3 | docs/specs/avo-200-planning-pod-meeting-room.md | architecture-change | Pending | Plan frozen; ADR-011 and design accepted; after AVO-199 shared rollout config; runtime not started. |
 | AVO-201 | Real-clock quiet night/weekend window and existing-light polish | product | vibe-rebalance | P3 | docs/specs/avo-201-real-clock-off-hours.md | feature | Pending | Plan frozen and design approved; requires AVO-199 quiet state; no added furniture; runtime not started. |
 | AVO-187 | Door-crossing stack — agents pausing at a door are ALWAYS visually overlapped | product | office-runtime | **P1** | [Spec](avo-187-temporal-doorway-claim.md) | feature | Shipped | Atomic full-route physical-door claims now serialize both directions with stable FIFO tickets, fencing, and rendered-truth lifecycle release. Commit `018ef1e`; AC1–AC13 include all-door forced contention and a 10-minute visual cold-watch. |

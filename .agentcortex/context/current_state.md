@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-21T04:43:20.633993Z
-- **Last Verified**: 2026-10-11
-- **Update Sequence**: 154
+- **Last Updated**: 2026-10-24T08:07:18.897397+00:00
+- **Last Verified**: 2026-10-24
+- **Update Sequence**: 155
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -61,6 +61,7 @@
     - **Session closure** — final retro at `docs/reviews/2026-05-29-session-retro.md` (snapshot, not authoritative). 27 commits ahead of `origin/main`, 0 behind. `main` branch is the canonical state; `_product-backlog.md` lean (14 items: AVO-101..AVO-115 minus done + #20 deferred); `_shipped-log.md` holds 73 prior shipped rows; vitest 960/960; build 887ms clean. All work-log archives in place + INDEX.jsonl up to date. Push to origin pending human confirmation.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
+  - [ui-rendering] docs/specs/cozy-interactions.md [Shipped] [Updated: 2026-10-24] *(AVO-206: scene gestures, duration star, decorated postcard and CSP-safe preview/Blob export; owner-authorized agent validation; code 5a08b58)*
   - [office-runtime] docs/specs/avo-199-all-quiet-calm-state.md [Shipped] [Updated: 2026-10-21] *(AVO-199: honest observed-idle calm; visual acceptance and automatic gates passed; enabled)*
   - [hook-integration] docs/specs/antigravity-gemini-hook-integration.md [Shipped] [Updated: 2026-10-20] *(AVO-198: passive Antigravity observer and separate Gemini CLI hooks; owner-approved live-validation limits documented)*
   - [maintenance] docs/specs/engineering-audit-remediation.md [Shipped]  *(2026-09-24 audit remediation: dev server monotonic clock parity F-01, bridge UI planning/awaiting-approval toggles F-05; 2026-09-26 server-hardening wave: malformed-request crash guard, SSE heartbeat/client cap, Host-header DNS-rebinding allowlist, vitest CVE bump; 2026-09-26 dev-server-parity wave: file-watcher fallback root-scoping + `.claude`-segment fix, STALE_MS-based overwrite window, add/unlink SSE watch, dev CORS parity, LAN/no-token warning parity; 2026-09-27 follow-ups: `OFFICE_ALLOWED_HOSTS` also governs the dev server via shared `src/utils/hostAllowlist.mjs`, render-smoke exit-race teardown)*
@@ -74,14 +75,11 @@
   - [ui-rendering] docs/specs/poke-acknowledge.md [Shipped]  *(AVO-158 — Poke / acknowledge micro-interaction (Model A, layered on existing click); honest in-place bob + real-status quip; ZERO position/status write; replaces rejected AVO-142 per ADR-005)*
   - [office-runtime] docs/specs/blocked-reason-tags.md [Shipped]  *(AVO-110 / #29 — honest-narrow blocked-reason badge; reasonCode contract)*
   - [office-runtime] docs/specs/recurring-failure-detection.md [Shipped]  *(AVO-117 — recurring blocked-reason detection; downstream of AVO-110)*
-  - [multi-agent] docs/specs/pair-programming-huddle.md [Shipped]  *(AVO-106 — co-editing pair OVERLAY (desk-to-desk link); per-agent activeFile, edit-only; redesigned from a huddle per expert panel)*
-  - [ci-infra] docs/specs/ci-render-smoke.md [Shipped]  *(AVO-145 / hardening-wave H1 — blocking render-smoke gate; AC-6 test-the-test proven)*
   - [data-path] docs/specs/status-field-schema-unification.md [Shipped] [Updated: 2026-06-14 — #122 runtime mirror eliminated → statusContract.mjs single source]  *(AVO-146 / hardening-wave H2 — AGENT_CARRY_FIELDS canonical schema; 9-site map; drift-guarded)*
   - [hook-io] docs/specs/hook-status-write-lock.md [Shipped]  *(#20 / hardening-wave H3 — bounded-wait RMW lock; multi-process proof)*
   - [office-runtime] docs/specs/structured-error-reasons.md [Shipped]  *(AVO-148 / hardening-wave H5 — event-driven permission-denied / api-rate-limit / api-auth-failed)*
   - [ci-infra] docs/specs/npm-pack-install-smoke.md [Shipped]  *(AVO-151 / stability-wave W3 — pack→install→setup/hook/boot smoke gate)*
   - [ci-infra] docs/specs/transport-spine-e2e.md [Shipped]  *(AVO-150 / stability-wave W2 — 19-case real-server API e2e; HOME-override isolation)*
-  - [hook-io] docs/specs/hook-runtime-contract.md [Shipped]  *(AVO-153 / stability-wave W4 — live-captured fixtures + 143 contract tests; found the tool_response/tool_result divergence → AVO-154)*
   - [game-feel] docs/specs/cozy-micro-interactions.md [Shipped]  *(AVO-125 / chill-fun wave — night desk-lamp halos beneath the status layer; status-tinted monitor glow DROPPED on honesty (desk-fixed glow vs walking agents))*
   - [game-feel] docs/specs/ambient-soundscape.md [Shipped]  *(AVO-122 / chill-fun wave — off-by-default 0-KB procedural Web Audio; clatter∝teamPulse (silent@0) + double-gated rain; coffee gurgle DROPPED on honesty (tea-break is a clock event))*
   - [ui-rendering] docs/specs/dialogue-interaction-layer.md [Shipped]  *(dialogue layer — ADR-007 channel separation + open-ended content + honesty gate; S1/S1b reduction commits, S2–5 killable hypotheses; red-team + expert/PM hardened; Wave B shipped 2026-10-01)*
@@ -159,6 +157,12 @@
 
 ## Ship History
 
+### Ship-codex-cozy-scene-interactions-2026-10-24
+- Feature delivered: AVO-206 scene-native gestures and postcard resources; code 5a08b584b0513f6f35351a33653eab469b0d7185.
+- Tests:2972PASS/3existing skips; build535204<=546154;4viewport decoded-image/focus render smoke and panel smoke PASS.
+- Owner authorized verified closeout and normal project launch on2026-10-24; actual painted preview/PNG save proved. Exact-head CI and external merge disposition are recorded in the PR, not inferred here.
+
+
 ### Ship-chore-release-v1.6.12-2026-10-21 (more agents, and a calmer quiet office) · release v1.6.12
 
 - Cuts merged PR258/259 as v1.6.12 under the established patch-release convention: Antigravity passive observation, separate Gemini CLI project hooks, trusted observed-idle calm and Vite8.2.4 security patch. AVO201/200 remain pending; accepted authenticated Gemini/native Linux live-validation limits remain explicit.
@@ -211,12 +215,11 @@
 - Feature shipped: Authored comprehensive 8-agent Character Lore & Office Life book (`docs/CHARACTER_LORE.md`) featuring full agent profiles, desk objects, habits, and 4 interconnected narrative threads weaving character bubbles into collective storylines. Added automated Playwright capture harness (`scripts/capture-office-lore-preview.mjs`) generating high-fidelity visual asset (`docs/assets/office-lore-preview.png`).
 - Tests: dialogueS2Lint 83/83 passed, validate.ps1 115 passed.
 
-### Ship-feat-avo-161-character-dialogue-depth-2026-10-01 (deepen character personalities, hobbies, and philosophies) · AVO-161 Wave B
-
-- Feature shipped: AVO-161 Wave B: Deepened and humanized character dialogues across 8 roles (PM, Arch, Dev, QA, Ops, Res, Gate, Designer) with distinct personalities, hobbies, life philosophies, and quirks in `src/config/characters.json`, `src/locales/en.json`, and `src/locales/zh-TW.json`. Context bubble pools expanded (+3 lines per role) and gossip pool expanded (+16 lines) adhering to ADR-007 channel separation and open-ended non-conclusive content rules (zero banned terminal completion stems).
-- Tests: 150 test suites passed (2,711 passed, 0 failed), dialogueS2Lint passed 83/83, 100% key parity (395/395 keys), smoke passed across 4 viewports.
-
 ## Spec Index Archive
+
+  - [multi-agent] docs/specs/pair-programming-huddle.md [Shipped]  *(AVO-106 — co-editing pair OVERLAY (desk-to-desk link); per-agent activeFile, edit-only; redesigned from a huddle per expert panel)*
+  - [ci-infra] docs/specs/ci-render-smoke.md [Shipped]  *(AVO-145 / hardening-wave H1 — blocking render-smoke gate; AC-6 test-the-test proven)*
+  - [hook-io] docs/specs/hook-runtime-contract.md [Shipped]  *(AVO-153 / stability-wave W4 — live-captured fixtures + 143 contract tests; found the tool_response/tool_result divergence → AVO-154)*
 
 > Rotated out of the live **Spec Index** on 2026-08-16 to satisfy the `check_ssot_caps.py`
 > 30-entry advisory cap. These are index lines only — every spec body remains at its

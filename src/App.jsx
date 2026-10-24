@@ -21,8 +21,13 @@ export default function App() {
   // Global keyboard shortcuts: Space = pause, L = switch language
   useEffect(() => {
     const handler = (e) => {
+      // An interactive control owns keys it has already handled (e.g. squeeze/pet).
+      if (e.defaultPrevented) return
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
       if (e.key === ' ') {
+        // Leave native activation to focused controls; Space pauses the background.
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT' ||
+            e.target.closest?.('button, [role="button"], [role="switch"], a[href], [contenteditable="true"]')) return
         e.preventDefault()
         useOfficeStore.getState().togglePause()
       } else if (e.key === 'l' || e.key === 'L') {

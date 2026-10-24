@@ -106,3 +106,71 @@ html, body, #root {
   35% { opacity: 0.9; }
   100% { opacity: 0; transform: translateY(-6px); }
 }
+@keyframes cozy-plant-sway {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-10deg); }
+  60% { transform: rotate(8deg); }
+}
+@keyframes cozy-pet-tail {
+  0%, 100% { transform: rotate(0deg); }
+  25%, 65% { transform: rotate(14deg); }
+  45%, 85% { transform: rotate(-14deg); }
+}
+@keyframes cozy-vacuum-brush {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+/* SVG focus gets a heavy browser outline even after pointer clicks. Keep our
+   lighter indicator for keyboard navigation, without framing clicked scene art. */
+[data-cozy-plant]:focus,
+[data-office-pet][role="button"]:focus,
+[data-agent-id][role="button"]:focus {
+  outline: none;
+}
+[data-cozy-plant]:focus-visible,
+[data-office-pet][role="button"]:focus-visible,
+[data-agent-id][role="button"]:focus-visible {
+  outline: 2px solid #B87C31;
+  outline-offset: 2px;
+}
+[data-cozy-plant]:hover [data-cozy-leaves] { filter: brightness(1.2); }
+
+/* In-world props keep their world anchors; feedback transforms only their art. */
+[data-scene-cozy] { cursor: pointer; }
+[data-scene-cozy]:focus { outline: none; }
+[data-scene-cozy-hint] { opacity: 0; }
+[data-scene-cozy]:hover [data-scene-cozy-hint],
+[data-scene-cozy]:focus-visible [data-scene-cozy-hint] { opacity: 1; }
+.cozy-postcard-paper { transform-origin: 0 -9px; transition: transform 140ms ease-out; }
+[data-scene-cozy="postcard"]:hover .cozy-postcard-paper,
+[data-scene-cozy="postcard"]:focus-visible .cozy-postcard-paper {
+  transform: translateY(-2px) rotate(-6deg);
+  filter: drop-shadow(0 1px 1px #755A3E);
+}
+@keyframes cozy-star-short {
+  0% { transform: scale(1.05, .88); }
+  50% { transform: scale(.98, 1.07); }
+  100% { transform: scale(1); }
+}
+@keyframes cozy-star-medium {
+  0% { transform: scale(1.14, .64); }
+  38% { transform: scale(.9, 1.2) rotate(-8deg); }
+  68% { transform: scale(1.04, .96) rotate(3deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes cozy-star-long {
+  0% { transform: scale(1.24, .45); }
+  32% { transform: translateY(-9px) scale(.8, 1.38) rotate(-12deg); }
+  58% { transform: translateY(0) scale(1.16, .8) rotate(8deg); }
+  78% { transform: translateY(-2px) scale(.96, 1.1) rotate(-4deg); }
+  100% { transform: translateY(0) scale(1) rotate(0); }
+}
+@keyframes cozy-card-lift {
+  from { opacity: .6; transform: translateY(12px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cozy-postcard-paper { transition: none; }
+  [data-scene-cozy="postcard"]:hover .cozy-postcard-paper,
+  [data-scene-cozy="postcard"]:focus-visible .cozy-postcard-paper { transform: none; }
+}

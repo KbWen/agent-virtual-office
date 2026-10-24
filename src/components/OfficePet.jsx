@@ -4,6 +4,8 @@ import { clampToFloor, isOnFloor, isOnObstacle } from '../systems/movementSystem
 import { derivePetState, petIsMobile, resolvePetMode, petReadabilityScale, petMotionGrammar, runTarget, modeEmote, pickWanderTarget, countAttentionBlockers, firstAttentionBlockerId, PET_MODES } from '../systems/petState.js'
 import PetSprite from './petSprites.jsx'
 import { useTransientFlag } from './useTransientFlag.js'
+import { useCozyInteractions } from './useCozyInteractions.js'
+import { t, useLocale } from '../i18n.js'
 
 // ─── Office pet — a signal-driven barometer (#39 / AVO-121) ─────────────────────────────────────
 // A small ambient cat whose MODE is an honest readout of real aggregate office state (see
@@ -45,6 +47,8 @@ function nearTarget(from) {
 }
 
 export default function OfficePet() {
+  const cozyEnabled = useCozyInteractions()
+  useLocale()
   const officePet = useOfficeStore((s) => s.officePet)
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
   const mood = useOfficeStore((s) => s.mood)
@@ -98,6 +102,23 @@ export default function OfficePet() {
   // #39 delight: click-to-pet — a purely cosmetic, user-initiated ♥ beat (no mode/state change, never
   // affects the honest reading). Gated in render so it can't co-occur with a real-signal beat.
   const [petted, firePetted] = useTransientFlag(1000)
+  const [reaction, setReaction] = useState(0)
+  const reactionTimer = useRef(null)
+  const reactionSerial = useRef(0)
+  const canReact = cozyEnabled && blockedCount === 0 &&
+    (mode === PET_MODES.WANDER || mode === PET_MODES.NAP || mode === PET_MODES.EXCITED)
+  useEffect(() => {
+    setReaction(0)
+    clearTimeout(reactionTimer.current)
+    return () => clearTimeout(reactionTimer.current)
+  }, [canReact, petType, mode, officePet])
+  const pet = () => {
+    firePetted()
+    if (!canReact) return
+    clearTimeout(reactionTimer.current)
+    setReaction(++reactionSerial.current)
+    reactionTimer.current = setTimeout(() => setReaction(0), 850)
+  }
 
   const [pos, setPos] = useState(START)
   const [facing, setFacing] = useState(1)
@@ -168,15 +189,24 @@ export default function OfficePet() {
       data-office-pet={mode}
       data-pet-type={petType}
       data-petted={petted ? '1' : undefined}
-      aria-hidden="true"
+      aria-hidden={cozyEnabled ? undefined : 'true'}
+      role={cozyEnabled ? 'button' : undefined}
+      tabIndex={cozyEnabled ? 0 : undefined}
+      aria-label={cozyEnabled ? t('cozy.petAria', 'Gently pet the office companion') : undefined}
       transform={`translate(${pos.x}, ${pos.y})`}
       style={reducedMotion ? { cursor: 'pointer' } : { transition: `transform ${glideMs}ms ${grammar.easing}`, cursor: 'pointer' }}
       pointerEvents="auto"
-      onClick={firePetted}
+      onClick={pet}
+      onKeyDown={cozyEnabled ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          if (!event.repeat) pet()
+        }
+      } : undefined}
     >
       <g transform={`scale(${facing * petScale}, ${petScale})`} style={hop}>
         <g key={mode} style={pop}>
-          <PetSprite type={petType} mode={mode} reducedMotion={reducedMotion} />
+          <PetSprite key={canReact ? reaction : 0} type={petType} mode={mode} reducedMotion={reducedMotion} reaction={canReact && reaction !== 0} />
         </g>
         {/* Type-independent mode emote — makes the state legible at a glance for ANY skin (the poses
             alone are subtle at ~30px). Static (no animation). Counter-flipped so the glyph reads

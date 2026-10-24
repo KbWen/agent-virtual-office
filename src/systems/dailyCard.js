@@ -15,6 +15,35 @@ import en from '../locales/en.json'
 import zhTW from '../locales/zh-TW.json'
 
 const LOCALES = { en, 'zh-TW': zhTW }
+export const CARD_STICKERS = Object.freeze(['none', 'plant', 'cat'])
+
+// Optional ink in a reserved sky corner; never changes the card's source model.
+export function drawCardSticker(ctx, sticker) {
+  if (sticker !== 'plant' && sticker !== 'cat') return
+  ctx.save()
+  const pixel = (x, y, w, h, color) => {
+    ctx.fillStyle = color
+    ctx.fillRect(654 + x, 64 + y, w, h)
+  }
+  if (sticker === 'plant') {
+    pixel(13, 30, 22, 14, '#C4724B')
+    pixel(10, 27, 28, 6, '#DF9B6F')
+    pixel(22, 11, 4, 17, '#5C8051')
+    pixel(8, 9, 14, 10, '#83A76D')
+    pixel(26, 4, 14, 12, '#6B945B')
+    pixel(13, 2, 12, 10, '#A1BD82')
+  } else {
+    pixel(9, 8, 10, 14, '#D7A56A')
+    pixel(29, 8, 10, 14, '#D7A56A')
+    pixel(7, 18, 34, 24, '#E5BC86')
+    pixel(12, 11, 4, 8, '#E6A999')
+    pixel(32, 11, 4, 8, '#E6A999')
+    pixel(14, 26, 4, 4, '#654D3D')
+    pixel(30, 26, 4, 4, '#654D3D')
+    pixel(22, 32, 4, 3, '#B77B70')
+  }
+  ctx.restore()
+}
 
 // Resolve the dailyCard string sub-tree for a locale, falling back to en per-key.
 export function resolveCardStrings(locale = 'en') {
@@ -396,6 +425,7 @@ export function renderDailyCard(input = {}) {
   const ctx = canvas.getContext('2d')
   ctx.imageSmoothingEnabled = true
   drawCard(ctx, model)
+  drawCardSticker(ctx, input.sticker)
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (blob) resolve(blob)

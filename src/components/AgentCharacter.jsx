@@ -12,6 +12,8 @@ import BehaviorBubble, { shouldFlipBubbleBelow, isSpeakerOnScreen } from './Beha
 import OneShotSmil from './OneShotSmil.jsx'
 import { shouldShakeDesk } from '../systems/eventJuice.js'
 import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
+import { applyIdleWave, canIdleWave } from '../systems/idleWave.js'
+import { useCozyInteractions } from './useCozyInteractions.js'
 
 // Character sprite scale. The root <g> scales by this; the name-tag/bubble group undoes it with
 // 1/CHAR_SCALE. Keep both in sync via this one constant.
@@ -412,12 +414,12 @@ function PixelSprite({ grid, flipX = false, scale = 1 }) {
 
 // ─── Full Sprite with shadow ──────────────────────────────────────────
 // React.memo: AgentCharacter re-renders ~30fps while the character walks (setRenderPos
-// fires every other RAF frame). Of CharacterPixelSprite's five props only walkFrame
+// fires every other RAF frame). Only walkFrame
 // (250ms cadence) and isMoving change during a walk — charId/expression/facing are
 // stable. Memo elides the component invocation (and its baseRole string-split +
 // CHAR_STYLES lookup) on the ~28-of-30 frames per second where no prop changed; the
 // inner useMemos only guarded the sprite-grid generation, not the function body itself.
-export const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing }) {
+export const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing, idleWave = null }) {
   // Strip session prefix for style lookup: "feat-x~dev" → use dev's style
   const baseRole = charId.includes('~') ? charId.split('~').pop() : charId
   const style = CHAR_STYLES[charId] || CHAR_STYLES[baseRole] || CHAR_STYLES.pm
@@ -438,12 +440,27 @@ export const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ c
   }, [isMoving, walkFrame, sprites, expression])
 
   const flipX = facing === 'left'
+  const waveGrids = useMemo(() => idleWave && !isMoving
+    ? [0, 1].map(phase => applyIdleWave(grid, { phase, skin: SKIN, sleeve: style.clothes }))
+    : null, [grid, idleWave, isMoving, style.clothes])
 
   return (
     <g>
       {/* Shadow */}
       <ellipse cx={0} cy={1} rx={10} ry={3} fill="rgba(0,0,0,0.15)" />
-      <PixelSprite grid={grid} flipX={flipX} scale={1} />
+      {waveGrids ? (
+        <g key={idleWave} data-idle-wave="1">
+          {waveGrids.map((waveGrid, phase) => (
+            <g key={phase} data-idle-wave-phase={phase} opacity={phase === 0 ? 1 : 0}>
+              <OneShotSmil>
+                <animate attributeName="opacity" values={phase === 0 ? '1;0;1;1' : '0;1;0;0'}
+                  keyTimes="0;0.3;0.65;1" calcMode="discrete" dur="0.42s" repeatCount="1" fill="freeze" />
+              </OneShotSmil>
+              <PixelSprite grid={waveGrid} flipX={flipX} scale={1} />
+            </g>
+          ))}
+        </g>
+      ) : <PixelSprite grid={grid} flipX={flipX} scale={1} />}
     </g>
   )
 })
@@ -741,6 +758,7 @@ function AgentCharacter({ agent }) {
   const name = charName(id)
   const agentState = useOfficeStore((s) => s.agents[id])
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
+  const cozyInteractions = useCozyInteractions()
   // AVO-132: session effort level intensifies the working glow ring (folded in from the
   // removed ThinkingAura). Subscribe to just `effort` so we re-render only when it changes.
   const effort = useOfficeStore((s) => s.effort)
@@ -1519,6 +1537,12 @@ function AgentCharacter({ agent }) {
   // unmount cleanup clears both. (Audit AVO-159 follow-up: divergence is deliberate, documented.)
   const pokeQuipTimerRef = useRef(null)
   const pokeBobTimerRef = useRef(null)
+  const waveEligible = canIdleWave({ enabled: cozyInteractions, status: agentState?.status,
+    isMoving: isWalking || agentState?.isMoving, reducedMotion })
+  useEffect(() => {
+    // Consume the gesture when interrupted; returning to idle must not replay an old poke.
+    if (!waveEligible) setPokeBob(previous => previous?.wave ? { ...previous, wave: false } : previous)
+  }, [waveEligible])
   useEffect(() => () => {
     if (pokeQuipTimerRef.current) clearTimeout(pokeQuipTimerRef.current)
     if (pokeBobTimerRef.current) clearTimeout(pokeBobTimerRef.current)
@@ -1526,21 +1550,24 @@ function AgentCharacter({ agent }) {
 
   const firePoke = useCallback(() => {
     const now = Date.now()
-    // Read the agent's REAL status fresh from the store at call time (stable empty-deps
-    // closure; never stale). Honest by construction — we only READ status, never write.
-    const status = (useOfficeStore.getState().agents[id]?.status) || 'idle'
+    // Read the agent's REAL status fresh from the store at call time rather than
+    // capturing it. Honest by construction — we only READ status, never write.
+    const latest = useOfficeStore.getState().agents[id]
+    const status = latest?.status || 'idle'
     const r = pickPokeReaction(status, pokeHistoryRef.current, now)
     pokeHistoryRef.current = r.nextHistory
     const pool = t(r.turnAway ? 'poke.turnaway' : `poke.quips.${r.poolKey}`, [])
     const quip = Array.isArray(pool) && pool.length ? pool[pickQuipIndex(pool.length, r.streak)] : null
     pokeSeqRef.current += 1
     setPokeQuip(quip)
-    setPokeBob({ seq: pokeSeqRef.current, intensity: r.intensity })
+    setPokeBob({ seq: pokeSeqRef.current, intensity: r.intensity,
+      wave: canIdleWave({ enabled: cozyInteractions, status: latest?.status,
+        isMoving: movingRef.current || latest?.isMoving, reducedMotion }) })
     if (pokeQuipTimerRef.current) clearTimeout(pokeQuipTimerRef.current)
     pokeQuipTimerRef.current = setTimeout(() => setPokeQuip(null), 1200)
     if (pokeBobTimerRef.current) clearTimeout(pokeBobTimerRef.current)
     pokeBobTimerRef.current = setTimeout(() => setPokeBob(null), r.intensity === 'normal' ? 460 : 720)
-  }, [id])
+  }, [id, cozyInteractions, reducedMotion])
 
   const handleClick = useCallback((e) => {
     e.stopPropagation()
@@ -1674,6 +1701,7 @@ function AgentCharacter({ agent }) {
         isMoving={isWalking}
         walkFrame={walkFrame}
         facing={state.facing || 'down'}
+        idleWave={waveEligible && pokeBob?.wave ? pokeBob.seq : null}
       />
 
       {/* Behavior-specific indicator icon */}

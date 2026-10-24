@@ -8,15 +8,16 @@ import { PET_MODES } from '../systems/petState.js'
 // contact; the parent <g> positions/flips/scales it.
 
 // ── Cat (default) ──
-function CatSprite({ mode, reducedMotion }) {
+function CatSprite({ mode, reducedMotion, reaction }) {
   const fur = '#9B8579', dark = '#6E5E54', belly = '#D9CCBF'
   if (mode === PET_MODES.NAP) {
     return (
-      <g aria-hidden="true">
+      <g aria-hidden="true" data-cozy-pet-reaction={reaction ? 'cat' : undefined}>
         <ellipse cx={0} cy={0} rx={9} ry={5.5} fill={fur} />
         <ellipse cx={0} cy={1.5} rx={6} ry={3} fill={belly} opacity="0.5" />
         <circle cx={-6} cy={-1} r={3.6} fill={fur} />
-        <path d="M -8.6 -3 l 1.4 -2.2 l 1.4 2.2 Z" fill={fur} />
+        <path d="M -8.6 -3 l 1.4 -2.2 l 1.4 2.2 Z" fill={fur}
+          transform={reaction ? 'rotate(-12 -7.2 -3)' : undefined} />
         <path d="M -7.4 -1.2 q 1 0.8 2 0" stroke={dark} strokeWidth="0.5" fill="none" />
         <path d="M 8 0 q 5 0 4 -4" stroke={fur} strokeWidth="2.4" fill="none" strokeLinecap="round" />      </g>
     )
@@ -65,7 +66,7 @@ function CatSprite({ mode, reducedMotion }) {
   }
   const excited = mode === PET_MODES.EXCITED
   return (
-    <g aria-hidden="true">
+    <g aria-hidden="true" data-cozy-pet-reaction={reaction ? 'cat' : undefined}>
       {excited
         ? <path d="M -7 0 q -5 -2 -4 -7" stroke={fur} strokeWidth="2.2" fill="none" strokeLinecap="round" />
         : <path d="M -7 0 q -5 1 -5 -3" stroke={fur} strokeWidth="2.2" fill="none" strokeLinecap="round" />}
@@ -76,8 +77,13 @@ function CatSprite({ mode, reducedMotion }) {
       <circle cx={6} cy={-1.5} r={4} fill={fur} />
       <path d="M 3.2 -4.4 l -0.6 -3 l 2.4 1.6 Z" fill={fur} />
       <path d="M 8.8 -4.4 l 0.6 -3 l -2.4 1.6 Z" fill={fur} />
-      <circle cx={4.6} cy={-1.8} r={0.8} fill={dark} />
-      <circle cx={7.4} cy={-1.8} r={0.8} fill={dark} />
+      {reaction ? (
+        <g fill="none" stroke={dark} strokeWidth="0.65" strokeLinecap="round">
+          <path d="M 3.8 -1.8 q 0.8 0.9 1.6 0" />
+          <path d="M 6.6 -1.8 q 0.8 0.9 1.6 0" />
+        </g>
+      ) : <><circle cx={4.6} cy={-1.8} r={0.8} fill={dark} />
+      <circle cx={7.4} cy={-1.8} r={0.8} fill={dark} /></>}
       <circle cx={6} cy={-0.2} r={0.6} fill="#C77" />
     </g>
   )
@@ -85,7 +91,7 @@ function CatSprite({ mode, reducedMotion }) {
 
 // ── Robot vacuum (Roomba). Machine motion grammar: a flat disc, a status LED that reads the mode,
 //    a front bumper. Minimal animation by nature (calm-tech friendly). ──
-function VacuumSprite({ mode, reducedMotion }) {
+function VacuumSprite({ mode, reducedMotion, reaction }) {
   const body = '#3A3F44', top = '#4E555C', rim = '#23262A'
   // LED colour reads the mode (honest: same mode the barometer chose)
   const led = mode === PET_MODES.HIDE ? '#E24B4A'
@@ -102,7 +108,14 @@ function VacuumSprite({ mode, reducedMotion }) {
   const sweeping = mode === PET_MODES.WANDER || mode === PET_MODES.EXCITED
   const puffing = mode === PET_MODES.EXCITED
   return (
-    <g aria-hidden="true">
+    <g aria-hidden="true" data-cozy-pet-reaction={reaction ? 'vacuum' : undefined}>
+      {reaction && (
+        <g transform="translate(6, 4)" stroke="#9aa1a8" strokeWidth="0.8" strokeLinecap="round">
+          <g style={reducedMotion ? undefined : { animation: 'cozy-vacuum-brush 720ms ease-out' }}>
+            <path d="M -2 0 h 4 M 0 -2 v 4 M -1.4 -1.4 l 2.8 2.8" />
+          </g>
+        </g>
+      )}
       {docked && /* charging dock */ <rect x={-7} y={3} width={14} height={2.4} rx={1} fill="#555" opacity="0.8" />}
       {/* motion sweep lines trailing behind (disc faces +x, so the trail is to the left) */}
       {sweeping && (
@@ -132,17 +145,20 @@ function VacuumSprite({ mode, reducedMotion }) {
 }
 
 // ── Dog. Like the cat but doggier: floppy ears, snout, a wagging tail when excited/celebrating. ──
-function DogSprite({ mode, reducedMotion }) {
+function DogSprite({ mode, reducedMotion, reaction }) {
   const fur = '#A6713C', dark = '#6E4A28', belly = '#E0C29A'
+  const tail = reaction && !reducedMotion
+    ? { animation: 'cozy-pet-tail 720ms ease-in-out', transformOrigin: mode === PET_MODES.NAP ? '8.4px 0.4px' : '-7px 0px' }
+    : undefined
   if (mode === PET_MODES.NAP) {
     return (
-      <g aria-hidden="true">
+      <g aria-hidden="true" data-cozy-pet-reaction={reaction ? 'dog' : undefined}>
         <ellipse cx={0} cy={0} rx={9.5} ry={5.5} fill={fur} />
         <ellipse cx={0} cy={1.6} rx={6} ry={3} fill={belly} opacity="0.5" />
         <circle cx={-6.5} cy={-0.5} r={3.8} fill={fur} />
         <path d="M -9.4 -1.6 q -2 1 -1 3.4" stroke={dark} strokeWidth="2" fill="none" strokeLinecap="round" />{/* floppy ear */}
         <path d="M -7.6 -0.6 q 1 0.8 2 0" stroke={dark} strokeWidth="0.5" fill="none" />
-        <path d="M 8.4 0.4 q 4.4 0 3.6 -3.4" stroke={fur} strokeWidth="2.6" fill="none" strokeLinecap="round" />      </g>
+        <path d="M 8.4 0.4 q 4.4 0 3.6 -3.4" stroke={fur} strokeWidth="2.6" fill="none" strokeLinecap="round" style={tail} />      </g>
     )
   }
   if (mode === PET_MODES.HIDE) {
@@ -187,10 +203,10 @@ function DogSprite({ mode, reducedMotion }) {
   }
   const excited = mode === PET_MODES.EXCITED
   return (
-    <g aria-hidden="true">
+    <g aria-hidden="true" data-cozy-pet-reaction={reaction ? 'dog' : undefined}>
       {excited
-        ? <path d="M -7 0 q -5 -2 -3.6 -7" stroke={fur} strokeWidth="2.4" fill="none" strokeLinecap="round" />
-        : <path d="M -7 0 q -5 1 -4.6 -3" stroke={fur} strokeWidth="2.4" fill="none" strokeLinecap="round" />}
+        ? <path d="M -7 0 q -5 -2 -3.6 -7" stroke={fur} strokeWidth="2.4" fill="none" strokeLinecap="round" style={tail} />
+        : <path d="M -7 0 q -5 1 -4.6 -3" stroke={fur} strokeWidth="2.4" fill="none" strokeLinecap="round" style={tail} />}
       <ellipse cx={-1} cy={1} rx={7.2} ry={4.2} fill={fur} />
       <ellipse cx={-1} cy={2.6} rx={4} ry={2} fill={belly} opacity="0.55" />
       <rect x={-4} y={4} width={1.8} height={3} rx={0.9} fill={dark} />
@@ -323,11 +339,14 @@ function HamsterSprite({ mode }) {
   )
 }
 
-export default function PetSprite({ type, mode, reducedMotion }) {
-  if (type === 'vacuum') return <VacuumSprite mode={mode} reducedMotion={reducedMotion} />
-  if (type === 'dog') return <DogSprite mode={mode} reducedMotion={reducedMotion} />
+export default function PetSprite({ type, mode, reducedMotion, reaction = false }) {
+  // Defense in depth: genuine attention/celebration poses always win, even if a
+  // caller still holds a click reaction during the same render as a mode change.
+  const calmReaction = reaction && (mode === PET_MODES.WANDER || mode === PET_MODES.NAP || mode === PET_MODES.EXCITED)
+  if (type === 'vacuum') return <VacuumSprite mode={mode} reducedMotion={reducedMotion} reaction={calmReaction} />
+  if (type === 'dog') return <DogSprite mode={mode} reducedMotion={reducedMotion} reaction={calmReaction} />
   if (type === 'rabbit') return <RabbitSprite mode={mode} />
   if (type === 'bird') return <BirdSprite mode={mode} />
   if (type === 'hamster') return <HamsterSprite mode={mode} />
-  return <CatSprite mode={mode} reducedMotion={reducedMotion} />
+  return <CatSprite mode={mode} reducedMotion={reducedMotion} reaction={calmReaction} />
 }

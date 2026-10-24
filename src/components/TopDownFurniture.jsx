@@ -1,5 +1,8 @@
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { classifyMood } from '../systems/classify.js'
+import { useOfficeStore } from '../systems/store.js'
+import { t, useLocale } from '../i18n.js'
+import { useCozyInteractions } from './useCozyInteractions.js'
 
 // All furniture below is wrapped in React.memo. PixelOffice re-renders on every minute/
 // hour clock tick, every activeEvent/activeWorkflow change, and every agentOrderSignature
@@ -111,14 +114,53 @@ export const Bookshelf = React.memo(function Bookshelf({ x, y, width = 70, rows 
 
 // ─── Plant ───────────────────────────────────────────────────────────────
 export const Plant = React.memo(function Plant({ x, y }) {
+  const enabled = useCozyInteractions()
+  const reducedMotion = useOfficeStore((s) => s.reducedMotion)
+  useLocale()
+  const [reaction, setReaction] = useState(0)
+  const timer = useRef(null)
+  const serial = useRef(0)
+  useEffect(() => {
+    if (!enabled) { clearTimeout(timer.current); setReaction(0) }
+    return () => clearTimeout(timer.current)
+  }, [enabled])
+  const react = () => {
+    if (!enabled) return
+    clearTimeout(timer.current)
+    setReaction(++serial.current)
+    timer.current = setTimeout(() => setReaction(0), 720)
+  }
+  const active = enabled && reaction !== 0
   return (
-    <g>
+    <g
+      data-cozy-plant={enabled ? '1' : undefined}
+      role={enabled ? 'button' : undefined}
+      tabIndex={enabled ? 0 : undefined}
+      aria-label={enabled ? t('cozy.plantAria', 'Gently sway plant leaves') : undefined}
+      style={enabled ? { cursor: 'pointer' } : undefined}
+      onClick={enabled ? react : undefined}
+      onKeyDown={enabled ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          if (!event.repeat) react()
+        }
+      } : undefined}
+    >
+      {enabled && <rect data-cozy-hit-area="1" x={x - 14} y={y - 23} width={28} height={34}
+        fill="transparent" pointerEvents="all" />}
+      {active && <ellipse data-cozy-feedback="plant" cx={x} cy={y - 6} rx={13} ry={17}
+        fill="none" stroke="#FFD887" strokeWidth={1.5} pointerEvents="none" />}
       <rect x={x - 5} y={y} width={10} height={9} rx={2} fill="#C4724B" />
       <rect x={x - 6} y={y} width={12} height={3} rx={1} fill="#A55A3A" />
+      <g key={reaction} data-cozy-leaves={active ? 'active' : undefined}
+        style={active ? (reducedMotion
+          ? { filter: 'brightness(1.25)' }
+          : { animation: 'cozy-plant-sway 720ms ease-in-out', transformOrigin: `${x}px ${y}px` }) : undefined}>
       <ellipse cx={x - 4} cy={y - 7} rx={4.5} ry={5.5} fill="#3D8B3D" />
       <ellipse cx={x + 4} cy={y - 8} rx={4} ry={5} fill="#4CAF50" />
       <ellipse cx={x} cy={y - 10} rx={3.5} ry={5} fill="#388E3C" />
       <ellipse cx={x - 2} cy={y - 12} rx={2.5} ry={3.5} fill="#66BB6A" />
+      </g>
     </g>
   )
 })
