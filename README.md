@@ -8,9 +8,9 @@
 
 **A tiny pixel office where your coding agents come to life.**
 
-![Agent Virtual Office — pixel-art virtual office visualizing AI coding agents (Claude Code, Codex, Gemini CLI) working, blocked, and shipping in real time](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.png)
+![Agent Virtual Office — the local office scene connected to a live session, with all eight characters idle at capture](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.jpg)
 
-<sub><i>The office mid-session: someone heads-down, someone blocked, someone just shipped — all from a live session.</i></sub>
+<sub><i>A live local session is connected; all eight characters are idle in this capture.</i></sub>
 
 While Claude Code grinds through your codebase, a pixel version sits at a desk doing the same — typing,
 getting blocked, stomping off to argue with QA about whether that's *really* a bug. Point it at your
@@ -28,8 +28,8 @@ bickering, live. It does approximately nothing useful, and you'll leave it open 
 <table>
 <tr>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-hero.png" alt="The pixel office mid-session: agents at desks working, a blocked agent, speech bubbles, a pet wandering the lounge" /><br>
-<sub><b>The office, live.</b> Each character is a real agent in your session.</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.jpg" alt="The local office scene is connected to a live session; all eight characters are idle at capture" /><br>
+<sub><b>The office at a glance.</b> This capture shows the live local session with all characters idle.</sub>
 </td>
 <td width="50%" align="center">
 <img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.gif" alt="Animated: poking a character makes it bob and pop a speech bubble showing its current status" /><br>
@@ -38,12 +38,12 @@ bickering, live. It does approximately nothing useful, and you'll leave it open 
 </tr>
 <tr>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/share-card.png" alt="A cozy pixel-art postcard summarizing the day's office activity" height="300" /><br>
-<sub><b>End-of-day card.</b> One click exports the day as a PNG. A quiet day says so.</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/cozy-postcard.jpg" alt="The office postcard preview with the optional Cat sticker selected" /><br>
+<sub><b>Office postcard.</b> Pick it up from the notice board, add an optional local sticker, then download a PNG.</sub>
 </td>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-zh.png" alt="The office rendered in Traditional Chinese with localized labels and speech bubbles" /><br>
-<sub><b>繁體中文 built in.</b> Labels, bubbles, and names all localized.</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.jpg" alt="Traditional Chinese office scene from the connected local session, with all eight characters idle at capture" /><br>
+<sub><b>繁體中文 built in.</b> This capture shows the localized live session with all characters idle.</sub>
 </td>
 </tr>
 </table>
@@ -91,9 +91,9 @@ Everything you see is real. Events fire from your actual session, and an agent's
 
 Each role murmurs in its own voice — the skeptic QA, the brisk PM, the heads-down Researcher — but the speech bubble is *only* for that voice; status always rides the colored ring and a work symbol. Personality without faking it: no invented conversations, no made-up rapport the agents couldn't actually have.
 
-Click a character and it bobs and tells you what it's doing right now. It won't move or change state. `Space` pokes again; right-click pokes without opening the inspector.
+Click a character and it bobs and tells you what it’s doing right now. It won’t move or change state. `Space` pokes again; right-click pokes without opening the inspector. Try the paper star on the lounge table with a short tap, a medium hold, or a long hold for different reactions. Optional pet, plant, and idle-wave behaviors are off by default and can be enabled in Settings.
 
-One click saves the day as a little pixel-art postcard you can share. Slow day with nothing finished? The card says so.
+Pick up the postcard pinned to the notice board to preview it, then choose Download PNG to export it. The Plant and Cat stickers are optional and local to the postcard; the card reflects the day’s activity.
 
 The quieter stuff: weather follows the room's mood, 45 seconds of silence reads as thinking instead of stuck, reduced-motion and a11y are respected, and a watchdog keeps anyone from freezing mid-walk.
 

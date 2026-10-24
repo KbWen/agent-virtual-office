@@ -5,6 +5,20 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.13 — 2026-10-24 — Small playful moments around the office
+
+### Added
+
+- **The lounge table's paper star responds to your press.** Short, medium and long presses get distinct, bounded reactions, with keyboard support and reduced-motion feedback.
+- **A pinned postcard can be previewed and saved.** Choose a plant or cat sticker and export a local PNG; postcard details remain unchanged, and downloads stay local.
+- **Optional cozy reactions.** When enabled, plants sway, pets react and idle characters wave. The preference is off by default; the paper star and postcard work without it.
+
+### Changed
+
+- **Keyboard focus is easier to see.** Warm focus feedback appears without a black frame, while pointer interactions keep their existing appearance.
+- **Postcard preview works under the existing production CSP.** Preview rendering uses a local data URL; downloads use separately managed Blob URLs with stale-render protection and cleanup.
+- **README screenshots and scene guidance are refreshed.** English and Traditional Chinese README sections now show the production scene and explain where to find the direct interactions.
+
 ## v1.6.12 — 2026-10-21 — More agents, and a calmer quiet office
 
 Two pull requests since v1.6.11 (#258 and #259).
