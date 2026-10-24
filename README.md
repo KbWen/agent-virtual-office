@@ -25,8 +25,8 @@ Connect Claude Code, Codex, Gemini CLI, or CI to see who’s working, blocked, o
 <table>
 <tr>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.jpg" alt="The pixel office" /><br>
-<sub><b>The office.</b> A quick look around.</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/marketing/paper-star.gif" alt="Animated demonstration of a long press on the paper star, then its spring back" /><br>
+<sub>Hold the paper star, then let it spring back.</sub>
 </td>
 <td width="50%" align="center">
 <img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.gif" alt="Animated: poking a character makes it bob and show its current status" /><br>
@@ -35,8 +35,8 @@ Connect Claude Code, Codex, Gemini CLI, or CI to see who’s working, blocked, o
 </tr>
 <tr>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/cozy-postcard.jpg" alt="Office postcard preview with the optional Cat sticker selected" /><br>
-<sub><b>Office postcard.</b> Pick it up from the notice board, add a sticker, and download a PNG.</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/marketing/postcard.gif" alt="Animated demonstration of opening the postcard, choosing the Cat sticker, and closing it" /><br>
+<sub><b>Office postcard.</b> Open it and choose a sticker.</sub>
 </td>
 <td width="50%" align="center">
 <img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.jpg" alt="The office with Traditional Chinese labels" /><br>
@@ -44,6 +44,8 @@ Connect Claude Code, Codex, Gemini CLI, or CI to see who’s working, blocked, o
 </td>
 </tr>
 </table>
+
+[Posters & GIF files](docs/assets/marketing/README.md)
 
 ## Meet the Team
 
