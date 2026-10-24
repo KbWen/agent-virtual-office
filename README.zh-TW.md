@@ -8,9 +8,9 @@
 
 **一個讓你的 coding agent 活過來的迷你像素辦公室。**
 
-![Agent Virtual Office — 像素風虛擬辦公室,即時視覺化 AI coding agent(Claude Code、Codex、Gemini CLI)的工作、卡關與出貨狀態](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.png)
+![Agent Virtual Office — 本機辦公室已連線至 live session，擷取當下八位角色都在閒置](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.jpg)
 
-<sub><i>整間辦公室，session 進行中 —— 有人埋頭、有人卡關、有人剛出貨。全是即時的。</i></sub>
+<sub><i>這張擷取畫面已連上本機 session；當下八位角色都在閒置。</i></sub>
 
 當 Claude Code 在你的 codebase 裡埋頭苦幹，一個像素版的它正坐在桌前做一樣的事 —— 打字、卡關、氣呼呼地跑去跟
 QA 吵那到底算不算 bug。把它接上你的 Claude Code / Codex / CI session，你的 agent 就真的來上班了 —— `working`、
@@ -27,8 +27,8 @@ QA 吵那到底算不算 bug。把它接上你的 Claude Code / Codex / CI sessi
 <table>
 <tr>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-hero.png" alt="辦公室進行中：小人在座位上工作、有人卡關、對話泡泡、寵物在休息區晃" /><br>
-<sub><b>辦公室本人。</b>每個小人都是你 session 裡真實的 agent。</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.jpg" alt="本機辦公室已連線至 live session，擷取當下八位角色都在閒置" /><br>
+<sub><b>辦公室一覽。</b>這張擷取畫面已連線，角色當下都在閒置。</sub>
 </td>
 <td width="50%" align="center">
 <img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.gif" alt="動畫：戳一下小人，他會晃一下並冒出目前狀態的對話泡泡" /><br>
@@ -37,12 +37,12 @@ QA 吵那到底算不算 bug。把它接上你的 Claude Code / Codex / CI sessi
 </tr>
 <tr>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/share-card.png" alt="總結當天辦公室活動的溫馨像素風明信片" height="300" /><br>
-<sub><b>下班明信片。</b>一鍵把這一天匯出成 PNG。今天很安靜，它就說今天很安靜。</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/cozy-postcard.jpg" alt="已選用小貓咪貼紙的辦公室明信片預覽" /><br>
+<sub><b>辦公室明信片。</b>從佈告欄拿起來，可加本機限定貼紙，再下載 PNG。</sub>
 </td>
 <td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-zh.png" alt="以繁體中文呈現的辦公室，標籤與對話泡泡都在地化" /><br>
-<sub><b>內建繁體中文。</b>標籤、泡泡、名字全部在地化。</sub>
+<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.jpg" alt="已連線的英文介面辦公室畫面，角色當下都在閒置" /><br>
+<sub><b>英文介面也能切換。</b>此畫面顯示本機 session 已連線，八位角色都在閒置。</sub>
 </td>
 </tr>
 </table>
@@ -84,6 +84,9 @@ QA 吵那到底算不算 bug。把它接上你的 Claude Code / Codex / CI sessi
 - **誠實、由訊號驅動的生命力** — 事件由你的*真實* session 觸發，角色的真實狀態永遠不造假。
 - **每個角色有自己的口吻** — 對話氣泡只放聲音（懷疑的 QA、俐落的 PM、埋頭的研究員各有腔調），狀態一律走顏色環 + 工作符號。有個性，但不假造它們其實沒有的對話或交情。
 - **以「安靜」為設計** — 情緒驅動天氣、閒置推論（`working+45s` → thinking）、減少動態 + a11y，以及永不卡死的行為看門狗。
+- **直接玩場景互動** — 點角色可查看目前動作；捏休息區桌上的紙星星，短按、稍微按住或長按紙星星，都會有不同反應。摸摸小夥伴、盆栽互動與閒置揮手都是選用設定，預設關閉，可在設定中開啟。
+
+點一下佈告欄上的明信片即可預覽，再選「下載 PNG」匯出。小盆栽與小貓咪是選用貼紙，只會套用在這張明信片；卡片內容會反映當日活動。
 
 → 完整內部機制（分類器層級、移動、行為引擎、天氣、推論）在 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**。
 

@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-24T08:07:18.897397+00:00
+- **Last Updated**: 2026-10-24T13:45:16.058796+00:00
 - **Last Verified**: 2026-10-24
-- **Update Sequence**: 155
+- **Update Sequence**: 156
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -157,6 +157,11 @@
 
 ## Ship History
 
+### Ship-codex-release-v1.6.13-2026-10-24
+- Release cut: v1.6.13 packages merged AVO206/PR261 and fresh English/Traditional Chinese README scene/postcard screenshots; source 70903f56ea44f2cf7c297741e208daf20891dbbb.
+- Verification:3version fields agree, dependency graph/runtime/older changelog unchanged; actual Live/idle and decoded760x820 Cat preview; build535204<=546154 and clean package4assertionsPASS.
+- Release-cut exact-head CI, merge, annotated tag and GitHub Release are verified externally; no npm-registry publication claim.
+
 ### Ship-codex-cozy-scene-interactions-2026-10-24
 - Feature delivered: AVO-206 scene-native gestures and postcard resources; code 5a08b584b0513f6f35351a33653eab469b0d7185.
 - Tests:2972PASS/3existing skips; build535204<=546154;4viewport decoded-image/focus render smoke and panel smoke PASS.
@@ -209,11 +214,6 @@
 
 - Quick-win shipped: Remediated 2 verified defects: (1) Fixed HTTPS remote deployment status polling & SSE termination in src/inference/inferStatus.js where non-localhost HTTPS origins falsely skipped polling and SSE, and (2) pinned source-map-js to ^1.2.2 via package.json overrides, eliminating high-severity CVE (GHSA-68fv-2mgg-jv7q).
 - Tests: 151 test suites passed (2,714 passed, 0 failed), npm audit 0 vulnerabilities, pack-smoke 4/4 assertions PASS, render-smoke PASS across 4 viewports, validate.ps1 PASS (115/115).
-
-### Ship-docs-character-roster-lore-2026-10-02 (character lore book, interconnected storylines, and visual preview)
-
-- Feature shipped: Authored comprehensive 8-agent Character Lore & Office Life book (`docs/CHARACTER_LORE.md`) featuring full agent profiles, desk objects, habits, and 4 interconnected narrative threads weaving character bubbles into collective storylines. Added automated Playwright capture harness (`scripts/capture-office-lore-preview.mjs`) generating high-fidelity visual asset (`docs/assets/office-lore-preview.png`).
-- Tests: dialogueS2Lint 83/83 passed, validate.ps1 115 passed.
 
 ## Spec Index Archive
 
