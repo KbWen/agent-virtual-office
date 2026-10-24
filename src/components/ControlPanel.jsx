@@ -5,8 +5,8 @@ import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eve
 import { requestNotificationPermission, getNotificationState } from '../inference/desktopNotifier'
 import { PET_TYPES } from '../systems/petState.js'
 import { THEMES } from '../systems/theme.js'
-import { classifyMood } from '../systems/classify.js'
-import { renderDailyCard, shareOrDownloadCard, todayKey } from '../systems/dailyCard.js'
+import { useCozyInteractions } from './useCozyInteractions.js'
+import { setCozyInteractionsEnabled } from '../systems/cozyPreferences.js'
 
 const statusOptions = ['idle', 'working', 'blocked', 'done']
 
@@ -81,7 +81,6 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const setPetType = useOfficeStore((s) => s.setPetType)
   const theme = useOfficeStore((s) => s.theme)              // AVO-123
   const setTheme = useOfficeStore((s) => s.setTheme)
-  const mood = useOfficeStore((s) => s.mood)                // AVO-115 share card hero
   // #28: RAF-watchdog stall counter — surfaced as an opt-in DEV diagnostic chip (see render; off by
   // default, `?debug=raf`). Cheap primitive subscription; re-renders only when a stall bumps the count.
   const watchdogRestarts = useOfficeStore((s) => s.watchdogRestarts)
@@ -116,6 +115,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   // #39 consolidation: a ⚙ settings popover holds the cosmetic toggles + notify + dev test, so the
   // bottom bar stays lean (pause · view · lang · run · ⚙).
   const [showSettings, setShowSettings] = useState(false)
+  const cozyEnabled = useCozyInteractions()
   const settingsRef = React.useRef(null)
   useEffect(() => {
     if (!showSettings) return
@@ -144,34 +144,6 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
     () => controlPanelPresenceRows({ agents: agentList, externalStatus }),
     [agentList, externalStatus]
   )
-  // AVO-115: opt-in cozy postcard. Gathers ONLY honest signals (done/blocked from the
-  // existing ledgers + live mood), renders client-side, then shares-or-downloads. The
-  // button is disabled while busy (no double-render).
-  const [cardBusy, setCardBusy] = useState(false)
-  const handleShareCard = async () => {
-    if (cardBusy) return
-    setCardBusy(true)
-    try {
-      const dayKey = todayKey()
-      const blob = await renderDailyCard({
-        dayKey,
-        doneTotal: totalDoneToday,
-        blockedTotal: totalBlockedToday,
-        mood,
-        weather: classifyMood(mood).family,
-        locale: lang,
-      })
-      const filename = t('dailyCard.filename', 'agent-office-{date}.png').replace('{date}', dayKey)
-      await shareOrDownloadCard(blob, filename, {
-        title: t('dailyCard.shareTitle', 'Today at the office'),
-        text: t('dailyCard.shareText', ''),
-      })
-    } catch (err) {
-      console.warn('[Office] share card failed:', err)
-    } finally {
-      setCardBusy(false)
-    }
-  }
   const isPanel = mode === 'panel'
 
   const setStatus = (id, status) => {
@@ -402,12 +374,11 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${showTest ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>{showTest ? t('settings.on', 'On') : t('settings.off', 'Off')}</span>
           </button>
           <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
-          {/* AVO-115: opt-in cozy share postcard — an action, not a toggle. Lives here in ⚙, never the resting bar. */}
-          <button onClick={handleShareCard} disabled={cardBusy}
-            aria-label={t('dailyCard.shareAria', 'Generate and download today\'s office postcard')}
-            className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-200 disabled:opacity-60 disabled:cursor-wait">
-            <span>{t('settings.shareCard', "Share today's card")}</span>
-            <span aria-hidden="true">{cardBusy ? '…' : '🖼️'}</span>
+          {/* Scene interactions are operated directly on their objects; only preferences live here. */}
+          <button role="switch" aria-checked={cozyEnabled} onClick={() => setCozyInteractionsEnabled(!cozyEnabled)}
+            className="w-full flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700/60 text-gray-700 dark:text-gray-200">
+            <span>{t('cozy.enable', 'Small interactions')}</span>
+            <span>{cozyEnabled ? t('settings.on', 'On') : t('settings.off', 'Off')}</span>
           </button>
           {/* Triangle pointer (right-anchored) */}
           <div className="absolute top-full right-3 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-white dark:border-t-gray-800" />

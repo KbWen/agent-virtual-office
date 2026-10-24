@@ -21,6 +21,10 @@ import OfficePet from './OfficePet'
 import NarrowRoster from './NarrowRoster'
 import AgentInspector from './AgentInspector'
 import OneShotSmil from './OneShotSmil.jsx'
+import ScenePaperStar from './ScenePaperStar.jsx'
+import ScenePostcard from './ScenePostcard.jsx'
+import CozyCardPreview from './CozyCardPreview.jsx'
+import { captureSceneCardInput } from '../systems/sceneCozy.js'
 import {
   Bookshelf, Plant, Couch, RoundTable, MeetingTable,
   CoffeeMachine, WaterCooler, GateBooth, WallWindow, Whiteboard,
@@ -833,7 +837,12 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   // OR of the accessibility pref and the user weather toggle so disabling either renders weather
   // as static decoration (no per-frame rain/cloud/lightning) — the documented CPU-spike fix.
   const weatherReduced = reducedMotion || !weatherEffects
-  useLocale() // re-render on language switch so hint text updates
+  const lang = useLocale() // re-render on language switch so hint text updates
+  const [cardInput, setCardInput] = useState(null)
+  const openSceneCard = useCallback(() => {
+    setCardInput(captureSceneCardInput(useOfficeStore.getState(), lang))
+  }, [lang])
+  const closeSceneCard = useCallback(() => setCardInput(null), [])
 
   useEffect(() => {
     const cleanup = startOfficeLife(useOfficeStore)
@@ -926,6 +935,9 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
   const [panelViewBox, setPanelViewBox] = useState('60 155 540 260')
   // Office is the primary view at every size; the roster is an opt-in MANUAL toggle (not size-based).
   const rosterMode = useOfficeStore((s) => s.rosterMode)
+  useEffect(() => {
+    if (rosterMode || isPanel) setCardInput(null)
+  }, [rosterMode, isPanel])
   // POINT 2: publish the office's live `meet` scale so AgentCharacter can counter-scale labels.
   const setSceneScale = useOfficeStore((s) => s.setSceneScale)
   // POINT 2: read it back too, to counter-scale the top event/workflow banner (its text is tiny).
@@ -1158,6 +1170,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <rect x={236} y={58} width={10} height={7} fill="#FF9E9E" />
       <rect x={223} y={68} width={10} height={7} fill="#A8E6CF" />
       <rect x={236} y={68} width={10} height={7} fill="#87CEEB" />
+      {!isPanel && <ScenePostcard onOpen={openSceneCard} sceneScale={sceneScale} />}
       <text x={245} y={87} textAnchor="middle" fontSize="6" fill="#8B7355" fontFamily="monospace" opacity="0.7">NOTICE</text>
       {/* Coat rack */}
       <line x1={400} y1={50} x2={400} y2={80} stroke="#6B5335" strokeWidth="2" />
@@ -1255,6 +1268,7 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <Rug x={50} y={440} w={180} h={95} color="#507050" />
       <Couch x={55} y={450} width={90} color="#B97A4E" />
       <RoundTable x={175} y={490} r={22} />
+      {!isPanel && <ScenePaperStar x={175} y={487} reducedMotion={reducedMotion} sceneScale={sceneScale} />}
       <CoffeeCorner />
       <WaterCooler x={48} y={448} />
       {/* Bookshelf (single, away from WC and doors) */}
@@ -1467,8 +1481,11 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
       <NarrowRoster />
     </div>
   ) : (
-    <div ref={containerRef} className="w-full flex-1 overflow-hidden min-h-0 flex items-center justify-center">
-      {svgElement}
-    </div>
+    <>
+      <div ref={containerRef} className="w-full flex-1 overflow-hidden min-h-0 flex items-center justify-center">
+        {svgElement}
+      </div>
+      {cardInput && <CozyCardPreview input={cardInput} onClose={closeSceneCard} reducedMotion={reducedMotion} />}
+    </>
   )
 }

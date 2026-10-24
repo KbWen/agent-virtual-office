@@ -460,5 +460,36 @@
   },
   "pairLink": {
     "coediting": "both editing"
+  },
+  "cozy": {
+    "sceneCardHint": "Pick it up for a closer look",
+    "sceneCardAria": "Pick up the postcard on the notice board",
+    "sceneStarHint": "Tap or hold — try both!",
+    "sceneStarHoldshort": "A little squeeze…",
+    "sceneStarHoldmedium": "Getting flatter…",
+    "sceneStarHoldlong": "Ready? Let go!",
+    "sceneStarReleaseshort": "Pop!",
+    "sceneStarReleasemedium": "Wobble~",
+    "sceneStarReleaselong": "Boing! Phew~",
+    "sceneStarAria": "Squeeze the paper star on the lounge table",
+    "enable": "Small interactions",
+    "openToy": "A small toy",
+    "plantAria": "Give the plant a gentle nudge",
+    "petAria": "Pet the office companion",
+    "close": "Close",
+    "toyTitle": "A little paper star",
+    "toyHint": "Press, hold, and let go. A small pause for you.",
+    "toyStar": "Squeeze the paper star",
+    "cardTitle": "Your office postcard",
+    "cardAlt": "Office postcard preview",
+    "cardLoading": "Making your postcard…",
+    "cardError": "The postcard could not be made. Please try again.",
+    "retry": "Try again",
+    "decoration": "Just a little decoration",
+    "stickerNone": "None",
+    "stickerPlant": "Plant",
+    "stickerCat": "Cat",
+    "download": "Download PNG",
+    "downloadError": "The download could not start. Please try again."
   }
 }
