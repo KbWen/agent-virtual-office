@@ -1090,3 +1090,8 @@ Rotated 1 additional entry on 2026-10-20 (SSoT Update Sequence150 ->151).
 
 - Feature shipped: AVO-161 Wave B: Deepened and humanized character dialogues across 8 roles (PM, Arch, Dev, QA, Ops, Res, Gate, Designer) with distinct personalities, hobbies, life philosophies, and quirks in `src/config/characters.json`, `src/locales/en.json`, and `src/locales/zh-TW.json`. Context bubble pools expanded (+3 lines per role) and gossip pool expanded (+16 lines) adhering to ADR-007 channel separation and open-ended non-conclusive content rules (zero banned terminal completion stems).
 - Tests: 150 test suites passed (2,711 passed, 0 failed), dialogueS2Lint passed 83/83, 100% key parity (395/395 keys), smoke passed across 4 viewports.
+
+### Ship-docs-character-roster-lore-2026-10-02 (character lore book, interconnected storylines, and visual preview)
+
+- Feature shipped: Authored comprehensive 8-agent Character Lore & Office Life book (`docs/CHARACTER_LORE.md`) featuring full agent profiles, desk objects, habits, and 4 interconnected narrative threads weaving character bubbles into collective storylines. Added automated Playwright capture harness (`scripts/capture-office-lore-preview.mjs`) generating high-fidelity visual asset (`docs/assets/office-lore-preview.png`).
+- Tests: dialogueS2Lint 83/83 passed, validate.ps1 115 passed.
