@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-24T13:45:16.058796+00:00
+- **Last Updated**: 2026-10-24T15:38:02.440647+00:00
 - **Last Verified**: 2026-10-24
-- **Update Sequence**: 156
+- **Update Sequence**: 157
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -157,6 +157,11 @@
 
 ## Ship History
 
+### Ship-codex-office-marketing-assets-2026-10-24
+- Delivered:2promotional illustrations and2actual UI GIFs, media-kit/exact generation prompts and compact bilingual README references; source e1eb0053c84207c2a8cfc17c610e04a7dd4e30e5.
+- Verification:PNG/GIF types, dimensions, animated frame diversity, byte budgets, local links, unchanged hero/technical suffix/runtime/dependencies and independent visual reviewPASS. Illustrations are labeled; star is long-press only; card clips edited for pacing with no download claim.
+- Source captures, artifact removal and encoding metadata retained; exact-head CI and external merge disposition are verified in the media PR.
+
 ### Ship-codex-release-v1.6.13-2026-10-24
 - Release cut: v1.6.13 packages merged AVO206/PR261 and fresh English/Traditional Chinese README scene/postcard screenshots; source 70903f56ea44f2cf7c297741e208daf20891dbbb.
 - Verification:3version fields agree, dependency graph/runtime/older changelog unchanged; actual Live/idle and decoded760x820 Cat preview; build535204<=546154 and clean package4assertionsPASS.
@@ -209,11 +214,6 @@
 
 - Quick-win shipped: every bubble line #254 added was wider than the 140 px bubble budget (real-font measure: 40/40 en, 38/40 zh-TW rendered cut off, e.g. "日誌不會騙人，它只是…"). All 80 rewritten shorter in the same voice (max 128 / 110 px); owner approved a rendered before/after. New ratchet in `tests/bubbleTextFit.test.jsx` caps cut-off pool lines at 58 en / 14 zh-TW (red on #254 pools, green after). `docs/CHARACTER_LORE.md` + spec AC-2 corrected: 1 of 58 quoted lore lines is a real pool line, so the book now says its quotes are character-voice flavor text. Dead fabricated-bubble staging removed from `scripts/capture-office-lore-preview.mjs`.
 - Tests: vitest 152 files / 2719 passed; build, bundle-budget (+2.83%), pack-smoke, npm audit 0. Also rotated 3 Ship History entries and 1 Spec Index line — both caps were over after #254/#255.
-
-### Ship-fix-https-status-and-security-audit-2026-10-07 (fix HTTPS remote status polling and resolve source-map-js vulnerability)
-
-- Quick-win shipped: Remediated 2 verified defects: (1) Fixed HTTPS remote deployment status polling & SSE termination in src/inference/inferStatus.js where non-localhost HTTPS origins falsely skipped polling and SSE, and (2) pinned source-map-js to ^1.2.2 via package.json overrides, eliminating high-severity CVE (GHSA-68fv-2mgg-jv7q).
-- Tests: 151 test suites passed (2,714 passed, 0 failed), npm audit 0 vulnerabilities, pack-smoke 4/4 assertions PASS, render-smoke PASS across 4 viewports, validate.ps1 PASS (115/115).
 
 ## Spec Index Archive
 
