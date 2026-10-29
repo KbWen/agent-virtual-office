@@ -88,14 +88,15 @@ Pet, plant, and idle-wave behaviors are optional, off by default, and can be ena
 
 ```bash
 # Straight from the public GitHub repo — no clone, no install:
-npx github:KbWen/agent-virtual-office
+npx github:KbWen/agent-virtual-office --no-host
 
 # Using Claude Code? Wire up automatic status in one command:
 npx github:KbWen/agent-virtual-office setup
 ```
 
-Open the browser tab it pops, and your agents are already at their desks. That's it — no backend, no
-database, no WebSocket.
+Open the browser tab it pops. The office is ready for a real source connection; live agent status
+appears when a connected source reports it. Ambient scenes are decoration, not evidence that an
+agent is working. There's no hosted backend, database, or WebSocket.
 
 <details>
 <summary>Prefer to clone, or want options?</summary>
@@ -110,8 +111,11 @@ npm run dev
 CLI flags: `--port=PORT` · `--lang=en|zh-TW` · `--no-open` · `--no-host` (localhost only; the dev
 server otherwise binds all interfaces).
 
-> The dev server has no authentication and exposes to your LAN by default. Use `--no-host` for
-> localhost-only, or the production `serve` mode with an `OFFICE_API_TOKEN` for a secured deploy.
+> The `npx agent-virtual-office` dev launcher has no authentication and exposes to LAN by default;
+> use `--no-host` for localhost-only access. Direct `npm run dev` uses Vite's localhost default
+> unless you pass `--host`. Production `serve` binds to localhost by default; `--host` opts into LAN.
+> `OFFICE_API_TOKEN` protects API writes, not status reads or SSE. Do not expose `--host` to a
+> network where active office status should remain private.
 
 **Hosting it for a team** (production build, Docker, Nginx, PM2, TLS) → **[docs/deployment/DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md)**.
 
@@ -131,10 +135,39 @@ curl -X POST http://localhost:5174/api/status \
 curl -X POST http://localhost:5174/api/event -d '{"event":"deploy-success"}'
 ```
 
-- **Claude Code** → `npx agent-virtual-office setup`, and every tool call routes itself. Done.
-- **Gemini CLI** → run `npx agent-virtual-office setup --platform gemini` from the same project root as the office. This installs project-local hooks; see the requirements below.
+- **Claude Code** → `npx github:KbWen/agent-virtual-office setup` for lifecycle hooks.
+- **Optional Codex desktop hooks** → From each target project's root, run `npx github:KbWen/agent-virtual-office setup --platform codex`. If **Review hook** appears, expand and verify all six entries point to this project's adapter before choosing **Allow selected items**. Setup preserves `notify` and trust records; changed definitions may need review again. **Not now** leaves automatic Codex observation inactive. Manual alternatives: [bridge, Status API, or status helper](docs/INTEGRATIONS.md#native-codex-lifecycle-hooks).
+- **Codex CLI** → Use the same project-local setup and review with `/hooks`.
+- **Gemini CLI** → run `npx github:KbWen/agent-virtual-office setup --platform gemini` from the same project root as the office. This installs project-local hooks; see the requirements below.
 - **Antigravity desktop** → the office passively observes compatible local transcripts; see the limits below.
-- **Codex CLI / Codex App / GitHub Actions / any CI** → see the **[Integration guide](docs/INTEGRATIONS.md)**.
+- **Codex App bridge / GitHub Actions / any CI** → see the **[Integration guide](docs/INTEGRATIONS.md)**.
+
+Manual status reports and file-watcher signals reflect submitted data or observed file changes;
+they do not prove that Codex ran a tool. Native approval runs local adapter code, so inspect the
+adapter and helper before allowing it. Definition hashes do not verify the referenced script bytes.
+The adapter does not retain raw prompts, arguments, or outputs, but it writes status metadata to
+local files and serves it through the office API. API reach depends on server binding: the dev
+`npx agent-virtual-office` dev launcher exposes to LAN by default; use `--no-host` for localhost-only
+access. Direct `npm run dev` uses Vite's localhost default unless `--host` is set. Production `serve`
+defaults to localhost, and `--host` opts into LAN; `OFFICE_API_TOKEN` protects writes, not status
+reads or SSE. See the
+[integration guide](docs/INTEGRATIONS.md#native-codex-lifecycle-hooks) for the trust boundary and
+lifecycle limits.
+
+### What Codex native hooks show
+
+The six approved callbacks report prompt submission, tool start/completion, permission requests,
+turn stop, and session end. `PostToolUse` means a callback completed, not that the task succeeded;
+`Stop` moves the observed agent to idle, not done. Child-agent events are not separate office roles,
+and a thinking label is inferred from elapsed time rather than directly observed. `Interrupt` would
+return the agent to idle if supplied, but is not registered by this setup; cancellation without a
+delivered callback remains unobserved. Claude's separate event coverage is listed below.
+
+**Upgrading to v1.6.14?** Re-run `npx github:KbWen/agent-virtual-office setup` to refresh Claude's
+installed hook. From each Codex target project's root, rerun
+`npx github:KbWen/agent-virtual-office setup --platform codex`. If the desktop app shows
+**Review hook**, inspect the six intended definitions and approve them through the normal review
+flow; no trust bypass is used.
 
 ### Antigravity and Gemini CLI adapters
 
@@ -158,9 +191,9 @@ Docker/remote use needs an explicitly mounted compatible root; the observer neve
 **Gemini CLI:** from your project's exact root, run:
 
 ```bash
-npx agent-virtual-office setup --platform gemini
+npx github:KbWen/agent-virtual-office setup --platform gemini
 # Remove only the owned project registrations and unchanged owned script:
-npx agent-virtual-office uninstall --platform gemini
+npx github:KbWen/agent-virtual-office uninstall --platform gemini
 ```
 
 Setup merges six uniquely named lifecycle/tool hooks into `.gemini/settings.json` and copies the
@@ -182,22 +215,38 @@ Authenticated Gemini CLI sessions and native Linux execution have not been live-
 
 | Event | Capability needed | What it shows |
 |---|---|---|
-| `PreToolUse` / `PostToolUse` | Core hooks | Per-tool working/done/blocked status |
+| `PreToolUse` / `PostToolUse` / `PostToolUseFailure` | Core hooks | Tool work, callback completion, and reported tool failure |
 | `SubagentStart` / `SubagentStop` | Core hooks | Subagent workflow banners |
-| `UserPromptSubmit` | Core hooks | PM enters planning mode |
-| `Stop` | Core hooks | Turn-end idle state |
-| `PermissionDenied` *(AVO-148)* | Hooks v1.x+ | Stamps the responsible agent `blocked` with reason `permission-denied` when the permission system denies a tool call. Harmless if your Claude Code version does not emit this event — the handler simply never runs. |
-| `StopFailure` *(AVO-148)* | Hooks v1.x+ | Stamps all currently-working session agents `blocked` with `api-rate-limit` or `api-auth-failed` when the turn ends on a Claude-API error (keyed on the `matcher` enum field — zero text parsing). Harmless if absent. |
+| `UserPromptSubmit` | Core hooks | PM shows working; a thinking label is inferred from elapsed time, not directly observed |
+| `PermissionRequest` | Core hooks | Awaiting approval for a reliably attributed tool; makes no decision |
+| `PermissionDenied` | Auto mode | Blocked when Claude reports an auto-mode denial |
+| `Stop` / `StopFailure` | Core hooks / Claude API error | Turn end or supported API rate-limit/authentication failure; Stop is not task success |
+| `SessionEnd` | Core hooks | Clears session state without counting completion |
+
+Notifications, generic idle/compaction events, and malformed or unknown events do not create
+office states. Interrupt/cancellation paths without a reliable lifecycle callback remain
+unobservable. Full coverage details and Codex native setup are in the [Integration guide](docs/INTEGRATIONS.md).
+
+Claude can report `SubagentStart` / `SubagentStop` workflow huddles, but Claude sessions sharing
+the same branch and working directory are not shown as fully independent sessions: the latest
+verified session owns that lane, and a handoff drops the previous owner's helpers and clears its
+stale roles. Codex native hooks instead write one root-thread representative per hashed session;
+they do not create child-agent roles or helper huddles. Separate producer files are isolated and
+merged by the office, with one representative shown for each active session.
+Planning status comes from tool events carrying `permission_mode: "plan"`, not from
+`UserPromptSubmit` itself. A `thinking` label is a timing inference, not a direct event signal.
 
 ### Opt-in capture mode *(AVO-153)*
 
-The hook supports capturing raw hook events for fixture generation and schema validation:
+This optional Claude debugging feature is **off by default**. When the marker exists, it writes raw
+hook input—which can contain prompts, commands, and output—to a local JSONL file. Keep it disabled
+for normal use and never share an unsanitized capture:
 
 1. **Enable**: `touch ~/.claude/office-hook-capture` (Linux/macOS) or `New-Item ~/.claude/office-hook-capture` (PowerShell)
 2. **Use Claude Code normally** — every tool call appends a JSON line to `~/.claude/office-hook-capture.jsonl`
 3. **Sanitize**: `node scripts/sanitize-hook-capture.mjs` → creates `tests/fixtures/hook-events/*.json`
 4. **Review**: check fixtures for residual sensitive strings before committing
-5. **Disable**: remove the marker file; raw capture stays in `~/.claude` (never committed)
+5. **Disable**: remove the marker file; raw capture stays in `~/.claude`. Inspect and sanitize before sharing or committing anything.
 
 The capture path is fully `try/catch`'d — enabling or disabling it has zero effect on normal hook behavior.
 
@@ -274,13 +323,13 @@ v1.4.0 started from one of these captures.
 <summary><b>Common issues</b></summary>
 
 **Office is blank — no agents appear**
-1. No hooks installed? Run `npx agent-virtual-office setup`.
+1. No hooks installed? Run `npx github:KbWen/agent-virtual-office setup`.
 2. Wrong directory? The office only shows sessions from the directory you launched it in — run it from
    your project root, or point it somewhere else with `OFFICE_PROJECT_ROOT=/path/to/project`.
 3. Stale status? Status expires after 5 minutes of inactivity — start a new session.
 4. Not using Claude Code? Push status with `curl` (see [Connect Your Agent](#connect-your-agent)).
 
-**Port 5174 in use** → `npx agent-virtual-office --port=5175`
+**Port 5174 in use** → `npx github:KbWen/agent-virtual-office --port=5175`
 
 **Browser doesn't open** (headless Linux / WSL / remote) → open `http://localhost:5174` manually.
 
@@ -288,7 +337,7 @@ v1.4.0 started from one of these captures.
 
 **403 Forbidden by hostname** (a LAN colleague at `http://mypc.local:5174`, **or `server.mjs` running behind the Nginx reverse proxy in `docs/deployment/nginx.conf`**) → reaching the office by IP already works; reaching it by *any* hostname needs that hostname in `OFFICE_ALLOWED_HOSTS` (Host-header validation guards against DNS rebinding) — e.g. `OFFICE_ALLOWED_HOSTS=mypc.local` for LAN, or `OFFICE_ALLOWED_HOSTS=office.example.com` to match the reverse proxy's `server_name`. This applies to `npm run dev` (Vite's own Host check) too, not just `server.mjs` — set the same env var before `npm run dev` to reach the dev server by a custom hostname. See [DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md#environment-variables).
 
-**Windows Firewall prompt** → the dev server binds all interfaces; use `--no-host` to avoid it.
+**Windows Firewall prompt** → the `npx agent-virtual-office` dev launcher binds all interfaces; use `--no-host` to avoid it. Direct `npm run dev` uses localhost unless you pass `--host`.
 
 **Node version error** → requires Node ≥ 22 (`node --version`).
 
@@ -309,8 +358,10 @@ Built with React and pure SVG, it runs entirely on your machine with no backend.
 
 ### How do I visualize Claude Code activity?
 
-Run `npx github:KbWen/agent-virtual-office setup` once. It registers Claude Code hooks so every tool
-call, subagent, and turn updates the office automatically — no manual wiring, no API keys.
+Run `npx github:KbWen/agent-virtual-office setup` to register the supported Claude Code lifecycle
+hooks. The office updates from callbacks the hook observes; unsupported and missing callbacks
+remain gaps, so setup does not mean every tool or state is captured. See the
+[event coverage table](#hook-events-registered-by-setup).
 
 ### Does it work with Codex, Gemini CLI, or CI pipelines?
 
@@ -324,9 +375,17 @@ only updates when a real signal comes in, and activity is never faked. It's a de
 
 ### Does it send my code or data anywhere?
 
-No. There is no backend, no database, no telemetry, and no external service. Status updates travel
-over HTTP on your own machine — localhost by default, with optional LAN exposure you can turn off
-via `--no-host`.
+The app has no hosted backend, database, telemetry, or external service. Native Codex hooks write
+sanitized status metadata to local files; they do not retain raw prompts, arguments, or outputs.
+The office serves that metadata through its HTTP API. Network reach depends on server binding: the
+`npx agent-virtual-office` dev launcher exposes to LAN by default; use `--no-host` for localhost-only
+access. Direct `npm run dev` uses Vite's localhost default unless `--host` is set. Production `serve`
+defaults to localhost, and `--host` opts into LAN; `OFFICE_API_TOKEN` protects writes, not status
+reads or SSE. Hook approval runs local code and is a trust decision; review the adapter/helper and
+changed definitions before allowing.
+Claude has a separate optional raw-event capture mode that can include prompts and tool content; it
+is off by default. Keep its marker absent normally and never share an unsanitized capture. See
+[Opt-in capture mode](#opt-in-capture-mode-avo-153).
 
 ### Do I need to install anything?
 

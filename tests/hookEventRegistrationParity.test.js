@@ -22,11 +22,9 @@ const read = (p) => fs.readFileSync(path.join(repoRoot, p), 'utf-8')
 /** The event list `setup` actually writes into settings.json. */
 function cliEvents() {
   const src = read('bin/cli.js')
-  const lists = [...src.matchAll(/for \(const event of \[([^\]]+)\]\)/g)]
-    .map((m) => m[1].match(/'([^']+)'/g).map((q) => q.slice(1, -1)))
-  expect(lists.length, 'bin/cli.js must register hook events in a literal array').toBeGreaterThan(0)
-  // Every registration site must agree with the first before it can be the SSoT.
-  for (const l of lists) expect(l).toEqual(lists[0])
+  const declaration = src.match(/const CLAUDE_EVENTS = \[([^\]]+)\]/)
+  expect(declaration, 'bin/cli.js must declare its Claude event list').not.toBeNull()
+  const lists = [declaration[1].match(/'([^']+)'/g).map((q) => q.slice(1, -1))]
   return lists[0]
 }
 
@@ -37,6 +35,9 @@ describe('hand-wiring instructions match what `setup` registers', () => {
     expect(expected.length).toBeGreaterThan(0)
     expect(expected).toContain('PermissionDenied')
     expect(expected).toContain('StopFailure')
+    expect(expected).toContain('PostToolUseFailure')
+    expect(expected).toContain('PermissionRequest')
+    expect(expected).toContain('SessionEnd')
   })
 
   it('public/hooks/hooks-config.json registers exactly the same events', () => {
@@ -46,7 +47,7 @@ describe('hand-wiring instructions match what `setup` registers', () => {
 
   it('docs/INTEGRATIONS.md states the right event count', () => {
     const doc = read('docs/INTEGRATIONS.md')
-    const m = doc.match(/for all (\d+) events automatically/)
+    const m = doc.match(/for all (\d+) Claude events automatically/)
     expect(m, 'INTEGRATIONS.md must state the event count').not.toBeNull()
     expect(Number(m[1])).toBe(expected.length)
   })

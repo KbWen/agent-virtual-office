@@ -22,6 +22,16 @@
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /path/to/office-status-hook.js"
+          }
+        ]
+      }
+    ],
     "SubagentStart": [
       {
         "hooks": [
@@ -73,6 +83,26 @@
       }
     ],
     "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /path/to/office-status-hook.js"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /path/to/office-status-hook.js"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
       {
         "hooks": [
           {

@@ -25,8 +25,11 @@ function homeEnv(fakeHome) {
 }
 
 function runCli(args, fakeHome) {
+  const project = path.join(fakeHome, 'project')
+  fs.mkdirSync(project, { recursive: true })
   return execFileSync(process.execPath, [cliPath, ...args], {
     env: homeEnv(fakeHome),
+    cwd: project,
     encoding: 'utf-8',
   })
 }
@@ -83,7 +86,7 @@ describe('bin/cli.js uninstall — malformed settings.json does not throw (findi
       hooks: {
         PreToolUse: [
           null,
-          { hooks: [{ type: 'command', command: 'node /somewhere/office-status-hook.js' }] },
+          { hooks: [{ type: 'command', command: `node "${path.join(fakeHome, '.claude', 'office-status-hook.js').replace(/\\/g, '/')}"` }] },
           { hooks: [{ type: 'command' /* no command field */ }] },
           { hooks: [null] },
         ],

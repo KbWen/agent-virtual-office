@@ -93,7 +93,7 @@ Set `OFFICE_URL` (e.g. `http://office.internal:5174`) as a repository variable a
 
 ## Claude Code Hook
 
-The one-click setup copies the hook to `~/.claude/office-status-hook.js` and registers it in `~/.claude/settings.json` for all 8 events automatically (idempotent — safe to re-run):
+The one-click setup copies the hook to `~/.claude/office-status-hook.js` and registers it in `~/.claude/settings.json` for all 11 Claude events automatically (idempotent — safe to re-run):
 
 ```bash
 # If you cloned the repo:
@@ -101,19 +101,24 @@ node bin/cli.js setup
 
 # Straight from the public GitHub repo (no clone, no npm publish needed):
 npx github:KbWen/agent-virtual-office setup
-
-# Once published to npm:
-npx agent-virtual-office setup
 ```
+
+If a previously installed AVO Claude hook has the legacy version marker but no stable hook ID,
+setup refuses to replace it by default. For that known legacy copy only, pass its exact SHA-256:
+`npx github:KbWen/agent-virtual-office setup --migrate-legacy-claude=<64-character-sha256>`. The installer
+also checks the anchored AVO hook header and version before accepting the nominated digest, and
+backs up and verifies the exact old bytes as `~/.claude/office-status-hook.js.avo-claude-backup`.
+This option cannot authorize replacement of an unrecognized or edited non-AVO script.
 
 **Manual install** (if you prefer):
 
 ```bash
 # from a clone:
 cp public/hooks/office-status-hook.js ~/.claude/office-status-hook.js
-# or, if installed from npm:
-cp node_modules/agent-virtual-office/public/hooks/office-status-hook.js ~/.claude/office-status-hook.js
 ```
+
+The setup command above uses the current GitHub source distribution. Avoid copying a hook from an
+older npm package until that package contains this release.
 
 Register it in `~/.claude/settings.json` (the hook reads events from stdin, no arguments needed):
 
@@ -122,27 +127,124 @@ Register it in `~/.claude/settings.json` (the hook reads events from stdin, no a
   "hooks": {
     "PreToolUse":       [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
     "PostToolUse":      [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
     "SubagentStart":    [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
     "SubagentStop":     [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
     "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
     "Stop":             [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
     "PermissionDenied": [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
-    "StopFailure":      [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }]
+    "StopFailure":      [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }],
+    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "node ~/.claude/office-status-hook.js" }] }]
   }
 }
 ```
 
-`PermissionDenied` and `StopFailure` (AVO-148) are what turn a denied tool call or a
-Claude-API failure into an honest `blocked` state instead of an agent that just stops moving.
-They are harmless on Claude Code versions that do not emit them — the handler simply never
-runs — so register them unconditionally. See the event table in the
-[README](../README.md#hook-events-registered-by-setup) for what each one shows.
+The setup also registers `PostToolUseFailure`, `PermissionRequest`, and `SessionEnd`. The
+coverage table below distinguishes states supported by real lifecycle evidence from events
+that are intentionally ignored or remain unavailable.
 
 The hook auto-detects the current git branch slug, writes `~/.claude/office-status-{slug}.json`, and the office filters by the directory it was launched in so sessions from other projects never appear. Set `OFFICE_PROJECT_ROOT` to match against a different project root (e.g. a multi-worktree setup).
 
 ---
 
-## Codex CLI Status Bridge
+### Claude lifecycle coverage and limits
+
+| Evidence | Office behavior | Limits |
+|---|---|---|
+| `UserPromptSubmit` | Shows PM as working with a thinking label | Prompt content is discarded; this event alone does not signal planning mode. |
+| Tool start/completion/failure, subagent start/stop | Shows working, callback completion, reported failure, or subagent workflow for the attributable role | `planning` comes from tool events with `permission_mode: "plan"`. Tool completion is not overall task success. |
+| `PermissionRequest` | Shows awaiting approval for a reliably attributed tool role; makes no approval decision | Unattributed requests do not assign a role. `AskUserQuestion` is not treated as an approval request. |
+| `PermissionDenied` | Shows blocked only when Claude reports auto-mode denial | It does not infer a human denial from other events. |
+| `Stop` / documented `StopFailure` | Ends a turn, or marks supported API rate-limit/authentication failures blocked | `Stop` is turn-end, not task success. Unknown error details stay unknown; raw error text is not published. |
+| `SessionEnd` | Clears that source's active state without counting completion | Interrupt/cancel paths without a reliable lifecycle callback remain unobservable. |
+| Notifications, idle/compaction, unknown or malformed events | No new office state | Generic `idle_prompt`, compaction, and informational notifications do not prove work, success, or approval. Thinking remains an existing inference from elapsed time. |
+
+Claude's `SubagentStart` / `SubagentStop` callbacks can show workflow huddles, but sessions using
+the same branch and working directory are not fully independent in the office: the latest verified
+session owns that lane, and a handoff drops the prior owner's helpers and neutralizes its stale
+roles. Codex native hooks write a separate status file per root-thread session (keyed by a session
+hash); child events do not become roles or huddles. Other producers also keep separate files, which
+the office merges into one representative per active session. These boundaries mean the office
+does not claim complete multi-agent visibility across providers.
+
+### Codex CLI status bridge
+
+#### Native Codex lifecycle hooks
+
+From the project root, install the native Codex hooks with:
+
+```bash
+npx github:KbWen/agent-virtual-office setup --platform codex
+# Remove only the exact owned entries and unchanged hook scripts:
+npx github:KbWen/agent-virtual-office uninstall --platform codex
+```
+
+This project-local setup merges six core events (`UserPromptSubmit`, `PreToolUse`,
+`PermissionRequest`, `PostToolUse`, `Stop`, and `SessionEnd`) into `.codex/hooks.json` and
+copies the adapter plus its helper into `.codex/hooks/`. It preserves unrelated hook groups,
+Codex settings, and the existing `notify` configuration. It does not change trust records or
+global configuration.
+
+**Desktop app:** run setup from each target project's root, then open or reload a desktop chat
+for that project. When the **Review hook** dialog appears, expand each of the six entries and
+verify its command points to this project's `.codex/hooks/office-status-codex-hook.js` and its
+registration is in `.codex/hooks.json`. Select the intended six entries and choose **Allow
+selected items**. The hooks do not run until the normal review/trust flow is complete and the
+session is new or reloaded.
+
+This installer affects only the project where it runs. Another project needs its own setup and
+review when prompted. Codex remembers approval for unchanged hook definitions by their hashes;
+new or changed definitions require review. That hash behavior does not promise that approvals
+are isolated by project, so do not assume that approving one project's definitions approves a
+different project's commands. CLI users can inspect and approve hooks with `/hooks`; that is a
+CLI flow, not the desktop review dialog. See [Codex's hook documentation](https://learn.chatgpt.com/docs/hooks).
+
+Native hooks are optional. If you choose **Not now**, they stay inactive; the office UI remains
+available, but it will not automatically observe Codex events through these hooks. Other
+integrations and explicit status reports continue to work. Hook-free alternatives include the
+[manual bridge UI](http://localhost:5174/bridge.html), a `POST /api/status` from an existing
+workflow ([Status API](#status-api)), or an explicit call to the
+[normalized status helper](#explicit-normalized-status-helper). These report the state supplied
+by the user or workflow; they are not automatic observation of real Codex tool events and do not
+provide full hook lifecycle coverage. A configured file watcher can observe file changes, but
+that is not proof that Codex ran a tool. The office can still open and show its quiet ambient
+scenes while native lifecycle state is unavailable; those scenes are decoration, not work evidence.
+
+The approved command runs the project's local Node.js adapter and helper. The adapter reads the
+native event input, keeps only fixed sanitized status metadata, and writes a status file under
+`~/.claude/office-status-codex-hook-<digest>.json`; it does not retain raw prompts, tool arguments, or
+outputs and does not execute commands from the event payload. The office serves status through
+its HTTP API, so who can reach that metadata depends on server binding and LAN configuration. The
+`npx agent-virtual-office` dev launcher binds to all interfaces by default; use `--no-host` for
+localhost-only access. Direct `npm run dev` uses Vite's localhost default unless `--host` is set.
+Production `serve` binds to `127.0.0.1` by default; `--host` opts into LAN. `OFFICE_API_TOKEN`
+protects API writes, not status reads or SSE. Do not expose `--host` to a network where active
+status should remain private.
+
+Approval is still a local code-execution trust decision. Review both copied scripts and the exact
+command before allowing them. Codex remembers hashes of hook definitions; that approval does not
+hash the referenced script contents or dependencies. A source or dependency change can therefore
+change local behavior even if the hook definition is unchanged. New or changed definitions go
+through Codex's normal review flow; this setup does not bypass trust controls.
+
+Native PostToolUse is callback evidence only; it does not claim business-task success. Child-agent
+events are not registered as office roles.
+
+| Native evidence | Office behavior | Deliberate limits |
+|---|---|---|
+| `UserPromptSubmit` | Opens the root session as planning or working | Prompt text is discarded; a thinking label is inferred from elapsed time, not a native callback. |
+| `PreToolUse` / `PostToolUse` | Shows a fixed generic/tool-role label as working | PostToolUse is not task success; unknown tools use a generic label. |
+| `PermissionRequest` | Shows awaiting approval for the attributed tool role | The hook does not return a decision. |
+| `Stop` / `SessionEnd` | Stop returns the observed agent to idle; SessionEnd clears it without completion | Stop is not whole-task success. |
+| `Interrupt` | If an Interrupt payload is supplied, returns the observed agent to idle | Interrupt is not registered, so this setup does not normally receive it. Cancellation without a delivered callback remains unobservable. |
+| Child-agent events, notifications, unknown events | No new office state | Child events do not finish or invent a parent role. |
+
+Only fixed safe metadata reaches the status file. Prompts, arguments, patches, output, transcript
+content, and raw session IDs are not stored. An office status represents one root thread per
+Codex session; this adapter does not report child agents as separate roles or workflow huddles.
+
+#### Explicit normalized status helper
 
 Codex CLI can use the same file-backed runtime path as Claude by writing a normalized `office-status` payload with the helper script:
 
@@ -181,7 +283,10 @@ If Codex App can run or embed browser JavaScript, use the built-in bridge:
 
 You can also open [bridge.html](http://localhost:5174/bridge.html) and send `codex-app` updates through the UI.
 
-Limitation: this project does not receive automatic host-level tool events from the Codex desktop app by itself. Full parity requires a host-side emitter. When the host cannot emit events directly, `bridge.js` / `bridge.html` is the supported Codex App route.
+The native project-local Codex hook setup above observes supported CLI lifecycle events when
+the project is trusted and the session reloads. It does not bypass trust, and its availability
+in a desktop host depends on that host's native hook support. When native delivery is unavailable,
+`bridge.js` / `bridge.html` remains a manual route.
 
 ## Gemini CLI
 
@@ -216,7 +321,7 @@ Running multiple worktrees in parallel? Each worktree's agent appears as a separ
 ```bash
 # Worktree 1: main project
 git worktree add ../feat-auth feat/auth
-cd ../feat-auth && npx agent-virtual-office --port=5175
+cd ../feat-auth && npx github:KbWen/agent-virtual-office --port=5175
 
 # Worktree 2: current project (different port, same office view)
 # Both worktrees share the same ~/.claude/ directory but are isolated by branch slug

@@ -25,11 +25,13 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-const HOOK_VERSION = '1.0.0'
+const HOOK_VERSION = '1.1.0'
+const HOOK_ID = 'agent-virtual-office/claude-hook'
 
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+const crypto = require('crypto')
 
 // Monotonic _seq: plain integer, matches server.mjs / vite.config.mjs canonical form.
 // Monotonic within a process run; two runs in the same ms can produce equal values,
@@ -39,6 +41,23 @@ function nextSeq() {
   const now = Date.now()
   _seqLast = now > _seqLast ? now : _seqLast + 1
   return String(_seqLast)
+}
+
+function hashUpstreamPromptId(promptId) {
+  if (typeof promptId !== 'string' || !promptId.trim()) return null
+  return crypto.createHash('sha256').update(promptId).digest('hex')
+}
+
+function hashSessionId(sessionId) {
+  if (typeof sessionId !== 'string' || !sessionId.trim()) return null
+  return crypto.createHash('sha256').update(sessionId).digest('hex')
+}
+
+function sessionOwnerMismatch(data, incomingOwnerHash) {
+  if (!data || !Object.prototype.hasOwnProperty.call(data, '_sessionOwnerHash')
+      || data._sessionOwnerHash == null) return false
+  if (typeof data._sessionOwnerHash !== 'string' || !/^[a-f0-9]{64}$/.test(data._sessionOwnerHash)) return true
+  return !incomingOwnerHash || data._sessionOwnerHash !== incomingOwnerHash
 }
 
 // ─── Bilingual labels ───
@@ -89,8 +108,8 @@ process.stdin.on('end', () => {
   try {
     const event = JSON.parse(input)
     processEvent(event)
-  } catch (e) {
-    process.stderr.write('[office-hook] ' + (e.message || e) + '\n')
+  } catch {
+    process.stderr.write('[office-hook] invalid status input\n')
     process.exit(0)
   }
 })
@@ -1020,12 +1039,26 @@ function helperRemove(helpers, role, agentId) {
 // ─── Main ───
 
 function processEvent(event) {
+  if (!event || typeof event !== 'object' || Array.isArray(event)) return
+  const hookEvent = event.hook_event_name
+  const upstreamPromptHash = hashUpstreamPromptId(event.prompt_id)
+  const sessionOwnerHash = hashSessionId(event.session_id)
+  const allowedEvents = new Set([
+    'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure',
+    'SubagentStart', 'SubagentStop', 'PermissionDenied', 'PermissionRequest',
+    'StopFailure', 'Stop', 'SessionEnd', 'Notification',
+  ])
+  if (!allowedEvents.has(hookEvent)) return
+  if (hookEvent === 'Notification' && event.notification_type !== 'permission_prompt') return
+  if (['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest'].includes(hookEvent)
+      && (typeof event.tool_name !== 'string' || !event.tool_name.trim())) return
+  if (hookEvent === 'Notification' && (typeof event.tool_name !== 'string' || !event.tool_name.trim())) return
+
   // Sweep our own pre-branch-switch alias files first, so the very first event after
   // a `git checkout` removes the ghost before the scanner's next poll can merge it.
   cleanupGhostAliases()
-  const hookEvent = event.hook_event_name
-  const tool = event.tool_name || ''
-  const agentType = event.agent_type || ''
+  const tool = typeof event.tool_name === 'string' ? event.tool_name.trim() : ''
+  const agentType = typeof event.agent_type === 'string' ? event.agent_type : ''
   const toolInput = event.tool_input || null
   const agentId = event.agent_id || null
   // AVO-108: cheap tail-read of the transcript for token usage. null when unavailable; the
@@ -1042,8 +1075,11 @@ function processEvent(event) {
   let workflowOverride = null  // only SubagentStart sets this; PreToolUse/PostToolUse must not clobber workflow
   let capturedPromptId = null  // PreToolUse captures current _promptId for straggler detection
   let newPromptId = null       // UserPromptSubmit sets a fresh _promptId each turn
+  let newUpstreamPromptHash = null
+  let newSessionOwnerHash = null
   // Helper-huddle: 'add' or 'remove' or null; resolved after merge-read using existingHelpers.
   let helperAction = null  // { op: 'add'|'remove', role, agentId, agentType }
+  let skillContextAction = null  // applied only after the locked session-owner check
 
   switch (hookEvent) {
     case 'UserPromptSubmit': {
@@ -1055,6 +1091,8 @@ function processEvent(event) {
       status = 'working'
       clearWorkflow = true  // reset subagent workflow on each new turn
       newPromptId = nextSeq()  // unique turn token; advances when user submits a new prompt
+      newUpstreamPromptHash = upstreamPromptHash
+      newSessionOwnerHash = sessionOwnerHash
       label = pick(LANG === 'en'
         ? ['🤔 Thinking...', '📊 Got it, planning', '💡 Good question...', '🧠 Analyzing']
         : ['🤔 想一下...', '📊 收到，規劃中', '💡 好問題...', '🧠 分析中'])
@@ -1142,6 +1180,37 @@ function processEvent(event) {
       }
       break
     }
+    case 'PostToolUseFailure':
+    case 'PermissionRequest':
+    case 'Notification': {
+      // Use the PreToolUse routing contract so a failure or approval wait lands on
+      // the same role that owns the tool, file, or saved skill context.
+      try {
+        const cur = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
+        const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
+        if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
+      } catch {}
+      const fullPath = extractFilePath(tool, toolInput)
+      activeFile = activeFileForTool(tool, fullPath)
+      const skillCtx = readSkillContext(agentId)
+      role = skillCtx ? skillCtx.role : (fileToRole(fullPath) || toolToRole(tool))
+      task = tool
+      if (hookEvent === 'PermissionRequest' || hookEvent === 'Notification') {
+        status = 'awaiting-approval'
+        label = LANG === 'zh-TW' ? '⏳ 等待核准' : '⏳ Awaiting approval'
+      } else if (event.is_interrupt === true) {
+        status = 'idle'
+        task = null
+        activeFile = null
+        label = LANG === 'zh-TW' ? '⏸️ 已中斷' : '⏸️ Interrupted'
+      } else {
+        status = 'blocked'
+        reasonCode = 'blocked-unknown'
+        hint = 'error'
+        label = LANG === 'zh-TW' ? '❌ 工具失敗' : '❌ Tool failed'
+      }
+      break
+    }
     case 'SubagentStart': {
       role = skillToRoleExtended(agentType)
       task = agentType
@@ -1149,30 +1218,17 @@ function processEvent(event) {
       label = skillLabel(agentType, false)
       skill = agentType  // AVO-104: announce this skill once as a transient bubble on the client
       workflowOverride = agentType  // set workflow to the subagent type on start
-      // Persist skill context so tool calls within this subagent stay on the right role
-      if (agentId) saveSkillContext(agentId, role, agentType)
+      if (agentId) skillContextAction = { op: 'save', agentId, role, agentType }
       helperAction = { op: 'add', role, agentId, agentType }
       break
     }
     case 'SubagentStop': {
-      // Guard against stale SubagentStop stragglers (same _stopped check as PreToolUse).
-      // clearSkillContext runs on the suppressed path too — turn is already over so the
-      // context file is safe to remove regardless. The key fix is that the status write
-      // (which would erase done-agents from Stop) must not happen on the suppressed path.
-      try {
-        const cur = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
-        const stoppedAt = typeof cur._stoppedAt === 'number' ? cur._stoppedAt : parseInt(cur._seq, 10)
-        if (cur._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) {
-          if (agentId) clearSkillContext(agentId)
-          return
-        }
-      } catch {}
       role = skillToRoleExtended(agentType)
       task = agentType
       status = 'done'
       label = skillLabel(agentType, true)
       clearWorkflow = true  // subagent workflow ends; reset so it doesn't stick forever
-      if (agentId) clearSkillContext(agentId)
+      if (agentId) skillContextAction = { op: 'clear', agentId }
       helperAction = { op: 'remove', role, agentId, agentType }
       break
     }
@@ -1209,14 +1265,19 @@ function processEvent(event) {
       try {
         let sfReason = 'blocked-unknown'
         try {
-          const matcher = (event && typeof event.matcher === 'string') ? event.matcher : ''
-          if (matcher === 'rate_limit') sfReason = 'api-rate-limit'
-          else if (matcher === 'authentication_failed') sfReason = 'api-auth-failed'
+          // `error` is the documented StopFailure enum. A present value, even an
+          // unknown or malformed one, is authoritative and must not fall through.
+          // `matcher` is retained only for older producers that omit `error`.
+          const hasError = Object.prototype.hasOwnProperty.call(event, 'error')
+          const source = hasError ? event.error : event.matcher
+          if (source === 'rate_limit') sfReason = 'api-rate-limit'
+          else if (source === 'authentication_failed') sfReason = 'api-auth-failed'
           // other matchers (overloaded, billing, …) → blocked-unknown (honest floor)
         } catch {}
 
         let sfData = null
         try { sfData = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8')) } catch {}
+        if (sessionOwnerMismatch(sfData, sessionOwnerHash)) return
 
         // Mark all CURRENTLY working/planning session agents as blocked.
         // "Session agents" = agents whose role appears in VALID_HOOK_ROLES (the hook's
@@ -1279,6 +1340,53 @@ function processEvent(event) {
       }
       return  // no further processing needed (wrote directly, like Stop handler)
     }
+    case 'SessionEnd': {
+      const endLock = acquireStatusLock()
+      if (!endLock.ok) return
+      try {
+        if (!sessionOwnerHash) return
+        let data = {}
+        try { data = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8')) } catch {}
+        if (typeof data._sessionOwnerHash !== 'string'
+            || !/^[a-f0-9]{64}$/.test(data._sessionOwnerHash)
+            || data._sessionOwnerHash !== sessionOwnerHash) return
+        const agents = (Array.isArray(data.agents) ? data.agents : [])
+          .filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
+          .map(a => ({
+            role: a.role,
+            task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
+            status: 'idle',
+            label: LANG === 'zh-TW' ? '⏸️ 工作階段結束' : '⏸️ Session ended',
+            hint: null,
+            reasonCode: null,
+            activeFile: null,
+          }))
+        const output = Object.assign({}, data, {
+          _seq: nextSeq(),
+          _cwd: process.cwd(),
+          type: 'office-status',
+          agents,
+          activeCount: 0,
+          workflow: null,
+          _workflowAgentId: null,
+          _workflowPromptId: null,
+          _upstreamPromptHash: null,
+          _sessionOwnerHash: data._sessionOwnerHash,
+          _stopped: true,
+          _stoppedAt: Date.now(),
+          helpers: [],
+          source: 'claude-cli',
+        })
+        const dir = path.dirname(getStatusFile())
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+        atomicWriteJson(getStatusFile(), JSON.stringify(output, null, 2))
+      } catch {
+        // A malformed or unavailable prior status is safest to leave untouched.
+      } finally {
+        if (endLock.ok) releaseStatusLock(endLock.token)
+      }
+      return
+    }
     case 'Stop': {
       // Claude's turn is over — mark all current agents as done.
       // _stopped: true prevents straggler PostToolUse events from overwriting this idle state.
@@ -1287,17 +1395,29 @@ function processEvent(event) {
       try {
         try {
           const data = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
+          if (sessionOwnerMismatch(data, sessionOwnerHash)) return
           const doneAgents = (Array.isArray(data.agents) ? data.agents : [])
             .filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
-            .map(a => ({
-              role: a.role,
-              task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
-              status: 'done',
-              label: pick(LANG === 'en'
-                ? ['✅ All done', '✅ Round complete', '✅ Over to you']
-                : ['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了']),
-              hint: null,
-            }))
+            .map(a => {
+              const wasActive = a.status === 'working' || a.status === 'planning'
+              const status = wasActive
+                ? 'done'
+                : ['blocked', 'awaiting-approval', 'idle', 'done'].includes(a.status) ? a.status : 'done'
+              return {
+                role: a.role,
+                task: typeof a.task === 'string' ? a.task.slice(0, 200) : null,
+                status,
+                label: wasActive
+                  ? pick(LANG === 'en'
+                    ? ['✅ All done', '✅ Round complete', '✅ Over to you']
+                    : ['✅ 搞定了', '✅ 這輪結束', '✅ 交給你了'])
+                  : (typeof a.label === 'string' ? a.label.slice(0, 200) : null),
+                hint: wasActive ? null : (typeof a.hint === 'string' ? a.hint.slice(0, 200) : null),
+                reasonCode: pickReason(status, a.reasonCode),
+                activeFile: null,
+              }
+            })
+          const activeCount = doneAgents.filter(a => a.status === 'blocked' || a.status === 'awaiting-approval').length
           const output = {
             _seq: nextSeq(),
             _stopped: true,
@@ -1305,7 +1425,7 @@ function processEvent(event) {
             _cwd: process.cwd(),
             type: 'office-status',
             agents: doneAgents,
-            activeCount: 0,
+            activeCount,
             // A workflow banner is ONLY ever set by SubagentStart, so any workflow still
             // present when the turn ends must be cleared — it can never legitimately outlive a
             // Stop. The previous `_workflowAgentId ? null : workflow` guard leaked a banner
@@ -1321,6 +1441,10 @@ function processEvent(event) {
             source: 'claude-cli',
             _promptId: data._promptId || null,
             _preToolPromptId: data._preToolPromptId || null,
+            _upstreamPromptHash: typeof data._upstreamPromptHash === 'string' && /^[a-f0-9]{64}$/.test(data._upstreamPromptHash)
+              ? data._upstreamPromptHash : null,
+            _sessionOwnerHash: typeof data._sessionOwnerHash === 'string' && /^[a-f0-9]{64}$/.test(data._sessionOwnerHash)
+              ? data._sessionOwnerHash : null,
             helpers: [],  // turn over — clear all helpers
           }
           const dir = path.dirname(getStatusFile())
@@ -1370,11 +1494,14 @@ function processEvent(event) {
   let existingWorkflowPromptId = null
   let existingPromptId = null
   let existingPreToolPromptId = null
+  let existingUpstreamPromptHash = null
+  let existingSessionOwnerHash = null
   let existingStopped = false
   let existingStoppedAt = null
   let existingHelpers = []
   try {
     const data = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
+    if (hookEvent !== 'UserPromptSubmit' && sessionOwnerMismatch(data, sessionOwnerHash)) return
     existing = Array.isArray(data.agents)
       ? data.agents
           .filter(a => a && typeof a === 'object' && VALID_HOOK_ROLES.includes(a.role))
@@ -1396,10 +1523,39 @@ function processEvent(event) {
     existingWorkflowPromptId = typeof data._workflowPromptId === 'string' ? data._workflowPromptId : null
     existingPromptId = data._promptId || null
     existingPreToolPromptId = data._preToolPromptId || null
+    existingUpstreamPromptHash = typeof data._upstreamPromptHash === 'string'
+      && /^[a-f0-9]{64}$/.test(data._upstreamPromptHash) ? data._upstreamPromptHash : null
+    existingSessionOwnerHash = typeof data._sessionOwnerHash === 'string'
+      && /^[a-f0-9]{64}$/.test(data._sessionOwnerHash) ? data._sessionOwnerHash : null
     existingStopped = Boolean(data._stopped)
     existingStoppedAt = typeof data._stoppedAt === 'number' ? data._stoppedAt : null
     existingHelpers = Array.isArray(data.helpers) ? data.helpers.filter(h => h && typeof h.id === 'string') : []
   } catch {}
+
+  // A verified owner change means the shared checkout status file is now representing
+  // a different Claude session. Keep the old roles only as neutral idle rows so the
+  // incremental store can retire them; never carry their activity, workflow, or helpers
+  // into the new owner's ambient status. Same-session prompts preserve existing context.
+  const sessionOwnerChanged = hookEvent === 'UserPromptSubmit'
+    && typeof existingSessionOwnerHash === 'string' && /^[a-f0-9]{64}$/.test(existingSessionOwnerHash)
+    && typeof newSessionOwnerHash === 'string' && /^[a-f0-9]{64}$/.test(newSessionOwnerHash)
+    && existingSessionOwnerHash !== newSessionOwnerHash
+  if (sessionOwnerChanged) {
+    existing = existing.map(a => ({
+      ...a,
+      task: null,
+      status: 'idle',
+      label: LANG === 'zh-TW' ? '⏸️ 工作階段變更' : '⏸️ Session changed',
+      hint: null,
+      reasonCode: null,
+      activeFile: null,
+      skill: null,
+    }))
+    existingWorkflow = null
+    existingWorkflowAgentId = null
+    existingWorkflowPromptId = null
+    existingHelpers = []
+  }
 
   // Detect stale workflow from a previous turn. Two conditions that independently indicate
   // the workflow no longer belongs to the current turn:
@@ -1461,11 +1617,15 @@ function processEvent(event) {
   if (hookEvent !== 'UserPromptSubmit') {
     try {
       const latest = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
+      if (hookEvent !== 'UserPromptSubmit' && sessionOwnerMismatch(latest, sessionOwnerHash)) return
       // Update recheck fields from the freshest read (single consistent snapshot for guard + carry-through).
       recheckStopped = Boolean(latest._stopped)
       recheckStoppedAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : null
       const stoppedAt = recheckStoppedAt ?? parseInt(latest._seq, 10)
-      if (latest._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) return
+      if (latest._stopped && Number.isFinite(stoppedAt) && Date.now() - stoppedAt < 30_000) {
+        if (hookEvent === 'SubagentStop' && agentId) clearSkillContext(agentId)
+        return
+      }
       // SubagentStart with _stopped is unconditionally a straggler — no time limit.
       // A legitimate new-turn SubagentStart is always preceded by a UPS that clears _stopped.
       // Without this, a straggler SubagentStart arriving >30s after Stop reinstalls a phantom
@@ -1474,9 +1634,13 @@ function processEvent(event) {
       // PostToolUse straggler detection: PreToolUse captures _promptId as _preToolPromptId.
       // If UserPromptSubmit advanced _promptId after our PreToolUse, _promptId !== _preToolPromptId
       // → new turn started in our window → abort so we don't clobber the fresh PM state.
-      if (hookEvent === 'PostToolUse'
+      if (['PostToolUse', 'PostToolUseFailure', 'PermissionRequest', 'Notification'].includes(hookEvent)
           && latest._promptId && latest._preToolPromptId
           && latest._promptId !== latest._preToolPromptId) return
+      if (['PostToolUseFailure', 'PermissionRequest', 'Notification'].includes(hookEvent)
+          && upstreamPromptHash && typeof latest._upstreamPromptHash === 'string'
+          && /^[a-f0-9]{64}$/.test(latest._upstreamPromptHash)
+          && latest._upstreamPromptHash !== upstreamPromptHash) return
       // Fresh-install guard: if both tokens are synthesized (__t: prefix) AND the session
       // is stopped, no UPS has ever run — there is no legitimate new turn, so any PostToolUse
       // arriving after the 30s window is unconditionally a straggler. The normal mismatch
@@ -1570,6 +1734,12 @@ function processEvent(event) {
     _preToolPromptId: hookEvent === 'PreToolUse'
       ? (capturedPromptId !== null ? capturedPromptId : existingPromptId)
       : existingPreToolPromptId,
+    _upstreamPromptHash: hookEvent === 'UserPromptSubmit'
+      ? newUpstreamPromptHash
+      : existingUpstreamPromptHash,
+    _sessionOwnerHash: hookEvent === 'UserPromptSubmit'
+      ? newSessionOwnerHash
+      : existingSessionOwnerHash,
   }
 
   // Write with retry (Windows file locking can cause EBUSY on rename).
@@ -1590,12 +1760,17 @@ function processEvent(event) {
       if (i > 0 && hookEvent !== 'UserPromptSubmit') {
         try {
           const latest = JSON.parse(fs.readFileSync(getStatusFile(), 'utf-8'))
+          if (hookEvent !== 'UserPromptSubmit' && sessionOwnerMismatch(latest, sessionOwnerHash)) return
           const sAt = typeof latest._stoppedAt === 'number' ? latest._stoppedAt : parseInt(latest._seq, 10)
           if (latest._stopped && Number.isFinite(sAt) && Date.now() - sAt < 30_000) return
           // New turn started between our first write attempt and this retry — abort so we
           // don't overwrite UPS's fresh PM-planning state with old-turn working data.
           if (hookEvent === 'PreToolUse' && capturedPromptId && latest._promptId
               && latest._promptId !== capturedPromptId) return
+          if (['PostToolUseFailure', 'PermissionRequest', 'Notification'].includes(hookEvent)
+              && upstreamPromptHash && typeof latest._upstreamPromptHash === 'string'
+              && /^[a-f0-9]{64}$/.test(latest._upstreamPromptHash)
+              && latest._upstreamPromptHash !== upstreamPromptHash) return
         } catch (err) {
           if (err.code === 'EBUSY' || err.code === 'EPERM') return
         }
@@ -1607,6 +1782,12 @@ function processEvent(event) {
     }
   } catch {}
 
+  if (writeOk && skillContextAction?.op === 'save') {
+    saveSkillContext(skillContextAction.agentId, skillContextAction.role, skillContextAction.agentType)
+  } else if (writeOk && skillContextAction?.op === 'clear') {
+    clearSkillContext(skillContextAction.agentId)
+  }
+
   } finally {
     if (mainLock.ok) releaseStatusLock(mainLock.token)
   }
@@ -1614,7 +1795,7 @@ function processEvent(event) {
 
 // Export helpers for testing (CommonJS — this file runs as a Node.js hook)
 if (typeof module !== 'undefined') {
-  module.exports = { HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
+  module.exports = { HOOK_ID, HOOK_VERSION, VALID_HOOK_ROLES, toolToRole, fileToRole, skillToRole,
     shortFile, shortCommand, bashVibeLabel, deriveBlockedReason, pickReason, extractContext, sanitizeId,
     skillContextPath, saveSkillContext, readSkillContext, clearSkillContext,
     shouldClearWorkflowOnSubagentStop, shouldCarryStoppedSignal, statusForPreToolUse,

@@ -3,7 +3,7 @@
  *
  * Covers:
  *   - working + ≥45s gap → status='thinking'
- *   - blocked + ≥90s gap → status='awaiting-approval'
+ *   - blocked remains blocked without new lifecycle evidence
  *   - non-stalled (< threshold) → no inference
  *   - hook update during stall resets the clock (no inference triggered)
  *   - infer routes through applyExternalStatus with source='idle-gap-infer'
@@ -117,25 +117,17 @@ describe('idleGapInfer — working → thinking inference', () => {
   })
 })
 
-describe('idleGapInfer — blocked → awaiting-approval inference', () => {
-  it('blocked agent with no update for 90s → awaiting-approval', () => {
-    const store = makeStore({ dev: { status: 'blocked', task: 'Bash' } })
+describe('idleGapInfer — blocked status needs lifecycle evidence', () => {
+  it('keeps a blocked agent and its reason blocked beyond multiple 90s gaps', () => {
+    const store = makeStore({ dev: { status: 'blocked', task: 'Bash', reasonCode: 'blocked-unknown' } })
     const stop = startIdleGapInference(store, { intervalMs: 1000 })
-    vi.advanceTimersByTime(90000)
-    expect(store.applyExternalStatus).toHaveBeenCalledTimes(1)
-    expect(store.applyExternalStatus.mock.calls[0][0]).toEqual([{ agentId: 'dev', status: 'awaiting-approval' }])
-    stop()
-  })
-
-  it('blocked <90s does NOT infer', () => {
-    const store = makeStore({ dev: { status: 'blocked', task: 'Bash' } })
-    const stop = startIdleGapInference(store, { intervalMs: 1000 })
-    vi.advanceTimersByTime(80000)
+    vi.advanceTimersByTime(270000)
     expect(store.applyExternalStatus).not.toHaveBeenCalled()
+    expect(store.getState().agents.dev).toMatchObject({ status: 'blocked', reasonCode: 'blocked-unknown' })
     stop()
   })
 
-  it('blocked 45s does NOT trigger thinking (90s threshold for blocked, not 45s)', () => {
+  it('blocked status does not trigger working → thinking inference', () => {
     const store = makeStore({ dev: { status: 'blocked', task: 'Bash' } })
     const stop = startIdleGapInference(store, { intervalMs: 1000 })
     vi.advanceTimersByTime(46000)

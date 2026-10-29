@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-24T15:38:02.440647+00:00
-- **Last Verified**: 2026-10-24
-- **Update Sequence**: 157
+- **Last Updated**: 2026-10-29T16:52:14Z
+- **Last Verified**: 2026-10-30
+- **Update Sequence**: 158
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -61,6 +61,7 @@
     - **Session closure** — final retro at `docs/reviews/2026-05-29-session-retro.md` (snapshot, not authoritative). 27 commits ahead of `origin/main`, 0 behind. `main` branch is the canonical state; `_product-backlog.md` lean (14 items: AVO-101..AVO-115 minus done + #20 deferred); `_shipped-log.md` holds 73 prior shipped rows; vitest 960/960; build 887ms clean. All work-log archives in place + INDEX.jsonl up to date. Push to origin pending human confirmation.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
+  - [hook-integration] docs/specs/signal-lifecycle-compatibility.md [Shipped] [Updated: 2026-10-30] *(Claude/native Codex lifecycle parity, truthful source/subagent retirement, safe installation and privacy; v1.6.14)*
   - [ui-rendering] docs/specs/cozy-interactions.md [Shipped] [Updated: 2026-10-24] *(AVO-206: scene gestures, duration star, decorated postcard and CSP-safe preview/Blob export; owner-authorized agent validation; code 5a08b58)*
   - [office-runtime] docs/specs/avo-199-all-quiet-calm-state.md [Shipped] [Updated: 2026-10-21] *(AVO-199: honest observed-idle calm; visual acceptance and automatic gates passed; enabled)*
   - [hook-integration] docs/specs/antigravity-gemini-hook-integration.md [Shipped] [Updated: 2026-10-20] *(AVO-198: passive Antigravity observer and separate Gemini CLI hooks; owner-approved live-validation limits documented)*
@@ -157,6 +158,11 @@
 
 ## Ship History
 
+### Ship-main-signal-lifecycle-v1.6.14-2026-10-30
+- Feature shipped: truthful Claude lifecycle/error/subagent ownership and optional native Codex hooks; source d53fdf27938cd3e8e9f050e64f0b6c2e08ca461b; PR265.
+- Tests:3050PASS/3existing skips, build/budget, pack5/5, actual Claude blocked149s/native Codex SSE, independent review and source-head CI8/8PASS.
+- Release metadata: v1.6.14 GitHub distribution; final-head CI, squash merge, annotated tag and latest GitHub Release are verified externally, not assumed here. No npm publication claim.
+
 ### Ship-codex-office-marketing-assets-2026-10-24
 - Delivered:2promotional illustrations and2actual UI GIFs, media-kit/exact generation prompts and compact bilingual README references; source e1eb0053c84207c2a8cfc17c610e04a7dd4e30e5.
 - Verification:PNG/GIF types, dimensions, animated frame diversity, byte budgets, local links, unchanged hero/technical suffix/runtime/dependencies and independent visual reviewPASS. Illustrations are labeled; star is long-press only; card clips edited for pacing with no download claim.
@@ -209,11 +215,6 @@
 
 - Cuts the 3 PRs merged since `v1.6.10` (#254, #255, #256) as **v1.6.11** (patch). #254/#255 were done by Gemini (Antigravity); #256 is the post-merge review that fixed their cut-off bubble lines and the lore book's false "100% aligned" claim. The release commit contains no app code: `package.json` 1.6.10 -> 1.6.11, **both** `package-lock.json` root version fields (0 `"version": "1.6.10"` strings left), the CHANGELOG narrative, and this entry.
 - CHANGELOG under-sells: one Fixed (HTTPS-hosted office now polls/streams status, #255), one Changed (new short character lines + lore book, explicitly not runtime lines), Housekeeping (dev-only `source-map-js` override for GHSA-68fv-2mgg-jv7q — verified via GitHub advisory API; the ratchet test). Post-merge: **annotated** `v1.6.11` tag on the release merge commit + `gh release create --latest`.
-
-### Ship-fix-dialogue-bubble-fit-2026-10-11 (the new character lines fit their bubbles; the lore book stops claiming its quotes are bubble lines) · AVO-161 Wave B follow-up
-
-- Quick-win shipped: every bubble line #254 added was wider than the 140 px bubble budget (real-font measure: 40/40 en, 38/40 zh-TW rendered cut off, e.g. "日誌不會騙人，它只是…"). All 80 rewritten shorter in the same voice (max 128 / 110 px); owner approved a rendered before/after. New ratchet in `tests/bubbleTextFit.test.jsx` caps cut-off pool lines at 58 en / 14 zh-TW (red on #254 pools, green after). `docs/CHARACTER_LORE.md` + spec AC-2 corrected: 1 of 58 quoted lore lines is a real pool line, so the book now says its quotes are character-voice flavor text. Dead fabricated-bubble staging removed from `scripts/capture-office-lore-preview.mjs`.
-- Tests: vitest 152 files / 2719 passed; build, bundle-budget (+2.83%), pack-smoke, npm audit 0. Also rotated 3 Ship History entries and 1 Spec Index line — both caps were over after #254/#255.
 
 ## Spec Index Archive
 

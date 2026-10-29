@@ -76,6 +76,11 @@ Rotated 1 additional entry on 2026-10-07 (SSoT Update Sequence 145 -> 146).
 
 Rotated 1 additional entry on 2026-10-11 (SSoT Update Sequence 147 -> 148).
 
+### Ship-fix-dialogue-bubble-fit-2026-10-11 (the new character lines fit their bubbles; the lore book stops claiming its quotes are bubble lines) · AVO-161 Wave B follow-up
+
+- Quick-win shipped: every bubble line #254 added was wider than the 140 px bubble budget (real-font measure: 40/40 en, 38/40 zh-TW rendered cut off, e.g. "日誌不會騙人，它只是…"). All 80 rewritten shorter in the same voice (max 128 / 110 px); owner approved a rendered before/after. New ratchet in `tests/bubbleTextFit.test.jsx` caps cut-off pool lines at 58 en / 14 zh-TW (red on #254 pools, green after). `docs/CHARACTER_LORE.md` + spec AC-2 corrected: 1 of 58 quoted lore lines is a real pool line, so the book now says its quotes are character-voice flavor text. Dead fabricated-bubble staging removed from `scripts/capture-office-lore-preview.mjs`.
+- Tests: vitest 152 files / 2719 passed; build, bundle-budget (+2.83%), pack-smoke, npm audit 0. Also rotated 3 Ship History entries and 1 Spec Index line — both caps were over after #254/#255.
+
 ### Ship-fix-dev-server-parity-2026-09-26 (the dev server stops inventing agent status from ~/.claude and matches production CORS)
 
 - Quick-win shipped: remediated the remaining dev-only (`vite.config.mjs`) divergences from `server.mjs` (production) for the status transport, found in a 2026-09-26 re-audit that followed the 2026-09-24 wave's shared-clock fix. Scope: `vite.config.mjs`, the dev-start warning lines in `bin/cli.js`, and a one-line `STALE_MS` export from `src/server/scanSessions.mjs`.

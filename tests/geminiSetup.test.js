@@ -1,10 +1,12 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
 const cliSource = path.resolve('bin/cli.js')
+const repoClaudeSettingsPath = path.resolve('.claude/settings.json')
+const repoClaudeSettingsBaseline = fs.readFileSync(repoClaudeSettingsPath)
 const tempRoots = []
 
 function makeTempDir(prefix) {
@@ -61,6 +63,10 @@ afterEach(() => {
   for (const dir of tempRoots.splice(0)) {
     try { fs.rmSync(dir, { recursive: true, force: true }) } catch {}
   }
+})
+
+afterAll(() => {
+  expect(fs.readFileSync(repoClaudeSettingsPath), 'CLI tests must not mutate this checkout\'s Claude settings').toEqual(repoClaudeSettingsBaseline)
 })
 
 describe('Gemini project hook setup', () => {
@@ -268,7 +274,8 @@ describe('Gemini project hook setup', () => {
 
   it('keeps bare setup on the existing Claude path', () => {
     const home = makeTempDir('avo-claude-home-')
-    const result = spawnSync(process.execPath, [cliSource, 'setup'], { env: cliEnv(home), encoding: 'utf8' })
+    const projectRoot = makeProjectDir('avo-claude-project-')
+    const result = spawnSync(process.execPath, [cliSource, 'setup'], { cwd: projectRoot, env: cliEnv(home), encoding: 'utf8' })
     expect(result.status, result.stderr).toBe(0)
     expect(fs.existsSync(path.join(home, '.claude', 'office-status-hook.js'))).toBe(true)
     expect(fs.existsSync(path.join(home, '.gemini'))).toBe(false)
@@ -276,7 +283,9 @@ describe('Gemini project hook setup', () => {
 
   it('keeps explicit Claude setup on the existing user settings path', () => {
     const home = makeTempDir('avo-claude-home-')
+    const projectRoot = makeProjectDir('avo-claude-project-')
     const result = spawnSync(process.execPath, [cliSource, 'setup', '--platform', 'claude'], {
+      cwd: projectRoot,
       env: cliEnv(home),
       encoding: 'utf8',
     })
