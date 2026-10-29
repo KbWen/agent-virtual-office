@@ -108,3 +108,17 @@ source_spec: docs/specs/avo-199-all-quiet-calm-state.md
 source_sha: 41b81c7c8b9f72ec24366ab9d2d7c4e385c043ef
 
 - Cross-reference: docs/architecture/office-runtime.log.md, AVO-199 entry dated 2026-10-21; authoritative decisions are consolidated there.
+
+### [hook-integration][2026-10-30][main]
+source_spec: docs/specs/signal-lifecycle-compatibility.md
+source_sha: d53fdf27938cd3e8e9f050e64f0b6c2e08ca461b
+
+- [DECISION] Claude and Codex producers use the existing normalized office-status transport and UI; producer files remain separate to prevent collisions.
+- [CONSTRAINT] Native integrations observe events only. They do not decide approvals, modify trust/notify settings, or bypass platform consent.
+- [CONSTRAINT] The native Codex adapter persists only bounded, fixed status metadata; it does not persist prompts, arguments, patches, output, transcript contents, or raw session IDs.
+- [DECISION] Claude's supported lifecycle evidence includes tool/subagent work, attributable approval waits, reported failures, turn end, and session end; unsupported paths remain gaps.
+- [DECISION] For a Claude branch/working-directory lane, the latest verified session owns its visible state; handoff drops the previous owner's helpers and stale roles, and stale callbacks must not revive them.
+- [DECISION] Codex native status represents one root thread per session. Child events do not create office roles or finish the parent; separate producers remain isolated and merge as session representatives.
+- [CONSTRAINT] Approval requires attributable lifecycle evidence; PermissionDenied is auto-mode-only, and idle/notification signals do not imply approval.
+- [CONSTRAINT] Tool callback completion and Stop are not business-task success. Thinking remains an elapsed-time inference, not direct upstream evidence.
+- [TRADEOFF] Keep coverage honest and partial: do not fabricate work, failure, success, approval, or unsupported cross-provider child-agent visibility.

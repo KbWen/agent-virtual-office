@@ -1,5 +1,5 @@
 ---
-status: frozen
+status: shipped
 title: Signal lifecycle compatibility for Claude Code and Codex
 source: internal
 created: 2026-10-29
