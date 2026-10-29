@@ -62,6 +62,46 @@ powershell -ExecutionPolicy Bypass -File .\.agentcortex\bin\validate.ps1 -NoPyth
 
 ## 3) Opening Commands — Pick Your Entry Point
 
+### Agent Virtual Office native Codex hooks
+
+The npm package may lag this release; use the GitHub source distribution from the Agent Virtual Office project root:
+
+```bash
+npx github:KbWen/agent-virtual-office setup --platform codex
+```
+
+This installs project-local hooks for prompt, tool, permission, turn-stop, and session-end events
+under `.codex/hooks.json`, together with the two local adapter scripts. Codex must trust the
+project through its normal user flow, and the session must be new or reloaded before the hooks
+are available. In the desktop app, open or reload a chat for this project. When **Review hook**
+appears, expand all six entries, verify they point to this project's `.codex/hooks.json` and
+`.codex/hooks/office-status-codex-hook.js`, select the intended entries, and choose **Allow
+selected items**. Until approval and reload, the hooks do not run.
+
+Native hooks are optional. **Not now** leaves automatic Codex lifecycle observation inactive,
+while the office UI and other integrations remain available. Manual updates or file-watcher
+signals reflect supplied statuses or observed file changes; they do not prove Codex tool activity. For manual updates, use the
+[bridge UI, Status API, or status helper](../docs/INTEGRATIONS.md#native-codex-lifecycle-hooks).
+The approved hook runs local Node.js code and writes sanitized metadata to local status files; it
+does not store raw prompts, arguments, or outputs or execute event-payload commands. The office
+serves that metadata through its HTTP API, whose network reach depends on server binding and LAN
+configuration. The `npx agent-virtual-office` dev launcher binds all interfaces by default; use
+`--no-host` for localhost. Direct `npm run dev` uses Vite's localhost default unless `--host` is set.
+Production `serve` binds to localhost by default, and `--host` opts into LAN. `OFFICE_API_TOKEN`
+protects writes, not status reads or SSE; do not expose private status to an untrusted network.
+Approval is a trust decision: review the adapter/helper and dependencies. Codex hashes hook
+definitions, not the referenced script contents, so source changes may alter behavior even when
+the definition is unchanged.
+
+Setup applies only to the current project. Repeat setup and review for each project when prompted.
+Unchanged hook definitions are remembered by their hashes; new or changed definitions require
+review. Hash-based approval does not promise project-isolated trust. CLI users can inspect hooks
+with `/hooks`; this is separate from the desktop review flow. The installer does not edit global
+Codex settings, trust records, or `notify`.
+Remove only unchanged owned files and exact owned hook entries with
+`npx github:KbWen/agent-virtual-office uninstall --platform codex`. See [`docs/INTEGRATIONS.md`](../docs/INTEGRATIONS.md)
+for observed states and lifecycle limits.
+
 The right first command depends on your starting point. **Always start with this preamble**:
 
 ```text

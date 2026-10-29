@@ -748,6 +748,8 @@ export function startStatusIntegration(store) {
   let pendingMsg = null
   let latestTransportGeneration = 0
   let lastAppliedSeq = null  // cross-channel stale-drop: tracks highest numeric _seq applied
+  let apiOwnedAgentIds = new Set()
+  let apiRepresentation = null
 
   function applyMessage(msg) {
     if (torn) return
@@ -785,6 +787,45 @@ export function startStatusIntegration(store) {
 
     // Route agents
     const updates = routeExternalAgents(msg.agents || [])
+    const fallbackUpdates = updates.length === 0 && msg.activeCount > 0
+      ? distributeFallbackCount(msg.activeCount).map(id => ({ agentId: id, status: 'working', task: null, label: null }))
+      : []
+    const snapshotAgentIds = new Set((updates.length > 0 ? updates : fallbackUpdates).map(update => update.agentId))
+
+    if (transportMeta) {
+      // Only known filesystem scan representations have snapshot ownership semantics.
+      // Other API payloads (including POST-backed manual integrations) may be incremental.
+      const isMultiSnapshot = msg.source === 'multi-session' && Number.isInteger(msg.sessionCount) && msg.sessionCount > 1
+      const isSingleFileSnapshot = ['codex-cli', 'claude-cli', 'file-watcher'].includes(msg.source)
+      const nextRepresentation = isMultiSnapshot ? 'multi' : isSingleFileSnapshot ? `single:${msg.source}` : null
+      if (nextRepresentation) {
+        const representationChanged = apiRepresentation !== null && apiRepresentation !== nextRepresentation
+        if (representationChanged) {
+          // Bare roles and worktree~role IDs are different store identities. Retire the
+          // prior file-snapshot identities only at this representation boundary, never on
+          // each poll/SSE delivery. API/manual sources outside this allowlist are incremental.
+          for (const agentId of apiOwnedAgentIds) {
+            if (!snapshotAgentIds.has(agentId)) s.clearExternalStatus?.(agentId)
+          }
+        }
+        if (isMultiSnapshot || representationChanged) {
+          apiOwnedAgentIds = snapshotAgentIds
+        } else {
+          for (const agentId of snapshotAgentIds) apiOwnedAgentIds.add(agentId)
+        }
+        apiRepresentation = nextRepresentation
+      } else {
+        // A trusted API delivery with an unrecognized/manual source takes ownership of
+        // only the roles it names; do not later clear those entries as stale file-hook data.
+        for (const agentId of snapshotAgentIds) apiOwnedAgentIds.delete(agentId)
+      }
+    } else {
+      // A manual channel update takes ownership of the specific roles it names. Keep
+      // unrelated API-owned roles tracked so the next API snapshot can still retire them.
+      for (const update of updates.length > 0 ? updates : fallbackUpdates) {
+        apiOwnedAgentIds.delete(update.agentId)
+      }
+    }
 
     // "Hooks not installed" signal — keep the setup prompt visible (see shouldSkipHintDismiss).
     const skipHintDismiss = shouldSkipHintDismiss(msg)
@@ -819,8 +860,6 @@ export function startStatusIntegration(store) {
       }
     } else if (msg.activeCount > 0) {
       const prevExt = s.externalStatus
-      const ids = distributeFallbackCount(msg.activeCount)
-      const fallbackUpdates = ids.map(id => ({ agentId: id, status: 'working', task: null, label: null }))
       s.applyExternalStatus(fallbackUpdates, {
         skipHintDismiss,
         statusSource: 'fallback',

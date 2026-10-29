@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useOfficeStore, createPersistedState } from '../src/systems/store.js'
 
 // ─── markIntegrationProbe — state machine ────────────────────────────
@@ -74,17 +74,27 @@ describe('store — markIntegrationProbe state machine', () => {
     expect(h.lastSuccessAt).toBeGreaterThan(0)
   })
 
-  it('success when already online: same-value guard — no state change', () => {
-    useOfficeStore.getState().markIntegrationProbe({ ok: true })
-    const firstSuccessAt = useOfficeStore.getState().integrationHealth.lastSuccessAt
+  it('success when already online renews freshness while preserving state and failure count', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    try {
+      useOfficeStore.getState().markIntegrationProbe({ ok: true })
+      const firstSuccess = useOfficeStore.getState().integrationHealth
 
-    // Second success: nextState='online', failures=0 — same as current
-    // guard returns {} so lastSuccessAt is NOT updated (no-op)
-    useOfficeStore.getState().markIntegrationProbe({ ok: true })
-    const h = useOfficeStore.getState().integrationHealth
-    expect(h.state).toBe('online')
-    expect(h.consecutiveFailures).toBe(0)
-    expect(h.lastSuccessAt).toBe(firstSuccessAt)
+      // At the same timestamp, this is a true duplicate and should be a no-op.
+      useOfficeStore.getState().markIntegrationProbe({ ok: true })
+      expect(useOfficeStore.getState().integrationHealth).toBe(firstSuccess)
+
+      // A later successful probe refreshes freshness despite unchanged status and counter.
+      now.mockReturnValue(2_000)
+      useOfficeStore.getState().markIntegrationProbe({ ok: true })
+      const h = useOfficeStore.getState().integrationHealth
+      expect(h.state).toBe('online')
+      expect(h.consecutiveFailures).toBe(0)
+      expect(h.lastSuccessAt).toBe(2_000)
+      expect(h).not.toBe(firstSuccess)
+    } finally {
+      vi.restoreAllMocks()
+    }
   })
 })
 

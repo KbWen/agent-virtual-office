@@ -225,6 +225,566 @@ function parsePlatformSelector(argv) {
   return { selected: false, value: undefined }
 }
 
+const CODEX_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'Stop', 'SessionEnd']
+const CODEX_HOOK_TIMEOUT_SECONDS = 2
+const CLAUDE_EVENTS = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'SubagentStart', 'SubagentStop', 'UserPromptSubmit', 'Stop', 'PermissionDenied', 'StopFailure', 'PermissionRequest', 'SessionEnd']
+
+function exactClaudeCommand(command, hookDest) {
+  if (typeof command !== 'string') return false
+  const normalized = command.replace(/\\/g, '/')
+  const normalizedPath = hookDest.replace(/\\/g, '/')
+  const current = `node "${normalizedPath}"`
+  const bare = `node ${normalizedPath}`
+  const legacy = 'node public/hooks/office-status-hook.js'
+  const safeBarePath = /^[A-Za-z0-9_./:\\-]+$/.test(normalizedPath)
+  return normalized === current || (safeBarePath && normalized === bare) || command === legacy
+}
+
+function claudeHookIdentity(contents) {
+  const source = (Buffer.isBuffer(contents) ? contents.toString('utf8') : String(contents)).replace(/\r\n/g, '\n')
+  const hasHeader = source.startsWith('#!/usr/bin/env node\n/**\n * Agent Virtual Office — Claude Code Hook')
+  const hasId = /(?:const|var|let) HOOK_ID\s*=\s*['"]agent-virtual-office\/claude-hook['"]/.test(source)
+  const version = source.match(/(?:const|var|let) HOOK_VERSION\s*=\s*['"]([0-9]+\.[0-9]+\.[0-9]+)['"]/)?.[1]
+  return hasHeader && hasId && version ? { id: 'agent-virtual-office/claude-hook', version } : null
+}
+
+function claudeLegacyHookIdentity(contents) {
+  const source = (Buffer.isBuffer(contents) ? contents.toString('utf8') : String(contents)).replace(/\r\n/g, '\n')
+  const hasHeader = source.startsWith('#!/usr/bin/env node\n/**\n * Agent Virtual Office — Claude Code Hook')
+  const hasVersion = /(?:const|var|let) HOOK_VERSION\s*=\s*['"]([0-9]+\.[0-9]+\.[0-9]+)['"]/.test(source)
+  const hasStableId = /(?:const|var|let) HOOK_ID\s*=/.test(source)
+  return hasHeader && hasVersion && !hasStableId
+}
+
+function validateProjectClaudeSettings(projectRoot) {
+  const file = path.join(projectRoot, '.claude', 'settings.json')
+  let stat
+  try { stat = fs.lstatSync(file) } catch (error) {
+    if (error && error.code === 'ENOENT') return
+    throw new Error('cannot inspect project Claude settings safely')
+  }
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('unsafe project Claude settings path')
+  const settings = JSON.parse(fs.readFileSync(file, 'utf8'))
+  if (!isPlainObject(settings) || (settings.hooks !== undefined && !isPlainObject(settings.hooks))) {
+    throw new Error('unsupported project Claude settings structure')
+  }
+  if (settings.hooks) for (const event of CLAUDE_EVENTS) {
+    if (settings.hooks[event] !== undefined && !Array.isArray(settings.hooks[event])) {
+      throw new Error('unsupported project Claude event structure')
+    }
+  }
+}
+
+function writeClaudeHookSafely(source, destination, nominatedLegacyHash) {
+  const backup = destination + '.avo-claude-backup'
+  let existing = null
+  try {
+    const stat = fs.lstatSync(destination)
+    if (stat.isSymbolicLink() || !stat.isFile()) throw new Error('unsafe Claude hook path')
+    existing = fs.readFileSync(destination)
+  } catch (error) {
+    if (!error || error.code !== 'ENOENT') throw error
+  }
+  if (existing && existing.equals(source)) return { action: 'up-to-date', previous: existing, backupCreatedPath: null, backupPath: null }
+  const currentOwned = existing && claudeHookIdentity(existing)
+  const nominatedHashValid = typeof nominatedLegacyHash === 'string' && /^[a-f0-9]{64}$/i.test(nominatedLegacyHash) &&
+    require('node:crypto').createHash('sha256').update(existing || Buffer.alloc(0)).digest('hex') === nominatedLegacyHash.toLowerCase()
+  const nominatedLegacy = existing && nominatedHashValid && claudeLegacyHookIdentity(existing)
+  if (existing && !currentOwned && !nominatedLegacy) throw new Error('existing Claude hook is not verifiably AVO-owned')
+  let createdBackupPath = null
+  let backupPath = null
+  if (existing) {
+    let baseBackupExists = false
+    try {
+      const stat = fs.lstatSync(backup)
+      baseBackupExists = true
+      if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('unsafe Claude hook backup')
+      if (fs.readFileSync(backup).equals(existing)) backupPath = backup
+    } catch (error) {
+      if (!error || error.code !== 'ENOENT') throw error
+    }
+    if (baseBackupExists && !backupPath) {
+      if (!currentOwned) throw new Error('Claude hook backup does not match the nominated legacy bytes')
+      const versionBackup = `${backup}.${require('node:crypto').createHash('sha256').update(existing).digest('hex')}`
+      try {
+        const stat = fs.lstatSync(versionBackup)
+        if (!stat.isFile() || stat.isSymbolicLink() || !fs.readFileSync(versionBackup).equals(existing)) {
+          throw new Error('Claude hook version backup does not match the prior installed bytes')
+        }
+        backupPath = versionBackup
+      } catch (error) {
+        if (!error || error.code !== 'ENOENT') throw error
+        fs.copyFileSync(destination, versionBackup, fs.constants.COPYFILE_EXCL)
+        createdBackupPath = versionBackup
+        if (!fs.readFileSync(versionBackup).equals(existing)) throw new Error('Claude hook version backup verification failed')
+        backupPath = versionBackup
+      }
+    } else if (!backupPath) {
+      fs.copyFileSync(destination, backup, fs.constants.COPYFILE_EXCL)
+      createdBackupPath = backup
+      if (!fs.readFileSync(backup).equals(existing)) throw new Error('Claude hook backup verification failed')
+      backupPath = backup
+    }
+  }
+  const temp = `${destination}.tmp.${process.pid}.${Math.random().toString(36).slice(2, 8)}`
+  try {
+    fs.writeFileSync(temp, source, { flag: 'wx', mode: 0o600 })
+    fs.renameSync(temp, destination)
+    if (!fs.readFileSync(destination).equals(source)) throw new Error('Claude hook verification failed')
+  } catch (error) {
+    try { fs.unlinkSync(temp) } catch {}
+    if (existing) { try { fs.writeFileSync(destination, existing) } catch {} }
+    else { try { fs.unlinkSync(destination) } catch {} }
+    if (createdBackupPath) { try { fs.unlinkSync(createdBackupPath) } catch {} }
+    throw error
+  }
+  return { action: existing ? 'updated' : 'installed', previous: existing, backupCreatedPath: createdBackupPath, backupPath }
+}
+
+function rollbackClaudeHook(destination, previous, backupCreatedPath) {
+  try {
+    if (previous) fs.writeFileSync(destination, previous)
+    else fs.unlinkSync(destination)
+  } catch {}
+  if (backupCreatedPath) { try { fs.unlinkSync(backupCreatedPath) } catch {} }
+}
+
+function removeKnownProjectClaudeHooks(projectRoot) {
+  const file = path.join(projectRoot, '.claude', 'settings.json')
+  let stat
+  try { stat = fs.lstatSync(file) } catch (error) {
+    if (error && error.code === 'ENOENT') return null
+    throw new Error('cannot inspect project Claude settings safely')
+  }
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('unsafe project Claude settings path')
+  let original
+  try { original = fs.readFileSync(file) } catch { throw new Error('cannot read project Claude settings safely') }
+  const settings = JSON.parse(original.toString('utf8'))
+  if (!isPlainObject(settings) || (settings.hooks !== undefined && !isPlainObject(settings.hooks))) {
+    throw new Error('unsupported project Claude settings structure')
+  }
+  let changed = false
+  if (settings.hooks) for (const event of CLAUDE_EVENTS) {
+    const groups = settings.hooks[event]
+    if (groups === undefined) continue
+    if (!Array.isArray(groups)) throw new Error('unsupported project Claude event structure')
+    const kept = []
+    for (const group of groups) {
+      if (!isPlainObject(group) || !Array.isArray(group.hooks)) { kept.push(group); continue }
+      const hooks = group.hooks.filter(hook => !(isPlainObject(hook) && hook.type === 'command' && exactClaudeCommand(hook.command, path.join(projectRoot, '.claude', 'office-status-hook.js'))))
+      if (hooks.length !== group.hooks.length) changed = true
+      if (hooks.length) kept.push(hooks.length === group.hooks.length ? group : { ...group, hooks })
+    }
+    if (kept.length) settings.hooks[event] = kept
+    else delete settings.hooks[event]
+  }
+  if (settings.hooks && Object.keys(settings.hooks).length === 0) delete settings.hooks
+  if (!changed) return null
+  const backup = file + '.avo-claude-backup'
+  let backupCreated = false
+  if (fs.existsSync(backup)) {
+    const stat = fs.lstatSync(backup)
+    if (!stat.isFile() || stat.isSymbolicLink() || !fs.readFileSync(backup).equals(original)) {
+      throw new Error('project Claude backup does not match the pre-migration settings')
+    }
+  } else {
+    fs.copyFileSync(file, backup, fs.constants.COPYFILE_EXCL)
+    backupCreated = true
+    if (!fs.readFileSync(backup).equals(original)) {
+      try { fs.unlinkSync(backup) } catch {}
+      throw new Error('project Claude backup verification failed')
+    }
+  }
+  if (!atomicWriteSettings(file, JSON.stringify(settings, null, 2))) {
+    try { fs.writeFileSync(file, original) } catch {}
+    if (backupCreated) { try { fs.unlinkSync(backup) } catch {} }
+    throw new Error('cannot update project Claude settings')
+  }
+  return { file, original, backup }
+}
+
+function codexHookCommand(scriptPath) {
+  if (process.platform === 'win32') {
+    return `& ${shellQuotePowerShell(process.execPath)} ${shellQuotePowerShell(scriptPath)}`
+  }
+  return `${shellQuotePosix(process.execPath)} ${shellQuotePosix(scriptPath)}`
+}
+
+function readCodexHooks(file) {
+  let settings = {}
+  let exists = false
+  try { fs.lstatSync(file); exists = true } catch (error) {
+    if (!error || error.code !== 'ENOENT') throw error
+  }
+  if (exists) {
+    const stat = fs.lstatSync(file)
+    if (stat.isSymbolicLink() || !stat.isFile()) throw new Error('unsafe hooks.json path')
+    settings = JSON.parse(fs.readFileSync(file, 'utf8'))
+    if (!isPlainObject(settings)) throw new Error('hooks.json root must be an object')
+  }
+  if (settings.hooks !== undefined && !isPlainObject(settings.hooks)) throw new Error('hooks.json hooks must be an object')
+  for (const event of CODEX_EVENTS) {
+    if (settings.hooks?.[event] !== undefined && !Array.isArray(settings.hooks[event])) {
+      throw new Error(`hooks.json hooks.${event} must be an array`)
+    }
+  }
+  return { settings, exists }
+}
+
+function codexOwnedEntry(hook, command) {
+  return hasExactKeys(hook, ['type', 'command', 'timeout']) && hook.type === 'command' &&
+    hook.command === command && hook.timeout === CODEX_HOOK_TIMEOUT_SECONDS
+}
+
+function codexOwnedGroupShape(group) {
+  return isPlainObject(group) && Array.isArray(group.hooks) &&
+    (hasExactKeys(group, ['hooks']) || (hasExactKeys(group, ['matcher', 'hooks']) && group.matcher === '*'))
+}
+
+function hasEditedCodexRegistration(settings, command) {
+  if (!settings.hooks) return false
+  return CODEX_EVENTS.some(event => (settings.hooks[event] || []).some(group =>
+    isPlainObject(group) && Array.isArray(group.hooks) && group.hooks.some(hook =>
+      isPlainObject(hook) && typeof hook.command === 'string' &&
+      hook.command.includes('office-status-codex-hook.js') &&
+      (!codexOwnedEntry(hook, command) || !codexOwnedGroupShape(group)),
+    ),
+  ))
+}
+
+function mergeCodexRegistration(settings, event, command) {
+  if (!settings.hooks) settings.hooks = {}
+  const groups = settings.hooks[event] || []
+  let inserted = false
+  const merged = []
+  for (const group of groups) {
+    if (!isPlainObject(group) || !Array.isArray(group.hooks)) { merged.push(group); continue }
+    const matching = group.hooks.some(hook => codexOwnedEntry(hook, command))
+    if (!matching || !codexOwnedGroupShape(group)) { merged.push(group); continue }
+    const hooks = []
+    for (const hook of group.hooks) {
+      if (!codexOwnedEntry(hook, command)) { hooks.push(hook); continue }
+      if (!inserted) {
+        hooks.push({ type: 'command', command, timeout: CODEX_HOOK_TIMEOUT_SECONDS })
+        inserted = true
+      }
+    }
+    if (hooks.length) merged.push({ ...group, hooks })
+  }
+  if (!inserted) merged.push({ hooks: [{ type: 'command', command, timeout: CODEX_HOOK_TIMEOUT_SECONDS }] })
+  settings.hooks[event] = merged
+}
+
+function removeCodexRegistrations(settings, command) {
+  if (!settings.hooks) return
+  for (const event of CODEX_EVENTS) {
+    const groups = settings.hooks[event]
+    if (!Array.isArray(groups)) continue
+    const kept = []
+    for (const group of groups) {
+      if (!isPlainObject(group) || !Array.isArray(group.hooks)) { kept.push(group); continue }
+      const hooks = codexOwnedGroupShape(group) ? group.hooks.filter(hook => !codexOwnedEntry(hook, command)) : group.hooks
+      if (hooks.length) kept.push(hooks.length === group.hooks.length ? group : { ...group, hooks })
+    }
+    if (kept.length) settings.hooks[event] = kept
+    else delete settings.hooks[event]
+  }
+  if (Object.keys(settings.hooks).length === 0) delete settings.hooks
+}
+
+function writeCodexHooks(file, contents) {
+  const temp = `${file}.tmp.${process.pid}.${Math.random().toString(36).slice(2, 8)}`
+  try {
+    fs.writeFileSync(temp, contents, { flag: 'wx' })
+    fs.renameSync(temp, file)
+    return true
+  } catch {
+    try { fs.unlinkSync(temp) } catch {}
+    return false
+  }
+}
+
+function codexHash(bytes) {
+  return require('node:crypto').createHash('sha256').update(bytes).digest('hex')
+}
+
+function stageCodexFile(destination, contents) {
+  const temp = `${destination}.tmp.${process.pid}.${Math.random().toString(36).slice(2, 10)}`
+  try {
+    fs.writeFileSync(temp, contents, { flag: 'wx', mode: 0o600 })
+    return temp
+  } catch (error) {
+    try { fs.unlinkSync(temp) } catch {}
+    throw error
+  }
+}
+
+function commitCodexFile(temp, destination, replace) {
+  if (replace) fs.renameSync(temp, destination)
+  else {
+    // linkSync is an atomic no-clobber commit on the same filesystem.
+    fs.linkSync(temp, destination)
+    fs.unlinkSync(temp)
+  }
+  return true
+}
+
+function readCodexOwnership(manifestPath) {
+  try {
+    const stat = fs.lstatSync(manifestPath)
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('unsafe ownership metadata')
+    const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+    const allowedKeys = ['version', 'files', 'settingsBackupHash']
+    if (!isPlainObject(parsed) || Object.keys(parsed).some(key => !allowedKeys.includes(key)) ||
+        !Object.prototype.hasOwnProperty.call(parsed, 'version') || !Object.prototype.hasOwnProperty.call(parsed, 'files') ||
+        parsed.version !== 1 || !isPlainObject(parsed.files) ||
+        (parsed.settingsBackupHash !== undefined && parsed.settingsBackupHash !== null && !/^[a-f0-9]{64}$/.test(parsed.settingsBackupHash)) ||
+        Object.keys(parsed.files).some(name => !['office-status-codex-hook.js', 'office-status-codex.js'].includes(name) || !/^[a-f0-9]{64}$/.test(parsed.files[name]))) {
+      throw new Error('invalid ownership metadata')
+    }
+    return { exists: true, parsed, bytes: fs.readFileSync(manifestPath) }
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return { exists: false, parsed: { version: 1, files: {} }, bytes: null }
+    throw error
+  }
+}
+
+function hasCodexScriptReference(settings, scriptPath) {
+  if (!settings.hooks) return false
+  const normalized = scriptPath.replace(/\\/g, '/')
+  return Object.values(settings.hooks).some(groups => Array.isArray(groups) && groups.some(group =>
+    isPlainObject(group) && Array.isArray(group.hooks) && group.hooks.some(hook => {
+      if (!isPlainObject(hook) || typeof hook.command !== 'string') return false
+      const command = hook.command.replace(/\\/g, '/')
+      return process.platform === 'win32'
+        ? command.toLowerCase().includes(normalized.toLowerCase())
+        : command.includes(normalized)
+    }),
+  ))
+}
+
+function runCodexProjectCommand(action) {
+  const projectRoot = process.cwd()
+  const codexDir = path.join(projectRoot, '.codex')
+  const hooksDir = path.join(codexDir, 'hooks')
+  const settingsPath = path.join(codexDir, 'hooks.json')
+  const hookDest = path.join(hooksDir, 'office-status-codex-hook.js')
+  const helperDest = path.join(hooksDir, 'office-status-codex.js')
+  const ownershipPath = path.join(hooksDir, '.avo-codex-owned.json')
+  const settingsBackup = settingsPath + '.avo-codex-backup'
+  let hooksDirExisted = false
+  for (const directory of [codexDir, hooksDir]) {
+    try {
+      const stat = fs.lstatSync(directory)
+      if (stat.isSymbolicLink() || !stat.isDirectory()) {
+        console.error('  Error: Refusing an unsafe Codex hook directory; no project files were changed.')
+        process.exit(1)
+      }
+      if (directory === hooksDir) hooksDirExisted = true
+    } catch (error) {
+      if (!error || error.code !== 'ENOENT') {
+        console.error('  Error: Cannot safely inspect a Codex hook directory; no project files were changed.')
+        process.exit(1)
+      }
+    }
+  }
+  const sources = ['office-status-codex-hook.js', 'office-status-codex.js'].map(name =>
+    fs.readFileSync(path.join(root, 'public', 'hooks', name)),
+  )
+  let parsed
+  try { parsed = readCodexHooks(settingsPath) } catch {
+    console.error('  Error: Cannot safely read .codex/hooks.json (invalid JSON or unsupported structure).')
+    console.error('  No project files were changed.')
+    process.exit(1)
+  }
+  const command = codexHookCommand(hookDest)
+  if (action === 'setup' && hasEditedCodexRegistration(parsed.settings, command)) {
+    console.error('  Error: An AVO Codex hook entry was edited; it was preserved.')
+    console.error('  Restore the AVO entry before retrying setup.')
+    process.exit(1)
+  }
+  const destinations = [hookDest, helperDest]
+  const names = ['office-status-codex-hook.js', 'office-status-codex.js']
+  let ownership
+  try { ownership = readCodexOwnership(ownershipPath) } catch {
+    console.error('  Error: Codex ownership metadata is invalid or unsafe; no project files were changed.')
+    process.exit(1)
+  }
+  const existed = []
+  const priorBytes = []
+  const owned = []
+  for (let i = 0; i < destinations.length; i++) {
+    try {
+      const stat = fs.lstatSync(destinations[i])
+      if (stat.isSymbolicLink() || !stat.isFile()) throw new Error('unsafe hook path')
+      existed[i] = true
+      priorBytes[i] = fs.readFileSync(destinations[i])
+      owned[i] = ownership.parsed.files[names[i]] === codexHash(priorBytes[i])
+      if (action === 'setup' && !priorBytes[i].equals(sources[i]) && !owned[i]) {
+        console.error('  Error: An installed Codex hook differs from its recorded owned version; it was preserved.')
+        process.exit(1)
+      }
+    } catch (error) {
+      if (!error || error.code !== 'ENOENT') {
+        console.error('  Error: Cannot safely inspect a Codex hook path; no project files were changed.')
+        process.exit(1)
+      }
+      existed[i] = false
+    }
+  }
+  if (action === 'setup' && parsed.exists && fs.existsSync(settingsBackup)) {
+    // Existing backup is retained; it is the rollback point from the first successful install.
+  }
+  if (action === 'setup') for (const event of CODEX_EVENTS) mergeCodexRegistration(parsed.settings, event, command)
+  else removeCodexRegistrations(parsed.settings, command)
+  const updated = JSON.stringify(parsed.settings, null, 2)
+  const oldBytes = parsed.exists ? fs.readFileSync(settingsPath) : null
+  const settingsChanged = action === 'setup' || (parsed.exists && JSON.stringify(JSON.parse(oldBytes.toString('utf8'))) !== JSON.stringify(parsed.settings))
+  let settingsBackupHash = ownership.parsed.settingsBackupHash
+  if (action === 'setup') {
+    let backupBytes = null
+    try {
+      const stat = fs.lstatSync(settingsBackup)
+      if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('unsafe Codex settings backup')
+      backupBytes = fs.readFileSync(settingsBackup)
+    } catch (error) {
+      if (!error || error.code !== 'ENOENT') {
+        console.error('  Error: Codex settings backup is unsafe; no project files were changed.')
+        process.exit(1)
+      }
+    }
+    if (ownership.exists && settingsBackupHash === null) {
+      if (backupBytes) {
+        console.error('  Error: Unexpected Codex settings backup; no project files were changed.')
+        process.exit(1)
+      }
+    } else if (ownership.exists && settingsBackupHash) {
+      if (!backupBytes || codexHash(backupBytes) !== settingsBackupHash) {
+        console.error('  Error: Codex settings backup does not match recorded ownership; no project files were changed.')
+        process.exit(1)
+      }
+    } else if (backupBytes) {
+      if (!parsed.exists || !backupBytes.equals(oldBytes)) {
+        console.error('  Error: Existing Codex settings backup does not match the pre-install settings; no project files were changed.')
+        process.exit(1)
+      }
+      settingsBackupHash = codexHash(backupBytes)
+    } else if (!ownership.exists && parsed.exists) {
+      settingsBackupHash = codexHash(oldBytes)
+    } else if (!ownership.exists) {
+      settingsBackupHash = null
+    } else if (settingsBackupHash === undefined) {
+      settingsBackupHash = null
+    }
+  }
+  const installed = []
+  let createdBackup = false
+  const staged = []
+  let ownershipTemp = null
+  const rollbackBackups = []
+  let ownershipCommitted = false
+  const originalOwnershipBytes = ownership.bytes
+  try {
+    if (action === 'setup') {
+      fs.mkdirSync(hooksDir, { recursive: true })
+      for (let i = 0; i < destinations.length; i++) {
+        if (existed[i] && priorBytes[i].equals(sources[i])) continue
+        if (existed[i]) {
+          const backup = `${destinations[i]}.avo-codex-backup.${codexHash(priorBytes[i])}`
+          if (fs.existsSync(backup)) {
+            if (!fs.readFileSync(backup).equals(priorBytes[i])) throw new Error('Codex script backup mismatch')
+          } else {
+            fs.copyFileSync(destinations[i], backup, fs.constants.COPYFILE_EXCL)
+            rollbackBackups.push(backup)
+            if (!fs.readFileSync(backup).equals(priorBytes[i])) throw new Error('Codex script backup verification failed')
+          }
+        }
+        staged[i] = stageCodexFile(destinations[i], sources[i])
+      }
+      const nextFiles = { ...ownership.parsed.files }
+      for (let i = 0; i < destinations.length; i++) {
+        if (!existed[i] || owned[i]) nextFiles[names[i]] = codexHash(sources[i])
+      }
+      const nextOwnership = { version: 1, files: nextFiles }
+      nextOwnership.settingsBackupHash = settingsBackupHash
+      const ownershipContents = JSON.stringify(nextOwnership, null, 2)
+      ownershipTemp = stageCodexFile(ownershipPath, ownershipContents)
+      if (parsed.exists && settingsChanged && settingsBackupHash && !fs.existsSync(settingsBackup)) {
+        fs.copyFileSync(settingsPath, settingsBackup, fs.constants.COPYFILE_EXCL)
+        createdBackup = true
+        if (!fs.readFileSync(settingsBackup).equals(oldBytes)) throw new Error('Codex settings backup verification failed')
+      }
+      for (let i = 0; i < destinations.length; i++) if (staged[i]) {
+        commitCodexFile(staged[i], destinations[i], Boolean(existed[i]))
+        staged[i] = null
+        if (!existed[i]) installed.push(i)
+      }
+      commitCodexFile(ownershipTemp, ownershipPath, ownership.exists)
+      ownershipTemp = null
+      ownershipCommitted = true
+    }
+    if (settingsChanged && !writeCodexHooks(settingsPath, updated)) throw new Error('hooks.json write failed')
+  } catch (error) {
+    for (const temp of staged) {
+      if (typeof temp === 'string') { try { fs.unlinkSync(temp) } catch {} }
+    }
+    if (ownershipTemp) { try { fs.unlinkSync(ownershipTemp) } catch {} }
+    if (action === 'setup') for (let i = 0; i < destinations.length; i++) {
+      if (existed[i] && owned[i] && !priorBytes[i].equals(sources[i])) {
+        const restoreTemp = `${destinations[i]}.restore.${process.pid}.${Math.random().toString(36).slice(2, 8)}`
+        try { fs.writeFileSync(restoreTemp, priorBytes[i], { flag: 'wx' }); fs.renameSync(restoreTemp, destinations[i]) } catch { try { fs.unlinkSync(restoreTemp) } catch {} }
+      } else if (installed.includes(i)) { try { fs.unlinkSync(destinations[i]) } catch {} }
+    }
+    if (ownershipCommitted) {
+      try {
+        if (originalOwnershipBytes) {
+          const restore = stageCodexFile(ownershipPath, originalOwnershipBytes)
+          commitCodexFile(restore, ownershipPath, true)
+        } else fs.unlinkSync(ownershipPath)
+      } catch {}
+    }
+    for (const backup of rollbackBackups) { try { fs.unlinkSync(backup) } catch {} }
+    if (createdBackup) { try { fs.unlinkSync(settingsBackup) } catch {} }
+    if (action === 'setup' && !hooksDirExisted) { try { fs.rmdirSync(hooksDir) } catch {} }
+    console.error(`  Error: Codex ${action} failed; changes were rolled back where possible.`)
+    process.exit(1)
+  }
+  if (action === 'uninstall') {
+    const adapterStillReferenced = hasCodexScriptReference(parsed.settings, hookDest)
+    const retained = { ...ownership.parsed.files }
+    for (let i = 0; i < destinations.length; i++) {
+      try {
+        const referenced = hasCodexScriptReference(parsed.settings, destinations[i]) || (i === 1 && adapterStillReferenced)
+        if (!referenced && existed[i] && owned[i]) {
+          fs.unlinkSync(destinations[i])
+          delete retained[names[i]]
+        }
+      } catch {}
+    }
+    try {
+      const settingsBackupVerified = ownership.parsed.settingsBackupHash && (() => {
+        try {
+          const stat = fs.lstatSync(settingsBackup)
+          return stat.isFile() && !stat.isSymbolicLink() && codexHash(fs.readFileSync(settingsBackup)) === ownership.parsed.settingsBackupHash
+        } catch { return false }
+      })()
+      if (Object.keys(retained).length || settingsBackupVerified) {
+        const remainingOwnership = { version: 1, files: retained }
+        if (Object.prototype.hasOwnProperty.call(ownership.parsed, 'settingsBackupHash')) {
+          remainingOwnership.settingsBackupHash = ownership.parsed.settingsBackupHash
+        }
+        const temp = stageCodexFile(ownershipPath, JSON.stringify(remainingOwnership, null, 2))
+        commitCodexFile(temp, ownershipPath, true)
+      } else if (ownership.exists) fs.unlinkSync(ownershipPath)
+    } catch {}
+  }
+  const setupGuidance = action === 'setup'
+    ? `\n  Desktop hooks are optional. Open or reload a chat for this project; if "Review hook" appears, expand all six entries, verify the project paths, select the intended hooks, and choose "Allow selected items". They stay inactive until approved and the session reloads.\n  Choose "Not now" to leave automatic Codex observation off; the office remains usable. Manual alternatives: docs/INTEGRATIONS.md#native-codex-lifecycle-hooks. This setup applies to this project only. CLI users can review with /hooks.`
+    : ''
+  console.log(`\n  Codex project hook ${action} complete.\n  Settings: ${settingsPath}${setupGuidance}\n`)
+  process.exit(0)
+}
+
 function runGeminiProjectCommand(action) {
   const projectRoot = process.cwd()
   const geminiDir = path.join(projectRoot, '.gemini')
@@ -378,8 +938,10 @@ const platformSelector = parsePlatformSelector(args.slice(1))
 if ((command === 'setup' || command === 'uninstall') && platformSelector.selected) {
   if (platformSelector.value === 'gemini') {
     runGeminiProjectCommand(command)
+  } else if (platformSelector.value === 'codex') {
+    runCodexProjectCommand(command)
   } else if (platformSelector.value !== 'claude') {
-    console.error(`  Error: Unsupported platform "${platformSelector.value || ''}". Supported platforms: claude, gemini.`)
+    console.error(`  Error: Unsupported platform "${platformSelector.value || ''}". Supported platforms: claude, codex, gemini.`)
     process.exit(1)
   }
 }
@@ -389,11 +951,12 @@ if (command === 'setup') {
   const claudeDir = path.join(os.homedir(), '.claude')
   const settingsPath = path.join(claudeDir, 'settings.json')
   const hookSrc = path.join(root, 'public', 'hooks', 'office-status-hook.js')
+  const legacyMigrationArg = args.find(arg => arg.startsWith('--migrate-legacy-claude='))
+  const nominatedLegacyHash = legacyMigrationArg ? legacyMigrationArg.slice('--migrate-legacy-claude='.length) : undefined
 
   // Ensure ~/.claude exists
   if (!fs.existsSync(claudeDir)) fs.mkdirSync(claudeDir, { recursive: true })
 
-  // Copy hook script to ~/.claude/ (update if changed)
   const hookDest = path.join(claudeDir, 'office-status-hook.js')
   if (!fs.existsSync(hookSrc)) {
     console.error('  Error: Hook source not found at ' + hookSrc)
@@ -401,35 +964,59 @@ if (command === 'setup') {
     console.error('    npm install -g agent-virtual-office')
     process.exit(1)
   }
-  let hookAction = 'installed'
-  if (fs.existsSync(hookDest)) {
-    const oldContent = fs.readFileSync(hookDest, 'utf-8')
-    const newContent = fs.readFileSync(hookSrc, 'utf-8')
-    if (oldContent.replace(/\r\n/g, '\n') === newContent.replace(/\r\n/g, '\n')) {
-      hookAction = 'up-to-date'
-    } else {
-      hookAction = 'updated'
-    }
-  }
-  fs.copyFileSync(hookSrc, hookDest)
-  // Verify the hook was copied successfully
-  if (!fs.existsSync(hookDest)) {
-    console.error('  Error: Failed to copy hook file to ' + hookDest)
-    console.error('  Check file permissions for ~/.claude/')
+  let hookBytes
+  try {
+    hookBytes = fs.readFileSync(hookSrc)
+  } catch {
+    console.error('  Error: Hook source not found at ' + hookSrc)
     process.exit(1)
   }
 
   // Read or create settings.json
   let settings = {}
+  let settingsOriginalBytes = null
   if (fs.existsSync(settingsPath)) {
     try {
-      const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
-      settings = (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {}
+      settingsOriginalBytes = fs.readFileSync(settingsPath)
+      const parsed = JSON.parse(settingsOriginalBytes.toString('utf-8'))
+      if (!isPlainObject(parsed)) throw new Error('settings root must be an object')
+      settings = parsed
     } catch (e) {
       console.error('  Error: ' + settingsPath + ' contains invalid JSON.')
       console.error('  Please fix or back up the file, then re-run setup.')
       process.exit(1)
     }
+  }
+  if (settings.hooks !== undefined && !isPlainObject(settings.hooks)) {
+    console.error('  Error: ' + settingsPath + ' has an unsupported hooks structure.')
+    console.error('  No installed hook files or settings were changed.')
+    process.exit(1)
+  }
+  if (settings.hooks) for (const event of CLAUDE_EVENTS) {
+    if (settings.hooks[event] !== undefined && !Array.isArray(settings.hooks[event])) {
+      console.error(`  Error: ${settingsPath} has an unsupported hooks.${event} structure.`)
+      console.error('  No installed hook files or settings were changed.')
+      process.exit(1)
+    }
+  }
+
+  try { validateProjectClaudeSettings(process.cwd()) } catch {
+    console.error('  Error: Project Claude settings are malformed or unsafe; no hook files or settings were changed.')
+    process.exit(1)
+  }
+
+  let hookAction
+  let hookPrevious = null
+  let hookBackupCreated = false
+  try {
+    const installed = writeClaudeHookSafely(hookBytes, hookDest, nominatedLegacyHash)
+    hookAction = installed.action
+    hookPrevious = installed.previous
+    hookBackupCreated = installed.backupCreatedPath
+  } catch {
+    console.error('  Error: The installed Claude hook is unsafe, edited, or could not be verified; it was preserved.')
+    console.error('  Keep a copy of the file, then restore a known AVO hook before retrying setup.')
+    process.exit(1)
   }
 
   // Build hook command (node works on all platforms, no jq/bash dependency)
@@ -437,19 +1024,22 @@ if (command === 'setup') {
   const hookEntry = { type: 'command', command: hookCmd }
 
   // Add hooks for all relevant events
-  // AVO-148: PermissionDenied + StopFailure are harmless on older Claude Code versions that
-  // don't emit them — the hook simply never receives those event names and nothing is claimed.
+  // Register only lifecycle events that can support an honest office state.
   if (!settings.hooks || typeof settings.hooks !== 'object' || Array.isArray(settings.hooks)) settings.hooks = {}
-  for (const event of ['PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'UserPromptSubmit', 'Stop', 'PermissionDenied', 'StopFailure']) {
+  for (const event of CLAUDE_EVENTS) {
     if (!Array.isArray(settings.hooks[event])) settings.hooks[event] = []
-    // Check if already installed (avoid duplicates)
     const existing = settings.hooks[event]
-    const hasHook = existing.some(h =>
-      h && typeof h === 'object' && (h.hooks || []).some(hh => hh && hh.command && hh.command.includes('office-status-hook'))
-    )
-    if (!hasHook) {
-      existing.push({ hooks: [hookEntry] })
+    let inserted = false
+    const merged = []
+    for (const group of existing) {
+      if (!isPlainObject(group) || !Array.isArray(group.hooks)) { merged.push(group); continue }
+      const retained = group.hooks.filter(hook => !(isPlainObject(hook) && hook.type === 'command' && exactClaudeCommand(hook.command, hookDest)))
+      const hadOwned = retained.length !== group.hooks.length
+      if (hadOwned && !inserted) { retained.push(hookEntry); inserted = true }
+      if (retained.length) merged.push(retained.length === group.hooks.length ? group : { ...group, hooks: retained })
     }
+    if (!inserted) merged.push({ hooks: [hookEntry] })
+    settings.hooks[event] = merged
   }
 
   // Write back atomically to prevent corruption on crash/disk-full. tmp name = pid + random
@@ -458,8 +1048,21 @@ if (command === 'setup') {
   // atomicWriteSettings also resolves settingsPath through a symlink first (finding 6) so a
   // dotfile-symlink setup pointing ~/.claude/settings.json elsewhere isn't silently broken.
   if (!atomicWriteSettings(settingsPath, JSON.stringify(settings, null, 2))) {
+    rollbackClaudeHook(hookDest, hookPrevious, hookBackupCreated)
     console.error('  Error: Cannot write to ' + settingsPath)
     console.error('  Check file permissions for ~/.claude/')
+    process.exit(1)
+  }
+
+  try {
+    removeKnownProjectClaudeHooks(process.cwd())
+  } catch {
+    if (settingsOriginalBytes) {
+      try { atomicWriteSettings(settingsPath, settingsOriginalBytes.toString('utf8')) } catch {}
+    } else { try { fs.unlinkSync(settingsPath) } catch {} }
+    rollbackClaudeHook(hookDest, hookPrevious, hookBackupCreated)
+    console.error('  Error: Could not safely migrate known project-local Claude hooks.')
+    console.error('  The project settings were preserved; the global setup changes were rolled back where possible.')
     process.exit(1)
   }
 
@@ -470,7 +1073,7 @@ if (command === 'setup') {
   Settings updated: ${settingsPath}
 
   Now run:
-    npx agent-virtual-office
+    npx github:KbWen/agent-virtual-office --no-host
 
   Requires: Claude Code (https://claude.ai/code) must be installed.
   Then use Claude Code in any project — the office will light up automatically.
@@ -484,17 +1087,18 @@ if (command === 'uninstall') {
   const settingsPath = path.join(claudeDir, 'settings.json')
   const hookDest = path.join(claudeDir, 'office-status-hook.js')
   const hookDestLegacy = path.join(claudeDir, 'office-status-hook.sh')
+  const currentHookSource = (() => { try { return fs.readFileSync(path.join(root, 'public', 'hooks', 'office-status-hook.js')) } catch { return null } })()
 
-  // Remove hook files (current + legacy .sh). Each unlink is independently guarded (finding 6):
-  // a locked/already-removed file must not abort cleanup of the rest.
-  for (const f of [hookDest, hookDestLegacy]) {
-    if (fs.existsSync(f)) {
-      try {
-        fs.unlinkSync(f)
-        console.log('  Removed: ' + f)
-      } catch (e) {
-        console.warn('  Warning: Could not remove ' + f + ' (' + (e && e.message) + ')')
+  // Remove only a byte-identical current hook or a recognizable installed AVO hook.
+  if (fs.existsSync(hookDest)) {
+    try {
+      const contents = fs.readFileSync(hookDest)
+      if ((currentHookSource && contents.equals(currentHookSource)) || claudeHookIdentity(contents)) {
+        fs.unlinkSync(hookDest)
+        console.log('  Removed: ' + hookDest)
       }
+    } catch (e) {
+      console.warn('  Warning: Could not inspect or remove ' + hookDest)
     }
   }
 
@@ -524,15 +1128,19 @@ if (command === 'uninstall') {
     try {
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
       if (settings.hooks) {
-        for (const event of ['PreToolUse', 'PostToolUse', 'SubagentStart', 'SubagentStop', 'UserPromptSubmit', 'Stop', 'PermissionDenied', 'StopFailure']) {
+        for (const event of CLAUDE_EVENTS) {
           if (settings.hooks[event]) {
             // Null-guard both `h` and `hh` (finding 6) — a malformed/foreign settings entry
             // (e.g. `null` sitting in the array, or a hooks-array element with no `command`)
             // used to throw here and abort the ENTIRE uninstall, including the file cleanup
             // that already ran above.
-            settings.hooks[event] = settings.hooks[event].filter(h =>
-              !(h && (h.hooks || []).some(hh => hh && hh.command && hh.command.includes('office-status-hook')))
-            )
+            const retained = []
+            for (const group of settings.hooks[event]) {
+              if (!group || !Array.isArray(group.hooks)) { retained.push(group); continue }
+              const hooks = group.hooks.filter(hh => !(hh && hh.type === 'command' && exactClaudeCommand(hh.command, hookDest)))
+              if (hooks.length) retained.push(hooks.length === group.hooks.length ? group : { ...group, hooks })
+            }
+            settings.hooks[event] = retained
             if (settings.hooks[event].length === 0) delete settings.hooks[event]
           }
         }
@@ -628,14 +1236,18 @@ if (help) {
   agent-virtual-office — Pixel-art virtual office for AI agents
 
   Usage:
-    npx agent-virtual-office [options]
-    npx agent-virtual-office setup       Install Claude Code hooks (one-time)
-    npx agent-virtual-office setup --platform gemini
+    npx github:KbWen/agent-virtual-office [options]
+    npx github:KbWen/agent-virtual-office setup       Install Claude Code hooks (one-time)
+    npx github:KbWen/agent-virtual-office setup --platform codex
+                                         Install Codex CLI hooks in this project
+    npx github:KbWen/agent-virtual-office setup --platform gemini
                                          Install Gemini CLI hooks in this project
-    npx agent-virtual-office uninstall   Remove Claude Code hooks
-    npx agent-virtual-office uninstall --platform gemini
+    npx github:KbWen/agent-virtual-office uninstall   Remove Claude Code hooks
+    npx github:KbWen/agent-virtual-office uninstall --platform codex
+                                         Remove this project's Codex CLI hooks
+    npx github:KbWen/agent-virtual-office uninstall --platform gemini
                                          Remove this project's Gemini CLI hooks
-    npx agent-virtual-office serve       Serve production build (no Vite needed)
+    npx github:KbWen/agent-virtual-office serve       Serve production build (no Vite needed)
 
   Options:
     --port=PORT    Port number (default: 5174)
@@ -647,12 +1259,12 @@ if (help) {
     --help, -h     Show this help
 
   Quick start:
-    npx agent-virtual-office setup   # one-time: install hooks
-    npx agent-virtual-office         # start the office (dev mode)
+    npx github:KbWen/agent-virtual-office setup   # one-time: install hooks
+    npx github:KbWen/agent-virtual-office --no-host  # start locally (dev mode)
 
   Production / static deploy:
     npm run build                    # build to dist/
-    npx agent-virtual-office serve   # serve dist/ + /api/status
+    npx github:KbWen/agent-virtual-office serve   # serve dist/ + /api/status
 
   Then use Claude Code in any project — the office lights up automatically.
 `)
@@ -765,7 +1377,7 @@ if (open) {
 vite.on('close', (code) => {
   if (code) {
     console.error(`\n  Vite exited with code ${code}. If port ${port} is in use, try:`)
-    console.error(`    npx agent-virtual-office --port=${parseInt(port) + 1}\n`)
+    console.error(`    npx github:KbWen/agent-virtual-office --port=${parseInt(port) + 1}\n`)
   }
   process.exit(code || 0)
 })

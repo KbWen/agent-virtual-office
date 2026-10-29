@@ -240,8 +240,8 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((error) => {
-    process.stderr.write(`${error.message}\n`)
+  main().catch(() => {
+    process.stderr.write('invalid status input\n')
     process.exit(0)
   })
 }

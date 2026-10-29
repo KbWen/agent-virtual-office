@@ -90,13 +90,13 @@
 
 ```bash
 # 直接從公開的 GitHub repo 跑 —— 不用 clone、不用安裝：
-npx github:KbWen/agent-virtual-office
+npx github:KbWen/agent-virtual-office --no-host
 
 # 用 Claude Code？一行指令接好自動狀態：
 npx github:KbWen/agent-virtual-office setup
 ```
 
-打開它彈出的瀏覽器分頁，你的小人們已經在位子上了。就這樣 —— 不需要後端、不需要資料庫、不需要 WebSocket。
+打開它彈出的瀏覽器分頁即可。辦公室已準備好接收真實來源；連線來源回報狀態後才會顯示即時工作。場景動畫只是裝飾，不代表 agent 正在工作。沒有託管後端、資料庫或 WebSocket。
 
 <details>
 <summary>想用 clone，或需要更多選項？</summary>
@@ -110,8 +110,7 @@ npm run dev
 
 CLI 旗標：`--port=PORT` · `--lang=en|zh-TW` · `--no-open` · `--no-host`（只綁 localhost；dev 伺服器預設會綁定所有網路介面）。
 
-> dev 伺服器沒有任何驗證，且預設對 LAN 開放。要只在本機請用 `--no-host`，或改用 production `serve` 模式搭配
-> `OFFICE_API_TOKEN` 做有保護的部署。
+> `npx agent-virtual-office` dev 啟動器沒有驗證且預設對 LAN 開放；要只在本機請用 `--no-host`。直接執行 `npm run dev` 則使用 Vite 的 localhost 預設，除非加上 `--host`。production `serve` 預設只綁 localhost，`--host` 才會開放 LAN。`OFFICE_API_TOKEN` 只保護 API 寫入，不保護狀態讀取或 SSE。若狀態需要保持私密，請勿對不可信網路開放 `--host`。
 
 **架給團隊用**（production build、Docker、Nginx、PM2、TLS）→ **[docs/deployment/DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md)**。
 
@@ -131,29 +130,46 @@ curl -X POST http://localhost:5174/api/status \
 curl -X POST http://localhost:5174/api/event -d '{"event":"deploy-success"}'
 ```
 
-- **Claude Code** → `npx agent-virtual-office setup`，之後每個工具呼叫都會自己路由。搞定。
-- **Codex CLI / Codex App / Gemini CLI / GitHub Actions / 任何 CI** → 見 **[整合指南](docs/INTEGRATIONS.md)**。
+- **Claude Code** → `npx github:KbWen/agent-virtual-office setup` 註冊支援的 lifecycle hooks；狀態依 hook 實際觀察到的 callback 更新，未支援或缺少的事件仍有缺口。
+- **選擇性的 Codex 桌面版 hooks** → 在每個目標專案根目錄執行 `npx github:KbWen/agent-virtual-office setup --platform codex`。若出現 **Review hook**，展開六個項目，確認都指向這個專案的 adapter，再選 **Allow selected items**。安裝會保留 `notify` 與 trust records；定義變更後可能需要重新核准。選 **Not now** 會讓 Codex 自動觀察保持停用。手動替代方式：[bridge、Status API 或 status helper](docs/INTEGRATIONS.md#native-codex-lifecycle-hooks)。
+- **Codex CLI** → 使用相同的專案本機安裝方式，並以 `/hooks` 檢查與核准。
+- **Codex App bridge / Gemini CLI / GitHub Actions / 任何 CI** → 見 **[整合指南](docs/INTEGRATIONS.md)**。
+
+手動狀態回報反映呼叫者提供的內容；檔案監看只反映觀察到的檔案變化，兩者都不能證明 Codex 執行過工具。核准原生 hook 代表允許本機 adapter 程式碼執行，請先檢查 adapter 與 helper；定義的 hash 不會驗證參照腳本的內容。Codex 原生 adapter 不保留原始 prompt、參數或輸出，但會把狀態中繼資料寫入本機檔案並由辦公室 API 提供；`npx agent-virtual-office` dev 啟動器預設對 LAN 開放，`npm run dev` 預設 localhost；production `serve` 預設只綁 localhost。`OFFICE_API_TOKEN` 只保護寫入，不保護狀態讀取或 SSE。Claude 另有可選的原始事件擷取模式，可能包含 prompt 與工具內容，預設關閉；平常請勿建立擷取標記，也不要分享未清理的擷取檔。見[擷取模式](#選擇性開啟的事件擷取模式-avo-153)與[整合指南](docs/INTEGRATIONS.md#native-codex-lifecycle-hooks)。
+
+**升級至 v1.6.14？** 請重新執行 `npx github:KbWen/agent-virtual-office setup` 更新 Claude hook；在每個 Codex 目標專案根目錄重新執行 `npx github:KbWen/agent-virtual-office setup --platform codex`。若桌面版出現 **Review hook**，請檢查六個預期定義，並透過正常審查流程核准；不會繞過 trust controls。
+
+### Codex 原生 hooks 能顯示什麼
+
+六個核准的 callback 回報 prompt 送出、工具開始／回呼完成、等待核准、回合停止與 session 結束。`PostToolUse` 只代表 callback 完成，不代表任務成功；`Stop` 會把觀察中的 agent 設為 idle，不代表 done。子代理事件不會成為獨立角色；thinking 標籤是依經過時間推估，不是直接觀察。若有送達 `Interrupt` payload，adapter 會設為 idle，但此安裝不會註冊 Interrupt；沒有 callback 的取消／中斷仍無法觀察。Claude 的獨立事件範圍列於下方。
 
 ### `setup` 會註冊的 hook 事件
 
 | 事件 | 需要的能力 | 會看到什麼 |
 |---|---|---|
-| `PreToolUse` / `PostToolUse` | 核心 hooks | 每個工具呼叫的 working／done／blocked 狀態 |
+| `PreToolUse` / `PostToolUse` / `PostToolUseFailure` | 核心 hooks | 工具工作、回呼完成與明確回報的工具失敗 |
 | `SubagentStart` / `SubagentStop` | 核心 hooks | 子代理的工作流橫幅 |
-| `UserPromptSubmit` | 核心 hooks | PM 進入 planning 模式 |
-| `Stop` | 核心 hooks | 一輪結束後的 idle 狀態 |
-| `PermissionDenied` *(AVO-148)* | Hooks v1.x+ | 權限系統擋下工具呼叫時，把該負責的 agent 標成 `blocked`，原因 `permission-denied`。你的 Claude Code 版本若不發這個事件也無妨 —— handler 單純不會被呼叫。 |
-| `StopFailure` *(AVO-148)* | Hooks v1.x+ | 一輪以 Claude API 錯誤收尾時，把當下所有 working 的 session agent 標成 `blocked`，原因 `api-rate-limit` 或 `api-auth-failed`（讀 `matcher` enum 欄位，完全不做文字解析）。沒有這個事件也無妨。 |
+| `UserPromptSubmit` | 核心 hooks | PM 顯示工作中；thinking 標籤是依經過時間推估，不是直接觀察 |
+| `PermissionRequest` | 核心 hooks | 可可靠歸屬工具的等待核准狀態；不會替使用者做決定 |
+| `PermissionDenied` | Auto mode | Claude 回報 auto-mode 拒絕時顯示 blocked |
+| `Stop` / `StopFailure` | 核心 hooks / Claude API 錯誤 | 回合結束或受支援的 API rate-limit／authentication failure；Stop 不代表任務成功 |
+| `SessionEnd` | 核心 hooks | 清除 session 狀態，不計為完成 |
+
+通知、一般 idle／compaction、格式錯誤或未知事件都不會建立狀態。沒有可靠 lifecycle callback 的中斷／取消路徑仍無法觀察。完整範圍與 Codex 原生安裝方式見[整合指南](docs/INTEGRATIONS.md)。
+Planning 狀態來自帶有 `permission_mode: "plan"` 的工具事件，而非 `UserPromptSubmit` 本身。
+Thinking 標籤是依時間推估，不是 hook 直接回報。
+
+Claude 可透過 `SubagentStart`／`SubagentStop` 顯示工作流 huddle，但相同 branch 與工作目錄中的 Claude sessions 不會完整地各自呈現：最新驗證的 session 會接手該區，並清除前一個 owner 的 helpers 與過期角色。Codex 原生 hooks 則以每個雜湊 session 檔案顯示一個 root thread 代表，不會建立子代理角色或 helper huddles。不同來源會使用各自的檔案並合併到辦公室；每個作用中的 session 只顯示一個代表。
 
 ### 選擇性開啟的事件擷取模式 *(AVO-153)*
 
-hook 可以把原始事件錄下來，用於產生 fixture 與驗證 schema：
+此 Claude 除錯功能**預設關閉**。建立標記後會把原始 hook 輸入寫入本機 JSONL，內容可能包含 prompt、命令與輸出。一般使用時請勿建立標記，也不要分享未清理的擷取檔：
 
 1. **開啟**：`touch ~/.claude/office-hook-capture`（Linux／macOS）或 `New-Item ~/.claude/office-hook-capture`（PowerShell）
 2. **照常使用 Claude Code** —— 每次工具呼叫都會往 `~/.claude/office-hook-capture.jsonl` 追加一行 JSON
 3. **清理**：`node scripts/sanitize-hook-capture.mjs` → 產出 `tests/fixtures/hook-events/*.json`
 4. **檢查**：commit 前確認 fixture 裡沒有殘留的敏感字串
-5. **關閉**：刪掉那個標記檔；原始擷取留在 `~/.claude`（永遠不會被 commit）
+5. **關閉**：刪掉標記檔；原始擷取仍留在 `~/.claude`。分享或 commit 前請先檢查並清理內容。
 
 擷取路徑整段包在 `try/catch` 裡 —— 開或關都不會影響 hook 的正常行為。
 
@@ -222,13 +238,13 @@ window.__office_config__ = {
 <summary><b>常見問題</b></summary>
 
 **辦公室一片空白 — 沒有小人**
-1. 沒裝 hook？跑 `npx agent-virtual-office setup`。
+1. 沒裝 hook？跑 `npx github:KbWen/agent-virtual-office setup`。
 2. 目錄不對？辦公室只顯示「啟動它的那個目錄」的 session —— 請在專案根目錄執行，或用
    `OFFICE_PROJECT_ROOT=/path/to/project` 指到別處。
 3. 狀態過期？閒置 5 分鐘後狀態會過期 —— 開一個新 session。
 4. 沒在用 Claude Code？用 `curl` 推狀態（見[接上你的 Agent](#接上你的-agent)）。
 
-**埠 5174 被佔用** → `npx agent-virtual-office --port=5175`
+**埠 5174 被佔用** → `npx github:KbWen/agent-virtual-office --port=5175`
 
 **瀏覽器沒自動打開**（headless Linux / WSL / 遠端）→ 手動打開 `http://localhost:5174`。
 
@@ -253,8 +269,7 @@ window.__office_config__ = {
 
 ### 怎麼把 Claude Code 的活動視覺化?
 
-跑一次 `npx github:KbWen/agent-virtual-office setup`。它會註冊 Claude Code hooks,之後每個工具呼叫、
-subagent、回合都會自動更新辦公室 —— 不用手動接線、不用 API key。
+執行 `npx github:KbWen/agent-virtual-office setup` 以註冊 Claude Code 支援的 lifecycle hooks。辦公室會依 hook 實際觀察到的 callback 更新；未支援或缺少的 callback 仍有觀察缺口，並非每個工具或狀態都會被捕捉。見本頁上方的事件涵蓋表。
 
 ### 支援 Codex、Gemini CLI 或 CI 嗎?
 
@@ -268,8 +283,7 @@ subagent、回合都會自動更新辦公室 —— 不用手動接線、不用 
 
 ### 它會把我的程式碼或資料傳出去嗎?
 
-不會。沒有後端、沒有資料庫、沒有遙測、沒有外部服務。狀態更新只在你自己的機器上以 HTTP 傳遞 ——
-預設 localhost,LAN 曝露可用 `--no-host` 關閉。
+沒有託管後端、資料庫、遙測或外部服務。Codex 原生 adapter 會把整理過的狀態中繼資料寫入本機檔案，不保留原始 prompt、參數或輸出；辦公室會透過 HTTP API 提供這些資料。網路可達性取決於伺服器綁定位址：`npx agent-virtual-office` dev 啟動器預設對 LAN 開放，可用 `--no-host` 限定本機；直接 `npm run dev` 預設 localhost；production `serve` 預設只綁 localhost，`--host` 才會開放 LAN。`OFFICE_API_TOKEN` 只保護寫入，不保護狀態讀取或 SSE。核准 hook 會執行本機程式碼，是一項信任決定；允許前請檢查 adapter/helper 與有變更的定義。Claude 另有可選的原始事件擷取模式，可能包含 prompt 與工具內容，預設關閉；平常請勿開啟，也不要分享未清理的擷取檔，詳見[擷取模式](#選擇性開啟的事件擷取模式-avo-153)。
 
 ### 需要安裝什麼嗎?
 

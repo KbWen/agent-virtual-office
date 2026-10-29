@@ -3,13 +3,14 @@
  * pack-smoke.mjs — npm-pack install smoke harness (AVO-151)
  *
  * Packs the repo into a tarball, installs it in a fresh temp project, then
- * asserts the four contract properties of the published artifact:
+ * asserts five contract properties of the published artifact:
  *
- *   Assertion 1: setup exits 0; ALL 8 hook events are registered; hook file exists.
+ *   Assertion 1: setup exits 0; all configured Claude hook events are registered; hook file exists.
  *   Assertion 2: setup is idempotent — a second run adds no duplicate entries.
- *   Assertion 3: the installed hook runs standalone — pipe a __noop__ event → exit 0,
+ *   Assertion 3: packed Codex setup installs both scripts and writes a project-scoped status.
+ *   Assertion 4: the installed Claude hook runs standalone — pipe a __noop__ event → exit 0,
  *                no non-benign stderr (mirrors hookWriteLock.test.js filter).
- *   Assertion 4: Quick-Start boot — dev mode serves HTML at / within 120s.
+ *   Assertion 5: Quick-Start boot — dev mode serves HTML at / within 120s.
  *
  * Dev-mode readiness note (discovered in cli.js lines 280-375):
  *   The default launch (`node bin/cli.js`) starts Vite dev server, NOT server.mjs.
@@ -28,7 +29,7 @@
  */
 
 import { execSync, spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -37,19 +38,13 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 
-// ── Canonical hook event list (from cli.js line 68) ───────────────────────────
-// SYNC CONTRACT: keep in lockstep with bin/cli.js's event array. A DROPPED event is
-// caught (assertion fails); an ADDED 9th event would NOT be (coverage gap) — update
-// this list whenever cli.js's setup registration changes.
-const HOOK_EVENTS = [
-  'PreToolUse',
-  'PostToolUse',
-  'SubagentStart',
-  'SubagentStop',
-  'UserPromptSubmit',
-  'Stop',
-  'PermissionDenied',
-  'StopFailure',
+// ── Canonical Claude hook event list ──────────────────────────────────────────
+// hooks-config.json is the hand-wiring SSoT; parity tests ensure CLI setup matches it.
+const HOOK_EVENTS = Object.keys(JSON.parse(readFileSync(
+  path.join(ROOT, 'public', 'hooks', 'hooks-config.json'), 'utf8',
+)).hooks)
+const CODEX_HOOK_EVENTS = [
+  'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'Stop', 'SessionEnd',
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -178,11 +173,16 @@ try {
 
   const cliPath = path.join(tmpDir, 'node_modules', 'agent-virtual-office', 'bin', 'cli.js')
   const hookSrcPath = path.join(tmpDir, 'node_modules', 'agent-virtual-office', 'public', 'hooks', 'office-status-hook.js')
+  const codexHookSrcPath = path.join(tmpDir, 'node_modules', 'agent-virtual-office', 'public', 'hooks', 'office-status-codex-hook.js')
+  const codexHelperSrcPath = path.join(tmpDir, 'node_modules', 'agent-virtual-office', 'public', 'hooks', 'office-status-codex.js')
   if (!existsSync(cliPath)) {
     fail('install-check', `bin/cli.js not found at: ${cliPath}`, 'Check package.json "files" whitelist includes bin/')
   }
   if (!existsSync(hookSrcPath)) {
     fail('install-check', `Hook source not found at: ${hookSrcPath}`, 'Check package.json "files" whitelist includes public/')
+  }
+  if (!existsSync(codexHookSrcPath) || !existsSync(codexHelperSrcPath)) {
+    fail('install-check', 'Codex native hook source or helper is missing from the packed artifact.', 'Check package.json "files" whitelist includes public/hooks/.')
   }
   console.log('[pack-smoke] Install OK — cli.js and hook source present.')
 
@@ -290,8 +290,73 @@ try {
   console.log('[pack-smoke]   No duplicates. Per-event count === 1.')
   console.log('[pack-smoke] Assertion 2: PASS')
 
-  // ── Assertion 3: standalone hook exits 0 with __noop__ event ─────────────────
-  console.log('[pack-smoke] Assertion 3: standalone hook test...')
+  // ── Assertion 3: packed Codex native setup installs and runs standalone ──────
+  console.log('[pack-smoke] Assertion 3: packed Codex native hook setup...')
+  const codexProject = path.join(tmpDir, 'codex-project')
+  const codexHome = path.join(tmpDir, 'codex-home')
+  const codexDataDir = path.join(tmpDir, 'codex-status')
+  mkdirSync(codexProject, { recursive: true })
+  const codexEnv = {
+    ...homeEnv,
+    HOME: codexHome,
+    USERPROFILE: codexHome,
+    OFFICE_STATUS_DIR: codexDataDir,
+  }
+  try {
+    execSync(`node "${cliPath}" setup --platform codex`, {
+      cwd: codexProject,
+      env: codexEnv,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    })
+  } catch (e) {
+    fail('assertion-3-codex-setup', `Packed Codex setup failed: ${e.message}`, e.stderr || '')
+  }
+  const codexSettingsPath = path.join(codexProject, '.codex', 'hooks.json')
+  let codexSettings
+  try { codexSettings = JSON.parse(readFileSync(codexSettingsPath, 'utf8')) } catch (e) {
+    fail('assertion-3-codex-settings', `Packed Codex hooks.json is missing or invalid: ${e.message}`)
+  }
+  const codexHookPath = path.join(codexProject, '.codex', 'hooks', 'office-status-codex-hook.js')
+  const codexHelperPath = path.join(codexProject, '.codex', 'hooks', 'office-status-codex.js')
+  if (!existsSync(codexHookPath) || !existsSync(codexHelperPath)) {
+    fail('assertion-3-codex-files', 'Packed setup did not copy both Codex adapter scripts.')
+  }
+  if (Object.keys(codexSettings?.hooks || {}).sort().join(',') !== [...CODEX_HOOK_EVENTS].sort().join(',')) {
+    fail('assertion-3-codex-events', 'Packed Codex setup did not register exactly the six core events.')
+  }
+  const codexEvent = JSON.stringify({
+    hook_event_name: 'UserPromptSubmit',
+    cwd: codexProject,
+    session_id: 'pack-smoke-session',
+    turn_id: 'pack-smoke-turn',
+  })
+  await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [codexHookPath], {
+      cwd: codexProject,
+      env: codexEnv,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    let stderr = ''
+    child.stderr.on('data', data => { stderr += data.toString() })
+    child.stdin.end(codexEvent)
+    child.on('error', reject)
+    child.on('close', code => code === 0 ? resolve() : reject(new Error(`Packed Codex adapter exited ${code}: ${stderr.slice(0, 400)}`)))
+  }).catch(e => fail('assertion-3-codex-adapter', e.message))
+  const codexStatusFiles = readdirSync(codexDataDir).filter(file => /^office-status-codex-hook-.*\.json$/.test(file))
+  if (codexStatusFiles.length !== 1) fail('assertion-3-codex-status', `Expected one Codex status file, found ${codexStatusFiles.length}.`)
+  let codexStatus
+  try { codexStatus = JSON.parse(readFileSync(path.join(codexDataDir, codexStatusFiles[0]), 'utf8')) } catch (e) {
+    fail('assertion-3-codex-status', `Codex status file is invalid: ${e.message}`)
+  }
+  if (codexStatus.source !== 'codex-cli' || path.resolve(codexStatus._cwd) !== path.resolve(codexProject) || codexStatus.agents?.[0]?.status !== 'working') {
+    fail('assertion-3-codex-status', 'Packed Codex status did not carry the expected source, cwd, and working status.')
+  }
+  console.log('[pack-smoke]   Packed Codex setup copied both scripts, registered six events, and wrote a project-scoped working status.')
+  console.log('[pack-smoke] Assertion 3: PASS')
+
+  // ── Assertion 4: standalone Claude hook exits 0 with __noop__ event ──────────
+  console.log('[pack-smoke] Assertion 4: standalone hook test...')
   const noopEvent = JSON.stringify({ hook_event_name: '__noop__' })
 
   await new Promise((resolve, reject) => {
@@ -325,16 +390,16 @@ try {
   }).catch(e => fail('assertion-3-hook', e.message))
 
   console.log('[pack-smoke]   Hook exited 0, no non-benign stderr.')
-  console.log('[pack-smoke] Assertion 3: PASS')
+  console.log('[pack-smoke] Assertion 4: PASS')
 
-  // ── Assertion 4: Quick-Start boot — dev mode serves HTML at / ─────────────────
+  // ── Assertion 5: Quick-Start boot — dev mode serves HTML at / ─────────────────
   // Dev mode readiness design:
   //   cli.js default mode spawns Vite (not server.mjs). Vite does NOT expose
   //   /api/health — only server.mjs (serve command) does. We poll GET / for
   //   HTTP 200 + '<div id="root"' (index.html mount, confirmed in index.html:24).
   //   Budget: 120s (first run may npm-install dev deps via npm install if Vite
   //   can't be resolved; in practice deps are in node_modules already so it skips).
-  console.log(`[pack-smoke] Assertion 4: Quick-Start boot on port ${port}...`)
+  console.log(`[pack-smoke] Assertion 5: Quick-Start boot on port ${port}...`)
   console.log('[pack-smoke]   (polls GET / for 200+HTML; dev mode has no /api/health)')
 
   devChild = spawn(process.execPath, [cliPath, `--port=${port}`, '--no-open'], {
@@ -352,7 +417,7 @@ try {
   devChild.stdout.on('data', d => { devStdout += d.toString() })
   devChild.stderr.on('data', d => { devStderr += d.toString() })
   devChild.on('error', err => {
-    fail('assertion-4-spawn', `Failed to spawn dev server: ${err.message}`)
+    fail('assertion-5-spawn', `Failed to spawn dev server: ${err.message}`)
   })
 
   // Check if child died early
@@ -382,7 +447,7 @@ try {
     const reason = devExited
       ? `Dev server exited prematurely with code ${devExitCode}`
       : `Dev server did not respond within ${BOOT_TIMEOUT_MS}ms`
-    fail('assertion-4-boot',
+    fail('assertion-5-boot',
       reason,
       `stdout (tail): ${devStdout.slice(-600)}`,
       `stderr (tail): ${devStderr.slice(-600)}`
@@ -394,22 +459,22 @@ try {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/`)
     if (!res.ok) {
-      fail('assertion-4-root', `GET / returned ${res.status} (expected 200)`)
+      fail('assertion-5-root', `GET / returned ${res.status} (expected 200)`)
     }
     rootBody = await res.text()
   } catch (e) {
-    fail('assertion-4-root', `GET / threw: ${e.message}`)
+    fail('assertion-5-root', `GET / threw: ${e.message}`)
   }
 
   if (!rootBody.includes('<div id="root"')) {
-    fail('assertion-4-root-content',
+    fail('assertion-5-root-content',
       `GET / body does not contain '<div id="root"'`,
       `body snippet: ${rootBody.slice(0, 300)}`
     )
   }
 
   console.log('[pack-smoke]   Dev server responded with HTML containing app mount.')
-  console.log('[pack-smoke] Assertion 4: PASS')
+  console.log('[pack-smoke] Assertion 5: PASS')
 
   console.log('\n[pack-smoke] ALL ASSERTIONS PASSED\n')
 

@@ -5,6 +5,30 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.6.14 — 2026-10-30 — Clearer lifecycle signals across Claude and Codex
+
+### Added
+
+- **Optional native Codex lifecycle hooks.** Six project-local callbacks feed sanitized status
+  metadata through the existing office transport after normal Codex review and trust. The adapter
+  represents one root thread per session; child events do not become separate roles.
+
+### Fixed
+
+- **Claude reports more lifecycle evidence accurately.** Tool failures, attributable approval
+  waits, session end, and subagent workflow are handled without treating turn stop as task success.
+- **Claude session handoffs retire obsolete state.** Blocked stays blocked instead of becoming an
+  approval wait after silence; role switches and single/multi-agent snapshots retire old identities,
+  and stale owner/subagent callbacks cannot clobber the current session.
+
+### Changed
+
+- **Installer and integration guidance explain the trust boundary.** Codex setup preserves unrelated
+  project settings and `notify`, and uses the platform's normal review flow. The native Codex adapter
+  writes only fixed sanitized status metadata; local hook execution and network exposure remain trust decisions.
+- **Setup examples use the GitHub source distribution** so they run this release while the npm
+  package remains behind it.
+
 ## v1.6.13 — 2026-10-24 — Small playful moments around the office
 
 ### Added

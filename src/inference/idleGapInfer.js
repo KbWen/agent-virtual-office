@@ -2,33 +2,30 @@
  * #C — Idle-gap inference: close Pixel Agents' admitted heuristic gap.
  *
  * When an agent's status has not received a hook update for a long time,
- * infer one of two non-emitted Claude/Codex states that the office should
+ * infer a non-emitted Claude/Codex thinking state that the office should
  * still visualize:
  *
  *   working + no update for ≥ 45s   →  status = 'thinking'
  *       (Claude is in extended thinking, no PreToolUse fires meanwhile)
  *
- *   blocked + no update for ≥ 90s   →  status = 'awaiting-approval'
- *       (likely sitting at a permission prompt the user hasnt answered)
- *
  * Conservative on purpose: a normal 30-60s Bash test can produce no
  * intermediate events. The 45s threshold catches genuinely stalled work
  * while a 30s threshold (e.g. Pixel Agents-style) would misfire on every
- * test run. 90s for blocked is even more conservative — permission
- * prompts often go unanswered for minutes.
+ * test run. A blocked status remains blocked until a real lifecycle event
+ * changes it; elapsed time alone cannot prove that permission is pending.
  *
  * Reversibility: any real hook event flows through `applyExternalStatus`
  * which simply overwrites the status; the inferred state has no marker
  * to clean up. Thrashing is prevented structurally: inference only fires
- * for 'working'/'blocked', so once a tick flips the status to 'thinking'/
- * 'awaiting-approval' neither branch matches again (no guard needed).
+ * for 'working', so once a tick flips the status to 'thinking' the branch
+ * no longer matches.
  *
  * lastUpdatedAt tracking: zustand subscribe captures every state change
  * to `agents`. We stamp the current time whenever an agent's status or
  * task field changes (not on position/behavior — those tick organically).
  *
- * Polling cadence: 10s. Coarser than #8 (5s) since the thresholds are
- * larger (45s / 90s) so fewer chances are needed and we save wakeups.
+ * Polling cadence: 10s. Coarser than #8 (5s) since the working threshold is
+ * 45s, so fewer chances are needed and we save wakeups.
  *
  * rem-honest-office-events (2026-09-26): the update now carries the agent's own prior
  * externalStatus fields (task/label/activeFile/reasonCode/skill/hint) forward instead of
@@ -41,7 +38,6 @@
 import { AGENT_CARRY_FIELDS } from '../utils/statusFields.js'
 
 const WORKING_GAP_MS = 45_000   // 45s → thinking
-const BLOCKED_GAP_MS = 90_000   // 90s → awaiting-approval
 const POLL_INTERVAL_MS = 10_000
 
 // Map of agentId → last meaningful update timestamp. Survives across
@@ -81,13 +77,9 @@ function tick(store, opts, now = Date.now) {
     const elapsed = t0 - lastUpdatedAt.get(id)
     if (a.status === 'working' && elapsed >= opts.workingGapMs) {
       updates.push(inferredUpdate(id, 'thinking', externalStatus[id]))
-    } else if (a.status === 'blocked' && elapsed >= opts.blockedGapMs) {
-      updates.push(inferredUpdate(id, 'awaiting-approval', externalStatus[id]))
     }
-    // Note: we don't need an explicit INFERRED_STATUSES guard here because
-    // the outer conditions already restrict to 'working' and 'blocked'.
-    // Once applyExternalStatus changes the status to 'thinking' or
-    // 'awaiting-approval', neither branch matches on the next tick.
+    // Once applyExternalStatus changes the status to 'thinking', the working
+    // branch no longer matches on the next tick.
   }
   if (updates.length > 0) {
     // Route through applyExternalStatus so the inferred state passes through
@@ -169,14 +161,12 @@ function parseSig(sig) {
  *
  * Options:
  *   workingGapMs   — gap before inferring 'thinking' (default 45000)
- *   blockedGapMs   — gap before inferring 'awaiting-approval' (default 90000)
  *   intervalMs     — polling interval (default 10000)
  *   now            — clock injector for deterministic tests (default Date.now)
  */
 export function startIdleGapInference(store, options = {}) {
   const opts = {
     workingGapMs: options.workingGapMs ?? WORKING_GAP_MS,
-    blockedGapMs: options.blockedGapMs ?? BLOCKED_GAP_MS,
     intervalMs:   options.intervalMs   ?? POLL_INTERVAL_MS,
     now:          options.now           ?? Date.now,
   }

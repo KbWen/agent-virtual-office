@@ -1,8 +1,32 @@
 import { describe, expect, it } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { spawnSync } from 'node:child_process'
 
 const { normalizeCodexStatusPayload } = await import('../public/hooks/office-status-codex.js')
 
 describe('normalizeCodexStatusPayload', () => {
+  it('does not echo malformed manual input in standalone diagnostics', () => {
+    const childHome = fs.mkdtempSync(path.join(os.tmpdir(), 'avo-codex-invalid-input-'))
+    const sentinel = 'PRIVACY_SENTINEL_CODEX_INVALID_JSON'
+    try {
+      const result = spawnSync(process.execPath, [
+        path.resolve('public/hooks/office-status-codex.js'), sentinel,
+      ], {
+        cwd: childHome,
+        env: { ...process.env, HOME: childHome, USERPROFILE: childHome },
+        encoding: 'utf8',
+      })
+
+      expect(result.status).toBe(0)
+      expect(`${result.stdout}${result.stderr}`).not.toContain(sentinel)
+      expect(result.stderr).toContain('invalid status input')
+    } finally {
+      fs.rmSync(childHome, { recursive: true, force: true })
+    }
+  })
+
   it('normalizes shorthand Codex CLI payloads into office-status messages', () => {
     const result = normalizeCodexStatusPayload({
       dev: 'working',

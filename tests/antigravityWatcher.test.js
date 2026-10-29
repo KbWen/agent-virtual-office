@@ -291,16 +291,29 @@ describe('Antigravity passive watcher', () => {
     vi.setSystemTime(Date.now())
     const dirs = await makeRoots()
     await fs.writeFile(dirs.transcript, '')
+    const destination = path.join(dirs.statusDir, sessionFile(await fs.realpath(dirs.projectRoot), 'session-a'))
     let announceWrite
     let releaseWrite
     const writeStarted = new Promise((resolve) => { announceWrite = resolve })
     const writeGate = new Promise((resolve) => { releaseWrite = resolve })
+    let announceLockCleanup
+    const lockCleanup = new Promise((resolve) => { announceLockCleanup = resolve })
+    let publicationAttempts = 0
     const fsWithStall = new Proxy(fs, {
       get(target, property) {
         if (property === 'writeFile') return async (...args) => {
           announceWrite()
           await writeGate
           return target.writeFile(...args)
+        }
+        if (property === 'rename') return async (from, to) => {
+          if (to === destination) publicationAttempts += 1
+          return target.rename(from, to)
+        }
+        if (property === 'unlink') return async (candidate, ...args) => {
+          const result = await target.unlink(candidate, ...args)
+          if (candidate === `${destination}.antigravity-lock`) announceLockCleanup()
+          return result
         }
         const value = Reflect.get(target, property)
         return typeof value === 'function' ? value.bind(target) : value
@@ -313,7 +326,8 @@ describe('Antigravity passive watcher', () => {
     await writeStarted
     watcher.stop()
     releaseWrite()
-    await realDelay(20)
+    await lockCleanup
+    expect(publicationAttempts).toBe(0)
     expect((await fs.readdir(dirs.statusDir)).filter((name) => name.startsWith('office-status-antigravity-'))).toHaveLength(0)
   })
 
