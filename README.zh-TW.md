@@ -96,6 +96,9 @@ npx github:KbWen/agent-virtual-office --no-host
 npx github:KbWen/agent-virtual-office setup
 ```
 
+本專案由此 GitHub repository 發行。同名的 npm registry 套件屬於另一個 repository
+（`shahwaiz90/virtual-office`）；使用上方 GitHub 指令執行 Agent Virtual Office。
+
 打開它彈出的瀏覽器分頁即可。辦公室已準備好接收真實來源；連線來源回報狀態後才會顯示即時工作。場景動畫只是裝飾，不代表 agent 正在工作。沒有託管後端、資料庫或 WebSocket。
 
 <details>
@@ -110,7 +113,7 @@ npm run dev
 
 CLI 旗標：`--port=PORT` · `--lang=en|zh-TW` · `--no-open` · `--no-host`（只綁 localhost；dev 伺服器預設會綁定所有網路介面）。
 
-> `npx agent-virtual-office` dev 啟動器沒有驗證且預設對 LAN 開放；要只在本機請用 `--no-host`。直接執行 `npm run dev` 則使用 Vite 的 localhost 預設，除非加上 `--host`。production `serve` 預設只綁 localhost，`--host` 才會開放 LAN。`OFFICE_API_TOKEN` 只保護 API 寫入，不保護狀態讀取或 SSE。若狀態需要保持私密，請勿對不可信網路開放 `--host`。
+> GitHub dev 啟動器沒有驗證且預設對 LAN 開放；要只在本機請用 `--no-host`。直接執行 `npm run dev` 則使用 Vite 的 localhost 預設，除非加上 `--host`。production `serve` 預設只綁 localhost，`--host` 才會開放 LAN。`OFFICE_API_TOKEN` 只保護 API 寫入，不保護狀態讀取或 SSE。若狀態需要保持私密，請勿對不可信網路開放 `--host`。
 
 **架給團隊用**（production build、Docker、Nginx、PM2、TLS）→ **[docs/deployment/DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md)**。
 
@@ -135,7 +138,7 @@ curl -X POST http://localhost:5174/api/event -d '{"event":"deploy-success"}'
 - **Codex CLI** → 使用相同的專案本機安裝方式，並以 `/hooks` 檢查與核准。
 - **Codex App bridge / Gemini CLI / GitHub Actions / 任何 CI** → 見 **[整合指南](docs/INTEGRATIONS.md)**。
 
-手動狀態回報反映呼叫者提供的內容；檔案監看只反映觀察到的檔案變化，兩者都不能證明 Codex 執行過工具。核准原生 hook 代表允許本機 adapter 程式碼執行，請先檢查 adapter 與 helper；定義的 hash 不會驗證參照腳本的內容。Codex 原生 adapter 不保留原始 prompt、參數或輸出，但會把狀態中繼資料寫入本機檔案並由辦公室 API 提供；`npx agent-virtual-office` dev 啟動器預設對 LAN 開放，`npm run dev` 預設 localhost；production `serve` 預設只綁 localhost。`OFFICE_API_TOKEN` 只保護寫入，不保護狀態讀取或 SSE。Claude 另有可選的原始事件擷取模式，可能包含 prompt 與工具內容，預設關閉；平常請勿建立擷取標記，也不要分享未清理的擷取檔。見[擷取模式](#選擇性開啟的事件擷取模式-avo-153)與[整合指南](docs/INTEGRATIONS.md#native-codex-lifecycle-hooks)。
+手動狀態回報反映呼叫者提供的內容；檔案監看只反映觀察到的檔案變化，兩者都不能證明 Codex 執行過工具。核准原生 hook 代表允許本機 adapter 程式碼執行，請先檢查 adapter 與 helper；定義的 hash 不會驗證參照腳本的內容。Codex 原生 adapter 不保留原始 prompt、參數或輸出，但會把狀態中繼資料寫入本機檔案並由辦公室 API 提供；GitHub dev 啟動器預設對 LAN 開放，`npm run dev` 預設 localhost；production `serve` 預設只綁 localhost。`OFFICE_API_TOKEN` 只保護寫入，不保護狀態讀取或 SSE。Claude 另有可選的原始事件擷取模式，可能包含 prompt 與工具內容，預設關閉；平常請勿建立擷取標記，也不要分享未清理的擷取檔。見[擷取模式](#選擇性開啟的事件擷取模式-avo-153)與[整合指南](docs/INTEGRATIONS.md#native-codex-lifecycle-hooks)。
 
 **升級至 v1.6.14？** 請重新執行 `npx github:KbWen/agent-virtual-office setup` 更新 Claude hook；在每個 Codex 目標專案根目錄重新執行 `npx github:KbWen/agent-virtual-office setup --platform codex`。若桌面版出現 **Review hook**，請檢查六個預期定義，並透過正常審查流程核准；不會繞過 trust controls。
 
@@ -283,7 +286,7 @@ window.__office_config__ = {
 
 ### 它會把我的程式碼或資料傳出去嗎?
 
-沒有託管後端、資料庫、遙測或外部服務。Codex 原生 adapter 會把整理過的狀態中繼資料寫入本機檔案，不保留原始 prompt、參數或輸出；辦公室會透過 HTTP API 提供這些資料。網路可達性取決於伺服器綁定位址：`npx agent-virtual-office` dev 啟動器預設對 LAN 開放，可用 `--no-host` 限定本機；直接 `npm run dev` 預設 localhost；production `serve` 預設只綁 localhost，`--host` 才會開放 LAN。`OFFICE_API_TOKEN` 只保護寫入，不保護狀態讀取或 SSE。核准 hook 會執行本機程式碼，是一項信任決定；允許前請檢查 adapter/helper 與有變更的定義。Claude 另有可選的原始事件擷取模式，可能包含 prompt 與工具內容，預設關閉；平常請勿開啟，也不要分享未清理的擷取檔，詳見[擷取模式](#選擇性開啟的事件擷取模式-avo-153)。
+沒有託管後端、資料庫、遙測或外部服務。Codex 原生 adapter 會把整理過的狀態中繼資料寫入本機檔案，不保留原始 prompt、參數或輸出；辦公室會透過 HTTP API 提供這些資料。網路可達性取決於伺服器綁定位址：GitHub dev 啟動器預設對 LAN 開放，可用 `--no-host` 限定本機；直接 `npm run dev` 預設 localhost；production `serve` 預設只綁 localhost，`--host` 才會開放 LAN。`OFFICE_API_TOKEN` 只保護寫入，不保護狀態讀取或 SSE。核准 hook 會執行本機程式碼，是一項信任決定；允許前請檢查 adapter/helper 與有變更的定義。Claude 另有可選的原始事件擷取模式，可能包含 prompt 與工具內容，預設關閉；平常請勿開啟，也不要分享未清理的擷取檔，詳見[擷取模式](#選擇性開啟的事件擷取模式-avo-153)。
 
 ### 需要安裝什麼嗎?
 

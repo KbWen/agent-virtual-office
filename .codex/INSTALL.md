@@ -64,7 +64,9 @@ powershell -ExecutionPolicy Bypass -File .\.agentcortex\bin\validate.ps1 -NoPyth
 
 ### Agent Virtual Office native Codex hooks
 
-The npm package may lag this release; use the GitHub source distribution from the Agent Virtual Office project root:
+The npm registry's identically named package belongs to a different project
+([`shahwaiz90/virtual-office`](https://github.com/shahwaiz90/virtual-office)). Use this repository's
+GitHub source distribution from the Agent Virtual Office project root:
 
 ```bash
 npx github:KbWen/agent-virtual-office setup --platform codex
@@ -85,7 +87,7 @@ signals reflect supplied statuses or observed file changes; they do not prove Co
 The approved hook runs local Node.js code and writes sanitized metadata to local status files; it
 does not store raw prompts, arguments, or outputs or execute event-payload commands. The office
 serves that metadata through its HTTP API, whose network reach depends on server binding and LAN
-configuration. The `npx agent-virtual-office` dev launcher binds all interfaces by default; use
+configuration. The GitHub dev launcher binds all interfaces by default; use
 `--no-host` for localhost. Direct `npm run dev` uses Vite's localhost default unless `--host` is set.
 Production `serve` binds to localhost by default, and `--host` opts into LAN. `OFFICE_API_TOKEN`
 protects writes, not status reads or SSE; do not expose private status to an untrusted network.

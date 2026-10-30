@@ -94,6 +94,10 @@ npx github:KbWen/agent-virtual-office --no-host
 npx github:KbWen/agent-virtual-office setup
 ```
 
+This project is distributed from this GitHub repository. The identically named npm registry
+package belongs to a different repository (`shahwaiz90/virtual-office`); use the GitHub commands
+shown here for Agent Virtual Office.
+
 Open the browser tab it pops. The office is ready for a real source connection; live agent status
 appears when a connected source reports it. Ambient scenes are decoration, not evidence that an
 agent is working. There's no hosted backend, database, or WebSocket.
@@ -111,7 +115,7 @@ npm run dev
 CLI flags: `--port=PORT` · `--lang=en|zh-TW` · `--no-open` · `--no-host` (localhost only; the dev
 server otherwise binds all interfaces).
 
-> The `npx agent-virtual-office` dev launcher has no authentication and exposes to LAN by default;
+> The GitHub dev launcher has no authentication and exposes to LAN by default;
 > use `--no-host` for localhost-only access. Direct `npm run dev` uses Vite's localhost default
 > unless you pass `--host`. Production `serve` binds to localhost by default; `--host` opts into LAN.
 > `OFFICE_API_TOKEN` protects API writes, not status reads or SSE. Do not expose `--host` to a
@@ -146,9 +150,9 @@ Manual status reports and file-watcher signals reflect submitted data or observe
 they do not prove that Codex ran a tool. Native approval runs local adapter code, so inspect the
 adapter and helper before allowing it. Definition hashes do not verify the referenced script bytes.
 The adapter does not retain raw prompts, arguments, or outputs, but it writes status metadata to
-local files and serves it through the office API. API reach depends on server binding: the dev
-`npx agent-virtual-office` dev launcher exposes to LAN by default; use `--no-host` for localhost-only
-access. Direct `npm run dev` uses Vite's localhost default unless `--host` is set. Production `serve`
+local files and serves it through the office API. API reach depends on server binding: the GitHub
+dev launcher exposes status to LAN by default; use `--no-host` for localhost-only access. Direct
+`npm run dev` uses Vite's localhost default unless `--host` is set. Production `serve`
 defaults to localhost, and `--host` opts into LAN; `OFFICE_API_TOKEN` protects writes, not status
 reads or SSE. See the
 [integration guide](docs/INTEGRATIONS.md#native-codex-lifecycle-hooks) for the trust boundary and
@@ -337,7 +341,7 @@ v1.4.0 started from one of these captures.
 
 **403 Forbidden by hostname** (a LAN colleague at `http://mypc.local:5174`, **or `server.mjs` running behind the Nginx reverse proxy in `docs/deployment/nginx.conf`**) → reaching the office by IP already works; reaching it by *any* hostname needs that hostname in `OFFICE_ALLOWED_HOSTS` (Host-header validation guards against DNS rebinding) — e.g. `OFFICE_ALLOWED_HOSTS=mypc.local` for LAN, or `OFFICE_ALLOWED_HOSTS=office.example.com` to match the reverse proxy's `server_name`. This applies to `npm run dev` (Vite's own Host check) too, not just `server.mjs` — set the same env var before `npm run dev` to reach the dev server by a custom hostname. See [DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md#environment-variables).
 
-**Windows Firewall prompt** → the `npx agent-virtual-office` dev launcher binds all interfaces; use `--no-host` to avoid it. Direct `npm run dev` uses localhost unless you pass `--host`.
+**Windows Firewall prompt** → the GitHub dev launcher binds all interfaces; use `--no-host` to avoid it. Direct `npm run dev` uses localhost unless you pass `--host`.
 
 **Node version error** → requires Node ≥ 22 (`node --version`).
 
@@ -378,7 +382,7 @@ only updates when a real signal comes in, and activity is never faked. It's a de
 The app has no hosted backend, database, telemetry, or external service. Native Codex hooks write
 sanitized status metadata to local files; they do not retain raw prompts, arguments, or outputs.
 The office serves that metadata through its HTTP API. Network reach depends on server binding: the
-`npx agent-virtual-office` dev launcher exposes to LAN by default; use `--no-host` for localhost-only
+GitHub dev launches expose to LAN by default; use `--no-host` for localhost-only
 access. Direct `npm run dev` uses Vite's localhost default unless `--host` is set. Production `serve`
 defaults to localhost, and `--host` opts into LAN; `OFFICE_API_TOKEN` protects writes, not status
 reads or SSE. Hook approval runs local code and is a trust decision; review the adapter/helper and

@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-29T16:52:14Z
+- **Last Updated**: 2026-10-30T00:42:07Z
 - **Last Verified**: 2026-10-30
-- **Update Sequence**: 158
+- **Update Sequence**: 159
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -158,6 +158,10 @@
 
 ## Ship History
 
+### Ship-main-registry-identity-docs-2026-10-30
+- Corrected documentation and mutable Release/PR text: this project distributes via GitHub; the npm same-name package points to another repository. No application/dependency/version/tag changes.
+- Verification: official registry repository metadata, five-doc assertions, diff/whitespace checks and governance PASS. Final docs PR CI/merge recorded externally.
+
 ### Ship-main-signal-lifecycle-v1.6.14-2026-10-30
 - Feature shipped: truthful Claude lifecycle/error/subagent ownership and optional native Codex hooks; source d53fdf27938cd3e8e9f050e64f0b6c2e08ca461b; PR265.
 - Tests:3050PASS/3existing skips, build/budget, pack5/5, actual Claude blocked149s/native Codex SSE, independent review and source-head CI8/8PASS.
@@ -210,11 +214,6 @@
 - Feature shipped: AVO-198 read-only Antigravity observer and project-local Gemini CLI hooks, PR #258; existing producers/UI preserved.
 - Tests: full2809 PASS,3existing skips; Linux Node22/24 CI green; build/budget/render/panel/pack pass.
 - Acceptance: owner excluded further real-device tests; Gemini authenticated sessions/native Linux live scenarios remain unverified, not claimed proven.
-
-### Ship-chore-release-v1.6.11-2026-10-11 (live status over HTTPS, and the characters get a little more personality) · release v1.6.11
-
-- Cuts the 3 PRs merged since `v1.6.10` (#254, #255, #256) as **v1.6.11** (patch). #254/#255 were done by Gemini (Antigravity); #256 is the post-merge review that fixed their cut-off bubble lines and the lore book's false "100% aligned" claim. The release commit contains no app code: `package.json` 1.6.10 -> 1.6.11, **both** `package-lock.json` root version fields (0 `"version": "1.6.10"` strings left), the CHANGELOG narrative, and this entry.
-- CHANGELOG under-sells: one Fixed (HTTPS-hosted office now polls/streams status, #255), one Changed (new short character lines + lore book, explicitly not runtime lines), Housekeeping (dev-only `source-map-js` override for GHSA-68fv-2mgg-jv7q — verified via GitHub advisory API; the ratchet test). Post-merge: **annotated** `v1.6.11` tag on the release merge commit + `gh release create --latest`.
 
 ## Spec Index Archive
 
