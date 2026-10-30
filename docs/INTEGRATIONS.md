@@ -117,8 +117,9 @@ This option cannot authorize replacement of an unrecognized or edited non-AVO sc
 cp public/hooks/office-status-hook.js ~/.claude/office-status-hook.js
 ```
 
-The setup command above uses the current GitHub source distribution. Avoid copying a hook from an
-older npm package until that package contains this release.
+The npm registry's identically named package belongs to a different project:
+[`shahwaiz90/virtual-office`](https://github.com/shahwaiz90/virtual-office). The commands above use
+this repository's GitHub distribution, which is the supported way to run Agent Virtual Office.
 
 Register it in `~/.claude/settings.json` (the hook reads events from stdin, no arguments needed):
 
@@ -216,7 +217,7 @@ native event input, keeps only fixed sanitized status metadata, and writes a sta
 `~/.claude/office-status-codex-hook-<digest>.json`; it does not retain raw prompts, tool arguments, or
 outputs and does not execute commands from the event payload. The office serves status through
 its HTTP API, so who can reach that metadata depends on server binding and LAN configuration. The
-`npx agent-virtual-office` dev launcher binds to all interfaces by default; use `--no-host` for
+GitHub dev launcher binds to all interfaces by default; use `--no-host` for
 localhost-only access. Direct `npm run dev` uses Vite's localhost default unless `--host` is set.
 Production `serve` binds to `127.0.0.1` by default; `--host` opts into LAN. `OFFICE_API_TOKEN`
 protects API writes, not status reads or SSE. Do not expose `--host` to a network where active

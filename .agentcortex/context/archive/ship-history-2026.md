@@ -76,6 +76,11 @@ Rotated 1 additional entry on 2026-10-07 (SSoT Update Sequence 145 -> 146).
 
 Rotated 1 additional entry on 2026-10-11 (SSoT Update Sequence 147 -> 148).
 
+### Ship-chore-release-v1.6.11-2026-10-11 (live status over HTTPS, and the characters get a little more personality) · release v1.6.11
+
+- Cuts the 3 PRs merged since `v1.6.10` (#254, #255, #256) as **v1.6.11** (patch). #254/#255 were done by Gemini (Antigravity); #256 is the post-merge review that fixed their cut-off bubble lines and the lore book's false "100% aligned" claim. The release commit contains no app code: `package.json` 1.6.10 -> 1.6.11, **both** `package-lock.json` root version fields (0 `"version": "1.6.10"` strings left), the CHANGELOG narrative, and this entry.
+- CHANGELOG under-sells: one Fixed (HTTPS-hosted office now polls/streams status, #255), one Changed (new short character lines + lore book, explicitly not runtime lines), Housekeeping (dev-only `source-map-js` override for GHSA-68fv-2mgg-jv7q — verified via GitHub advisory API; the ratchet test). Post-merge: **annotated** `v1.6.11` tag on the release merge commit + `gh release create --latest`.
+
 ### Ship-fix-dialogue-bubble-fit-2026-10-11 (the new character lines fit their bubbles; the lore book stops claiming its quotes are bubble lines) · AVO-161 Wave B follow-up
 
 - Quick-win shipped: every bubble line #254 added was wider than the 140 px bubble budget (real-font measure: 40/40 en, 38/40 zh-TW rendered cut off, e.g. "日誌不會騙人，它只是…"). All 80 rewritten shorter in the same voice (max 128 / 110 px); owner approved a rendered before/after. New ratchet in `tests/bubbleTextFit.test.jsx` caps cut-off pool lines at 58 en / 14 zh-TW (red on #254 pools, green after). `docs/CHARACTER_LORE.md` + spec AC-2 corrected: 1 of 58 quoted lore lines is a real pool line, so the book now says its quotes are character-voice flavor text. Dead fabricated-bubble staging removed from `scripts/capture-office-lore-preview.mjs`.

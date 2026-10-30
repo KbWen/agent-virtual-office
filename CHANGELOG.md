@@ -26,8 +26,8 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 - **Installer and integration guidance explain the trust boundary.** Codex setup preserves unrelated
   project settings and `notify`, and uses the platform's normal review flow. The native Codex adapter
   writes only fixed sanitized status metadata; local hook execution and network exposure remain trust decisions.
-- **Setup examples use the GitHub source distribution** so they run this release while the npm
-  package remains behind it.
+- **Setup examples use this project's GitHub source distribution.** The identically named npm
+  registry package belongs to a different repository (`shahwaiz90/virtual-office`).
 
 ## v1.6.13 — 2026-10-24 — Small playful moments around the office
 
@@ -372,7 +372,7 @@ the README tells you to, the office could not see your agents at all.
 
 ### Fixed
 
-- **The office shows your agents over `npx` again** — launched via `npx agent-virtual-office`, every
+- **The office shows your agents over the project CLI again** — every
   hook-written status file was discarded as belonging to "another project", so the banner sat on
   *"No agent signal yet"* and agent names degraded to raw `.jsonl` filenames no matter how correctly
   the hook was installed. The office matched sessions against its own package directory instead of the
