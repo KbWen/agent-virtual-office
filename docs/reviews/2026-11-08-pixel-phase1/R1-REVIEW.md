@@ -34,7 +34,10 @@ same staged state (R1-seating-options.jpg; made by editing the live DOM, no sour
 - D no chair — standing desk; cleanest, no art needed, but removes the owner's new chair art.
 - C back view seated — reads most clearly as working at a desk; costs faces while at the desk.
   Mockup uses UNAPPROVED 2026-11-07 idle-up candidates purely as a concept.
-Each option applies to BOTH appearances. C would make "desk back view" the next Gemini batch.
+Each option applies to BOTH appearances.
+
+**Owner chose C (2026-11-08).** Implemented for Classic (R1-classic-seated-backview.jpg);
+Pixel waits for reviewed back-view art (Gemini batch 2) and keeps the standing front master meanwhile.
 
 ## Open items
 - Desk-work action prompts wait for the A/B/C choice. Gait batch 1 (Res, Arch right-facing

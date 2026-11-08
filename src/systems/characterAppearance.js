@@ -37,8 +37,19 @@ export const PIXEL_V1_PACK = Object.freeze({
   fallbackRole: 'pm',
 })
 
-export function pixelAssetUrl(role, pack = PIXEL_V1_PACK, base = BASE_URL) {
-  return `${base}${pack.roles[role].file}`
+// Optional reviewed views per role (Phase 2+). A role without `views.back` keeps its front
+// master everywhere (honest fallback); no unreviewed file is ever listed here.
+function viewEntry(role, view, pack) {
+  const r = pack.roles[role]
+  return (view !== 'front' && r.views?.[view]) || r
+}
+
+export function pixelHasBackView(role, pack = PIXEL_V1_PACK) {
+  return !!pack.roles[role]?.views?.back
+}
+
+export function pixelAssetUrl(role, pack = PIXEL_V1_PACK, base = BASE_URL, view = 'front') {
+  return `${base}${viewEntry(role, view, pack).file}`
 }
 
 // "feat-x~dev" → "dev"; aliases resolved; unknown → fallbackRole (explicit, tested).
@@ -53,8 +64,8 @@ export function resolvePixelRole(charId, pack = PIXEL_V1_PACK) {
 
 // Image placement INSIDE the fixed actor group (local units). Puts the measured sole contact on
 // local (0,0) = the unchanged world foot anchor; uniform scale only (no per-image normalisation).
-export function pixelBodyPlacement(role, pack = PIXEL_V1_PACK, scale = PIXEL_DISPLAY_SCALE) {
-  const { pivot } = pack.roles[role]
+export function pixelBodyPlacement(role, pack = PIXEL_V1_PACK, scale = PIXEL_DISPLAY_SCALE, view = 'front') {
+  const { pivot } = viewEntry(role, view, pack)
   const size = PIXEL_LOGICAL_SIZE * scale
   return { x: -pivot.x * scale, y: -pivot.y * scale, width: size, height: size }
 }

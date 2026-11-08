@@ -77,6 +77,16 @@ repository record of AVO-160 (custom sprite-asset pipeline); AVO-124 cosmetics s
 - Phase 3: one evidence-selected gait cycle for one high-frequency role and one complete
   action sequence, with explicit static fallbacks for everything else. R3 final review.
 
+## Seated at desk (owner R1 decision 2026-11-08: option C)
+
+Shared by both appearances, presentation only. An agent is drawn seated when it rests exactly on
+its own desk seat (desk roles only; not walking/moving, not in a group event). The body is drawn
+SEAT_SHIFT (8 local units) lower and clipped at the chair's top edge so the chair painted beneath
+shows instead of legs; back view (Classic: procedural back of head in the role's hair colours).
+Blocked / awaiting-approval agents stand and face the viewer. Pixel sits only for roles whose
+reviewed back-view asset is listed in the manifest (`views.back`); until then the front master
+stands, as in Phase 1. World feet, routes, hit target and overlays are unchanged.
+
 ## Phase 3 selection evidence (2026-11-08)
 
 90 s live sample (4 working + 4 idle agents): 73% of walking samples face left/right; res walks
