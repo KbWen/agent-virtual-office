@@ -22,3 +22,8 @@ select the agent. Reduced motion → 0 walk-bob nodes.
 Finding carried to R1 (not changed here): at desks both appearances put the feet on the top edge
 of the chair (shared world anchor + current chair geometry), which can read as standing on the
 chair. Any fix is shared paint order/occlusion or seat geometry, applied to both appearances.
+
+## Pose share (live sample, 120 s, 4 working + 4 idle, Pixel)
+- before actions: front 43% | walking 12% | seated back 39% | (signature behavior shown as front) 6%
+- after actions:  front 42% | walking 9%  | seated back 42% | action 6%
+Front standing stays as common; every action pose also faces the viewer.

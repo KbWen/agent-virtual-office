@@ -1,5 +1,5 @@
 import React, { useSyncExternalStore } from 'react'
-import { getAppearanceSnapshot, pixelAssetUrl, pixelBodyPlacement, resolvePixelRole, subscribeAppearance } from '../systems/characterAppearance'
+import { getAppearanceSnapshot, pixelActionView, pixelAssetUrl, pixelBodyPlacement, resolvePixelRole, subscribeAppearance } from '../systems/characterAppearance'
 import { SEAT_CLIP_Y, SEAT_SHIFT } from '../systems/seating.js'
 
 // { requested, active, status, error } — `active` is what renders (only flips after a full preload).
@@ -13,9 +13,17 @@ export function useOfficeAppearance() {
 // Pixel   → the role's front master for every facing (Phase 1: no mirroring, no pasted
 //           classic arms/face, unsupported expressions stay neutral).
 // (Not memoised: `classic` is a fresh element every parent render; PixelBody itself is memoised.)
-export function CharacterBody({ appearance, charId, isMoving = false, reducedMotion = false, classic, seated = false, seatClipId = 'seat-clip' }) {
+// Pixel pose priority: walking -> front master; seated at desk (working) -> back; stationary doing
+// the role's own signature behavior with a reviewed pose -> that action; otherwise front master.
+export function pixelViewFor({ charId, isMoving = false, seated = false, behavior = null }) {
+  if (isMoving) return 'front'
+  if (seated) return 'back'
+  return pixelActionView(resolvePixelRole(charId), behavior) || 'front'
+}
+
+export function CharacterBody({ appearance, charId, isMoving = false, reducedMotion = false, classic, seated = false, seatClipId = 'seat-clip', behavior = null }) {
   const body = appearance !== 'pixel' ? classic
-    : <PixelBody charId={charId} isMoving={isMoving} reducedMotion={reducedMotion} view={seated ? 'back' : 'front'} />
+    : <PixelBody charId={charId} isMoving={isMoving} reducedMotion={reducedMotion} view={pixelViewFor({ charId, isMoving, seated, behavior })} />
   return <SeatedFrame seated={seated} clipId={seatClipId}>{body}</SeatedFrame>
 }
 

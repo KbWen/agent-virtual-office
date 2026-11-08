@@ -89,8 +89,18 @@ Pixel sits only for roles whose
 reviewed back-view asset is listed in the manifest (`views.back`); until then the front master
 stands, as in Phase 1. World feet, routes, hit target and overlays are unchanged.
 
+## Phase 2 increment 1 — back views + signature action poses (owner-requested 2026-11-08/09)
+
+One reviewed key pose per role, shown only while that role performs ITS OWN signature behavior
+and is not walking or seated: pm typing, arch whiteboard (pointing), dev drink-coffee, qa
+magnifier, ops deploy-button, res research (book), designer writing-notes, gate shield-verify.
+Priority: walking -> front master; seated (working at desk) -> back; own signature behavior ->
+action pose; otherwise front master. All poses face the viewer except the seated back.
+Runtime files are derived by scripts/pixel_alpha_cleanup.py (owner asked for the white/grey rim
+to be made transparent); sources untouched; recipe and hashes in pixel-v1/PROVENANCE.md.
+
 Back views imported 2026-11-08 at the owner's request (first Phase 2 increment): the 2026-11-07
-idle-up candidates for all 8 roles, byte-for-byte, after review (see pixel-v1/PROVENANCE.md and
+idle-up candidates for all 8 roles, after review (later re-derived with the residue cleanup) (see pixel-v1/PROVENANCE.md and
 docs/reviews/2026-11-08-pixel-phase1/back-view-import-review.jpg). Used only seated, where the
 known below-sole residue row is clipped. All front + view files are preloaded before the atomic swap.
 

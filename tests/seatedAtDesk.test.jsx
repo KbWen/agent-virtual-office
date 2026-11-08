@@ -4,8 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { HOME_POSITIONS } from '../src/systems/movementSystem.js'
 import { isSeatedAtDesk, DESK_ROLES, SEAT_SHIFT, SEAT_CLIP_Y } from '../src/systems/seating.js'
 import { applyBackView } from '../src/systems/backView.js'
-import { CharacterBody } from '../src/components/CharacterBody.jsx'
-import { PIXEL_V1_PACK, pixelHasBackView } from '../src/systems/characterAppearance.js'
+import { CharacterBody, pixelViewFor } from '../src/components/CharacterBody.jsx'
+import { PIXEL_V1_PACK, pixelHasBackView, BEHAVIOR_POSES, pixelActionView } from '../src/systems/characterAppearance.js'
 
 const home = (id) => ({ ...HOME_POSITIONS[id] })
 
@@ -75,5 +75,29 @@ describe('seated frame rendering', () => {
     expect(html).toContain('data-pixel-view="back"')
     expect(html).toMatch(/pixel-v1\/dev-back\.png/)
     expect(html).toContain('x="-31.5"') // dev back pivot x 36 * 7/8
+  })
+})
+
+describe('Pixel signature action poses', () => {
+  const svg = (el) => renderToStaticMarkup(<svg>{el}</svg>)
+  const SIGNATURE = { pm: 'typing', arch: 'whiteboard', dev: 'drink-coffee', qa: 'magnifier', ops: 'deploy-button', res: 'research', designer: 'writing-notes', gate: 'shield-verify' }
+  it("each role has exactly its own signature pose, and no one borrows another role's", () => {
+    for (const [role, behavior] of Object.entries(SIGNATURE)) {
+      expect(pixelActionView(role, behavior), role).toBe(BEHAVIOR_POSES[behavior])
+      for (const [other, b2] of Object.entries(SIGNATURE)) if (other !== role) expect(pixelActionView(role, b2), `${role}/${b2}`).toBe(null)
+    }
+  })
+  it('pose priority: walking front > seated back > own action > front', () => {
+    expect(pixelViewFor({ charId: 'pm', isMoving: true, seated: true, behavior: 'typing' })).toBe('front')
+    expect(pixelViewFor({ charId: 'pm', seated: true, behavior: 'typing' })).toBe('back')
+    expect(pixelViewFor({ charId: 'pm', behavior: 'typing' })).toBe('typing')
+    expect(pixelViewFor({ charId: 'pm', behavior: 'coffee' })).toBe('front')
+    expect(pixelViewFor({ charId: 'worker', behavior: 'drink-coffee' })).toBe('drinking-coffee') // alias -> dev
+    expect(pixelViewFor({ charId: 'mystery', behavior: 'whiteboard' })).toBe('front') // fallback pm has no whiteboard pose
+  })
+  it('renders the action file with its own pivot', () => {
+    const html = svg(<CharacterBody appearance="pixel" charId="arch" behavior="whiteboard" />)
+    expect(html).toContain('data-pixel-view="pointing-board"')
+    expect(html).toMatch(/pixel-v1\/arch-pointing-board\.png/)
   })
 })

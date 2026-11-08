@@ -23,26 +23,38 @@ removal, trim, recentre, resample or recolour.
 | gate.png | 8692bcceee24a97423808a49c1a0bb5f6b31383ce87d9555b2b97b8889832dd8 |
 | designer.png | 61a665352ce563ba3a8a6de6cd6db5b6adc71be1873b93f0648059f200ed679c |
 
-## Back views (`<role>-back.png`) — imported 2026-11-08 at the owner's request
+## Views (back + signature actions) — imported 2026-11-08/09 at the owner's request
 
-Byte-for-byte copies of `pixel-kit/generated/candidates/2026-11-07-directions/characters/<role>/idle-up-0.png`.
-These candidates were produced by Gemini from each role's ORIGINAL master, but the producer
-disclosed background segmentation / crop / per-image scaling that had not been approved; the owner
-asked for them to be imported after review. Claude's review: 512x512 RGBA, zero non-uniform 8x8
-blocks, hard alpha (no partial-alpha halo), identity matches each master from behind (light and dark
-backgrounds). Known defect: pm / qa / ops / gate carry a light-grey residue strip on the row under
-the soles (logical row 56) from background removal. Mitigation: back views are used ONLY for the
-seated-at-desk pose, where everything below the waist is clipped behind the chair, so the strip is
-never rendered. Pivot = measured dark-sole bottom row / sole midpoint (not the residue row).
-Heads are 1-2 logical rows taller than the masters (accepted; seated only).
+Sources: Gemini candidates generated from each role's ORIGINAL master
+(`candidates/2026-11-07-directions/.../idle-up-0.png` for backs, `candidates/2026-11-05-regenerated/.../actions/*`
+for actions, Dev's coffee pose from the 2026-11-07 replacement). Those exports had been background-removed
+from white upstream, leaving an opaque light/grey rim (worst at the shoes, a strip under some soles); the
+owner asked for it to be made transparent.
 
-| file | sha256 | pivot (x, y) |
-|---|---|---|
-| pm-back.png | 04c603a98548d606be3991c20148c47a2df96ffad2a25ce12fc5711bbd77763d | 31.5, 57 |
-| arch-back.png | 5cf00fcf0ddeba3d7c7dd055abb204e17367371f4c916472cd656c3912053501 | 31, 56 |
-| dev-back.png | e2a4052ece046595ae677a06657aacb9a97710cb0de947d5b73724083ee72079 | 36, 57 |
-| qa-back.png | ff4c6de508b008565ee7a1e01a7ddaca4b6387ff481af95569119cae715f6e95 | 32, 56 |
-| ops-back.png | 2952b81ce35d8112004e5d2b90baa25b49698a831203bb366d9c3bfea8669ed5 | 32, 56 |
-| res-back.png | 17150b272363f8ac4b13c8edd87a52628b227f9fd4d055fe6aa69eef646c0c61 | 32, 57 |
-| designer-back.png | 96728530404986b37b9f3707385644770de9dfb0ef9818564f3b7babf2107784 | 32, 57 |
-| gate-back.png | 339999b385020d8cab781edcaa6657d4a6079186277a45ad322093af2e543180 | 31.5, 56 |
+Runtime files are DERIVED, not byte copies: `python scripts/pixel_alpha_cleanup.py <source> <master> <out>`
+(recipe: light_min 100, neutral_spread 30, palette_tol 6, max_layers 2) sets alpha to 0 only on
+edge-connected, near-neutral light pixels whose colour is not in that role's master palette, for whole 8x8
+blocks; nothing else changes. Sources stay untouched in the kit. Review: exact 8x8 grid, hard alpha,
+identity matches the master (light/dark and floor-colour composites at app scale), identity whites kept
+(Dev sneakers, Gate silver hair, QA paper). Pivot = measured bottom sole row / sole midpoint after cleanup.
+Back views are used only seated (clipped below the waist); action poses only while the role performs its
+own signature behavior and is not walking.
+
+| file | source | source sha256 | runtime sha256 | removed px | pivot (x, y) |
+|---|---|---|---|---|---|
+| arch-back.png | candidates/2026-11-07-directions/characters/arch/idle-up-0.png | 5cf00fcf0ddeba3d… | 339522ca5bd498b4cf88273344b53d07442e497c6f10ed7de953759163fbd817 | 43 | 31, 56 |
+| arch-pointing-board.png | characters/arch/actions/pointing-board-0.png | 39c9090b253d0062… | fc6325bb41a5ef2180d88efd696ecf5d1c12b4b1d102cd498ed4f4dedc98ed2d | 55 | 31.5, 56 |
+| designer-back.png | candidates/2026-11-07-directions/characters/designer/idle-up-0.png | 96728530404986b3… | 0c172c3685b79d4eeca586aae99919309c7a41334cc108249abb4ec408a900d4 | 25 | 32, 57 |
+| designer-writing-notes.png | characters/designer/actions/writing-notes-0.png | 37017156ccf4c146… | da236a7db6fb46bc8136e596009aa0be8d95e199b6147cd2c57b361d3a5e47dd | 58 | 32.5, 57 |
+| dev-back.png | candidates/2026-11-07-directions/characters/dev/idle-up-0.png | e2a4052ece046595… | 1e7564273729f2b1c7791741621d82274de681986a6eb64f4423ee65691b316b | 24 | 36, 57 |
+| dev-drinking-coffee.png | candidates/2026-11-07-directions/characters/dev/actions/drinking-coffee-1.png | 87630b485a2da97b… | 7d0307980fa96af4cf052d164f098949f535e463003ce8ca1803c986f592a289 | 51 | 36, 57 |
+| gate-back.png | candidates/2026-11-07-directions/characters/gate/idle-up-0.png | 339999b385020d8c… | a362fcb49be4987c28398b24e1f6f2ae8a127e532741775299857f1cd0a5c0f4 | 27 | 31.5, 57 |
+| gate-control-shield.png | characters/gate/actions/control-shield-0.png | f6b6edf99ffb89ae… | c5ed74774526bb43815ec3e1bda0dd861275d8510af2a4532add9d1387bec256 | 22 | 32, 57 |
+| ops-back.png | candidates/2026-11-07-directions/characters/ops/idle-up-0.png | 2952b81ce35d8112… | 39a0de129bea2063ede86c6bf23736c654be055ba6624037409d09e8f2eaf615 | 26 | 32, 56 |
+| ops-control-deploy.png | characters/ops/actions/control-deploy-0.png | f0be321c0ff3667f… | e4d620b6c6a48512ac07a00646aad8c894e4db5a6ebf4ea25ef3d1a6a143ef03 | 72 | 32, 56 |
+| pm-back.png | candidates/2026-11-07-directions/characters/pm/idle-up-0.png | 04c603a98548d606… | bfb2fa0fc9d50a2a1e85c7d2e55dc77a55dbaa63517f963e4d38792bdc6a628b | 41 | 31.5, 57 |
+| pm-typing.png | characters/pm/actions/typing-0.png | 5f4787dfa9b6c3ae… | 2f4bbe71576687343849748c8b0e1fd23f35aaf85b35e2ec23d9c186db21faa1 | 38 | 31.5, 56 |
+| qa-back.png | candidates/2026-11-07-directions/characters/qa/idle-up-0.png | ff4c6de508b00856… | b59c17b8fe55ae074a63969fce667fb675280fda9aaa8132566646656446439e | 28 | 32, 57 |
+| qa-reading-magnifier.png | characters/qa/actions/reading-magnifier-0.png | a2f9a1ca45b9ce7f… | 1d82acf2e076d0a2ee5cbc098a029cf26f9c3c808a0f1b73e51a2d9922ee5fb8 | 32 | 31.5, 57 |
+| res-back.png | candidates/2026-11-07-directions/characters/res/idle-up-0.png | 17150b272363f8ac… | bf5a7f160eb16ed06c495084248ac69c177be5c721cfb53047208529ce2b1e99 | 4 | 32, 57 |
+| res-reading-book.png | characters/res/actions/reading-book-0.png | b962cf6df56ddcd5… | 405cd0d703937248b465d5550d3f99dae677536c532ef58351cc8561f7ada875 | 58 | 32, 57 |

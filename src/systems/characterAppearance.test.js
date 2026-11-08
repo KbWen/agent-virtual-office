@@ -143,8 +143,9 @@ describe('appearance store (atomic pack switch)', () => {
   it('preload covers every front master and every reviewed view exactly once', () => {
     const urls = requiredPixelUrls()
     expect(new Set(urls).size).toBe(urls.length)
-    expect(urls.filter(u => !u.includes('-back.png'))).toHaveLength(8)
+    expect(urls.filter(u => /pixel-v1\/[a-z]+\.png$/.test(u))).toHaveLength(8)
     expect(urls.filter(u => u.includes('-back.png'))).toHaveLength(8)
+    expect(urls).toHaveLength(8 + 8 + 8) // front + back + one signature action per role
   })
 
   it('urls are same-origin relative paths under the pack folder', () => {

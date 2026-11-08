@@ -17,29 +17,55 @@ const SOURCE_SIZE = 512
 const BASE_URL = `${(typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/'}assets/characters/pixel-v1/`
 
 // pivot = measured sole contact in logical px (see public/assets/characters/pixel-v1/PROVENANCE.md).
-// views.back = owner-requested import (2026-11-08) of the 2026-11-07 idle-up candidates, used ONLY for
-// the seated-at-desk pose (everything below the waist is clipped behind the chair).
+// views = owner-requested imports (2026-11-08/09): back (seated at desk) + one signature action per
+// role. Runtime files are DERIVED from Gemini candidates by scripts/pixel_alpha_cleanup.py (outer
+// light/grey background residue -> transparent, identity colours of the master kept); sources and
+// hashes are recorded in public/assets/characters/pixel-v1/PROVENANCE.md.
 // Dev's canvas is off-centre (twin tails) and her soles end one row higher.
 export const PIXEL_V1_PACK = Object.freeze({
   version: 'pixel-v1',
   sourceSize: SOURCE_SIZE,
   roles: Object.freeze({
     pm:       { file: 'pm.png',       pivot: { x: 32, y: 56 }, sha256: '64b3b93551b2c6064877fe29f51de984301860c807a99e95372150bfa303d245',
-      views: { back: { file: 'pm-back.png', pivot: { x: 31.5, y: 57 }, sha256: '04c603a98548d606be3991c20148c47a2df96ffad2a25ce12fc5711bbd77763d' } } },
+      views: {
+        'back': { file: 'pm-back.png', pivot: { x: 31.5, y: 57 }, sha256: 'bfb2fa0fc9d50a2a1e85c7d2e55dc77a55dbaa63517f963e4d38792bdc6a628b' },
+        'typing': { file: 'pm-typing.png', pivot: { x: 31.5, y: 56 }, sha256: '2f4bbe71576687343849748c8b0e1fd23f35aaf85b35e2ec23d9c186db21faa1' },
+      } },
     arch:     { file: 'arch.png',     pivot: { x: 32, y: 56 }, sha256: '4dbbc0792212b9a9e7921a965c6a9b38c4a429d350e3ac566be20c9c14c7442a',
-      views: { back: { file: 'arch-back.png', pivot: { x: 31, y: 56 }, sha256: '5cf00fcf0ddeba3d7c7dd055abb204e17367371f4c916472cd656c3912053501' } } },
+      views: {
+        'back': { file: 'arch-back.png', pivot: { x: 31, y: 56 }, sha256: '339522ca5bd498b4cf88273344b53d07442e497c6f10ed7de953759163fbd817' },
+        'pointing-board': { file: 'arch-pointing-board.png', pivot: { x: 31.5, y: 56 }, sha256: 'fc6325bb41a5ef2180d88efd696ecf5d1c12b4b1d102cd498ed4f4dedc98ed2d' },
+      } },
     dev:      { file: 'dev.png',      pivot: { x: 36, y: 55 }, sha256: 'da81bee1bd1cb480783c878236458f6ded0d8ce88b9b8f81041c9c2cf1d4bd31',
-      views: { back: { file: 'dev-back.png', pivot: { x: 36, y: 57 }, sha256: 'e2a4052ece046595ae677a06657aacb9a97710cb0de947d5b73724083ee72079' } } },
+      views: {
+        'back': { file: 'dev-back.png', pivot: { x: 36, y: 57 }, sha256: '1e7564273729f2b1c7791741621d82274de681986a6eb64f4423ee65691b316b' },
+        'drinking-coffee': { file: 'dev-drinking-coffee.png', pivot: { x: 36, y: 57 }, sha256: '7d0307980fa96af4cf052d164f098949f535e463003ce8ca1803c986f592a289' },
+      } },
     qa:       { file: 'qa.png',       pivot: { x: 32, y: 56 }, sha256: 'd5f64afbf0a3778e1fe99fd5114fd409bcc60447e0de5f59a995a454f4f854ed',
-      views: { back: { file: 'qa-back.png', pivot: { x: 32, y: 56 }, sha256: 'ff4c6de508b008565ee7a1e01a7ddaca4b6387ff481af95569119cae715f6e95' } } },
+      views: {
+        'back': { file: 'qa-back.png', pivot: { x: 32, y: 57 }, sha256: 'b59c17b8fe55ae074a63969fce667fb675280fda9aaa8132566646656446439e' },
+        'reading-magnifier': { file: 'qa-reading-magnifier.png', pivot: { x: 31.5, y: 57 }, sha256: '1d82acf2e076d0a2ee5cbc098a029cf26f9c3c808a0f1b73e51a2d9922ee5fb8' },
+      } },
     ops:      { file: 'ops.png',      pivot: { x: 32, y: 56 }, sha256: '4916b663dad415068dfeba8b1ec07b634883b081e37693ce09c1cc7fd17f8db0',
-      views: { back: { file: 'ops-back.png', pivot: { x: 32, y: 56 }, sha256: '2952b81ce35d8112004e5d2b90baa25b49698a831203bb366d9c3bfea8669ed5' } } },
+      views: {
+        'back': { file: 'ops-back.png', pivot: { x: 32, y: 56 }, sha256: '39a0de129bea2063ede86c6bf23736c654be055ba6624037409d09e8f2eaf615' },
+        'control-deploy': { file: 'ops-control-deploy.png', pivot: { x: 32, y: 56 }, sha256: 'e4d620b6c6a48512ac07a00646aad8c894e4db5a6ebf4ea25ef3d1a6a143ef03' },
+      } },
     res:      { file: 'res.png',      pivot: { x: 32, y: 56 }, sha256: 'd638fee5040d840b32097e97e647052cb397e9ea0def93b1b861dca77e68a6f7',
-      views: { back: { file: 'res-back.png', pivot: { x: 32, y: 57 }, sha256: '17150b272363f8ac4b13c8edd87a52628b227f9fd4d055fe6aa69eef646c0c61' } } },
+      views: {
+        'back': { file: 'res-back.png', pivot: { x: 32, y: 57 }, sha256: 'bf5a7f160eb16ed06c495084248ac69c177be5c721cfb53047208529ce2b1e99' },
+        'reading-book': { file: 'res-reading-book.png', pivot: { x: 32, y: 57 }, sha256: '405cd0d703937248b465d5550d3f99dae677536c532ef58351cc8561f7ada875' },
+      } },
     gate:     { file: 'gate.png',     pivot: { x: 32, y: 56 }, sha256: '8692bcceee24a97423808a49c1a0bb5f6b31383ce87d9555b2b97b8889832dd8',
-      views: { back: { file: 'gate-back.png', pivot: { x: 31.5, y: 56 }, sha256: '339999b385020d8cab781edcaa6657d4a6079186277a45ad322093af2e543180' } } },
+      views: {
+        'back': { file: 'gate-back.png', pivot: { x: 31.5, y: 57 }, sha256: 'a362fcb49be4987c28398b24e1f6f2ae8a127e532741775299857f1cd0a5c0f4' },
+        'control-shield': { file: 'gate-control-shield.png', pivot: { x: 32, y: 57 }, sha256: 'c5ed74774526bb43815ec3e1bda0dd861275d8510af2a4532add9d1387bec256' },
+      } },
     designer: { file: 'designer.png', pivot: { x: 32.5, y: 56 }, sha256: '61a665352ce563ba3a8a6de6cd6db5b6adc71be1873b93f0648059f200ed679c',
-      views: { back: { file: 'designer-back.png', pivot: { x: 32, y: 57 }, sha256: '96728530404986b37b9f3707385644770de9dfb0ef9818564f3b7babf2107784' } } },
+      views: {
+        'back': { file: 'designer-back.png', pivot: { x: 32, y: 57 }, sha256: '0c172c3685b79d4eeca586aae99919309c7a41334cc108249abb4ec408a900d4' },
+        'writing-notes': { file: 'designer-writing-notes.png', pivot: { x: 32.5, y: 57 }, sha256: 'da236a7db6fb46bc8136e596009aa0be8d95e199b6147cd2c57b361d3a5e47dd' },
+      } },
   }),
   // Lightweight-mode roles reuse the identity the classic palette already maps them to.
   aliases: Object.freeze({ planner: 'pm', worker: 'dev', checker: 'qa' }),
@@ -56,6 +82,25 @@ function viewEntry(role, view, pack) {
 
 export function pixelHasBackView(role, pack = PIXEL_V1_PACK) {
   return !!pack.roles[role]?.views?.back
+}
+
+// Behavior -> signature action pose. A role shows a pose only for ITS OWN signature behavior and
+// only when that reviewed view exists; otherwise the front master (honest fallback). The pose is
+// chosen from the agent's actual behavior, never from its transport status.
+export const BEHAVIOR_POSES = Object.freeze({
+  typing: 'typing',
+  whiteboard: 'pointing-board',
+  'drink-coffee': 'drinking-coffee',
+  magnifier: 'reading-magnifier',
+  'deploy-button': 'control-deploy',
+  research: 'reading-book',
+  'writing-notes': 'writing-notes',
+  'shield-verify': 'control-shield',
+})
+
+export function pixelActionView(role, behavior, pack = PIXEL_V1_PACK) {
+  const view = BEHAVIOR_POSES[behavior]
+  return view && pack.roles[role]?.views?.[view] ? view : null
 }
 
 // Every file the pack can render (front masters + reviewed views): all are preloaded before the
