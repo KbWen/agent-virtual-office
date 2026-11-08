@@ -64,7 +64,10 @@ export function sampleRoute(measured, t) {
   const segLen = cum[i] - cum[i - 1] || 1
   const k = (d - cum[i - 1]) / segLen
   const a = points[i - 1], b = points[i]
-  return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, dx: Math.sign(b.x - a.x) || 0 }
+  // Vertical segments keep the most recent horizontal heading (no snap back to facing right).
+  let dx = Math.sign(b.x - a.x)
+  for (let j = i - 1; dx === 0 && j >= 1; j--) dx = Math.sign(points[j].x - points[j - 1].x)
+  return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, dx: dx || 1 }
 }
 
 // Paint order: how many employees stand above (smaller feet y than) the visitor's feet.

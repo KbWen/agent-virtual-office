@@ -30,10 +30,10 @@ describe('pixel-v1 pack manifest', () => {
       expect(bytes.subarray(1, 4).toString('latin1')).toBe('PNG')
       expect(bytes.readUInt32BE(16)).toBe(512) // IHDR width
       expect(bytes.readUInt32BE(20)).toBe(512) // IHDR height
-      const back = PIXEL_V1_PACK.roles[role].views?.back
-      if (back) {
-        const b = readFileSync(resolve(__dirname, '../../public/assets/characters/pixel-v1', back.file))
-        expect(createHash('sha256').update(b).digest('hex'), back.file).toBe(back.sha256)
+      for (const view of Object.values(PIXEL_V1_PACK.roles[role].views || {})) {
+        const b = readFileSync(resolve(__dirname, '../../public/assets/characters/pixel-v1', view.file))
+        expect(createHash('sha256').update(b).digest('hex'), view.file).toBe(view.sha256)
+        expect(b.readUInt32BE(16), view.file).toBe(512)
       }
     }
   })

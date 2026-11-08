@@ -58,6 +58,14 @@ describe('constant-speed sampling', () => {
   })
 })
 
+describe('visitor heading', () => {
+  it('keeps the last horizontal heading on vertical segments', () => {
+    const m = measureRoute([{ x: 100, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 100 }])
+    expect(sampleRoute(m, 0.75).dx).toBe(-1)
+    expect(sampleRoute(measureRoute([{ x: 0, y: 0 }, { x: 0, y: 50 }]), 0.5).dx).toBe(1)
+  })
+})
+
 describe('visitorDepthIndex', () => {
   it('places the visitor after employees whose feet are above it', () => {
     expect(visitorDepthIndex([80, 244, 264, 364], 290)).toBe(3)

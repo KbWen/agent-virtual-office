@@ -8,7 +8,8 @@ soles). This tool makes ONLY those residue pixels transparent:
   * a pixel is residue when it is opaque, light (min channel > 100) and near-neutral
     (max-min < 30), 4-connected to the OUTSIDE transparent region, and its colour is NOT within
     6 (per channel) of any opaque colour of that role's ORIGINAL master - so identity whites such
-    as Dev's sneakers, QA's sleeves or Gate's silver hair are kept
+    as Dev's sneakers, QA's sleeves or Gate's silver hair are kept; near-white prop pixels (every
+    channel >= 218: mug, book page, lens glint) are always kept
   * peels at most 2 layers (the 1-2 px blended rim/strip), never touches interior pixels
   * changes alpha only (to 0) for whole 8x8 blocks; every other pixel is copied unchanged
 
@@ -23,6 +24,9 @@ import sys
 from PIL import Image
 
 LIGHT_MIN, NEUTRAL_SPREAD, PALETTE_TOL, MAX_LAYERS = 100, 30, 6, 2
+# Near-white pixels are props/highlights (mug, book page, lens glint, sneakers), never the grey
+# residue (measured 150-217 on these exports): keep anything whose every channel is >= KEEP_BRIGHT.
+KEEP_BRIGHT = 218
 
 
 def sha(path):
@@ -60,7 +64,7 @@ def main(cand_path, master_path, out_path):
 
     def residue_like(c):
         r, gg, b, a = c
-        return a >= 250 and min(r, gg, b) > LIGHT_MIN and max(r, gg, b) - min(r, gg, b) < NEUTRAL_SPREAD and not in_palette((r, gg, b))
+        return a >= 250 and LIGHT_MIN < min(r, gg, b) < KEEP_BRIGHT and max(r, gg, b) - min(r, gg, b) < NEUTRAL_SPREAD and not in_palette((r, gg, b))
 
     # outside = transparent cells connected to the canvas border
     outside = set()
@@ -94,7 +98,7 @@ def main(cand_path, master_path, out_path):
         'input': cand_path, 'input_sha256': sha(cand_path),
         'master': master_path, 'master_sha256': sha(master_path),
         'output': out_path, 'output_sha256': sha(out_path),
-        'recipe': {'light_min': LIGHT_MIN, 'neutral_spread': NEUTRAL_SPREAD, 'palette_tol': PALETTE_TOL, 'max_layers': MAX_LAYERS},
+        'recipe': {'keep_bright': KEEP_BRIGHT, 'light_min': LIGHT_MIN, 'neutral_spread': NEUTRAL_SPREAD, 'palette_tol': PALETTE_TOL, 'max_layers': MAX_LAYERS},
         'removed_count': len(removed), 'removed': removed,
     }))
 

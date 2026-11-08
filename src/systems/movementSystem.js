@@ -519,7 +519,7 @@ function routeWithinMeetingRoom(from, to) {
 // Lounge route nodes (issue #27): the single south lane (y=520) descended straight
 // columns into wedged targets — a point 1–7px ABOVE the WC/shelves/coffee row was
 // approached vertically THROUGH the rect. Two clear lanes instead: the original south
-// lane (all lounge furniture ends by y≤502) and the north strip y=430 (all lounge
+// lane (all lounge furniture ends by y≤514 — the coffee-table collider added 2026-11-08 is the lowest) and the north strip y=430 (all lounge
 // furniture starts at y≥438), routed via the same fully edge-validated Dijkstra as the
 // main office; wedge-escape augmentation connects sub-margin endpoints. The pre-fix
 // lane path is kept verbatim as the degraded fallback, so no input routes worse.

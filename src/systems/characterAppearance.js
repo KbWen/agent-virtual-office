@@ -34,17 +34,17 @@ export const PIXEL_V1_PACK = Object.freeze({
     arch:     { file: 'arch.png',     pivot: { x: 32, y: 56 }, sha256: '4dbbc0792212b9a9e7921a965c6a9b38c4a429d350e3ac566be20c9c14c7442a',
       views: {
         'back': { file: 'arch-back.png', pivot: { x: 31, y: 56 }, sha256: '339522ca5bd498b4cf88273344b53d07442e497c6f10ed7de953759163fbd817' },
-        'pointing-board': { file: 'arch-pointing-board.png', pivot: { x: 31.5, y: 56 }, sha256: 'fc6325bb41a5ef2180d88efd696ecf5d1c12b4b1d102cd498ed4f4dedc98ed2d' },
+        'pointing-board': { file: 'arch-pointing-board.png', pivot: { x: 31.5, y: 56 }, sha256: '055e340d98d5aa94e8f2e37610451b130446288a03eb80711575badb2363b793' },
       } },
     dev:      { file: 'dev.png',      pivot: { x: 36, y: 55 }, sha256: 'da81bee1bd1cb480783c878236458f6ded0d8ce88b9b8f81041c9c2cf1d4bd31',
       views: {
         'back': { file: 'dev-back.png', pivot: { x: 36, y: 57 }, sha256: '1e7564273729f2b1c7791741621d82274de681986a6eb64f4423ee65691b316b' },
-        'drinking-coffee': { file: 'dev-drinking-coffee.png', pivot: { x: 36, y: 57 }, sha256: '7d0307980fa96af4cf052d164f098949f535e463003ce8ca1803c986f592a289' },
+        'drinking-coffee': { file: 'dev-drinking-coffee.png', pivot: { x: 36, y: 57 }, sha256: 'bbdd786f7f5941e7822ce31a5b816226d2d8a285b33af8e81a3131445cfa9424' },
       } },
     qa:       { file: 'qa.png',       pivot: { x: 32, y: 56 }, sha256: 'd5f64afbf0a3778e1fe99fd5114fd409bcc60447e0de5f59a995a454f4f854ed',
       views: {
         'back': { file: 'qa-back.png', pivot: { x: 32, y: 57 }, sha256: 'b59c17b8fe55ae074a63969fce667fb675280fda9aaa8132566646656446439e' },
-        'reading-magnifier': { file: 'qa-reading-magnifier.png', pivot: { x: 31.5, y: 57 }, sha256: '1d82acf2e076d0a2ee5cbc098a029cf26f9c3c808a0f1b73e51a2d9922ee5fb8' },
+        'reading-magnifier': { file: 'qa-reading-magnifier.png', pivot: { x: 31.5, y: 57 }, sha256: '2bfcf0164c8a0a3197d7abfce1d32c04cd3935dc6cc63cb67c29398941ac629d' },
       } },
     ops:      { file: 'ops.png',      pivot: { x: 32, y: 56 }, sha256: '4916b663dad415068dfeba8b1ec07b634883b081e37693ce09c1cc7fd17f8db0',
       views: {
@@ -54,7 +54,7 @@ export const PIXEL_V1_PACK = Object.freeze({
     res:      { file: 'res.png',      pivot: { x: 32, y: 56 }, sha256: 'd638fee5040d840b32097e97e647052cb397e9ea0def93b1b861dca77e68a6f7',
       views: {
         'back': { file: 'res-back.png', pivot: { x: 32, y: 57 }, sha256: 'bf5a7f160eb16ed06c495084248ac69c177be5c721cfb53047208529ce2b1e99' },
-        'reading-book': { file: 'res-reading-book.png', pivot: { x: 32, y: 57 }, sha256: '405cd0d703937248b465d5550d3f99dae677536c532ef58351cc8561f7ada875' },
+        'reading-book': { file: 'res-reading-book.png', pivot: { x: 32, y: 57 }, sha256: '2bfc9da351fd6268fb77d380388bb1ba4b6bc3309e290b20b1fce473d5e1daf9' },
       } },
     gate:     { file: 'gate.png',     pivot: { x: 32, y: 56 }, sha256: '8692bcceee24a97423808a49c1a0bb5f6b31383ce87d9555b2b97b8889832dd8',
       views: {

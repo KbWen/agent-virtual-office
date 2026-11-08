@@ -32,8 +32,8 @@ from white upstream, leaving an opaque light/grey rim (worst at the shoes, a str
 owner asked for it to be made transparent.
 
 Runtime files are DERIVED, not byte copies: `python scripts/pixel_alpha_cleanup.py <source> <master> <out>`
-(recipe: light_min 100, neutral_spread 30, palette_tol 6, max_layers 2) sets alpha to 0 only on
-edge-connected, near-neutral light pixels whose colour is not in that role's master palette, for whole 8x8
+(recipe: light_min 100, keep_bright 218, neutral_spread 30, palette_tol 6, max_layers 2) sets alpha to
+0 only on edge-connected, near-neutral light-grey pixels (near-white props/highlights are kept) whose colour is not in that role's master palette, for whole 8x8
 blocks; nothing else changes. Sources stay untouched in the kit. Review: exact 8x8 grid, hard alpha,
 identity matches the master (light/dark and floor-colour composites at app scale), identity whites kept
 (Dev sneakers, Gate silver hair, QA paper). Pivot = measured bottom sole row / sole midpoint after cleanup.
@@ -43,18 +43,18 @@ own signature behavior and is not walking.
 | file | source | source sha256 | runtime sha256 | removed px | pivot (x, y) |
 |---|---|---|---|---|---|
 | arch-back.png | candidates/2026-11-07-directions/characters/arch/idle-up-0.png | 5cf00fcf0ddeba3d… | 339522ca5bd498b4cf88273344b53d07442e497c6f10ed7de953759163fbd817 | 43 | 31, 56 |
-| arch-pointing-board.png | characters/arch/actions/pointing-board-0.png | 39c9090b253d0062… | fc6325bb41a5ef2180d88efd696ecf5d1c12b4b1d102cd498ed4f4dedc98ed2d | 55 | 31.5, 56 |
+| arch-pointing-board.png | candidates/2026-11-05-regenerated/characters/arch/actions/pointing-board-0.png | 39c9090b253d0062… | 055e340d98d5aa94e8f2e37610451b130446288a03eb80711575badb2363b793 | 54 | 31.5, 56 |
 | designer-back.png | candidates/2026-11-07-directions/characters/designer/idle-up-0.png | 96728530404986b3… | 0c172c3685b79d4eeca586aae99919309c7a41334cc108249abb4ec408a900d4 | 25 | 32, 57 |
-| designer-writing-notes.png | characters/designer/actions/writing-notes-0.png | 37017156ccf4c146… | da236a7db6fb46bc8136e596009aa0be8d95e199b6147cd2c57b361d3a5e47dd | 58 | 32.5, 57 |
+| designer-writing-notes.png | candidates/2026-11-05-regenerated/characters/designer/actions/writing-notes-0.png | 37017156ccf4c146… | da236a7db6fb46bc8136e596009aa0be8d95e199b6147cd2c57b361d3a5e47dd | 58 | 32.5, 57 |
 | dev-back.png | candidates/2026-11-07-directions/characters/dev/idle-up-0.png | e2a4052ece046595… | 1e7564273729f2b1c7791741621d82274de681986a6eb64f4423ee65691b316b | 24 | 36, 57 |
-| dev-drinking-coffee.png | candidates/2026-11-07-directions/characters/dev/actions/drinking-coffee-1.png | 87630b485a2da97b… | 7d0307980fa96af4cf052d164f098949f535e463003ce8ca1803c986f592a289 | 51 | 36, 57 |
+| dev-drinking-coffee.png | candidates/2026-11-07-directions/characters/dev/actions/drinking-coffee-1.png | 87630b485a2da97b… | bbdd786f7f5941e7822ce31a5b816226d2d8a285b33af8e81a3131445cfa9424 | 48 | 36, 57 |
 | gate-back.png | candidates/2026-11-07-directions/characters/gate/idle-up-0.png | 339999b385020d8c… | a362fcb49be4987c28398b24e1f6f2ae8a127e532741775299857f1cd0a5c0f4 | 27 | 31.5, 57 |
-| gate-control-shield.png | characters/gate/actions/control-shield-0.png | f6b6edf99ffb89ae… | c5ed74774526bb43815ec3e1bda0dd861275d8510af2a4532add9d1387bec256 | 22 | 32, 57 |
+| gate-control-shield.png | candidates/2026-11-05-regenerated/characters/gate/actions/control-shield-0.png | f6b6edf99ffb89ae… | c5ed74774526bb43815ec3e1bda0dd861275d8510af2a4532add9d1387bec256 | 22 | 32, 57 |
 | ops-back.png | candidates/2026-11-07-directions/characters/ops/idle-up-0.png | 2952b81ce35d8112… | 39a0de129bea2063ede86c6bf23736c654be055ba6624037409d09e8f2eaf615 | 26 | 32, 56 |
-| ops-control-deploy.png | characters/ops/actions/control-deploy-0.png | f0be321c0ff3667f… | e4d620b6c6a48512ac07a00646aad8c894e4db5a6ebf4ea25ef3d1a6a143ef03 | 72 | 32, 56 |
+| ops-control-deploy.png | candidates/2026-11-05-regenerated/characters/ops/actions/control-deploy-0.png | f0be321c0ff3667f… | e4d620b6c6a48512ac07a00646aad8c894e4db5a6ebf4ea25ef3d1a6a143ef03 | 72 | 32, 56 |
 | pm-back.png | candidates/2026-11-07-directions/characters/pm/idle-up-0.png | 04c603a98548d606… | bfb2fa0fc9d50a2a1e85c7d2e55dc77a55dbaa63517f963e4d38792bdc6a628b | 41 | 31.5, 57 |
-| pm-typing.png | characters/pm/actions/typing-0.png | 5f4787dfa9b6c3ae… | 2f4bbe71576687343849748c8b0e1fd23f35aaf85b35e2ec23d9c186db21faa1 | 38 | 31.5, 56 |
+| pm-typing.png | candidates/2026-11-05-regenerated/characters/pm/actions/typing-0.png | 5f4787dfa9b6c3ae… | 2f4bbe71576687343849748c8b0e1fd23f35aaf85b35e2ec23d9c186db21faa1 | 38 | 31.5, 56 |
 | qa-back.png | candidates/2026-11-07-directions/characters/qa/idle-up-0.png | ff4c6de508b00856… | b59c17b8fe55ae074a63969fce667fb675280fda9aaa8132566646656446439e | 28 | 32, 57 |
-| qa-reading-magnifier.png | characters/qa/actions/reading-magnifier-0.png | a2f9a1ca45b9ce7f… | 1d82acf2e076d0a2ee5cbc098a029cf26f9c3c808a0f1b73e51a2d9922ee5fb8 | 32 | 31.5, 57 |
+| qa-reading-magnifier.png | candidates/2026-11-05-regenerated/characters/qa/actions/reading-magnifier-0.png | a2f9a1ca45b9ce7f… | 2bfcf0164c8a0a3197d7abfce1d32c04cd3935dc6cc63cb67c29398941ac629d | 31 | 31.5, 57 |
 | res-back.png | candidates/2026-11-07-directions/characters/res/idle-up-0.png | 17150b272363f8ac… | bf5a7f160eb16ed06c495084248ac69c177be5c721cfb53047208529ce2b1e99 | 4 | 32, 57 |
-| res-reading-book.png | characters/res/actions/reading-book-0.png | b962cf6df56ddcd5… | 405cd0d703937248b465d5550d3f99dae677536c532ef58351cc8561f7ada875 | 58 | 32, 57 |
+| res-reading-book.png | candidates/2026-11-05-regenerated/characters/res/actions/reading-book-0.png | b962cf6df56ddcd5… | 2bfc9da351fd6268fb77d380388bb1ba4b6bc3309e290b20b1fce473d5e1daf9 | 57 | 32, 57 |
