@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import { locale } from './i18n'
 import './index.css'
+import { initAppearance } from './systems/characterAppearance'
 
 document.documentElement.lang = locale()
 
@@ -17,6 +18,9 @@ window.addEventListener('error', (e) => {
     console.warn('[Office] Uncaught error:', e.error)
   }
 })
+
+// Honour a stored Pixel appearance preference; Classic renders until the whole pack is ready.
+initAppearance()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

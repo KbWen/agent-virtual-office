@@ -1,0 +1,147 @@
+{
+  "when": "2026-11-08T14:39:23.635Z",
+  "results": [
+    {
+      "name": "staged statuses reached the render",
+      "ok": true,
+      "detail": {
+        "gate": {
+          "transform": "translate(100, 80) scale(1.35)",
+          "status": "idle"
+        },
+        "qa": {
+          "transform": "translate(400, 244) scale(1.35)",
+          "status": "working"
+        },
+        "res": {
+          "transform": "translate(520, 244) scale(1.35)",
+          "status": "done"
+        },
+        "pm": {
+          "transform": "translate(140, 264) scale(1.35)",
+          "status": "planning"
+        },
+        "arch": {
+          "transform": "translate(260, 264) scale(1.35)",
+          "status": "working"
+        },
+        "dev": {
+          "transform": "translate(340, 364) scale(1.35)",
+          "status": "working"
+        },
+        "ops": {
+          "transform": "translate(460, 364) scale(1.35)",
+          "status": "blocked"
+        },
+        "designer": {
+          "transform": "translate(140, 384) scale(1.35)",
+          "status": "working"
+        }
+      }
+    },
+    {
+      "name": "Pixel becomes active after full preload",
+      "ok": true
+    },
+    {
+      "name": "Pixel renders 8 raster bodies",
+      "ok": true,
+      "detail": {
+        "bodies": 8
+      }
+    },
+    {
+      "name": "no classic procedural body remains under Pixel",
+      "ok": true
+    },
+    {
+      "name": "actor transforms unchanged by toggle",
+      "ok": true
+    },
+    {
+      "name": "store positions/targets/facing unchanged by toggle",
+      "ok": true
+    },
+    {
+      "name": "door claims unchanged by toggle",
+      "ok": true
+    },
+    {
+      "name": "actor nodes not remounted by toggle",
+      "ok": true
+    },
+    {
+      "name": "every Pixel image has layout size 56 (local units, 7/8 scale)",
+      "ok": true,
+      "detail": [
+        56,
+        56,
+        56,
+        56,
+        56,
+        56,
+        56,
+        56
+      ]
+    },
+    {
+      "name": "back to Classic",
+      "ok": true
+    },
+    {
+      "name": "Pixel again (cached pack)",
+      "ok": true
+    },
+    {
+      "name": "positions still unchanged after 3 toggles",
+      "ok": true
+    },
+    {
+      "name": "actor nodes still not remounted",
+      "ok": true
+    },
+    {
+      "name": "mouse click on a Pixel body selects the agent",
+      "ok": true,
+      "detail": {
+        "selectedByClick": "dev"
+      }
+    },
+    {
+      "name": "keyboard Enter on a focused Pixel actor selects it",
+      "ok": true,
+      "detail": {
+        "selectedByKey": "arch"
+      }
+    },
+    {
+      "name": "hook status file reaches the Pixel render (gate idle→working)",
+      "ok": true
+    },
+    {
+      "name": "gate still renders its Pixel master after the live update",
+      "ok": true
+    },
+    {
+      "name": "no console errors (main page)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "reduced motion: zero walk-bob nodes",
+      "ok": true,
+      "detail": {
+        "bobs": 0
+      }
+    },
+    {
+      "name": "asset failure → error cue, 0 Pixel bodies, Classic still pressed",
+      "ok": true,
+      "detail": {
+        "status": "error",
+        "pixelBodies": 0,
+        "classicPressed": "true"
+      }
+    }
+  ]
+}

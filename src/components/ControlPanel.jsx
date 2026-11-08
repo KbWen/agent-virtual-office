@@ -16,6 +16,8 @@ const statusOptions = ['idle', 'working', 'blocked', 'done']
 // binding x into THIS module's scope — the component's internal calls would then crash with
 // "x is not defined" (regression caught only by actually loading the page).
 import { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, attentionStripState, controlPanelPresenceRows, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState, healthDotDetail } from './controlPanelLabels.js'
+import { requestAppearance } from '../systems/characterAppearance'
+import { useOfficeAppearance } from './CharacterBody.jsx'
 export { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, attentionStripState, controlPanelPresenceRows, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState, healthDotDetail }
 
 // #39 types: emoji shown on the "change pet" button per current skin.
@@ -32,6 +34,36 @@ const HEALTH_TONE = {
   emerald: { bg: 'bg-emerald-500',              text: 'text-emerald-600 dark:text-emerald-400' },
   gray:    { bg: 'bg-gray-400 dark:bg-gray-500', text: 'text-gray-500 dark:text-gray-400' },
 }
+
+// Phase-1 Classic/Pixel appearance switch (spec: phased-pixel-character-refresh). Presentation
+// only: the pack swaps after all eight images load + decode; a failure keeps the current style.
+function AppearanceSwitch() {
+  const { requested, active, status } = useOfficeAppearance()
+  const loading = status === 'loading'
+  const failed = status === 'error'
+  const title = loading ? t('settings.appearanceLoading', 'Loading Pixel characters…')
+    : failed ? t('settings.appearanceError', 'Pixel characters could not load; keeping the current style.')
+    : t('settings.appearance', 'Character style')
+  const opt = (value, label) => {
+    const pressed = active === value
+    return (
+      <button type="button" aria-pressed={pressed} data-appearance-option={value}
+        onClick={() => { if (requested !== value || failed) requestAppearance(value) }}
+        className={`px-1.5 py-1 transition-colors ${pressed ? 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+        {label}{value === 'pixel' && loading ? '…' : ''}{value === 'pixel' && failed ? ' ⚠' : ''}
+      </button>
+    )
+  }
+  return (
+    <div role="group" aria-label={t('settings.appearance', 'Character style')} title={title} data-appearance-status={status}
+      className="flex rounded border border-gray-300 dark:border-gray-600 overflow-hidden">
+      {opt('classic', t('settings.appearanceClassic', 'Classic'))}
+      {opt('pixel', t('settings.appearancePixel', 'Pixel'))}
+      {failed && <span className="sr-only" role="status">{title}</span>}
+    </div>
+  )
+}
+
 function HealthDot({ dot, reducedMotion, calm }) {
   const tone = HEALTH_TONE[dot.tone] || HEALTH_TONE.gray
   const detail = healthDotDetail(dot, t, calm)
@@ -445,6 +477,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             the persistent cluster is just the health dot + pause + gear. */}
 
         <div className="flex items-center gap-1.5 shrink-0">
+          <AppearanceSwitch />
           <button onClick={togglePause} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300" title={`${isPaused ? t('aria.resume', 'Resume') : t('aria.pause', 'Pause')} (Space)`} aria-label={isPaused ? t('aria.resume', 'Resume') : t('aria.pause', 'Pause')}>
             {isPaused ? '▶' : '⏸'}
           </button>

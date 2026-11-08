@@ -14,6 +14,7 @@ import { shouldShakeDesk } from '../systems/eventJuice.js'
 import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
 import { applyIdleWave, canIdleWave } from '../systems/idleWave.js'
 import { useCozyInteractions } from './useCozyInteractions.js'
+import { CharacterBody, useOfficeAppearance } from './CharacterBody.jsx'
 
 // Character sprite scale. The root <g> scales by this; the name-tag/bubble group undoes it with
 // 1/CHAR_SCALE. Keep both in sync via this one constant.
@@ -758,6 +759,7 @@ function AgentCharacter({ agent }) {
   const name = charName(id)
   const agentState = useOfficeStore((s) => s.agents[id])
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
+  const appearance = useOfficeAppearance().active
   const cozyInteractions = useCozyInteractions()
   // AVO-132: session effort level intensifies the working glow ring (folded in from the
   // removed ThinkingAura). Subscribe to just `effort` so we re-render only when it changes.
@@ -1695,14 +1697,19 @@ function AgentCharacter({ agent }) {
         </circle>
       )}
 
-      <CharacterPixelSprite
-        charId={id}
-        expression={state.expression || 'normal'}
-        isMoving={isWalking}
-        walkFrame={walkFrame}
-        facing={state.facing || 'down'}
-        idleWave={waveEligible && pokeBob?.wave ? pokeBob.seq : null}
-      />
+      {/* Phase-1 Pixel appearance swaps ONLY this decorative body; everything else in this
+          actor group (rings, labels, badges, bubbles, input) is shared by both appearances. */}
+      <CharacterBody appearance={appearance} charId={id} isMoving={isWalking} reducedMotion={reducedMotion}
+        classic={(
+          <CharacterPixelSprite
+            charId={id}
+            expression={state.expression || 'normal'}
+            isMoving={isWalking}
+            walkFrame={walkFrame}
+            facing={state.facing || 'down'}
+            idleWave={waveEligible && pokeBob?.wave ? pokeBob.seq : null}
+          />
+        )} />
 
       {/* Behavior-specific indicator icon */}
       {/* AVO-134: a one-shot pop-in (scale + slight squash) when the behavior CHANGES.
