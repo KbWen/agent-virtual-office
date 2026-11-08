@@ -25,15 +25,21 @@ in watcher/hook adapter suites that do not import changed code. Build PASS. Bund
 for this branch alone (+9.05%); the owner's uncommitted furniture WIP pushes it to +11.11%.
 
 ## Feet / chair fit — needs an owner decision
-Feet land on the world anchor in both appearances. At desks that anchor sits on the chair's top
-edge, so both Classic and Pixel can read as "standing on the chair". It is shared geometry, not a
-Pixel misalignment. Options (each applies to BOTH appearances):
-A. Keep as is for Phase 1 (honest, unchanged world).
-B. Shared paint order: draw the chair backrest in front of the lower legs (seated read).
-C. Seated back/three-quarter desk pose — affects which desk-work prompts Gemini gets next.
+Feet land on the world anchor in both appearances; at desks that anchor sits on the chair's top
+edge, so both Classic and Pixel can read as "standing on the chair". Render-only mockups of the
+same staged state (R1-seating-options.jpg; made by editing the live DOM, no source change):
+- A current — standing, feet on the chair edge.
+- B chair painted over the legs, body drawn lower (image-local offset) — front-facing; reads as
+  "behind the chair" more than "on it".
+- D no chair — standing desk; cleanest, no art needed, but removes the owner's new chair art.
+- C back view seated — reads most clearly as working at a desk; costs faces while at the desk.
+  Mockup uses UNAPPROVED 2026-11-07 idle-up candidates purely as a concept.
+Each option applies to BOTH appearances. C would make "desk back view" the next Gemini batch.
 
 ## Open items
 - Desk-work action prompts wait for the A/B/C choice. Gait batch 1 (Res, Arch right-facing
-  walk, 4 frames each) is ready: phased-handoff/GEMINI-GAIT-BATCH-1.md.
-- Historical boss/dog/lounge route defects not re-reproduced yet (shared-world unit, AVO-202).
+  walk, 4 frames each) is ready: phased-handoff/GEMINI-GAIT-BATCH-1.md, with a paste-first
+  opening in GEMINI-GAIT-BATCH-1-OPENING.txt.
+- Boss/dog/lounge route defects: reproduced and FIXED as a separate shared-world unit, see
+  docs/reviews/2026-11-08-visitor-routes/ (recordings + per-frame checks, both appearances).
 - Panel/compact footer has no switch in Phase 1 (preference still applies).
