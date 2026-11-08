@@ -25,6 +25,7 @@ import ScenePaperStar from './ScenePaperStar.jsx'
 import ScenePostcard from './ScenePostcard.jsx'
 import CozyCardPreview from './CozyCardPreview.jsx'
 import { captureSceneCardInput } from '../systems/sceneCozy.js'
+import { VISITOR_FEET_OFFSET, VISITOR_STOPS, buildVisitorRoute, measureRoute, sampleRoute, visitorDepthIndex } from '../systems/visitorRoutes.js'
 import {
   Bookshelf, Plant, Couch, RoundTable, MeetingTable,
   CoffeeMachine, WaterCooler, GateBooth, WallWindow, Whiteboard,
@@ -353,47 +354,49 @@ function ClockWidget({ x, y, r }) {
   return <Clock x={x} y={y} r={r} hour={hour} minute={minute} />
 }
 
-// ─── Boss character that walks through during boss-visit event ─────────
-function WalkingBoss() {
-  const [pos, setPos] = React.useState({ x: 100, y: 150 })
-  const rafRef = React.useRef(null)
+// ─── Event visitors: shared-navigation routes (src/systems/visitorRoutes.js) ─────────
+// Route built once per visit through the employees' navigation model (doors, corridors,
+// furniture colliders) and walked at constant speed. `pos` is the FEET point; the sprite is
+// drawn VISITOR_FEET_OFFSET above it so its shadow sits on the route. `onFeetY` lets the
+// parent depth-sort the visitor among employees.
+function useVisitorWalk(role, durationMs, onFeetY) {
+  const measured = React.useMemo(() => measureRoute(buildVisitorRoute(VISITOR_STOPS[role])), [role])
+  const [pos, setPos] = React.useState(() => sampleRoute(measured, 0))
+  // Start time lives in a ref: when the parent re-orders this keyed visitor for depth, React 19
+  // dev StrictMode re-runs effects on the move (same trap AgentCharacter documents); a local
+  // `start` would restart the walk from the entrance every time.
   const startRef = React.useRef(null)
-  const DURATION = 9000
-
-  // Boss walks: entrance → across main office → back out
-  const PATH = [
-    { x: 100, y: 150 }, // entrance
-    { x: 200, y: 280 }, // main office left
-    { x: 400, y: 290 }, // center
-    { x: 550, y: 280 }, // right
-    { x: 400, y: 350 }, // loop back
-    { x: 200, y: 300 }, // heading out
-    { x: 100, y: 150 }, // exit
-  ]
-
+  // Report the spawn point once, before first paint, so the first frame is already depth-sorted.
+  // Once only: a StrictMode move re-run must not snap the depth back to the spawn point.
+  const spawnReportedRef = React.useRef(false)
+  React.useLayoutEffect(() => {
+    if (spawnReportedRef.current) return
+    spawnReportedRef.current = true
+    onFeetY?.(sampleRoute(measured, 0).y)
+  }, [measured, onFeetY])
   React.useEffect(() => {
+    let raf = null
     const animate = (timestamp) => {
-      if (!startRef.current) startRef.current = timestamp
-      const t = Math.min(1, (timestamp - startRef.current) / DURATION)
-      // Interpolate along path
-      const totalSegs = PATH.length - 1
-      const segFloat = t * totalSegs
-      const seg = Math.min(Math.floor(segFloat), totalSegs - 1)
-      const segT = segFloat - seg
-      const from = PATH[seg]
-      const to = PATH[seg + 1]
-      setPos({
-        x: from.x + (to.x - from.x) * segT,
-        y: from.y + (to.y - from.y) * segT,
-      })
-      if (t < 1) rafRef.current = requestAnimationFrame(animate)
+      if (startRef.current === null) startRef.current = timestamp
+      const t = Math.min(1, (timestamp - startRef.current) / durationMs)
+      const p = sampleRoute(measured, t)
+      setPos(p)
+      onFeetY?.(p.y)
+      if (t < 1) raf = requestAnimationFrame(animate)
     }
-    rafRef.current = requestAnimationFrame(animate)
-    return () => cancelAnimationFrame(rafRef.current)
-  }, [])
+    raf = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(raf)
+  }, [measured, durationMs, onFeetY])
+  return pos
+}
+
+// ─── Boss character that walks through during boss-visit event ─────────
+function WalkingBoss({ onFeetY }) {
+  const pos = useVisitorWalk('boss', 9000, onFeetY)
+  const flip = pos.dx < 0 ? ' scale(-1, 1)' : ''
 
   return (
-    <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}>
+    <g transform={`translate(${pos.x}, ${pos.y - VISITOR_FEET_OFFSET.boss}) scale(1.35)${flip}`} data-visitor="boss" pointerEvents="none">
       {/* Boss shadow */}
       <ellipse cx={0} cy={12} rx={8} ry={3} fill="rgba(0,0,0,0.15)" />
       {/* Boss body — suit */}
@@ -419,38 +422,12 @@ function WalkingBoss() {
 }
 
 // ─── Dog that runs around during dog-visit event ──────────────────────
-function OfficeDog() {
-  const [pos, setPos] = React.useState({ x: 100, y: 150 })
-  const rafRef = React.useRef(null)
-  const startRef = React.useRef(null)
-  const DURATION = 18000
-
-  const PATH = [
-    { x: 100, y: 150 }, { x: 300, y: 290 }, { x: 500, y: 270 },
-    { x: 400, y: 380 }, { x: 175, y: 490 }, { x: 250, y: 470 },
-    { x: 175, y: 490 }, { x: 300, y: 350 }, { x: 100, y: 150 },
-  ]
-
-  React.useEffect(() => {
-    const animate = (timestamp) => {
-      if (!startRef.current) startRef.current = timestamp
-      const t = Math.min(1, (timestamp - startRef.current) / DURATION)
-      const totalSegs = PATH.length - 1
-      const segFloat = t * totalSegs
-      const seg = Math.min(Math.floor(segFloat), totalSegs - 1)
-      const segT = segFloat - seg
-      setPos({
-        x: PATH[seg].x + (PATH[seg + 1].x - PATH[seg].x) * segT,
-        y: PATH[seg].y + (PATH[seg + 1].y - PATH[seg].y) * segT,
-      })
-      if (t < 1) rafRef.current = requestAnimationFrame(animate)
-    }
-    rafRef.current = requestAnimationFrame(animate)
-    return () => cancelAnimationFrame(rafRef.current)
-  }, [])
+function OfficeDog({ onFeetY }) {
+  const pos = useVisitorWalk('dog', 18000, onFeetY)
+  const flip = pos.dx < 0 ? ' scale(-1, 1)' : ''
 
   return (
-    <g transform={`translate(${pos.x}, ${pos.y}) scale(1.35)`}>
+    <g transform={`translate(${pos.x}, ${pos.y - VISITOR_FEET_OFFSET.dog}) scale(1.35)${flip}`} data-visitor="dog" pointerEvents="none">
       <ellipse cx={0} cy={6} rx={5} ry={2} fill="rgba(0,0,0,0.1)" />
       {/* Body */}
       <ellipse cx={0} cy={0} rx={8} ry={5} fill="#C8964E" />
@@ -900,6 +877,19 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
     () => sortByY(Object.values(useOfficeStore.getState().agents)),
     [agentOrderSignature]
   )
+  // Event-visitor depth: index into agentList where the visitor is painted. Updated only when
+  // the visitor's feet cross an employee's feet line, so it re-renders a handful of times.
+  // Paint order of agentList is the source of truth; y values are read LIVE (agentList is memoised
+  // on order, so its objects' positions can be stale).
+  const agentIdsRef = React.useRef([])
+  agentIdsRef.current = agentList.map((a) => a.id)
+  const [visitorDepth, setVisitorDepth] = useState(0)
+  const reportVisitorFeet = useCallback((feetY) => {
+    const live = useOfficeStore.getState().agents
+    const ys = agentIdsRef.current.map((id) => (live[id]?.position || live[id]?.targetPosition || {}).y || 0)
+    const band = visitorDepthIndex(ys, feetY)
+    setVisitorDepth((prev) => (prev === band ? prev : band))
+  }, [])
   // Single memo derives all three id→count maps from the flat selector array.
   // The flat layout is [coffee×N, sticky×N, books×N] where N = DESK_IDS.length.
   const { coffeeCountMap, stickyCountMap, booksCountMap } = useMemo(() => {
@@ -1405,14 +1395,16 @@ export default function PixelOffice({ animationQuality = 'full', mode = 'full' }
           moves an agent. Renders nothing when no pair.) */}
       <PairLinkOverlay />
 
-      {/* ═══ AGENTS ═══ */}
-      {agentList.map((agent) => (
-        <AgentCharacter key={agent.id} agent={agent} />
-      ))}
-
-      {/* ═══ SPECIAL EVENT CHARACTERS ═══ */}
-      {activeEvent?.id === 'boss-visit' && <WalkingBoss />}
-      {activeEvent?.id === 'dog-visit' && <OfficeDog />}
+      {/* ═══ AGENTS + EVENT VISITORS ═══ One keyed list so a visitor is painted between the
+          employees above and below its feet (depth order) without remounting anyone. */}
+      {(() => {
+        const items = agentList.map((agent) => <AgentCharacter key={agent.id} agent={agent} />)
+        const visitor = activeEvent?.id === 'boss-visit' ? <WalkingBoss key="visitor-boss" onFeetY={reportVisitorFeet} />
+          : activeEvent?.id === 'dog-visit' ? <OfficeDog key="visitor-dog" onFeetY={reportVisitorFeet} />
+          : null
+        if (visitor) items.splice(Math.min(visitorDepth, items.length), 0, visitor)
+        return items
+      })()}
 
       {/* ═══ FLYING DOCUMENTS (handoff animation) ═══ */}
       <FlyingDocuments />

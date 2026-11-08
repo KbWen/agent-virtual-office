@@ -1,0 +1,42 @@
+{
+  "when": "2026-11-08T15:18:29.688Z",
+  "appearance": "classic",
+  "summary": {
+    "boss": {
+      "ok": true,
+      "frames": 523,
+      "offFloor": 0,
+      "onFurniture": 0,
+      "depthErrors": 0,
+      "samples": {
+        "offFloor": [],
+        "onFurniture": [],
+        "depth": []
+      },
+      "bbox": [
+        115,
+        115,
+        505,
+        293
+      ]
+    },
+    "dog": {
+      "ok": true,
+      "frames": 1031,
+      "offFloor": 0,
+      "onFurniture": 0,
+      "depthErrors": 0,
+      "samples": {
+        "offFloor": [],
+        "onFurniture": [],
+        "depth": []
+      },
+      "bbox": [
+        115,
+        115,
+        504,
+        520
+      ]
+    }
+  }
+}

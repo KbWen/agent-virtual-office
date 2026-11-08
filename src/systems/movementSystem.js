@@ -67,11 +67,17 @@ const OBSTACLE_RECTS = [
   // (server rack deliberately NOT an obstacle: flush against the right wall, so
   //  pushOutOfObstacle has no clean escape direction — and no waypoint places agents there)
   { x1: 590, y1: 488, x2: 612, y2: 508 },  // printer (researchLib waypoint (620,490) stays clear right)
+  // Lounge round coffee table (RoundTable x=175 y=490 r=22 + the scene paper star on top).
+  // Pre-fix it had no collider and WAYPOINTS.lounge sat ON it, so nap/stretch/check-phone
+  // agents and the dog-visit route stood on the table (2026-11-08 reproduction). It fits the
+  // lounge lane contract: below the north strip (y=430) and above the south lane (y=520).
+  { x1: 151, y1: 466, x2: 199, y2: 514 },
 ]
 
 // Main-office obstacles for path line-crossing checks.
 const MAIN_OFFICE_OBSTACLES = OBSTACLE_RECTS.slice(0, 9) // 7 desks + meeting-side whiteboard
-const LOUNGE_OBSTACLES = OBSTACLE_RECTS.slice(9, 12) // WC, bookshelves, coffee machine
+const LOUNGE_TABLE = OBSTACLE_RECTS[OBSTACLE_RECTS.length - 1]
+const LOUNGE_OBSTACLES = [...OBSTACLE_RECTS.slice(9, 12), LOUNGE_TABLE] // WC, bookshelves, coffee machine, coffee table
 // Research-zone furniture (3 bookshelves + printer), selected by GEOMETRY (inside the
 // research floor band) so the list survives OBSTACLE_RECTS reordering. First soak-gate CI
 // run (2026-06-10) caught designer resting INSIDE bookshelf B: research had no in-zone
@@ -148,7 +154,7 @@ export const WAYPOINTS = {
   coffeeArea:   { x: 80,  y: 475 },
   waterCooler:  { x: 130, y: 475 },
   whiteboard:   { x: 560, y: 350 },  // below whiteboard, not on it
-  lounge:       { x: 180, y: 490 },
+  lounge:       { x: 228, y: 488 },  // beside the coffee table (was 180,490 = ON the table)
   researchLib:  { x: 620, y: 490 },
   phone:        { x: 755, y: 480 },
   toilet:       { x: 380, y: 510 },  // below WC area

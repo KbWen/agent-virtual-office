@@ -1,0 +1,42 @@
+{
+  "when": "2026-11-08T15:17:40.796Z",
+  "appearance": "pixel",
+  "summary": {
+    "boss": {
+      "ok": true,
+      "frames": 585,
+      "offFloor": 0,
+      "onFurniture": 0,
+      "depthErrors": 0,
+      "samples": {
+        "offFloor": [],
+        "onFurniture": [],
+        "depth": []
+      },
+      "bbox": [
+        115,
+        115,
+        505,
+        290
+      ]
+    },
+    "dog": {
+      "ok": true,
+      "frames": 1025,
+      "offFloor": 0,
+      "onFurniture": 0,
+      "depthErrors": 0,
+      "samples": {
+        "offFloor": [],
+        "onFurniture": [],
+        "depth": []
+      },
+      "bbox": [
+        115,
+        115,
+        505,
+        521
+      ]
+    }
+  }
+}

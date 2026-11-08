@@ -45,7 +45,7 @@ process.on('exit', cleanup)
 const check = (name, ok, detail) => { results.push({ name, ok: !!ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ' — ' + JSON.stringify(detail) : ''}`) }
 
 server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--port', String(PORT), '--strictPort'], {
-  env: { ...process.env, OFFICE_STATUS_DIR: statusDir }, stdio: 'ignore',
+  env: { ...process.env, OFFICE_STATUS_DIR: statusDir, OFFICE_DISABLE_FILE_WATCHER: '1' }, stdio: 'ignore',
 })
 const base = `http://localhost:${PORT}`
 for (let up = false, end = Date.now() + 40000; !up;) {
