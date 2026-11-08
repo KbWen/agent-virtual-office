@@ -77,6 +77,13 @@ repository record of AVO-160 (custom sprite-asset pipeline); AVO-124 cosmetics s
 - Phase 3: one evidence-selected gait cycle for one high-frequency role and one complete
   action sequence, with explicit static fallbacks for everything else. R3 final review.
 
+## Phase 3 selection evidence (2026-11-08)
+
+90 s live sample (4 working + 4 idle agents): 73% of walking samples face left/right; res walks
+60% of the time, arch 34%. First gait request therefore = right-facing 4-frame walk for res,
+then arch (external brief `phased-handoff/GEMINI-GAIT-BATCH-1.md`). Desk-work actions (≈63% of
+stationary time) wait for the owner's R1 decision on seated orientation.
+
 ## Known shared-world items (tracked, not fixed here)
 
 Historical boss/dog visitor routes crossing desks and lounge waypoint/collider mismatch
