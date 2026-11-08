@@ -80,10 +80,12 @@ repository record of AVO-160 (custom sprite-asset pipeline); AVO-124 cosmetics s
 ## Seated at desk (owner R1 decision 2026-11-08: option C)
 
 Shared by both appearances, presentation only. An agent is drawn seated when it rests exactly on
-its own desk seat (desk roles only; not walking/moving, not in a group event). The body is drawn
+its own desk seat (desk roles only; not walking/moving, not in a group event) AND its live status is
+working / planning / (derived) thinking — owner follow-up 2026-11-08: mostly-backs felt distant, so
+idle, done, blocked and awaiting-approval agents stand and face the viewer. The body is drawn
 SEAT_SHIFT (8 local units) lower and clipped at the chair's top edge so the chair painted beneath
 shows instead of legs; back view (Classic: procedural back of head in the role's hair colours).
-Blocked / awaiting-approval agents stand and face the viewer. Pixel sits only for roles whose
+Pixel sits only for roles whose
 reviewed back-view asset is listed in the manifest (`views.back`); until then the front master
 stands, as in Phase 1. World feet, routes, hit target and overlays are unchanged.
 

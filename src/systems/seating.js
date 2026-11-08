@@ -13,8 +13,10 @@ export const DESK_ROLES = new Set(['pm', 'arch', 'qa', 'res', 'dev', 'ops', 'des
 export const SEAT_SHIFT = 8
 export const SEAT_CLIP_Y = -2.5
 
-// Waiting on the human → stand up and face the viewer instead of showing a back.
-const FACE_VIEWER_STATUSES = new Set(['blocked', 'awaiting-approval'])
+// Back view only while REALLY working (owner 2026-11-08: mostly-backs felt distant). Idle, done,
+// blocked and awaiting-approval stand and face the viewer. `thinking` is the derived quiet-working
+// state (idle-gap inference), so it still counts as working.
+const WORKING_STATUSES = new Set(['working', 'planning', 'thinking'])
 const AT_HOME_EPSILON = 2
 
 export function baseRoleOf(id) {
@@ -23,7 +25,7 @@ export function baseRoleOf(id) {
 
 export function isSeatedAtDesk({ id, position, isWalking = false, isMoving = false, inGroupEvent = false, status = 'idle' }) {
   if (isWalking || isMoving || inGroupEvent) return false
-  if (FACE_VIEWER_STATUSES.has(status)) return false
+  if (!WORKING_STATUSES.has(status)) return false
   const role = baseRoleOf(id)
   if (!DESK_ROLES.has(role)) return false
   const home = HOME_POSITIONS[id] || HOME_POSITIONS[role]

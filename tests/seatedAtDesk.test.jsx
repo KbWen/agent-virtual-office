@@ -11,28 +11,29 @@ const home = (id) => ({ ...HOME_POSITIONS[id] })
 
 describe('isSeatedAtDesk (R1 option C)', () => {
   it('seats every desk role resting exactly on its home seat', () => {
-    for (const id of DESK_ROLES) expect(isSeatedAtDesk({ id, position: home(id) }), id).toBe(true)
+    for (const id of DESK_ROLES) expect(isSeatedAtDesk({ id, position: home(id), status: 'working' }), id).toBe(true)
   })
   it('session-prefixed ids sit at their base role desk', () => {
-    expect(isSeatedAtDesk({ id: 'feat-x~dev', position: home('dev') })).toBe(true)
+    expect(isSeatedAtDesk({ id: 'feat-x~dev', position: home('dev'), status: 'working' })).toBe(true)
   })
   it('never seats gate, lightweight helpers or unknown roles', () => {
     for (const id of ['gate', 'planner', 'worker', 'checker', 'mystery']) {
-      expect(isSeatedAtDesk({ id, position: HOME_POSITIONS[id] || { x: 0, y: 0 } }), id).toBe(false)
+      expect(isSeatedAtDesk({ id, position: HOME_POSITIONS[id] || { x: 0, y: 0 }, status: 'working' }), id).toBe(false)
     }
   })
   it('stands while walking, moving, in a group event, or off the exact seat', () => {
-    expect(isSeatedAtDesk({ id: 'pm', position: home('pm'), isWalking: true })).toBe(false)
-    expect(isSeatedAtDesk({ id: 'pm', position: home('pm'), isMoving: true })).toBe(false)
-    expect(isSeatedAtDesk({ id: 'pm', position: home('pm'), inGroupEvent: true })).toBe(false)
-    expect(isSeatedAtDesk({ id: 'pm', position: { x: home('pm').x + 6, y: home('pm').y } })).toBe(false)
+    expect(isSeatedAtDesk({ id: 'pm', position: home('pm'), status: 'working', isWalking: true })).toBe(false)
+    expect(isSeatedAtDesk({ id: 'pm', position: home('pm'), status: 'working', isMoving: true })).toBe(false)
+    expect(isSeatedAtDesk({ id: 'pm', position: home('pm'), status: 'working', inGroupEvent: true })).toBe(false)
+    expect(isSeatedAtDesk({ id: 'pm', position: { x: home('pm').x + 6, y: home('pm').y }, status: 'working' })).toBe(false)
     expect(isSeatedAtDesk({ id: 'pm', position: null })).toBe(false)
   })
-  it('stands and faces the viewer while waiting on the human', () => {
-    expect(isSeatedAtDesk({ id: 'pm', position: home('pm'), status: 'blocked' })).toBe(false)
-    expect(isSeatedAtDesk({ id: 'pm', position: home('pm'), status: 'awaiting-approval' })).toBe(false)
-    for (const status of ['idle', 'working', 'planning', 'done']) {
+  it('sits with its back to the viewer only while really working', () => {
+    for (const status of ['working', 'planning', 'thinking']) {
       expect(isSeatedAtDesk({ id: 'pm', position: home('pm'), status }), status).toBe(true)
+    }
+    for (const status of ['idle', 'done', 'blocked', 'awaiting-approval', undefined]) {
+      expect(isSeatedAtDesk({ id: 'pm', position: home('pm'), status }), String(status)).toBe(false)
     }
   })
 })
