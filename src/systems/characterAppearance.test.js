@@ -4,10 +4,11 @@ import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import {
   APPEARANCE_STORAGE_KEY, PIXEL_V1_PACK, PIXEL_LOGICAL_SIZE, PIXEL_DISPLAY_SCALE,
-  createAppearanceStore, normalizeAppearance, pixelAssetUrl, pixelBodyPlacement, resolvePixelRole,
+  createAppearanceStore, normalizeAppearance, pixelAssetUrl, requiredPixelUrls, pixelBodyPlacement, resolvePixelRole,
 } from './characterAppearance.js'
 
 const ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
+const N = requiredPixelUrls().length // 8 front masters + reviewed views
 
 function memStorage(initial = {}) {
   const m = new Map(Object.entries(initial))
@@ -29,6 +30,11 @@ describe('pixel-v1 pack manifest', () => {
       expect(bytes.subarray(1, 4).toString('latin1')).toBe('PNG')
       expect(bytes.readUInt32BE(16)).toBe(512) // IHDR width
       expect(bytes.readUInt32BE(20)).toBe(512) // IHDR height
+      const back = PIXEL_V1_PACK.roles[role].views?.back
+      if (back) {
+        const b = readFileSync(resolve(__dirname, '../../public/assets/characters/pixel-v1', back.file))
+        expect(createHash('sha256').update(b).digest('hex'), back.file).toBe(back.sha256)
+      }
     }
   })
 })
@@ -78,19 +84,19 @@ describe('appearance store (atomic pack switch)', () => {
     expect(s.getSnapshot()).toMatchObject({ requested: 'classic', active: 'classic', status: 'idle' })
   })
 
-  it('swaps to pixel only after ALL eight images resolve', async () => {
+  it('swaps to pixel only after ALL required images resolve', async () => {
     const pending = new Map()
     const loadImage = vi.fn((url) => { const d = deferred(); pending.set(url, d); return d.p })
     const storage = memStorage()
     const s = createAppearanceStore({ storage, loadImage })
     const done = s.request('pixel')
-    expect(loadImage).toHaveBeenCalledTimes(8)
+    expect(loadImage).toHaveBeenCalledTimes(N)
     expect(s.getSnapshot()).toMatchObject({ requested: 'pixel', active: 'classic', status: 'loading' })
     const urls = [...pending.keys()]
-    urls.slice(0, 7).forEach((u) => pending.get(u).res())
+    urls.slice(0, N - 1).forEach((u) => pending.get(u).res())
     await flush()
-    expect(s.getSnapshot().active).toBe('classic') // 7/8 is never shown
-    pending.get(urls[7]).res()
+    expect(s.getSnapshot().active).toBe('classic') // N-1 of N is never shown
+    pending.get(urls[N - 1]).res()
     await done
     expect(s.getSnapshot()).toMatchObject({ active: 'pixel', status: 'ready' })
     expect(storage.getItem(APPEARANCE_STORAGE_KEY)).toBe('pixel')
@@ -121,7 +127,7 @@ describe('appearance store (atomic pack switch)', () => {
     await s.request('pixel')
     await s.request('classic')
     await s.request('pixel')
-    expect(loadImage).toHaveBeenCalledTimes(8)
+    expect(loadImage).toHaveBeenCalledTimes(N)
     expect(s.getSnapshot().active).toBe('pixel')
   })
 
@@ -132,6 +138,13 @@ describe('appearance store (atomic pack switch)', () => {
     expect(s.getSnapshot()).toMatchObject({ requested: 'pixel', active: 'classic', status: 'loading' })
     d.res(); await p
     expect(s.getSnapshot().active).toBe('pixel')
+  })
+
+  it('preload covers every front master and every reviewed view exactly once', () => {
+    const urls = requiredPixelUrls()
+    expect(new Set(urls).size).toBe(urls.length)
+    expect(urls.filter(u => !u.includes('-back.png'))).toHaveLength(8)
+    expect(urls.filter(u => u.includes('-back.png'))).toHaveLength(8)
   })
 
   it('urls are same-origin relative paths under the pack folder', () => {
@@ -156,7 +169,7 @@ describe('appearance store (atomic pack switch)', () => {
     fail = false
     await s.request('pixel')
     expect(s.getSnapshot()).toMatchObject({ active: 'pixel', status: 'ready', error: null })
-    expect(s.retainedCount()).toBe(8)
+    expect(s.retainedCount()).toBe(N)
   })
 
   it('init is a no-op when the stored preference is classic', async () => {

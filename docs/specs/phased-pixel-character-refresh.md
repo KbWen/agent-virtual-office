@@ -89,6 +89,11 @@ Pixel sits only for roles whose
 reviewed back-view asset is listed in the manifest (`views.back`); until then the front master
 stands, as in Phase 1. World feet, routes, hit target and overlays are unchanged.
 
+Back views imported 2026-11-08 at the owner's request (first Phase 2 increment): the 2026-11-07
+idle-up candidates for all 8 roles, byte-for-byte, after review (see pixel-v1/PROVENANCE.md and
+docs/reviews/2026-11-08-pixel-phase1/back-view-import-review.jpg). Used only seated, where the
+known below-sole residue row is clipped. All front + view files are preloaded before the atomic swap.
+
 ## Phase 3 selection evidence (2026-11-08)
 
 90 s live sample (4 working + 4 idle agents): 73% of walking samples face left/right; res walks

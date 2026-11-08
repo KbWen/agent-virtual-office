@@ -143,7 +143,7 @@ async function shoot(page, name) {
   check('Pixel becomes active after full preload', await waitActive(page, 'pixel'))
   await page.waitForTimeout(500)
   const pix = await snapshot(page)
-  check('Pixel renders 8 raster bodies', pix.bodies === 8, { bodies: pix.bodies })
+  check("Pixel renders 8 raster bodies", pix.bodies === 8, { bodies: pix.bodies })
   check('no classic procedural body remains under Pixel', await page.evaluate(() => [...document.querySelectorAll('[data-agent-id]')].every(n => n.querySelector('[data-body="pixel"]') && !n.querySelector('[data-idle-wave]'))))
   check('actor transforms unchanged by toggle', JSON.stringify(pix.actors) === JSON.stringify(before.actors))
   check('store positions/targets/facing unchanged by toggle', JSON.stringify(pix.pos) === JSON.stringify(before.pos))

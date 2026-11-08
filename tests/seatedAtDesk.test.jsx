@@ -69,7 +69,11 @@ describe('seated frame rendering', () => {
     const html = svg(<CharacterBody appearance="classic" charId="pm" classic={<g data-body="classic-marker" />} />)
     expect(html).not.toContain('data-seated')
   })
-  it('no Pixel role has a back view until a reviewed asset is added to the manifest', () => {
-    for (const role of Object.keys(PIXEL_V1_PACK.roles)) expect(pixelHasBackView(role), role).toBe(false)
+  it('every Pixel role has a reviewed back view; the pixel body switches file and pivot when seated', () => {
+    for (const role of Object.keys(PIXEL_V1_PACK.roles)) expect(pixelHasBackView(role), role).toBe(true)
+    const html = svg(<CharacterBody appearance="pixel" charId="dev" seated seatClipId="seat-clip-dev" />)
+    expect(html).toContain('data-pixel-view="back"')
+    expect(html).toMatch(/pixel-v1\/dev-back\.png/)
+    expect(html).toContain('x="-31.5"') // dev back pivot x 36 * 7/8
   })
 })

@@ -17,19 +17,29 @@ const SOURCE_SIZE = 512
 const BASE_URL = `${(typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/'}assets/characters/pixel-v1/`
 
 // pivot = measured sole contact in logical px (see public/assets/characters/pixel-v1/PROVENANCE.md).
+// views.back = owner-requested import (2026-11-08) of the 2026-11-07 idle-up candidates, used ONLY for
+// the seated-at-desk pose (everything below the waist is clipped behind the chair).
 // Dev's canvas is off-centre (twin tails) and her soles end one row higher.
 export const PIXEL_V1_PACK = Object.freeze({
   version: 'pixel-v1',
   sourceSize: SOURCE_SIZE,
   roles: Object.freeze({
-    pm:       { file: 'pm.png',       pivot: { x: 32, y: 56 }, sha256: '64b3b93551b2c6064877fe29f51de984301860c807a99e95372150bfa303d245' },
-    arch:     { file: 'arch.png',     pivot: { x: 32, y: 56 }, sha256: '4dbbc0792212b9a9e7921a965c6a9b38c4a429d350e3ac566be20c9c14c7442a' },
-    dev:      { file: 'dev.png',      pivot: { x: 36, y: 55 }, sha256: 'da81bee1bd1cb480783c878236458f6ded0d8ce88b9b8f81041c9c2cf1d4bd31' },
-    qa:       { file: 'qa.png',       pivot: { x: 32, y: 56 }, sha256: 'd5f64afbf0a3778e1fe99fd5114fd409bcc60447e0de5f59a995a454f4f854ed' },
-    ops:      { file: 'ops.png',      pivot: { x: 32, y: 56 }, sha256: '4916b663dad415068dfeba8b1ec07b634883b081e37693ce09c1cc7fd17f8db0' },
-    res:      { file: 'res.png',      pivot: { x: 32, y: 56 }, sha256: 'd638fee5040d840b32097e97e647052cb397e9ea0def93b1b861dca77e68a6f7' },
-    gate:     { file: 'gate.png',     pivot: { x: 32, y: 56 }, sha256: '8692bcceee24a97423808a49c1a0bb5f6b31383ce87d9555b2b97b8889832dd8' },
-    designer: { file: 'designer.png', pivot: { x: 32.5, y: 56 }, sha256: '61a665352ce563ba3a8a6de6cd6db5b6adc71be1873b93f0648059f200ed679c' },
+    pm:       { file: 'pm.png',       pivot: { x: 32, y: 56 }, sha256: '64b3b93551b2c6064877fe29f51de984301860c807a99e95372150bfa303d245',
+      views: { back: { file: 'pm-back.png', pivot: { x: 31.5, y: 57 }, sha256: '04c603a98548d606be3991c20148c47a2df96ffad2a25ce12fc5711bbd77763d' } } },
+    arch:     { file: 'arch.png',     pivot: { x: 32, y: 56 }, sha256: '4dbbc0792212b9a9e7921a965c6a9b38c4a429d350e3ac566be20c9c14c7442a',
+      views: { back: { file: 'arch-back.png', pivot: { x: 31, y: 56 }, sha256: '5cf00fcf0ddeba3d7c7dd055abb204e17367371f4c916472cd656c3912053501' } } },
+    dev:      { file: 'dev.png',      pivot: { x: 36, y: 55 }, sha256: 'da81bee1bd1cb480783c878236458f6ded0d8ce88b9b8f81041c9c2cf1d4bd31',
+      views: { back: { file: 'dev-back.png', pivot: { x: 36, y: 57 }, sha256: 'e2a4052ece046595ae677a06657aacb9a97710cb0de947d5b73724083ee72079' } } },
+    qa:       { file: 'qa.png',       pivot: { x: 32, y: 56 }, sha256: 'd5f64afbf0a3778e1fe99fd5114fd409bcc60447e0de5f59a995a454f4f854ed',
+      views: { back: { file: 'qa-back.png', pivot: { x: 32, y: 56 }, sha256: 'ff4c6de508b008565ee7a1e01a7ddaca4b6387ff481af95569119cae715f6e95' } } },
+    ops:      { file: 'ops.png',      pivot: { x: 32, y: 56 }, sha256: '4916b663dad415068dfeba8b1ec07b634883b081e37693ce09c1cc7fd17f8db0',
+      views: { back: { file: 'ops-back.png', pivot: { x: 32, y: 56 }, sha256: '2952b81ce35d8112004e5d2b90baa25b49698a831203bb366d9c3bfea8669ed5' } } },
+    res:      { file: 'res.png',      pivot: { x: 32, y: 56 }, sha256: 'd638fee5040d840b32097e97e647052cb397e9ea0def93b1b861dca77e68a6f7',
+      views: { back: { file: 'res-back.png', pivot: { x: 32, y: 57 }, sha256: '17150b272363f8ac4b13c8edd87a52628b227f9fd4d055fe6aa69eef646c0c61' } } },
+    gate:     { file: 'gate.png',     pivot: { x: 32, y: 56 }, sha256: '8692bcceee24a97423808a49c1a0bb5f6b31383ce87d9555b2b97b8889832dd8',
+      views: { back: { file: 'gate-back.png', pivot: { x: 31.5, y: 56 }, sha256: '339999b385020d8cab781edcaa6657d4a6079186277a45ad322093af2e543180' } } },
+    designer: { file: 'designer.png', pivot: { x: 32.5, y: 56 }, sha256: '61a665352ce563ba3a8a6de6cd6db5b6adc71be1873b93f0648059f200ed679c',
+      views: { back: { file: 'designer-back.png', pivot: { x: 32, y: 57 }, sha256: '96728530404986b37b9f3707385644770de9dfb0ef9818564f3b7babf2107784' } } },
   }),
   // Lightweight-mode roles reuse the identity the classic palette already maps them to.
   aliases: Object.freeze({ planner: 'pm', worker: 'dev', checker: 'qa' }),
@@ -46,6 +56,17 @@ function viewEntry(role, view, pack) {
 
 export function pixelHasBackView(role, pack = PIXEL_V1_PACK) {
   return !!pack.roles[role]?.views?.back
+}
+
+// Every file the pack can render (front masters + reviewed views): all are preloaded before the
+// atomic swap so no pose pops in late.
+export function requiredPixelUrls(pack = PIXEL_V1_PACK, base = BASE_URL) {
+  const urls = []
+  for (const [role, r] of Object.entries(pack.roles)) {
+    urls.push(pixelAssetUrl(role, pack, base))
+    for (const view of Object.keys(r.views || {})) urls.push(pixelAssetUrl(role, pack, base, view))
+  }
+  return urls
 }
 
 export function pixelAssetUrl(role, pack = PIXEL_V1_PACK, base = BASE_URL, view = 'front') {
@@ -115,8 +136,7 @@ export function createAppearanceStore({ storage, loadImage = loadImageInBrowser,
   }
 
   function preloadPixel(myToken) {
-    const roles = Object.keys(pack.roles)
-    return Promise.all(roles.map((role) => loadImage(pixelAssetUrl(role, pack))))
+    return Promise.all(requiredPixelUrls(pack).map((url) => loadImage(url)))
       .then((images) => {
         if (myToken !== token) return
         retainedImages = images
