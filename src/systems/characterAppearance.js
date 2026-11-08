@@ -91,6 +91,9 @@ export function createAppearanceStore({ storage, loadImage = loadImageInBrowser,
   let state = { requested, active: 'classic', status: 'idle', error: null }
   let token = 0
   let pixelReady = false
+  // Decoded images stay referenced for the page lifetime so the browser keeps them in its image
+  // cache and the swapped-in <image> elements do not have to refetch/revalidate (no blank flash).
+  let retainedImages = []
   const listeners = new Set()
   const emit = (patch) => {
     state = { ...state, ...patch }
@@ -103,8 +106,9 @@ export function createAppearanceStore({ storage, loadImage = loadImageInBrowser,
   function preloadPixel(myToken) {
     const roles = Object.keys(pack.roles)
     return Promise.all(roles.map((role) => loadImage(pixelAssetUrl(role, pack))))
-      .then(() => {
+      .then((images) => {
         if (myToken !== token) return
+        retainedImages = images
         pixelReady = true
         emit({ active: 'pixel', status: 'ready', error: null })
       }, (err) => {
@@ -132,6 +136,7 @@ export function createAppearanceStore({ storage, loadImage = loadImageInBrowser,
 
   return {
     getSnapshot: () => state,
+    retainedCount: () => retainedImages.length,
     subscribe(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)

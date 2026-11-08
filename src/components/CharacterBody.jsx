@@ -11,10 +11,11 @@ export function useOfficeAppearance() {
 // Classic → the existing procedural sprite (passed in as `classic`).
 // Pixel   → the role's front master for every facing (Phase 1: no mirroring, no pasted
 //           classic arms/face, unsupported expressions stay neutral).
-export const CharacterBody = React.memo(function CharacterBody({ appearance, charId, isMoving = false, reducedMotion = false, classic }) {
+// (Not memoised: `classic` is a fresh element every parent render; PixelBody itself is memoised.)
+export function CharacterBody({ appearance, charId, isMoving = false, reducedMotion = false, classic }) {
   if (appearance !== 'pixel') return classic
   return <PixelBody charId={charId} isMoving={isMoving} reducedMotion={reducedMotion} />
-})
+}
 
 export const PixelBody = React.memo(function PixelBody({ charId, isMoving = false, reducedMotion = false }) {
   const role = resolvePixelRole(charId)

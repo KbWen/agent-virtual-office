@@ -138,4 +138,32 @@ describe('appearance store (atomic pack switch)', () => {
     expect(pixelAssetUrl('dev')).toMatch(/\/assets\/characters\/pixel-v1\/dev\.png$/)
     expect(pixelAssetUrl('dev')).not.toMatch(/^https?:/)
   })
+
+  it('survives storage that throws on read and write (session-only)', async () => {
+    const storage = { getItem: () => { throw new Error('denied') }, setItem: () => { throw new Error('denied') } }
+    const s = createAppearanceStore({ storage, loadImage: () => Promise.resolve() })
+    expect(s.getSnapshot().requested).toBe('classic')
+    await s.request('pixel')
+    expect(s.getSnapshot().active).toBe('pixel')
+  })
+
+  it('retrying after a failure can succeed and keeps the decoded images referenced', async () => {
+    let fail = true
+    const loadImage = vi.fn(() => (fail ? Promise.reject(new Error('offline')) : Promise.resolve({})))
+    const s = createAppearanceStore({ storage: memStorage(), loadImage, warn: () => {} })
+    await s.request('pixel')
+    expect(s.getSnapshot()).toMatchObject({ active: 'classic', status: 'error' })
+    fail = false
+    await s.request('pixel')
+    expect(s.getSnapshot()).toMatchObject({ active: 'pixel', status: 'ready', error: null })
+    expect(s.retainedCount()).toBe(8)
+  })
+
+  it('init is a no-op when the stored preference is classic', async () => {
+    const loadImage = vi.fn()
+    const s = createAppearanceStore({ storage: memStorage({ [APPEARANCE_STORAGE_KEY]: 'classic' }), loadImage })
+    await s.init()
+    expect(loadImage).not.toHaveBeenCalled()
+    expect(s.getSnapshot()).toMatchObject({ active: 'classic', status: 'idle' })
+  })
 })

@@ -59,7 +59,8 @@ function AppearanceSwitch() {
       className="flex rounded border border-gray-300 dark:border-gray-600 overflow-hidden">
       {opt('classic', t('settings.appearanceClassic', 'Classic'))}
       {opt('pixel', t('settings.appearancePixel', 'Pixel'))}
-      {failed && <span className="sr-only" role="status">{title}</span>}
+      {/* Always mounted so assistive tech announces the text change on failure. */}
+      <span className="sr-only" role="status" aria-live="polite">{failed ? title : ''}</span>
     </div>
   )
 }
@@ -474,7 +475,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
         {/* AVO-129 + AVO-127: the ✓/✗ KPI and 🪙 token meter live on-demand in the info popover
             (opened from the ⚙ menu). AVO-130: language, list-view, run-workflow, help, and the
             platform label are all demoted off the resting bar into the ⚙ menu / info popover, so
-            the persistent cluster is just the health dot + pause + gear. */}
+            the persistent cluster is the health dot + Classic|Pixel switch + pause + gear. */}
 
         <div className="flex items-center gap-1.5 shrink-0">
           <AppearanceSwitch />
