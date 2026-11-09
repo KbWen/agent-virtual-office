@@ -115,6 +115,18 @@ describe('Pixel signature action poses', () => {
     const classic = svg(<CharacterBody appearance="classic" charId="pm" seated behavior="typing" status="working" classic={<g />} />)
     expect(classic).toContain('data-seated')
   })
+  it('a seated body is covered by a chair back drawn in front of it, never left cut off', () => {
+    const back = svg(<CharacterBody appearance="pixel" charId="pm" seated behavior="reading-screen" status="working" />)
+    expect(back).toContain('data-chair-back="pixel"')
+    // chair back comes after the clipped body in paint order (in front of it)
+    expect(back.indexOf('data-chair-back')).toBeGreaterThan(back.indexOf('data-pixel-view="back"'))
+    const classic = svg(<CharacterBody appearance="classic" charId="pm" seated status="working" classic={<g data-x="1" />} />)
+    expect(classic).toContain('data-chair-back="classic"')
+    expect(classic.indexOf('data-chair-back')).toBeGreaterThan(classic.indexOf('data-x'))
+    // standing (action pose at the desk, or not seated) has no chair back over the body
+    expect(svg(<CharacterBody appearance="pixel" charId="pm" seated behavior="typing" status="working" />)).not.toContain('data-chair-back')
+    expect(svg(<CharacterBody appearance="pixel" charId="pm" />)).not.toContain('data-chair-back')
+  })
   it('renders the action file with its own pivot', () => {
     const html = svg(<CharacterBody appearance="pixel" charId="arch" behavior="whiteboard" status="working" />)
     expect(html).toContain('data-pixel-view="pointing-board"')
