@@ -6,15 +6,15 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
 [![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev)
 
-**Your coding agents have a little office now.**
+**A little office for your coding agents.**
 
-![Agent Virtual Office — local office scene with all eight characters idle at capture](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.jpg)
+See what they're up to while you get on with your own work.
 
-<sub><i>Captured with the local session connected and all eight characters idle.</i></sub>
+![A pixel-art office with some agents working at their desks and others standing nearby](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/pixel/office-pixel-en.jpg)
 
-Connect Claude Code, Codex, Gemini CLI, or CI to see who’s working, blocked, or idle in a pixel office. When you need a break, squeeze the paper star or pick up the postcard.
+<sub><i>Pixel look with sample statuses.</i></sub>
 
-[Quick Start](#quick-start) · [Meet the Team](#meet-the-team) · [FAQ](#faq) · [中文版](README.zh-TW.md)
+[**Start the office**](#quick-start) · [Meet the Team](#meet-the-team) · [FAQ](#faq) · [中文版](README.zh-TW.md)
 
 </div>
 
@@ -22,30 +22,18 @@ Connect Claude Code, Codex, Gemini CLI, or CI to see who’s working, blocked, o
 
 ## ✨ A look around
 
-<table>
-<tr>
-<td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/marketing/paper-star.gif" alt="Animated demonstration of a long press on the paper star, then its spring back" /><br>
-<sub>Hold the paper star, then let it spring back.</sub>
-</td>
-<td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.gif" alt="Animated: poking a character makes it bob and show its current status" /><br>
-<sub><b>Poke a character</b> to see what it's doing. It stays in place.</sub>
-</td>
-</tr>
-<tr>
-<td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/marketing/postcard.gif" alt="Animated demonstration of opening the postcard, choosing the Cat sticker, and closing it" /><br>
-<sub><b>Office postcard.</b> Open it and choose a sticker.</sub>
-</td>
-<td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.jpg" alt="The office with Traditional Chinese labels" /><br>
-<sub><b>繁體中文 built in.</b> Switch languages in the app.</sub>
-</td>
-</tr>
-</table>
+Pick **Classic** (default) or the hand-drawn **Pixel** look in the footer. Your browser remembers
+your pick, and the crew carries on.
 
-[Posters & GIF files](docs/assets/marketing/README.md)
+| Change the look | Poke to peek |
+| :---: | :---: |
+| ![Classic and Pixel alternate while the crew stays in place](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/pixel/appearance-switch.gif) | ![A character bobs and shows its status when poked](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.gif) |
+| **Squeeze the paper star** | **Send an office postcard** |
+| ![A long press on the paper star, then its spring back](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/marketing/paper-star.gif) | ![Opening the postcard, choosing the Cat sticker, and closing it](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/marketing/postcard.gif) |
+| **On the job? They sit down** | **繁體中文 built in** |
+| ![Close-up: PM types facing you; the Architect works at the desk behind the chair back](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/pixel/desk-closeup.jpg) | ![The Classic look at night with Traditional Chinese labels](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.jpg) |
+
+[Side-by-side comparison](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/pixel/classic-vs-pixel.jpg) · [Posters & GIF files](docs/assets/marketing/README.md)
 
 ## Meet the Team
 
@@ -62,25 +50,21 @@ Connect Claude Code, Codex, Gemini CLI, or CI to see who’s working, blocked, o
 
 ## Office Life
 
-Tool reports drive the working and blocked indicators. Timed office scenes add background chatter and slow down while work is busy; some scenes also respond to session events. The colored ring and work symbol show status; speech bubbles are character chatter.
+Status rings follow tool reports. At their desks, working agents sit facing their screens. In Pixel,
+watch PM type or QA reach for a magnifier when they're on the job.
 
-- **Tea Break** — someone slips out for coffee
-- **Stand-up** — PM gathers the room at the whiteboard
-- **Food's Here** — the paper bag wins
-- **Review Beef** — Dev and QA disagree about a bug
-- **Eureka** — Architect makes a run for the whiteboard
-
-The office fills the width of its window, from an IDE sidebar to a full window. Hit **☰** for a roster of working and blocked characters plus recent activity.
+Between tasks, there's coffee, chatter, and the occasional whiteboard huddle. Open **☰** to see the
+roster and recent activity, even in an IDE sidebar.
 
 ## Scene interactions
 
-- **Characters:** Click to see current activity; `Space` pokes again, and right-click pokes without opening the inspector.
-- **Paper star:** On the lounge table. Short, medium, and long presses each get a different reaction.
-- **Postcard:** Pick it up from the notice board, add an optional Plant or Cat sticker, then choose **Download PNG**. Stickers apply to the postcard only.
+- **Characters** — Click to inspect, press `Space` to poke again, or right-click for a quick poke.
+- **Paper star** — Hold the star on the lounge table, then watch it spring back.
+- **Postcard** — Pick it up from the notice board, add a sticker if you like, and download a PNG.
 
 Pet, plant, and idle-wave behaviors are optional, off by default, and can be enabled in Settings.
 
-→ More on the classifier, movement, and behavior engine: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+[How the office works](docs/ARCHITECTURE.md)
 
 ---
 

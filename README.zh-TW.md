@@ -6,15 +6,15 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
 [![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev)
 
-**AI 忙著寫程式，小辦公室也開張了。**
+**你的 coding agents 有間小辦公室了。**
 
-![Agent Virtual Office — 本機辦公室畫面，擷取時八位角色都在閒置](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot-zh-TW.jpg)
+忙自己的事時，也能順手看看大家的動靜。
 
-<sub><i>擷取時本機工作階段已連線，八位角色都在閒置。</i></sub>
+![像素畫風的辦公室，有些角色坐在桌前工作，其他人站在一旁](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/pixel/office-pixel-zh-TW.jpg)
 
-接上 Claude Code、Codex、Gemini CLI 或 CI，就能在像素辦公室裡看見工作中、卡關與閒置。休息時，捏捏紙星星，或把明信片拿下來看看。
+<sub><i>像素畫風實拍，畫面為示範狀態。</i></sub>
 
-[快速開始](#快速開始) · [他們在幹嘛](#他們在幹嘛) · [常見問答](#常見問答) · [English](README.md)
+[**啟動辦公室**](#快速開始) · [他們在幹嘛](#他們在幹嘛) · [常見問答](#常見問答) · [English](README.md)
 
 </div>
 
@@ -22,30 +22,17 @@
 
 ## ✨ 隨手看看
 
-<table>
-<tr>
-<td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/marketing/paper-star.gif" alt="動畫：長按紙星星，再看它彈回來" /><br>
-<sub>捏住紙星星，放開看看它怎麼彈回來。</sub>
-</td>
-<td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.gif" alt="動畫：戳一下角色，他會晃一下並顯示目前狀態" /><br>
-<sub><b>戳一下角色</b>就能看目前在做什麼，位置不會改變。</sub>
-</td>
-</tr>
-<tr>
-<td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/marketing/postcard.gif" alt="動畫：打開明信片、選小貓貼紙，再關閉預覽" /><br>
-<sub><b>辦公室明信片。</b>打開明信片，選一張貼紙。</sub>
-</td>
-<td width="50%" align="center">
-<img src="https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.jpg" alt="英文介面的像素辦公室畫面" /><br>
-<sub><b>也有英文介面。</b>可在應用程式中切換語言。</sub>
-</td>
-</tr>
-</table>
+在畫面底部，從預設的**經典**切到手繪感的**像素**。瀏覽器會記住畫風，大家照常上班。
 
-[宣傳圖與 GIF 素材](docs/assets/marketing/README.md)
+| 換個畫風 | 戳一下看看 |
+| :---: | :---: |
+| ![經典與像素畫風交替，角色留在原位](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/pixel/appearance-switch.gif) | ![角色被戳一下會晃動，並顯示目前狀態](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/office-poke.gif) |
+| **捏捏紙星星** | **寄張辦公室明信片** |
+| ![長按紙星星，再看它彈回來](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/marketing/paper-star.gif) | ![打開明信片、選小貓貼紙，再關閉預覽](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/marketing/postcard.gif) |
+| **在忙？就會坐下** | **也有英文介面** |
+| ![特寫：PM 面向你打字，建築師坐在椅背後面工作](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/pixel/desk-closeup.jpg) | ![經典畫風的夜晚辦公室，英文介面](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/screenshot.jpg) |
+
+[兩種畫風並排看](https://raw.githubusercontent.com/KbWen/agent-virtual-office/main/docs/assets/pixel/classic-vs-pixel.jpg) · [宣傳圖與 GIF 素材](docs/assets/marketing/README.md)
 
 ## 他們在幹嘛？
 
@@ -60,29 +47,21 @@
 | **門神** | 盾牌一舉：「前置條件不夠。」重來。 |
 | **設計師** | 對 padding 很有意見，色票再往左兩格 |
 
-各角色會依工具動作呈現不同動畫：Bash 會讓 QA 拿出放大鏡、讓 Ops 走向部署按鈕；Edit 會讓設計師走到白板。只有工具有回報時，辦公室才會顯示卡關原因，例如測試、建置或安裝失敗；沒有回報就維持未知。重複失敗會出現記號；45 秒沒有新訊號時，工作中的角色可能轉為思考。八位角色都是手繪 SVG，不需 canvas 或 GPU。
-
 ## 辦公室日常
 
-工作中與卡關狀態依工具回報顯示。日常小演出按時間出現，忙碌時會減少；部分演出也會回應工作階段事件。顏色環與工作符號呈現狀態，對話泡泡則是角色碎念。
+狀態環跟著工具回報更新。兩種畫風裡，在桌前工作的人都會面向螢幕坐下。切成像素，還能看到忙著打字的 PM 和拿起放大鏡的 QA。
 
-- **茶歇時間** — 有人溜去咖啡機旁
-- **站立會議** — PM 把大家叫到白板前
-- **外送到了** — 紙袋一進門，工作先等等
-- **Review 開吵** — Dev 和 QA 對 bug 各有看法
-- **靈感時刻** — 建築師衝向白板
-
-從 IDE 側欄到完整視窗，辦公室都會填滿可用寬度。按 **☰** 打開名冊，查看工作中、卡關的角色與最近活動。
+空檔有人喝咖啡、聊兩句，偶爾在白板前集合。即使在 IDE 側欄，也能按 **☰** 查看名冊和最近活動。
 
 ## 場景互動
 
-- **角色：** 點一下查看目前動作；按 `Space` 再戳一次，右鍵直接戳、不開啟檢視窗。
-- **紙星星：**在休息區桌上；短按、稍微按住和長按各有不同反應。
-- **明信片：**從佈告欄拿下來，可加小盆栽或小貓咪貼紙，再按「下載 PNG」。貼紙只會套用在明信片上。
+- **角色** — 點一下看動作，按 `Space` 再戳一次，也能用右鍵直接戳。
+- **紙星星** — 捏住休息區桌上的紙星星，放開看它彈回來。
+- **明信片** — 從佈告欄拿下來，可以加張貼紙再下載 PNG。
 
 摸摸小夥伴、盆栽互動與閒置揮手都是選用功能，預設關閉，可在設定中開啟。
 
-→ 分類器、移動與行為引擎的說明：**[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**。
+[辦公室怎麼運作](docs/ARCHITECTURE.md)
 
 ---
 

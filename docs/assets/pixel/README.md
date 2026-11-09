@@ -12,5 +12,6 @@ agent data): five agents working, three quiet. Captured 2026-11-09 from the code
 | [classic-vs-pixel.jpg](classic-vs-pixel.jpg) | The same moment side by side: Classic left, Pixel right. |
 | [appearance-switch.gif](appearance-switch.gif) | Loops Classic ↔ Pixel on that moment (2 frames, 1.6 s each). |
 | [pixel-desks.jpg](pixel-desks.jpg) | Desk close-up in Pixel: working agents seated behind chair backs, signature poses. |
+| [desk-closeup.jpg](desk-closeup.jpg) | Two desks up close in Pixel: PM typing (signature pose), the Architect seated behind the chair back. 975 × 420. |
 
 Walking animation for Pixel is not part of v1.7.0; characters move with their standing pose.
