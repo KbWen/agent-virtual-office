@@ -1,5 +1,5 @@
 ---
-status: frozen
+status: shipped
 title: Phased Pixel character refresh (Classic / Pixel appearance)
 backlog: AVO-160
 classification: feature

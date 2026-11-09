@@ -1110,3 +1110,11 @@ Rotated 1 additional entry on 2026-10-20 (SSoT Update Sequence150 ->151).
 
 - Quick-win shipped: Remediated 2 verified defects: (1) Fixed HTTPS remote deployment status polling & SSE termination in src/inference/inferStatus.js where non-localhost HTTPS origins falsely skipped polling and SSE, and (2) pinned source-map-js to ^1.2.2 via package.json overrides, eliminating high-severity CVE (GHSA-68fv-2mgg-jv7q).
 - Tests: 151 test suites passed (2,714 passed, 0 failed), npm audit 0 vulnerabilities, pack-smoke 4/4 assertions PASS, render-smoke PASS across 4 viewports, validate.ps1 PASS (115/115).
+
+Rotated 1 additional entry on 2026-11-09 (SSoT Update Sequence 159 -> 160).
+
+### Ship-feat-antigravity-gemini-hook-2026-10-20
+
+- Feature shipped: AVO-198 read-only Antigravity observer and project-local Gemini CLI hooks, PR #258; existing producers/UI preserved.
+- Tests: full2809 PASS,3existing skips; Linux Node22/24 CI green; build/budget/render/panel/pack pass.
+- Acceptance: owner excluded further real-device tests; Gemini authenticated sessions/native Linux live scenarios remain unverified, not claimed proven.

@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-10-30T00:42:07Z
+- **Last Updated**: 2026-11-09T02:06:51Z
 - **Last Verified**: 2026-10-30
-- **Update Sequence**: 159
+- **Update Sequence**: 160
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -61,6 +61,7 @@
     - **Session closure** — final retro at `docs/reviews/2026-05-29-session-retro.md` (snapshot, not authoritative). 27 commits ahead of `origin/main`, 0 behind. `main` branch is the canonical state; `_product-backlog.md` lean (14 items: AVO-101..AVO-115 minus done + #20 deferred); `_shipped-log.md` holds 73 prior shipped rows; vitest 960/960; build 887ms clean. All work-log archives in place + INDEX.jsonl up to date. Push to origin pending human confirmation.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
+  - [ui-rendering] docs/specs/phased-pixel-character-refresh.md [Shipped] [Updated: 2026-11-09] *(AVO-160: optional Classic/Pixel appearance — 8 masters, atomic preload, seated back view while working, honesty-gated signature poses, visitor routes on shared navigation; gait frames continue in AVO-207)*
   - [hook-integration] docs/specs/signal-lifecycle-compatibility.md [Shipped] [Updated: 2026-10-30] *(Claude/native Codex lifecycle parity, truthful source/subagent retirement, safe installation and privacy; v1.6.14)*
   - [ui-rendering] docs/specs/cozy-interactions.md [Shipped] [Updated: 2026-10-24] *(AVO-206: scene gestures, duration star, decorated postcard and CSP-safe preview/Blob export; owner-authorized agent validation; code 5a08b58)*
   - [office-runtime] docs/specs/avo-199-all-quiet-calm-state.md [Shipped] [Updated: 2026-10-21] *(AVO-199: honest observed-idle calm; visual acceptance and automatic gates passed; enabled)*
@@ -158,6 +159,11 @@
 
 ## Ship History
 
+### Ship-claude-pixel-character-refresh-2026-11-09
+- Feature shipped: AVO-160 optional Classic/Pixel character appearance over unchanged world geometry (atomic 24-file pack, seated back view while working, honesty-gated signature poses, transparent-edge recipe) plus boss/dog routes on the shared navigation model; source 103c1c3.
+- Tests: clean-tree 3093 PASS / 2 failures reproduced on origin/main (Windows tar, watcher timing flake); build PASS; budget re-based (+11.7 KB over main); live checks 20/20; visitors 0 violations; 3 independent reviews PASS.
+- Not shipped: walk/gait frames (AVO-207 art batches). PR CI, merge and any release are recorded externally, not assumed here.
+
 ### Ship-main-registry-identity-docs-2026-10-30
 - Corrected documentation and mutable Release/PR text: this project distributes via GitHub; the npm same-name package points to another repository. No application/dependency/version/tag changes.
 - Verification: official registry repository metadata, five-doc assertions, diff/whitespace checks and governance PASS. Final docs PR CI/merge recorded externally.
@@ -208,12 +214,6 @@
 
 - Quick-win: test-only completion barriers replace fixed wall sleeps; all38cases and exact freshness/skew assertions preserved. Production unchanged.
 - Validation:155files/2809tests PASS,3existing skips; independentreviewPASS. PR258 final head CI/merge remains pending at this metadata checkpoint.
-
-### Ship-feat-antigravity-gemini-hook-2026-10-20
-
-- Feature shipped: AVO-198 read-only Antigravity observer and project-local Gemini CLI hooks, PR #258; existing producers/UI preserved.
-- Tests: full2809 PASS,3existing skips; Linux Node22/24 CI green; build/budget/render/panel/pack pass.
-- Acceptance: owner excluded further real-device tests; Gemini authenticated sessions/native Linux live scenarios remain unverified, not claimed proven.
 
 ## Spec Index Archive
 
