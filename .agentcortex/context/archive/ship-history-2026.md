@@ -1125,3 +1125,11 @@ Rotated 1 additional entry on 2026-11-09 (SSoT Update Sequence 160 -> 161).
 
 - Quick-win: test-only completion barriers replace fixed wall sleeps; all38cases and exact freshness/skew assertions preserved. Production unchanged.
 - Validation:155files/2809tests PASS,3existing skips; independentreviewPASS. PR258 final head CI/merge remains pending at this metadata checkpoint.
+
+Rotated 1 additional entry on 2026-11-09 (SSoT Update Sequence 161 -> 162).
+
+### Ship-feat-avo-199-all-quiet-2026-10-21
+
+- AVO-199: trusted expiring session observation drives transient30s calm; only existing health detail and authorized audio graph change. Empty sprites never prove idle; source/transport validity and lifecycle races fail closed.
+- Owner accepted actual C1-C4 captures and enabling calm; offHours/planningPod flags remain false. PR merge is separate from this delivery checkpoint.
+- Validation:2897PASS/3existing skips; build514383bytes within546154budget; browser7views/45captures/0errors; render/panel smoke PASS; independent review PASS. Review: docs/reviews/2026-10-21-avo-199-review.md.
