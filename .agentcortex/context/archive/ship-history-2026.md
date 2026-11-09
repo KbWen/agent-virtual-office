@@ -1118,3 +1118,10 @@ Rotated 1 additional entry on 2026-11-09 (SSoT Update Sequence 159 -> 160).
 - Feature shipped: AVO-198 read-only Antigravity observer and project-local Gemini CLI hooks, PR #258; existing producers/UI preserved.
 - Tests: full2809 PASS,3existing skips; Linux Node22/24 CI green; build/budget/render/panel/pack pass.
 - Acceptance: owner excluded further real-device tests; Gemini authenticated sessions/native Linux live scenarios remain unverified, not claimed proven.
+
+Rotated 1 additional entry on 2026-11-09 (SSoT Update Sequence 160 -> 161).
+
+### Ship-test-antigravity-watcher-sync-2026-10-20
+
+- Quick-win: test-only completion barriers replace fixed wall sleeps; all38cases and exact freshness/skew assertions preserved. Production unchanged.
+- Validation:155files/2809tests PASS,3existing skips; independentreviewPASS. PR258 final head CI/merge remains pending at this metadata checkpoint.

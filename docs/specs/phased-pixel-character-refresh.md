@@ -99,6 +99,9 @@ working / planning / (derived) thinking — owner follow-up 2026-11-08: mostly-b
 idle, done, blocked and awaiting-approval agents stand and face the viewer. The body is drawn
 SEAT_SHIFT (8 local units) lower and clipped at the chair's top edge so the chair painted beneath
 shows instead of legs; back view (Classic: procedural back of head in the role's hair colours).
+Owner review 2026-11-09 (option B "low chair back"): a chair back drawn in front of the body at
+waist height covers the clip edge and joins the desk chair's seat, so a seated agent never reads as a
+cut-off half body (Pixel: square stepped shape; Classic: rounded; both in the chair's greys).
 Pixel sits only for roles whose
 reviewed back-view asset is listed in the manifest (`views.back`); until then the front master
 stands, as in Phase 1. World feet, routes, hit target and overlays are unchanged.
