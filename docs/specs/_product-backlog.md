@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-10-24
+last_updated: 2026-11-09
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -29,7 +29,8 @@ last_updated: 2026-10-24
 
 | # | Feature | Kind | Labels | Priority | Spec File | Tier | Status | Dependencies |
 |---|---------|------|--------|----------|-----------|------|--------|--------------|
-| AVO-160 | Custom sprite-asset pipeline (public/sprites/ PNG auto-load → replace procedural SVG) | product | brand | P3 | docs/SPRITE_REQUIREMENTS.md | feature | Pending | foundation for hand-drawn art + AVO-124(b) |
+| AVO-160 | Custom sprite-asset pipeline (public/sprites/ PNG auto-load → replace procedural SVG) | product | brand | P3 | docs/specs/phased-pixel-character-refresh.md | feature | Shipped | 2026-11-09: optional Classic/Pixel appearance (8 masters, atomic preload, seated back view, honesty-gated signature poses, visitor routes); 3 reviews PASS; walk frames continue in AVO-207. |
+| AVO-207 | Pixel art batches: gait/walk cycles and further reviewed views | product | brand | P3 | docs/specs/phased-pixel-character-refresh.md | feature | Pending | Art-gated: one small PR per accepted batch. Batch 1 res+arch right walk: 7/8 raw JPEG frames, arch-walk-side-3 pending; needs alpha PNG derivation + R2 scene recording. |
 | AVO-124 | Agent appearance customization (sprite cosmetics — hats/accessories/outfits) | product | brand | P3 | — | feature | Pending | AVO-160 for PNG path |
 | AVO-141 | Comms / vertical (☰ roster) deeper optimization — "still lots of room" | product | vibe-rebalance | P2 | docs/specs/living-office-events.md | quick-win | Shipped | **Reframed by a 4-expert panel** to comms-feed honesty + dedup (the rail was already mature; "densify to fill room" rejected). Shipped: floating ActivityFeed → real-events `eventFeed` only + self-hide in roster mode. Idle-condense / adaptive-height / chrome-trim panel-rejected. |
 | AVO-161 | Dialogue & interaction layer (台詞/文字) — Wave A & Wave B SHIPPED | product | game-feel | P1 | docs/specs/dialogue-interaction-layer.md | feature | Shipped | ADR-007. **Wave A SHIPPED 2026-06-15 (PR #166)**: S1 quiet-worker reduction + rng seam · S1b de-fabricate generateCrossReaction · S2 5 voice archetypes (en+zh) + open-ended pools + AC-O2 lint. **Wave B SHIPPED 2026-10-01**: Deepened 8 agent roles with distinct personalities, hobbies, life philosophies, and daily quirks; expanded contextBubbles and gossip pools with 1:1 en/zh parity and strict non-terminal honesty validation. |

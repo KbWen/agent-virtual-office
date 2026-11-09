@@ -1,5 +1,5 @@
 ---
-status: draft
+status: frozen
 title: Phased Pixel character refresh (Classic / Pixel appearance)
 backlog: AVO-160
 classification: feature
@@ -67,7 +67,21 @@ repository record of AVO-160 (custom sprite-asset pipeline); AVO-124 cosmetics s
 | P1-10 | Rollback: setting Classic (or removing the pref) restores the procedural body; no store data touched. | Live toggle + code inspection. |
 | P1-11 | Build, full test suite and bundle budget pass. | `npm run build`, `npm test`, `node scripts/bundle-budget.mjs`. |
 
-## Phase 2 / Phase 3 (planned, not in this delivery)
+## Delivered in this ship (2026-11-09, owner asked to ship now and batch the art later)
+
+- Phase 1 complete (P1-01..P1-11).
+- Seated-at-desk option C for both appearances (working statuses only).
+- Phase 2 increment 1: 8 reviewed back views + 8 signature action poses, honesty-gated.
+- Visitor routes (boss/dog) moved onto the shared navigation model (see Known shared-world items).
+
+Not in this ship: gait/walk frames (Phase 3) and any further reviewed views. They continue as
+art-gated batches under backlog AVO-207: each batch is reviewed against the acceptance list in the
+external gait brief, derived with a recorded recipe, imported per role as `views.*` entries, and
+shipped on its own small PR. Until a role has an accepted walk cycle it keeps the front master while
+walking. First pending batch: res + arch right-facing 4-frame walk (7/8 frames delivered as
+white-background JPEG raw outputs; arch-walk-side-3 pending; conversion to 512px alpha PNG not done).
+
+## Phase 2 / Phase 3 (original plan; remaining parts continue under AVO-207)
 
 - Phase 2: per-asset manifest additions for individually reviewed action key poses and
   direction idles; resolver priority moving → gait/facing/front, stationary → reviewed
@@ -114,11 +128,13 @@ known below-sole residue row is clipped. All front + view files are preloaded be
 then arch (external brief `phased-handoff/GEMINI-GAIT-BATCH-1.md`). Desk-work actions (≈63% of
 stationary time) wait for the owner's R1 decision on seated orientation.
 
-## Known shared-world items (tracked, not fixed here)
+## Known shared-world items
 
-Historical boss/dog visitor routes crossing desks and lounge waypoint/collider mismatch
-(AVO-202 draft scope). Must be re-reproduced on current source and handled as a separate
-shared-world correctness unit; Pixel art does not fix or hide them.
+Boss/dog visitor routes crossing desks and the lounge waypoint/collider mismatch were re-reproduced
+on current source and fixed in this branch at the owner's request (2026-11-08): visitors route
+through the shared navigation model with a lounge-table collider, constant-speed sampling and
+depth sorting (docs/reviews/2026-11-08-visitor-routes/, 0 violations in both appearances).
+The larger foot-anchored boss from the same draft scope (AVO-202, owner WIP backlog) is NOT done.
 
 ## Rollback
 
