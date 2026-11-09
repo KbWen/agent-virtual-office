@@ -92,10 +92,13 @@ stands, as in Phase 1. World feet, routes, hit target and overlays are unchanged
 ## Phase 2 increment 1 — back views + signature action poses (owner-requested 2026-11-08/09)
 
 One reviewed key pose per role, shown only while that role performs ITS OWN signature behavior
-and is not walking or seated: pm typing, arch whiteboard (pointing), dev drink-coffee, qa
-magnifier, ops deploy-button, res research (book), designer writing-notes, gate shield-verify.
-Priority: walking -> front master; seated (working at desk) -> back; own signature behavior ->
-action pose; otherwise front master. All poses face the viewer except the seated back.
+and is not walking: pm typing, arch whiteboard (pointing), dev drink-coffee, qa magnifier, ops
+deploy-button, res research (book), designer writing-notes, gate shield-verify.
+Honesty (owner delegated the call 2026-11-09): work-claiming poses (all except dev coffee and res
+book) require a live working status (working/planning/thinking); an idle agent's work-ish fidget
+behavior keeps the front master. Priority: walking -> front master; own signature pose (gated as
+above) -> that pose, standing and facing the viewer, even at the desk; seated (working at desk) ->
+back; otherwise front master. Classic is unchanged.
 Runtime files are derived by scripts/pixel_alpha_cleanup.py (owner asked for the white/grey rim
 to be made transparent); sources untouched; recipe and hashes in pixel-v1/PROVENANCE.md.
 
