@@ -13,7 +13,11 @@ import OneShotSmil from './OneShotSmil.jsx'
 import { shouldShakeDesk } from '../systems/eventJuice.js'
 import { pickPokeReaction, pickQuipIndex } from '../systems/pokeReaction.js'
 import { applyIdleWave, canIdleWave } from '../systems/idleWave.js'
+import { applyBackView } from '../systems/backView.js'
+import { isSeatedAtDesk } from '../systems/seating.js'
+import { pixelHasBackView, resolvePixelRole } from '../systems/characterAppearance.js'
 import { useCozyInteractions } from './useCozyInteractions.js'
+import { CharacterBody, useOfficeAppearance } from './CharacterBody.jsx'
 
 // Character sprite scale. The root <g> scales by this; the name-tag/bubble group undoes it with
 // 1/CHAR_SCALE. Keep both in sync via this one constant.
@@ -419,7 +423,7 @@ function PixelSprite({ grid, flipX = false, scale = 1 }) {
 // stable. Memo elides the component invocation (and its baseRole string-split +
 // CHAR_STYLES lookup) on the ~28-of-30 frames per second where no prop changed; the
 // inner useMemos only guarded the sprite-grid generation, not the function body itself.
-export const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing, idleWave = null }) {
+export const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ charId, expression, isMoving, walkFrame, facing, idleWave = null, back = false }) {
   // Strip session prefix for style lookup: "feat-x~dev" → use dev's style
   const baseRole = charId.includes('~') ? charId.split('~').pop() : charId
   const style = CHAR_STYLES[charId] || CHAR_STYLES[baseRole] || CHAR_STYLES.pm
@@ -435,14 +439,17 @@ export const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ c
   }, [style.hair, style.clothes, style.hairStyle, gender])
 
   const grid = useMemo(() => {
+    // Seated back view (R1 option C): face rows become the back of the head; expressions are
+    // not visible from behind, live status stays in the overlays.
+    if (back && !isMoving) return applyBackView(sprites.idle, style.hair, darken(style.hair, 30))
     const base = isMoving ? (walkFrame ? sprites.walk2 : sprites.walk1) : sprites.idle
     return applyExpression(base, expression)
-  }, [isMoving, walkFrame, sprites, expression])
+  }, [isMoving, walkFrame, sprites, expression, back, style.hair])
 
-  const flipX = facing === 'left'
-  const waveGrids = useMemo(() => idleWave && !isMoving
+  const flipX = facing === 'left' && !back
+  const waveGrids = useMemo(() => idleWave && !isMoving && !back
     ? [0, 1].map(phase => applyIdleWave(grid, { phase, skin: SKIN, sleeve: style.clothes }))
-    : null, [grid, idleWave, isMoving, style.clothes])
+    : null, [grid, idleWave, isMoving, back, style.clothes])
 
   return (
     <g>
@@ -758,6 +765,7 @@ function AgentCharacter({ agent }) {
   const name = charName(id)
   const agentState = useOfficeStore((s) => s.agents[id])
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
+  const appearance = useOfficeAppearance().active
   const cozyInteractions = useCozyInteractions()
   // AVO-132: session effort level intensifies the working glow ring (folded in from the
   // removed ThinkingAura). Subscribe to just `effort` so we re-render only when it changes.
@@ -1592,6 +1600,10 @@ function AgentCharacter({ agent }) {
 
   const state = agentState || {}
   const pos = renderPos || state.position || { x: 0, y: 0 }
+  // R1 option C: sitting at one's own desk -> back view, lower body behind the chair. Pixel only
+  // sits once that role has a REVIEWED back-view asset; otherwise it keeps the front master.
+  const seated = isSeatedAtDesk({ id, position: pos, isWalking, isMoving: state.isMoving, inGroupEvent: state.inGroupEvent, status: state.status || 'idle' })
+    && (appearance !== 'pixel' || pixelHasBackView(resolvePixelRole(id)))
   const session = state.session || null
 
   // Name tag dimensions — memoized on `name`. estimateTextWidth runs a per-codepoint
@@ -1695,14 +1707,21 @@ function AgentCharacter({ agent }) {
         </circle>
       )}
 
-      <CharacterPixelSprite
-        charId={id}
-        expression={state.expression || 'normal'}
-        isMoving={isWalking}
-        walkFrame={walkFrame}
-        facing={state.facing || 'down'}
-        idleWave={waveEligible && pokeBob?.wave ? pokeBob.seq : null}
-      />
+      {/* Phase-1 Pixel appearance swaps ONLY this decorative body; everything else in this
+          actor group (rings, labels, badges, bubbles, input) is shared by both appearances. */}
+      <CharacterBody appearance={appearance} charId={id} isMoving={isWalking} reducedMotion={reducedMotion}
+        seated={seated} seatClipId={`seat-clip-${id}`} behavior={state.behavior} status={state.status || 'idle'}
+        classic={(
+          <CharacterPixelSprite
+            charId={id}
+            expression={state.expression || 'normal'}
+            isMoving={isWalking}
+            walkFrame={walkFrame}
+            facing={state.facing || 'down'}
+            idleWave={!seated && waveEligible && pokeBob?.wave ? pokeBob.seq : null}
+            back={seated}
+          />
+        )} />
 
       {/* Behavior-specific indicator icon */}
       {/* AVO-134: a one-shot pop-in (scale + slight squash) when the behavior CHANGES.

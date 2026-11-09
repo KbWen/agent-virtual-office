@@ -10,6 +10,7 @@ import {
   OVERFLOW_SLOT_BY_XY,
   HOME_POSITIONS,
   visuallyOverlapping,
+  lineHitsRect,
 } from '../src/systems/movementSystem.js'
 
 // ─── calcFacing ──────────────────────────────────────────────────────
@@ -251,12 +252,29 @@ describe('calcFacing — tie and threshold edge cases', () => {
 
 // ─── calculatePath — additional zone coverage ────────────────────────
 describe('calculatePath — additional zone coverage', () => {
-  it('same zone lounge → lounge (no desk check) → direct [to]', () => {
-    const from = { x: 100, y: 470 }
+  it('same zone lounge → lounge with a clear line → direct [to]', () => {
+    const from = { x: 100, y: 525 }
     const to   = { x: 380, y: 520 }
     const path = calculatePath(from, to)
     assertPathInvariants(path, to)
     expect(path).toHaveLength(1)
+  })
+
+  it('same zone lounge → lounge across the coffee table detours around it (2026-11-08)', () => {
+    // Pre-fix this straight line walked THROUGH the round coffee table (no collider).
+    const TABLE = { x1: 151, y1: 466, x2: 199, y2: 514 }
+    const from = { x: 100, y: 470 }
+    const to   = { x: 380, y: 520 }
+    for (let i = 0; i < 10; i++) {
+      const path = calculatePath(from, to)
+      assertPathInvariants(path, to)
+      expect(path.length).toBeGreaterThan(1)
+      let prev = from
+      for (const pt of path) {
+        expect(lineHitsRect(prev.x, prev.y, pt.x, pt.y, TABLE), `${JSON.stringify(prev)}→${JSON.stringify(pt)}`).toBe(false)
+        prev = pt
+      }
+    }
   })
 
   it('same zone meetingRoom crossing the table → detours around table', () => {

@@ -174,3 +174,12 @@ html, body, #root {
   [data-scene-cozy="postcard"]:hover .cozy-postcard-paper,
   [data-scene-cozy="postcard"]:focus-visible .cozy-postcard-paper { transform: none; }
 }
+
+/* Phase-1 Pixel appearance: restrained 1-local-unit bob, mounted ONLY while an actor is
+   really walking (never idle) and never under reduced motion (spec: phased-pixel-character-refresh). */
+@keyframes avo-pixel-walk-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+.avo-pixel-walk-bob { animation: avo-pixel-walk-bob 0.5s steps(1, end) infinite; }
+@media (prefers-reduced-motion: reduce) { .avo-pixel-walk-bob { animation: none; } }

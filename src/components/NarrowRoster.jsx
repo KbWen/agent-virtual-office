@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { charName, behaviorLabel, t, useLocale, eventName } from '../i18n'
 import { CharacterPixelSprite } from './AgentCharacter'
+import { CharacterBody, useOfficeAppearance } from './CharacterBody.jsx'
 import { agentLineLabel, taskChipLabel, formatTokens } from './ControlPanel'
 import { formatTimeAgo } from '../utils/formatTime'
 import { useNowTick, NOW_TICK_MS } from '../utils/useNowTick'
@@ -53,6 +54,7 @@ function DetailChip({ icon, label, value }) {
 
 function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expanded, onToggle, reducedMotion, dimmed, now }) {
   const name = charName(agent.id)
+  const appearance = useOfficeAppearance().active
   const color = presenceColor(status)
   const blocked = status === 'blocked'
   const busy = isBusy(status)
@@ -75,8 +77,9 @@ function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expa
     >
       <button onClick={onToggle} className="w-full flex items-center gap-3 px-3 py-3 text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70" aria-expanded={expanded}>
         <div className="relative shrink-0">
-          <svg viewBox="-18 -40 36 46" width="46" height="56" aria-hidden="true">
-            <CharacterPixelSprite charId={agent.id} expression={agent.expression || 'normal'} isMoving={false} walkFrame={0} facing="down" />
+          <svg viewBox={appearance === 'pixel' ? '-22 -48 44 52' : '-18 -40 36 46'} width="46" height="56" aria-hidden="true">
+            <CharacterBody appearance={appearance} charId={agent.id}
+              classic={<CharacterPixelSprite charId={agent.id} expression={agent.expression || 'normal'} isMoving={false} walkFrame={0} facing="down" />} />
           </svg>
           <span
             className="absolute bottom-1 right-0 w-3 h-3 rounded-full ring-2 ring-white dark:ring-gray-800"
