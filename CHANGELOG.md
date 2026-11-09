@@ -5,6 +5,34 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.7.0 — 2026-11-09 — A hand-drawn Pixel look for the office crew
+
+### Added
+
+- **Optional Pixel appearance.** A Classic / Pixel switch in the footer gives the eight employees a
+  hand-drawn pixel-art look. Classic stays the default. Switching changes only how people are drawn:
+  positions, routes, statuses and timers are the same in both looks. If an image fails to load, the
+  office keeps the current look and shows a short notice.
+- **Working at the desk reads as working.** In both looks, an agent that is really working sits at
+  its desk with its back to you, behind the chair back. Idle, done, blocked and waiting agents
+  stand and face you.
+- **Signature poses in Pixel.** Each role has one pose of its own, such as typing, pointing at the
+  board, checking with a magnifier or pressing deploy. Poses that suggest work appear only while the
+  agent is really working. Coffee and reading poses can appear anytime.
+
+### Fixed
+
+- **The boss and the office dog stop walking through desks and walls.** Their visits now follow the
+  same walkable paths as everyone else, at a steady pace, and they are drawn in front of or behind
+  people correctly.
+
+### Housekeeping / not user-facing
+
+- Documentation corrects where this project is distributed (GitHub source; the npm package with the
+  same name belongs to another repository).
+- Bundle-size budget re-based (+11.7 KB for the appearance feature).
+- Walking animation frames for Pixel are not in this release; they will arrive in later small updates.
+
 ## v1.6.14 — 2026-10-30 — Clearer lifecycle signals across Claude and Codex
 
 ### Added

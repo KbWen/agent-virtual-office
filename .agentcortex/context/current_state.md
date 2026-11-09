@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-11-09T02:46:57Z
+- **Last Updated**: 2026-11-09T02:50:36Z
 - **Last Verified**: 2026-10-30
-- **Update Sequence**: 161
+- **Update Sequence**: 162
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -159,6 +159,10 @@
 
 ## Ship History
 
+### Ship-chore-release-v1.7.0-2026-11-09
+- Release v1.7.0: optional Pixel appearance, seated working view, honesty-gated signature poses, visitor routes on shared navigation (#267), seated chair back (#268) + distribution-provenance docs (#266). package.json and both package-lock version fields 1.6.14 -> 1.7.0; CHANGELOG narrative.
+- Tag, GitHub Release and release-PR merge are recorded externally, not assumed here. No npm publication.
+
 ### Ship-fix-seated-chair-back-2026-11-09
 - Quick-win after owner review: seated agents get a low chair back drawn in front of the body (Classic rounded, Pixel stepped), so the waist clip no longer reads as a cut-off half body. Presentation only.
 - Tests: focused 37/37 + full suite in clean worktree; live capture of all 7 desks in both appearances (docs/reviews/2026-11-08-pixel-phase1/seated-chair-back-before-after.jpg).
@@ -205,13 +209,6 @@
 
 - Owner-approved Vite8.2.1->8.2.4 security patch clears PR259 dependency audit; only existing Vite requirement/package metadata changed, all other locked versions retained. Runtime dependency placement is preserved.
 - Verification: audit0; full2897PASS/3existing skips; build/budget, browser7views45captures0errors and render/panel smoke PASS; independent manifest/lock review PASS. CI final status is tracked on PR259; no merge claim.
-
-
-### Ship-feat-avo-199-all-quiet-2026-10-21
-
-- AVO-199: trusted expiring session observation drives transient30s calm; only existing health detail and authorized audio graph change. Empty sprites never prove idle; source/transport validity and lifecycle races fail closed.
-- Owner accepted actual C1-C4 captures and enabling calm; offHours/planningPod flags remain false. PR merge is separate from this delivery checkpoint.
-- Validation:2897PASS/3existing skips; build514383bytes within546154budget; browser7views/45captures/0errors; render/panel smoke PASS; independent review PASS. Review: docs/reviews/2026-10-21-avo-199-review.md.
 
 ## Spec Index Archive
 
