@@ -85,8 +85,10 @@ export function pixelHasBackView(role, pack = PIXEL_V1_PACK) {
 }
 
 // Behavior -> signature action pose. A role shows a pose only for ITS OWN signature behavior and
-// only when that reviewed view exists; otherwise the front master (honest fallback). The pose is
-// chosen from the agent's actual behavior, never from its transport status.
+// only when that reviewed view exists; otherwise the front master (honest fallback).
+// Honesty (owner delegated the call 2026-11-09): a pose that CLAIMS work (typing, board, magnifier,
+// deploy, shield, notes) needs a live working status - an idle agent's work-ish fidget behavior
+// stays the plain front master. Break/reading poses (coffee, book) claim nothing and show anytime.
 export const BEHAVIOR_POSES = Object.freeze({
   typing: 'typing',
   whiteboard: 'pointing-board',
@@ -98,9 +100,12 @@ export const BEHAVIOR_POSES = Object.freeze({
   'shield-verify': 'control-shield',
 })
 
-export function pixelActionView(role, behavior, pack = PIXEL_V1_PACK) {
+export const NON_CLAIM_POSES = Object.freeze(new Set(['drinking-coffee', 'reading-book']))
+
+export function pixelActionView(role, behavior, { working = true } = {}, pack = PIXEL_V1_PACK) {
   const view = BEHAVIOR_POSES[behavior]
-  return view && pack.roles[role]?.views?.[view] ? view : null
+  if (!view || !pack.roles[role]?.views?.[view]) return null
+  return working || NON_CLAIM_POSES.has(view) ? view : null
 }
 
 // Every file the pack can render (front masters + reviewed views): all are preloaded before the

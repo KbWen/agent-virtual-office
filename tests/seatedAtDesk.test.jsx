@@ -87,16 +87,35 @@ describe('Pixel signature action poses', () => {
       for (const [other, b2] of Object.entries(SIGNATURE)) if (other !== role) expect(pixelActionView(role, b2), `${role}/${b2}`).toBe(null)
     }
   })
-  it('pose priority: walking front > seated back > own action > front', () => {
-    expect(pixelViewFor({ charId: 'pm', isMoving: true, seated: true, behavior: 'typing' })).toBe('front')
-    expect(pixelViewFor({ charId: 'pm', seated: true, behavior: 'typing' })).toBe('back')
-    expect(pixelViewFor({ charId: 'pm', behavior: 'typing' })).toBe('typing')
+  it('pose priority: walking front > own action > seated back > front', () => {
+    expect(pixelViewFor({ charId: 'pm', isMoving: true, seated: true, behavior: 'typing', status: 'working' })).toBe('front')
+    expect(pixelViewFor({ charId: 'pm', seated: true, behavior: 'typing', status: 'working' })).toBe('typing')
+    expect(pixelViewFor({ charId: 'pm', seated: true, behavior: 'reading-screen', status: 'working' })).toBe('back')
+    expect(pixelViewFor({ charId: 'pm', behavior: 'typing', status: 'planning' })).toBe('typing')
     expect(pixelViewFor({ charId: 'pm', behavior: 'coffee' })).toBe('front')
     expect(pixelViewFor({ charId: 'worker', behavior: 'drink-coffee' })).toBe('drinking-coffee') // alias -> dev
     expect(pixelViewFor({ charId: 'mystery', behavior: 'whiteboard' })).toBe('front') // fallback pm has no whiteboard pose
   })
+  it('work-claiming poses need a live working status; coffee/book claim nothing', () => {
+    for (const status of ['idle', 'done', 'blocked', 'awaiting-approval', undefined]) {
+      for (const [role, behavior] of Object.entries(SIGNATURE)) {
+        const want = ['dev', 'res'].includes(role) ? BEHAVIOR_POSES[behavior] : 'front'
+        expect(pixelViewFor({ charId: role, behavior, status }), `${role}/${status}`).toBe(want)
+      }
+    }
+    expect(pixelActionView('ops', 'deploy-button', { working: false })).toBe(null)
+    expect(pixelActionView('ops', 'deploy-button', { working: true })).toBe('control-deploy')
+  })
+  it('an action pose at the desk stands (not clipped); the back view sits', () => {
+    const typing = svg(<CharacterBody appearance="pixel" charId="pm" seated behavior="typing" status="working" />)
+    expect(typing).toContain('data-pixel-view="typing"'); expect(typing).not.toContain('data-seated')
+    const back = svg(<CharacterBody appearance="pixel" charId="pm" seated behavior="reading-screen" status="working" />)
+    expect(back).toContain('data-pixel-view="back"'); expect(back).toContain('data-seated')
+    const classic = svg(<CharacterBody appearance="classic" charId="pm" seated behavior="typing" status="working" classic={<g />} />)
+    expect(classic).toContain('data-seated')
+  })
   it('renders the action file with its own pivot', () => {
-    const html = svg(<CharacterBody appearance="pixel" charId="arch" behavior="whiteboard" />)
+    const html = svg(<CharacterBody appearance="pixel" charId="arch" behavior="whiteboard" status="working" />)
     expect(html).toContain('data-pixel-view="pointing-board"')
     expect(html).toMatch(/pixel-v1\/arch-pointing-board\.png/)
   })

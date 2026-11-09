@@ -17,6 +17,9 @@ export const SEAT_CLIP_Y = -2.5
 // blocked and awaiting-approval stand and face the viewer. `thinking` is the derived quiet-working
 // state (idle-gap inference), so it still counts as working.
 const WORKING_STATUSES = new Set(['working', 'planning', 'thinking'])
+export function isWorkingStatus(status) {
+  return WORKING_STATUSES.has(status)
+}
 const AT_HOME_EPSILON = 2
 
 export function baseRoleOf(id) {

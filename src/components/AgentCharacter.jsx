@@ -1710,7 +1710,7 @@ function AgentCharacter({ agent }) {
       {/* Phase-1 Pixel appearance swaps ONLY this decorative body; everything else in this
           actor group (rings, labels, badges, bubbles, input) is shared by both appearances. */}
       <CharacterBody appearance={appearance} charId={id} isMoving={isWalking} reducedMotion={reducedMotion}
-        seated={seated} seatClipId={`seat-clip-${id}`} behavior={state.behavior}
+        seated={seated} seatClipId={`seat-clip-${id}`} behavior={state.behavior} status={state.status || 'idle'}
         classic={(
           <CharacterPixelSprite
             charId={id}

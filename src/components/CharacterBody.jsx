@@ -1,6 +1,6 @@
 import React, { useSyncExternalStore } from 'react'
 import { getAppearanceSnapshot, pixelActionView, pixelAssetUrl, pixelBodyPlacement, resolvePixelRole, subscribeAppearance } from '../systems/characterAppearance'
-import { SEAT_CLIP_Y, SEAT_SHIFT } from '../systems/seating.js'
+import { SEAT_CLIP_Y, SEAT_SHIFT, isWorkingStatus } from '../systems/seating.js'
 
 // { requested, active, status, error } — `active` is what renders (only flips after a full preload).
 export function useOfficeAppearance() {
@@ -13,18 +13,21 @@ export function useOfficeAppearance() {
 // Pixel   → the role's front master for every facing (Phase 1: no mirroring, no pasted
 //           classic arms/face, unsupported expressions stay neutral).
 // (Not memoised: `classic` is a fresh element every parent render; PixelBody itself is memoised.)
-// Pixel pose priority: walking -> front master; seated at desk (working) -> back; stationary doing
-// the role's own signature behavior with a reviewed pose -> that action; otherwise front master.
-export function pixelViewFor({ charId, isMoving = false, seated = false, behavior = null }) {
+// Pixel pose priority: walking -> front master; stationary doing the role's own signature behavior
+// (work-claiming poses only with a live working status) -> that action, facing the viewer, even at
+// the desk; seated at desk (working) -> back; otherwise front master.
+export function pixelViewFor({ charId, isMoving = false, seated = false, behavior = null, status = 'idle' }) {
   if (isMoving) return 'front'
-  if (seated) return 'back'
-  return pixelActionView(resolvePixelRole(charId), behavior) || 'front'
+  const action = pixelActionView(resolvePixelRole(charId), behavior, { working: isWorkingStatus(status) })
+  if (action) return action
+  return seated ? 'back' : 'front'
 }
 
-export function CharacterBody({ appearance, charId, isMoving = false, reducedMotion = false, classic, seated = false, seatClipId = 'seat-clip', behavior = null }) {
-  const body = appearance !== 'pixel' ? classic
-    : <PixelBody charId={charId} isMoving={isMoving} reducedMotion={reducedMotion} view={pixelViewFor({ charId, isMoving, seated, behavior })} />
-  return <SeatedFrame seated={seated} clipId={seatClipId}>{body}</SeatedFrame>
+export function CharacterBody({ appearance, charId, isMoving = false, reducedMotion = false, classic, seated = false, seatClipId = 'seat-clip', behavior = null, status = 'idle' }) {
+  if (appearance !== 'pixel') return <SeatedFrame seated={seated} clipId={seatClipId}>{classic}</SeatedFrame>
+  const view = pixelViewFor({ charId, isMoving, seated, behavior, status })
+  // A standing action pose at the desk is drawn standing (unclipped); only the back view sits.
+  return <SeatedFrame seated={seated && view === 'back'} clipId={seatClipId}><PixelBody charId={charId} isMoving={isMoving} reducedMotion={reducedMotion} view={view} /></SeatedFrame>
 }
 
 // Seated at desk (R1 option C): the body is drawn SEAT_SHIFT lower (hips on the seat) and clipped
