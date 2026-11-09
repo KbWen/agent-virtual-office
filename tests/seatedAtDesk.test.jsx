@@ -32,7 +32,7 @@ describe('isSeatedAtDesk (R1 option C)', () => {
     for (const status of ['working', 'planning', 'thinking']) {
       expect(isSeatedAtDesk({ id: 'pm', position: home('pm'), status }), status).toBe(true)
     }
-    for (const status of ['idle', 'done', 'blocked', 'awaiting-approval', undefined]) {
+    for (const status of ['idle', 'done', 'blocked', 'awaiting-approval', 'error', undefined]) {
       expect(isSeatedAtDesk({ id: 'pm', position: home('pm'), status }), String(status)).toBe(false)
     }
   })
@@ -92,12 +92,13 @@ describe('Pixel signature action poses', () => {
     expect(pixelViewFor({ charId: 'pm', seated: true, behavior: 'typing', status: 'working' })).toBe('typing')
     expect(pixelViewFor({ charId: 'pm', seated: true, behavior: 'reading-screen', status: 'working' })).toBe('back')
     expect(pixelViewFor({ charId: 'pm', behavior: 'typing', status: 'planning' })).toBe('typing')
+    expect(pixelViewFor({ charId: 'pm', behavior: 'typing', status: 'thinking' })).toBe('typing')
     expect(pixelViewFor({ charId: 'pm', behavior: 'coffee' })).toBe('front')
     expect(pixelViewFor({ charId: 'worker', behavior: 'drink-coffee' })).toBe('drinking-coffee') // alias -> dev
     expect(pixelViewFor({ charId: 'mystery', behavior: 'whiteboard' })).toBe('front') // fallback pm has no whiteboard pose
   })
   it('work-claiming poses need a live working status; coffee/book claim nothing', () => {
-    for (const status of ['idle', 'done', 'blocked', 'awaiting-approval', undefined]) {
+    for (const status of ['idle', 'done', 'blocked', 'awaiting-approval', 'error', undefined]) {
       for (const [role, behavior] of Object.entries(SIGNATURE)) {
         const want = ['dev', 'res'].includes(role) ? BEHAVIOR_POSES[behavior] : 'front'
         expect(pixelViewFor({ charId: role, behavior, status }), `${role}/${status}`).toBe(want)
