@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-11-09
+last_updated: 2026-11-11
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -25,21 +25,45 @@ last_updated: 2026-11-09
 
 ## Feature Inventory — Open / On-Mission Work
 
-> The genuinely-remaining, actionable backlog. Theme law: **chill + fun, honest, REDUCE-not-add.**
+> Priorities express impact. The approved visual sequence starts with AVO-205 preflight and
+> AVO-204 measurement, then AVO-202 visitor work, AVO-204 forced runs, AVO-203 readability, and
+> AVO-205 reconciliation. For the rollout, AVO-199 is delivered, followed by AVO-201 and AVO-200.
 
 | # | Feature | Kind | Labels | Priority | Spec File | Tier | Status | Dependencies |
 |---|---------|------|--------|----------|-----------|------|--------|--------------|
-| AVO-160 | Custom sprite-asset pipeline (public/sprites/ PNG auto-load → replace procedural SVG) | product | brand | P3 | docs/specs/phased-pixel-character-refresh.md | feature | Shipped | 2026-11-09: optional Classic/Pixel appearance (8 masters, atomic preload, seated back view, honesty-gated signature poses, visitor routes); 3 reviews PASS; walk frames continue in AVO-207. |
-| AVO-207 | Pixel art batches: gait/walk cycles and further reviewed views | product | brand | P3 | docs/specs/phased-pixel-character-refresh.md | feature | Pending | Art-gated: one small PR per accepted batch. Batch 1 res+arch right walk: 7/8 raw JPEG frames, arch-walk-side-3 pending; needs alpha PNG derivation + R2 scene recording. |
+| AVO-202 | Finish visitor lifecycle verification and size the foot-anchored boss | review-finding | game-feel | P1 | Draft pending publication | feature | Pending | Partial upstream delivery in PR #267: boss/dog shared navigation and lounge collision fix. The larger boss remains open. Reconcile the draft footprint, door contention, pause and lifecycle checks against v1.7.0 before changing routes. |
+| AVO-205 | Accurate delivered-state resume pointers and planning-checkout provenance | review-finding | tech-debt | P2 | Draft pending publication | quick-win | Pending | Audit F-06; owner-aware correction using actual delivery evidence; preserve untracked approved AVO-199/200/201 bundle and manifest. |
+| AVO-204 | Soak timing/report truth, forced visitor coverage and watcher-test stability | review-finding | ci-infra | P2 | Draft pending publication | feature | Pending | Audit F-04/F-05; measurement foundation first, forced rendered visitor scenarios after AVO-202; unchanged coverage thresholds. |
+| AVO-203 | Procedural character action, direction and narrow-view readability | review-finding | vibe-rebalance | P2 | Draft pending publication | feature | Pending | Audit F-01/F-02/F-03; preserve scene geometry and existing quiet controls; draft design; follows stable visitor/test baseline, not dependent on PNG pipeline. |
+| AVO-212 | Show worktree agents and their blockers in list view | review-finding | real-ai-behavior | P2 | — | quick-win | Pending | Source repro: a static idle agent plus one `awaiting-approval` worktree representative yields zero active rows and no waiting names. [NarrowRoster](../../src/components/NarrowRoster.jsx#L211) drops session agents and the [control bar](../../src/components/ControlPanel.jsx#L388) delegates its blocker strip to the list. Verify both worktree identity and waiting status survive the Office → List switch. |
+| AVO-208 | Make the Settings gear toggle reliably and restore keyboard focus | review-finding | info-density | P2 | — | quick-win | Pending | Chromium: the second mouse click leaves `aria-expanded=true`. Opening with Enter leaves focus on the gear, then Tab lands on Activity Feed. In [ControlPanel](../../src/components/ControlPanel.jsx#L119), outside mousedown treats the gear as outside before its click toggles. Verify open/close from the gear, direct keyboard access to settings, and focus return on Escape. |
+| AVO-209 | Keep Settings visible and clickable in short windows | review-finding | info-density | P2 | — | quick-win | Pending | Chromium at 640×360: menu starts 124 CSS px above the viewport, four rows are fully off-screen, and Activity Feed intercepts the weather toggle. At 390×844 the menu fits. Constrain and scroll the existing [popover](../../src/components/ControlPanel.jsx#L269) within the viewport. Verify all rows are reachable by mouse, touch, and keyboard at 640×360 and 320×300, with no overlapping hit targets. |
+| AVO-210 | Keep the office usable when browser storage is unavailable | review-finding | tech-debt | P2 | — | quick-win | Pending | Chromium with `localStorage` throwing `SecurityError`: default launch renders a blank page; `?lang=en` reaches the error screen via onboarding. Guard preference access in [i18n](../../src/i18n.js#L15) and [ControlPanel](../../src/components/ControlPanel.jsx#L128). Verify startup, switching language, and dismissing help when reads or writes throw. |
+| AVO-213 | Give the agent inspector a predictable keyboard focus path | review-finding | info-density | P2 | — | quick-win | Pending | Source review: [agent Enter](../../src/components/AgentCharacter.jsx#L1588) opens the [inspector](../../src/components/AgentInspector.jsx#L55) without moving focus. Closing via Escape or the close button does not restore the opener. Verify a named inspector is reachable on open and focus returns to the originating agent on close. |
+| AVO-201 | Real-clock quiet night/weekend window and existing-light polish | product | vibe-rebalance | P3 | docs/specs/avo-201-real-clock-off-hours.md | feature | Pending | Plan frozen and design approved; requires AVO-199 quiet state; no added furniture; runtime not started. |
+| AVO-200 | Signal-driven single planning seat in the existing meeting room | product | real-ai-behavior | P3 | docs/specs/avo-200-planning-pod-meeting-room.md | architecture-change | Pending | Plan frozen; ADR-011 and design accepted; after AVO-199 shared rollout config; runtime not started. |
+| AVO-207 | Pixel gait cycles and further reviewed views | product | brand | P3 | docs/specs/phased-pixel-character-refresh.md | feature | Pending | AVO-160 delivered. At v1.7.0, the first research/architect walk batch had 7 of 8 raw frames. Finish the missing frame, derive transparent PNGs, and record the in-scene R2 review before each batch ships. |
 | AVO-124 | Agent appearance customization (sprite cosmetics — hats/accessories/outfits) | product | brand | P3 | — | feature | Pending | AVO-160 for PNG path |
+| AVO-211 | Run a focused Windows CLI smoke job in CI | infra | ci-infra | P3 | — | quick-win | Pending | [CI](../../.github/workflows/ci.yml#L9) currently runs the product jobs on Ubuntu. The [pack smoke spec](npm-pack-install-smoke.md) scoped Windows to local verification. Reuse the existing Windows-aware setup, uninstall, and hook fixtures in a small `windows-latest` job with isolated temporary config directories. |
+| AVO-214 | Prevent held keyboard shortcuts from toggling repeatedly | review-finding | info-density | P3 | — | quick-win | Pending | Source repro: a press and two repeated keydowns invoke [Space pause and L language change](../../src/App.jsx#L21) three times each. Verify held Space and L perform one action while focused controls retain their native keyboard behavior. |
+| AVO-215 | Fit long custom names inside the agent inspector header | review-finding | ui-rendering | P3 | — | quick-win | Pending | Source repro: an 80-character `?agents=` name reaches the [200-unit SVG card](../../src/components/AgentInspector.jsx#L121) and renders as [unbounded header text](../../src/components/AgentInspector.jsx#L157). Check a long Latin and CJK name in full and panel views. Keep the close target clear and the full name available to assistive technology. |
+| AVO-216 | Keep the expanded Activity Feed scrollable in short windows | review-finding | ui-rendering | P3 | — | quick-win | Pending | Source review: the [floating feed](../../src/components/ActivityFeed.jsx#L47) sits below a fixed toggle and header, but its list uses a fixed `max-h-64` rather than the remaining height. Verify a 20-entry feed at 640×360 and 320×300 reaches its last row without covering the bottom controls. |
+| AVO-217 | Keep confirmed agent history visible after ambient activity | review-finding | real-ai-behavior | P3 | — | quick-win | Pending | Source repro: 50 organic updates by another agent evict a confirmed event from the [inspector history](../../src/components/AgentInspector.jsx#L65), while the dedicated event feed retains it. Reuse the real-event buffer for recent status history and verify the existing current-behavior label still works. |
+
+---
+
+## Recently Delivered
+
+> Recent delivery records. Earlier waves are in [_shipped-log.md](_shipped-log.md).
+
+| # | Feature | Kind | Labels | Priority | Spec File | Tier | Status | Dependencies |
+|---|---------|------|--------|----------|-----------|------|--------|--------------|
+| AVO-160 | Optional Classic/Pixel appearance and sprite-asset pipeline | product | brand | P3 | docs/specs/phased-pixel-character-refresh.md | feature | Shipped | v1.7.0, PR #267: eight reviewed masters, atomic preload, seated back views and honesty-gated poses. PR #268 refined the seated chair back. Gait frames continue in AVO-207. |
 | AVO-141 | Comms / vertical (☰ roster) deeper optimization — "still lots of room" | product | vibe-rebalance | P2 | docs/specs/living-office-events.md | quick-win | Shipped | **Reframed by a 4-expert panel** to comms-feed honesty + dedup (the rail was already mature; "densify to fill room" rejected). Shipped: floating ActivityFeed → real-events `eventFeed` only + self-hide in roster mode. Idle-condense / adaptive-height / chrome-trim panel-rejected. |
 | AVO-161 | Dialogue & interaction layer (台詞/文字) — Wave A & Wave B SHIPPED | product | game-feel | P1 | docs/specs/dialogue-interaction-layer.md | feature | Shipped | ADR-007. **Wave A SHIPPED 2026-06-15 (PR #166)**: S1 quiet-worker reduction + rng seam · S1b de-fabricate generateCrossReaction · S2 5 voice archetypes (en+zh) + open-ended pools + AC-O2 lint. **Wave B SHIPPED 2026-10-01**: Deepened 8 agent roles with distinct personalities, hobbies, life philosophies, and daily quirks; expanded contextBubbles and gossip pools with 1:1 en/zh parity and strict non-terminal honesty validation. |
-
 | AVO-198 | Antigravity passive observer + independent Gemini CLI hook adapter | product | real-ai-behavior | P2 | docs/specs/antigravity-gemini-hook-integration.md | feature | Shipped | PR #258: isolated adapters and setup; full2809 PASS; owner-approved remaining live-validation limits documented. |
 | AVO-199 | Honest all-quiet office: observed-idle state and calm presentation | product | game-feel | P2 | docs/specs/avo-199-all-quiet-calm-state.md | feature | Shipped | Delivered 2026-10-21: trusted source observation, transient calm and existing health/audio integration; actual visuals accepted; calm enabled; full2897PASS plus browser/build/smoke/governance evidence archived. PR merge is separate. |
 | AVO-206 | Scene-native cozy gestures and duration-sensitive paper star / postcard export | product | game-feel | P3 | docs/specs/cozy-interactions.md | feature | Shipped | Owner-authorized agent verification;2972PASS/3existing skips; production preview/export,4viewport and panel checks PASS; preserves AVO-199 calm runtime. |
-| AVO-200 | Signal-driven single planning seat in the existing meeting room | product | real-ai-behavior | P3 | docs/specs/avo-200-planning-pod-meeting-room.md | architecture-change | Pending | Plan frozen; ADR-011 and design accepted; after AVO-199 shared rollout config; runtime not started. |
-| AVO-201 | Real-clock quiet night/weekend window and existing-light polish | product | vibe-rebalance | P3 | docs/specs/avo-201-real-clock-off-hours.md | feature | Pending | Plan frozen and design approved; requires AVO-199 quiet state; no added furniture; runtime not started. |
 | AVO-187 | Door-crossing stack — agents pausing at a door are ALWAYS visually overlapped | product | office-runtime | **P1** | [Spec](avo-187-temporal-doorway-claim.md) | feature | Shipped | Atomic full-route physical-door claims now serialize both directions with stable FIFO tickets, fencing, and rendered-truth lifecycle release. Commit `018ef1e`; AC1–AC13 include all-door forced contention and a 10-minute visual cold-watch. |
 | AVO-188 | Abort sites leave a stale `isMoving: true` on a standing agent | product | data-path | P2 | [Spec](avo-188-abort-movement-in-place.md) | quick-win | Shipped | Abort paths now atomically copy the last rendered position into `position` and `targetPosition`, clear motion/journey truth, and preserve live teardown restoration. Commit `ac07a4d`. |
 | AVO-189 | `shouldRecordRafWatchdogRestart` is structurally dead — reads 0 on a broken build | product | ci-infra | P3 | [Spec](avo-189-reachable-raf-watchdog-diagnostic.md) | quick-win | Shipped | The first focused lost-chain restart is now observable while pending-frame and unfocused noise gates remain unchanged. Commit `feb23ef`. |
@@ -51,16 +75,6 @@ last_updated: 2026-11-09
 | AVO-196 | Panel mode: a speaker just BELOW the crop (lounge / research) still shows its bubble inside the crop with no visible speaker | review-finding | ui-rendering | P3 | — | quick-win | Shipped | Found in the 2026-09-19 review round 2 (PR #236); pre-existing on `main`. Examples: lounge `stretch` at (180,490) puts its bubble at y 388–414, fully inside the wide and initial crops, speaker invisible; `coffee` at (80,475) likewise. PR #236 stopped the ABOVE / LEFT / RIGHT cases (an off-crop speaker's bubble is neither flipped nor clamped into view) and deliberately left this one: hiding the bubble collides with ADR-007 (voice is not suppressed), so it is a design decision, not a bug fix. Measure first with a staged panel capture (the round-2 reviewer's numbers are computed, not rendered). **Shipped 2026-09-20 (PR #240).** Owner chose the rule from rendered candidates: hide the bubble when the speaker's ANCHOR is outside the visible crop, except `blocked`/`awaiting-approval` (ADR-007 D1 licenses blocked to seize the bubble, and the panel control bar surfaces it anyway). The anchor is the same test the #236 flip and edge clamp use on the other three sides; a first cut allowed a head poking in above the bottom edge, which made the coffee spot (80,475) count as visible by 4 units. Correction to this row's earlier note: ADR-007 does NOT say voice is never suppressed. |
 | AVO-197 | Every ONE-SHOT SMIL animation in the office is dead — a late-mounted `<animate>` snaps to its end value instead of playing | review-finding | game-feel | **P2** | — | feature | Shipped | Independent of AVO-193, which sidestepped this by using CSS. **Measured 2026-09-20** (headless Chromium, controlled experiment with a known-playing control): a one-shot SMIL element inserted after page load never animates — SMIL resolves `begin="0s"` against the DOCUMENT timeline, which is already in the past. AVO-135's done flash was mounted for **60 frames and visible on exactly 1** (opacity 0.393 on the mount frame, then 0.000 x59; radii 22.58 -> 30.00, i.e. a snap, not a ramp) — the celebratory flash is effectively invisible. Same defect, lower severity, at AVO-158 poke bob and AVO-136 desk-slam jitter (both end at `0 0`, so NO motion ever happens) and AVO-134 / AVO-110 entry pops (snap to the correct end state, so only the pop is lost). `repeatCount="indefinite"` animations are UNAFFECTED (always mid-cycle) and so is `<animateTransform additive="sum">` only insofar as it is also one-shot. Two fixes work: a CSS `@keyframes` (what AVO-193 shipped) or `begin="indefinite"` + `beginElement()` — both verified moving. Tier is `feature`, not quick-win: 5 shipped features' feel changes at once, so each needs owner sight before it lands. **Shipped 2026-09-20 (PR #244).** Fixed with `begin="indefinite"` + `beginElement()` on mount, NOT a CSS rewrite: AVO-136/158 are `additive="sum"` transforms on a root `<g>` already carrying `scale(CHAR_SCALE)`, where CSS `transform` replaces the base transform and CSS `translate` applies outside it, silently changing the bob distance. No duration, curve or `values` list was touched. All six verified in a real browser, same instrument both sides: DEAD (1-2 distinct values) -> PLAYS (19-43); the done flash went from 1 visible frame to 39. Shipped as `quick-win`, not the `feature` estimated here — the code is mechanical and the design was already approved per feature; the owner-sight requirement was kept as its own gate (frame strips approved before merge). |
 
-> [!NOTE]
-> **Reality check (2026-06-15):** the planned-feature backlog is essentially exhausted. After the
-> sprite-art pair (AVO-160 → AVO-124), only AVO-141 (a small polish) remains. That is a maturity
-> signal, not a gap to backfill. **The real next-value work is not yet ticketed:**
-> (a) the sprite/character **art** itself (content for AVO-160's pipeline);
-> (b) **dialogue / text** (台詞、文字) — bubble message pools + i18n strings (owner's stated next
-> direction).
-> Open those as precise items when the angle is confirmed — do NOT manufacture busywork to fill
-> the backlog (REDUCE-not-add).
-
 ---
 
 ## Optimization & Charm Backlog — Existing-Item Tuning (2026-06-19, must earn place)
@@ -70,26 +84,24 @@ last_updated: 2026-11-09
 > via the per-visual-feature gate (chill/office-sim panel + automated legibility guard + adversarial
 > verify of MERGED main) before it earns a Feature Inventory row. Owner lean = **optimize existing
 > rhythm/pacing over net-new chrome.** Theme law: chill+fun, honest, REDUCE-not-add. Distinct tier
-> from the committed Feature Inventory — keeps the SSoT "3 open on-mission items" honest. Each row
+> from the committed Feature Inventory. Each row
 > cites the file/lever so a future `/plan` can lift it directly; every "AVO lacks X" was confirmed by
 > a read file:line (after the AVO-162 dup-proposal was caught same-session).
 
 | # | Optimization (testable) | Honesty / R1 guard | REDUCE? | Key file / lever |
 |---|---|---|---|---|
 | AVO-163 | Static idle agents get a phase-desynced **breathing/blink micro-loop** (+ ease-out motion) so they read "alive" with zero new assets. | Fires ONLY in genuine idle; breathe is IDENTICAL regardless of status (never implies progress/emotion); distinct from the existing supervising-breathe / working-pulse rings. | ~ (polish on existing motion) | `AgentCharacter.jsx` `CharacterPixelSprite` (idle body is static today, ~L368-397) |
-| AVO-164 | An all-idle office renders a deliberate **"all quiet / all caught up"** calm state (vs reading dead) → honest permission-to-stop. | No streak, no "agents miss you", no fake activity to fill the screen. | ✅ (reframes empty, adds nothing) | new calm-state branch; not present today |
+| AVO-164 | **Covered by AVO-199.** Observed-idle calm presentation delivered the actionable part of this proposal. | Calm depends on trusted observations and yields to live activity. | ✅ (reuses the existing office presentation) | [AVO-199 spec](avo-199-all-quiet-calm-state.md) |
 | ✅ AVO-165 | **Walk-rhythm — concurrent out-trip soft-cap** (panel chose this over weight reduction: the felt "always walking" is a CONCURRENCY effect, 8×~32%≈94%, not a per-agent rate the two prior tunes could fix). `MAX_CONCURRENT_OUT_TRIPS=2`; at cap an ambient agent stays at its desk this cycle. | R1-safe (keeps agent AT desk, never relocates a working agent); `social` weight untouched; +4 tests. | ✅✅ (fewer simultaneous walkers) | `behaviorEngine.js` getNextBehavior + `AgentCharacter.jsx` journeyTarget count |
 | ✅ AVO-166 | **DONE (ADR-008, 2026-06-19)** — codified the "no-fabricated-need" rule as an N1–N7 checklist that gates every future ambient/pet/companion/charm/notification feature (anti decay/streak/loot; pet hides on blocker; no unbound decorative channel; honest-neutral degrade; real-clock variety; no engagement notification). | enforceable honesty boundary | ✅ (a guard, not a feature) | `docs/adr/ADR-008-no-fabricated-need-ambient-honesty.md` |
-| AVO-167 | Give the **`awaiting-approval` ("waiting on you") state its own ring + name-tag colour** — today it falls back to identity colour and reads like a normal idle agent. | State already inferred from real signals (`idleGapInfer`); new colour must pass the existing contrast guard. | ~ (one colour entry + one ring branch) | `constants.js:82-88` STATUS_COLORS · `AgentCharacter.jsx:1411` ring branch |
+| ✅ AVO-167 | **Shipped (PR #177).** The `awaiting-approval` state has a cyan ring and name pill. | Status remains based on real signals; contrast guarded. | ~ (one colour entry and ring branch) | `constants.js` STATUS_COLORS · `AgentCharacter.jsx` |
 | AVO-168 | **Ambient events rarer + more rewarding**: widen the daily/rare event intervals and give a rare event a slightly bigger juice payload. | Juice stays gated on real signals (`eventEligible`); no new event types added. | ✅ (less churn) | `constants.js:53-54` intervals · `eventJuice.js:15-16` counts |
-| AVO-169 | Show **elapsed-time-in-state** ("blocked for 3m" / "waiting for 3m") in the agent inspector. | Driven only by real `changedAt`; inspector-only (no scene clutter). | ✅ (reuses `formatTimeAgo`) | `AgentInspector.jsx:~200` · `NarrowRoster.jsx:~59` |
+| ✅ AVO-169 | **Shipped (PR #177).** The inspector shows elapsed time for blocked and awaiting-approval states after 30 seconds. | Driven by real `changedAt` and shown in the inspector. | ✅ (reuses `formatTimeAgo`) | `agentInspectorModel.js` `stateDurationLabel` · `AgentInspector.jsx` |
 | AVO-170 | **Notification etiquette**: make the OS blocked-alert chime a user preference (don't blind-silence a functional "come back" alert) + audit the 30s-notice vs recurring-pattern paths so one episode can't double-fire unintentionally. | Visual banner unchanged; only fires while tab hidden + permission granted. | ✅ (calmer default, no new surface) | `desktopNotifier.js:94/115` `silent` · `:30` threshold |
 | ✅ AVO-186 | **DONE (2026-06-20)** — Cozy visual pass. (a) Declutter: plants 12→6 symmetric perimeter frame (dropped 4 redundant stacked pairs + the center crowder). (b) 5-expert design/game panel warm-palette restyle: lounge couch grey-blue→muted clay `#B97A4E` (4-tone ramp), CoffeeMachine body→espresso `#5A4A3E`, WaterCooler housing→putty `#D8CDBE`. Adversary lens pulled the group back from full terracotta to keep figure-ground. | Pure decoration/soft-furnishing only; NO signal-bearing colour touched (windows/monitors/gate/kanban/rug hues/clocks protected); plant count + desk-zone + no-cluster guarded. | ✅✅ (−6 specks; recolor adds nothing) | `PixelOffice.jsx` plants+Couch · `TopDownFurniture.jsx` Couch/CoffeeMachine/WaterCooler · guard `officeDecorationDensity.test.js` · `docs/reviews/2026-06-20-audit.md` |
 
-> **AC-SEQ:** each resolves to `do | refine | kill` with evidence when picked up. Likely first
-> pickups (owner pacing lean + core status-visibility value): **AVO-165** (walk-rhythm — measure
-> `getNextBehavior` split first) + **AVO-167** (await-you visibility). AVO-168/169/170 are cheap
-> measurable tunes; AVO-163/164 need the chill panel first; **AVO-166 is DONE (ADR-008)**.
+> **AC-SEQ:** resolve the remaining candidates AVO-163, AVO-168 and AVO-170 to
+> `do | refine | kill` with evidence when picked up. The recorded AVO-168 scope is rarity only.
 >
 > **Expert panel + build (2026-06-19, PR #177 — SHIPPED):** a 4-lens adversarial panel (cozy / honesty / REDUCE-skeptic
 > / status-legibility) verdicted **AVO-165 + AVO-167 + AVO-169 → DO**; **AVO-168 → descope (rarity-only,
@@ -133,7 +145,7 @@ last_updated: 2026-11-09
 > removed both conclusive patterns; channel capped to working role-hints; pure `classifyTitle` extracted
 > + tested, test-the-test verified; PR #174). **AVO-178/179 CLOSED as audit false-positives** — both
 > modules are already well-tested (movementSystem 54 cases / agentRouter 40 / contextBubble 27;
-> re-grep 2026-06-19). **Open:** AVO-163..170 (optimizations — need a chill panel + owner visual confirm).
+> re-grep 2026-06-19). See the tuning section above for the remaining candidate dispositions.
 >
 > **All 9 Bugs & Correctness items resolved**: AVO-171/172/173/174/175/176/177 fixed+merged (PR #173/#174);
 > AVO-178/179 closed as false positives. Lesson: a subagent "no test coverage / glob-verified" claim must
@@ -231,13 +243,29 @@ last_updated: 2026-11-09
 
 ---
 
-## Implementation Notes (open items only)
+## Source Summary
 
-### AVO-160 Custom sprite-asset pipeline (P3, brand)
-The unbuilt engine spec'd in `docs/SPRITE_REQUIREMENTS.md`: detect `public/sprites/<id>.png`,
-switch from procedural `getBaseSprite` to image render, fallback on miss. Foundation for
-hand-drawn art + AVO-124(b). Currently 0% built (no loader, no `public/sprites/`). This is the
-geometry/loader half; the actual art is separate (and not yet ticketed).
+### Worktree, inspector, and short-window sweep on 2026-11-11
+
+Source-level Node fixtures reproduced the worktree omission, key repeat, unbounded name path and inspector history eviction. Keyboard focus and floating feed height were reviewed in source. The in-app browser could not reach the local preview, so this sweep has no new rendered measurements. Relevant code was checked against local `origin/main` at `3e0ddc8`.
+
+### Small bug and visual polish sweep on 2026-11-11
+
+Chromium checks used the existing 2026-10-30 production build with isolated status responses. The relevant Settings, Activity Feed, and storage code was also checked against local `origin/main` (`3e0ddc8`, v1.7.0). Pixel appearance and walk cycles already have AVO-160 and AVO-207 upstream. The new rows are backlog intake only.
+
+### Complete remediation planning selected on 2026-10-23
+
+The owner selected the complete 2026-10-23 audit follow-up scope and added visitor desk crossings and a visibly larger boss. AVO-202 through AVO-205 share a draft spec and design. PR #267 subsequently delivered visitor routing. The AVO-202 row records what still needs to be reconciled against the draft before implementation.
+
+The planning draft records acceptance criteria, verification and rollback. Publish its references when the draft is ready to share.
+
+The approved rollout and visual ordering are in the Feature Inventory. The asset track uses the shipped AVO-160 foundation, with AVO-207 for reviewed art batches and AVO-124 for cosmetics. The earlier unfreeze authorization covered the AVO-199/200/201 rollout scope.
+
+## Implementation Notes
+
+### AVO-207 Pixel art batches (P3, brand)
+Use the v1.7.0 appearance manifest and the review checkpoints in
+`docs/specs/phased-pixel-character-refresh.md`. The spec and the shipped assets are in `origin/main`.
 
 ### AVO-124 Agent appearance customization (P3, brand)
 Name + color override already EXISTS and is documented (`?agents=` / `window.__office_config__`,
@@ -246,6 +274,8 @@ clothing. AVO-124 = the **sprite-cosmetic layer** (hats/accessories/outfits). Tw
 (a) procedural — let users override `CHAR_STYLES` (hairStyle/clothes) per role, no asset pipeline;
 (b) PNG sprite-assets via AVO-160. `characters.json` has an `accessory` field the renderer does
 NOT consume (CHAR_STYLES is authoritative) — reconcile when building.
+
+## Earlier Delivery Notes
 
 ### AVO-141 Comms / vertical roster optimization (P2) — SHIPPED (reframed)
 The ☰ roster → living-presence rail (PR #44) left "still lots of room". A 4-expert design panel
@@ -257,8 +287,9 @@ ADR-008) and self-hides in roster mode (the inline rail feed already covers it).
 deferred: idle-row condense, density-adaptive feed height, uniform card-chrome trim (touches protected
 responsive/label/sprite surfaces). Decision record: Work Log `feat-avo-141-comms-rail-optimization` D-1.
 
-### AVO-161 Dialogue layer — Wave B verdicts (P1, game-feel)
-Wave A shipped (PR #166). Wave B closes per AC-SEQ (`do|refine|kill` + evidence):
+### AVO-161 Dialogue layer — June 2026 design verdicts
+Wave A shipped in PR #166. These are the June verdicts for the original AC-SEQ proposals. The
+October content delivery is recorded in the shipped row above.
 - **S5 (stale-working ring decay) → `kill`** (2026-06-15). Shipped `idleGapInfer`
   (`PixelOffice.jsx:851`, production) already reclassifies `working → thinking` after **45s** of no
   (status,task) change (`WORKING_GAP_MS=45000`); `changedAt` advances only on a real sig change
