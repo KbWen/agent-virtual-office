@@ -55,6 +55,12 @@ export const PIXEL_V1_PACK = Object.freeze({
       views: {
         'back': { file: 'res-back.png', pivot: { x: 32, y: 57 }, sha256: 'bf5a7f160eb16ed06c495084248ac69c177be5c721cfb53047208529ce2b1e99' },
         'reading-book': { file: 'res-reading-book.png', pivot: { x: 32, y: 57 }, sha256: '2bfc9da351fd6268fb77d380388bb1ba4b6bc3309e290b20b1fce473d5e1daf9' },
+        // AVO-207 walk cycle (right-facing; mirrored for left). Derived by scripts/pixel_walk_derive.py.
+        // pivot y = measured sole row 56 + 1; x = measured torso centre (31.2-31.4 in every frame).
+        'walk-side-0': { file: 'res-walk-side-0.png', pivot: { x: 31.5, y: 57 }, sha256: '729eaff66c18a22cba5ccfccfb15c86ea910f81277338053a349ea4525b8b2c1' },
+        'walk-side-1': { file: 'res-walk-side-1.png', pivot: { x: 31.5, y: 57 }, sha256: '5ee2b66e35d69f646a2abd46e20da843f32e2a1c00237dc4dd9344b042fd673e' },
+        'walk-side-2': { file: 'res-walk-side-2.png', pivot: { x: 31.5, y: 57 }, sha256: '354f169c51d47fd23c5b694f37281b7e5e543c10bd8a69fa4dc294cd0f4db4b7' },
+        'walk-side-3': { file: 'res-walk-side-3.png', pivot: { x: 31.5, y: 57 }, sha256: '20163e5200334848731a3b8381bbc225352602d53ec064c457c0212157b31924' },
       } },
     gate:     { file: 'gate.png',     pivot: { x: 32, y: 56 }, sha256: '8692bcceee24a97423808a49c1a0bb5f6b31383ce87d9555b2b97b8889832dd8',
       views: {
@@ -82,6 +88,17 @@ function viewEntry(role, view, pack) {
 
 export function pixelHasBackView(role, pack = PIXEL_V1_PACK) {
   return !!pack.roles[role]?.views?.back
+}
+
+// AVO-207 walk cycle: four right-facing side frames, used only when ALL four are reviewed and
+// listed (a partial set never shows). Returns the view for walk step `step` (0..3 cycles), or null.
+export const WALK_CYCLE_FRAMES = 4
+export function pixelWalkView(role, step, pack = PIXEL_V1_PACK) {
+  const views = pack.roles[role]?.views
+  if (!views) return null
+  for (let i = 0; i < WALK_CYCLE_FRAMES; i++) if (!views[`walk-side-${i}`]) return null
+  const n = Number.isFinite(step) ? Math.trunc(step) : 0
+  return `walk-side-${((n % WALK_CYCLE_FRAMES) + WALK_CYCLE_FRAMES) % WALK_CYCLE_FRAMES}`
 }
 
 // Behavior -> signature action pose. A role shows a pose only for ITS OWN signature behavior and

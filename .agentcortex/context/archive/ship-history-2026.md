@@ -76,6 +76,13 @@ Rotated 1 additional entry on 2026-10-07 (SSoT Update Sequence 145 -> 146).
 
 Rotated 1 additional entry on 2026-10-11 (SSoT Update Sequence 147 -> 148).
 
+Rotated 1 additional entry on 2026-11-14 (SSoT Update Sequence 162 -> 163).
+
+### Ship-hotfix-avo-199-vite-security-2026-10-21
+
+- Owner-approved Vite8.2.1->8.2.4 security patch clears PR259 dependency audit; only existing Vite requirement/package metadata changed, all other locked versions retained. Runtime dependency placement is preserved.
+- Verification: audit0; full2897PASS/3existing skips; build/budget, browser7views45captures0errors and render/panel smoke PASS; independent manifest/lock review PASS. CI final status is tracked on PR259; no merge claim.
+
 ### Ship-chore-release-v1.6.11-2026-10-11 (live status over HTTPS, and the characters get a little more personality) · release v1.6.11
 
 - Cuts the 3 PRs merged since `v1.6.10` (#254, #255, #256) as **v1.6.11** (patch). #254/#255 were done by Gemini (Antigravity); #256 is the post-merge review that fixed their cut-off bubble lines and the lore book's false "100% aligned" claim. The release commit contains no app code: `package.json` 1.6.10 -> 1.6.11, **both** `package-lock.json` root version fields (0 `"version": "1.6.10"` strings left), the CHANGELOG narrative, and this entry.
