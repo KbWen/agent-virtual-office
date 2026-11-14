@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-11-09T02:50:36Z
+- **Last Updated**: 2026-11-14T06:38:18Z
 - **Last Verified**: 2026-11-14
-- **Update Sequence**: 162
+- **Update Sequence**: 163
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -61,6 +61,7 @@
     - **Session closure** — final retro at `docs/reviews/2026-05-29-session-retro.md` (snapshot, not authoritative). 27 commits ahead of `origin/main`, 0 behind. `main` branch is the canonical state; `_product-backlog.md` lean (14 items: AVO-101..AVO-115 minus done + #20 deferred); `_shipped-log.md` holds 73 prior shipped rows; vitest 960/960; build 887ms clean. All work-log archives in place + INDEX.jsonl up to date. Push to origin pending human confirmation.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
+  - [ui-rendering] docs/specs/avo-207-pixel-walk-cycles.md [Shipped] [Updated: 2026-11-14] *(AVO-207 increment 1: Pixel walk cycle for Res (right frames, mirrored left, front master for up/down + reduced motion) and the raw-frame derivation recipe scripts/pixel_walk_derive.py; other roles join as data after review)*
   - [ui-rendering] docs/specs/phased-pixel-character-refresh.md [Shipped] [Updated: 2026-11-09] *(AVO-160 [chair back 2026-11-09]: optional Classic/Pixel appearance — 8 masters, atomic preload, seated back view while working, honesty-gated signature poses, visitor routes on shared navigation; gait frames continue in AVO-207)*
   - [hook-integration] docs/specs/signal-lifecycle-compatibility.md [Shipped] [Updated: 2026-10-30] *(Claude/native Codex lifecycle parity, truthful source/subagent retirement, safe installation and privacy; v1.6.14)*
   - [ui-rendering] docs/specs/cozy-interactions.md [Shipped] [Updated: 2026-10-24] *(AVO-206: scene gestures, duration star, decorated postcard and CSP-safe preview/Blob export; owner-authorized agent validation; code 5a08b58)*
@@ -88,9 +89,6 @@
   - [ui-rendering] docs/specs/character-roster-lore.md [Shipped]  *(character roster lore & interconnected storylines + automated visual preview asset)*
   - [ui-rendering] docs/specs/calm-stationery-palette.md [Shipped]  *(warm-oak floor/walls + paper inspector with role-tint header, owner-chosen from rendered candidates; all shell/sign/card colours are tokens in `src/systems/officePalette.js` with enforced legibility rules R1–R5)*
   - [ui-rendering] docs/specs/review-2026-09-19-remediation.md [Shipped]  *(2026-09-19 external review, wave 1 — REV-01/02/03/08/09: panel-mode overlays clamp to the live viewBox; no speech is moved into view for an off-crop speaker (both axes + the #47 clamp); dead page-title status channel deleted; relative times tick every 10 s; PR #236)*
-  - [hook-io] docs/specs/hook-robustness-privacy.md [Shipped]  *(2026-09-26 audit remediation: lock TOCTOU identity-verified steal-close (token+mtime post-rename recheck) + orphan `.stale.*` cleanup; `atomicWriteJson` EPERM/EBUSY retry; `WebSearch`/`Agent` privacy-leak fixes (raw query/description no longer surfaced); `bridge.js` client-forgeable `source` field closed; `generic-llm-bridge.js` `--watch`-dir git-diff scope + anchored ignore regex + `--port=` support; `cli.js` symlink-safe settings write + null-guard uninstall)*
-  - [office-runtime] docs/specs/client-runtime-hygiene.md [Shipped]  *(2026-09-26 audit remediation: confirmed-unchanged (304) poll refreshes the 120s staleness timer; SSE retries every 60s post-give-up, cadence-down gated on a genuine `open` event; persist dedupe key fixed (`_savedAt` excluded); same-day `dailyDoneLedger`/`dailyBlockedLedger` survive a >4h tab-closed gap; `desktopNotifier` per-tick eviction pruning; `clearExternalStatus` eviction parity with `applyExternalStatus`/`abortAgentMovement`)*
-  - [office-runtime] docs/specs/honest-office-events.md [Shipped]  *(2026-09-26 audit remediation: `hasRequiredActors()` symmetric pre-fire refusal for a non-empty-but-wrong cast (AVO-191 sibling); idle-gap inference preserves real carry-fields/`changedAt` instead of a synthetic-fresh signal; real work releases a stale group-event pose; `fireWithCast` exported + mutex/epoch-guarded against stale/aborted-fire races; owner-visible Friday-15:00 cadence swap to `group-meeting` (G2))*
   - When reading specs: only open files tagged with the current task's module.
   - Older `[Shipped]` index lines are in `## Spec Index Archive` at the bottom of this file. Spec bodies stay in `docs/specs/` — only index lines rotate.
 - **Canonical Commands**:
@@ -159,6 +157,10 @@
 
 ## Ship History
 
+### Ship-claude-gemini-image-quota-character-actions-23ad2f-2026-11-14
+- Feature shipped: AVO-207 increment 1 — Res walks with a reviewed 4-frame side cycle in the Pixel appearance (mirrored for left; up/down, reduced motion and incomplete sets keep the front master; Classic unchanged) + deterministic raw-frame derivation recipe with a mandatory --review overlay. PR #273 (6b41b58, 9e0484d). Owner approved the same-state before/after.
+- Tests: 3109 PASS / 1 pre-existing Windows tar failure (also on main); build + budget PASS; independent red-team review PASS (M1/L2/L3 fixed, M2/M3 gated by overlay review, L1 recorded).
+
 ### Ship-chore-release-v1.7.0-2026-11-09
 - Release v1.7.0: optional Pixel appearance, seated working view, honesty-gated signature poses, visitor routes on shared navigation (#267), seated chair back (#268) + distribution-provenance docs (#266). package.json and both package-lock version fields 1.6.14 -> 1.7.0; CHANGELOG narrative.
 - Tag, GitHub Release and release-PR merge are recorded externally, not assumed here. No npm publication.
@@ -204,14 +206,11 @@
 - Validation: full2897PASS/3existing skips; build514383bytes within546154budget; pack-smokePASS; audit0; independent release-notes/version/diff reviewPASS. Final governance evidence is in the release work-log archive.
 - After the release-cut PR is green and merged: annotated v1.6.12 tag at the exact release merge commit, push the tag, then create the latest GitHub Release. Publication is not claimed by this pre-merge metadata checkpoint.
 
-
-### Ship-hotfix-avo-199-vite-security-2026-10-21
-
-- Owner-approved Vite8.2.1->8.2.4 security patch clears PR259 dependency audit; only existing Vite requirement/package metadata changed, all other locked versions retained. Runtime dependency placement is preserved.
-- Verification: audit0; full2897PASS/3existing skips; build/budget, browser7views45captures0errors and render/panel smoke PASS; independent manifest/lock review PASS. CI final status is tracked on PR259; no merge claim.
-
 ## Spec Index Archive
 
+  - [hook-io] docs/specs/hook-robustness-privacy.md [Shipped]  *(2026-09-26 audit remediation: lock TOCTOU identity-verified steal-close (token+mtime post-rename recheck) + orphan `.stale.*` cleanup; `atomicWriteJson` EPERM/EBUSY retry; `WebSearch`/`Agent` privacy-leak fixes (raw query/description no longer surfaced); `bridge.js` client-forgeable `source` field closed; `generic-llm-bridge.js` `--watch`-dir git-diff scope + anchored ignore regex + `--port=` support; `cli.js` symlink-safe settings write + null-guard uninstall)*
+  - [office-runtime] docs/specs/client-runtime-hygiene.md [Shipped]  *(2026-09-26 audit remediation: confirmed-unchanged (304) poll refreshes the 120s staleness timer; SSE retries every 60s post-give-up, cadence-down gated on a genuine `open` event; persist dedupe key fixed (`_savedAt` excluded); same-day `dailyDoneLedger`/`dailyBlockedLedger` survive a >4h tab-closed gap; `desktopNotifier` per-tick eviction pruning; `clearExternalStatus` eviction parity with `applyExternalStatus`/`abortAgentMovement`)*
+  - [office-runtime] docs/specs/honest-office-events.md [Shipped]  *(2026-09-26 audit remediation: `hasRequiredActors()` symmetric pre-fire refusal for a non-empty-but-wrong cast (AVO-191 sibling); idle-gap inference preserves real carry-fields/`changedAt` instead of a synthetic-fresh signal; real work releases a stale group-event pose; `fireWithCast` exported + mutex/epoch-guarded against stale/aborted-fire races; owner-visible Friday-15:00 cadence swap to `group-meeting` (G2))*
   - [multi-agent] docs/specs/pair-programming-huddle.md [Shipped]  *(AVO-106 — co-editing pair OVERLAY (desk-to-desk link); per-agent activeFile, edit-only; redesigned from a huddle per expert panel)*
   - [ci-infra] docs/specs/ci-render-smoke.md [Shipped]  *(AVO-145 / hardening-wave H1 — blocking render-smoke gate; AC-6 test-the-test proven)*
   - [hook-io] docs/specs/hook-runtime-contract.md [Shipped]  *(AVO-153 / stability-wave W4 — live-captured fixtures + 143 contract tests; found the tool_response/tool_result divergence → AVO-154)*

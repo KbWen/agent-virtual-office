@@ -1,5 +1,5 @@
 ---
-status: frozen
+status: shipped
 title: Pixel walk cycles (AVO-207 increment 1 — derivation recipe + Res)
 backlog: AVO-207
 classification: feature

@@ -2,7 +2,7 @@
 status: living
 title: Agent Virtual Office — Product Backlog
 created: 2026-05-29
-last_updated: 2026-11-11
+last_updated: 2026-11-14
 ---
 
 # Agent Virtual Office — Product Backlog
@@ -42,7 +42,7 @@ last_updated: 2026-11-11
 | AVO-213 | Give the agent inspector a predictable keyboard focus path | review-finding | info-density | P2 | — | quick-win | Pending | Source review: [agent Enter](../../src/components/AgentCharacter.jsx#L1588) opens the [inspector](../../src/components/AgentInspector.jsx#L55) without moving focus. Closing via Escape or the close button does not restore the opener. Verify a named inspector is reachable on open and focus returns to the originating agent on close. |
 | AVO-201 | Real-clock quiet night/weekend window and existing-light polish | product | vibe-rebalance | P3 | docs/specs/avo-201-real-clock-off-hours.md | feature | Pending | Plan frozen and design approved; requires AVO-199 quiet state; no added furniture; runtime not started. |
 | AVO-200 | Signal-driven single planning seat in the existing meeting room | product | real-ai-behavior | P3 | docs/specs/avo-200-planning-pod-meeting-room.md | architecture-change | Pending | Plan frozen; ADR-011 and design accepted; after AVO-199 shared rollout config; runtime not started. |
-| AVO-207 | Pixel gait cycles and further reviewed views | product | brand | P3 | docs/specs/avo-207-pixel-walk-cycles.md | feature | In Progress | AVO-160 delivered. At v1.7.0, the first research/architect walk batch had 7 of 8 raw frames. Finish the missing frame, derive transparent PNGs, and record the in-scene R2 review before each batch ships. |
+| AVO-207 | Pixel gait cycles and further reviewed views | product | brand | P3 | docs/specs/avo-207-pixel-walk-cycles.md | feature | In Progress | Increment 1 shipped in PR #273 (2026-11-14): walk-cycle mechanism, derivation recipe (`scripts/pixel_walk_derive.py`, `--review` overlay required) and Res's cycle. Remaining: other roles' cycles after Gemini fix waves 5A/5B pass per-role review (frames must match the master natively; no resizing), then boss/dog/cat. |
 | AVO-124 | Agent appearance customization (sprite cosmetics — hats/accessories/outfits) | product | brand | P3 | — | feature | Pending | AVO-160 for PNG path |
 | AVO-211 | Run a focused Windows CLI smoke job in CI | infra | ci-infra | P3 | — | quick-win | Pending | [CI](../../.github/workflows/ci.yml#L9) currently runs the product jobs on Ubuntu. The [pack smoke spec](npm-pack-install-smoke.md) scoped Windows to local verification. Reuse the existing Windows-aware setup, uninstall, and hook fixtures in a small `windows-latest` job with isolated temporary config directories. |
 | AVO-214 | Prevent held keyboard shortcuts from toggling repeatedly | review-finding | info-density | P3 | — | quick-win | Pending | Source repro: a press and two repeated keydowns invoke [Space pause and L language change](../../src/App.jsx#L21) three times each. Verify held Space and L perform one action while focused controls retain their native keyboard behavior. |
