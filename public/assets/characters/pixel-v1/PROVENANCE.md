@@ -58,3 +58,23 @@ own signature behavior and is not walking.
 | qa-reading-magnifier.png | candidates/2026-11-05-regenerated/characters/qa/actions/reading-magnifier-0.png | a2f9a1ca45b9ce7f… | 2bfcf0164c8a0a3197d7abfce1d32c04cd3935dc6cc63cb67c29398941ac629d | 31 | 31.5, 57 |
 | res-back.png | candidates/2026-11-07-directions/characters/res/idle-up-0.png | 17150b272363f8ac… | bf5a7f160eb16ed06c495084248ac69c177be5c721cfb53047208529ce2b1e99 | 4 | 32, 57 |
 | res-reading-book.png | candidates/2026-11-05-regenerated/characters/res/actions/reading-book-0.png | b962cf6df56ddcd5… | 2bfc9da351fd6268fb77d380388bb1ba4b6bc3309e290b20b1fce473d5e1daf9 | 57 | 32, 57 |
+
+## Walk cycles (AVO-207) — derived 2026-11-14
+
+Spec: `docs/specs/avo-207-pixel-walk-cycles.md`. Owner rule: a frame ships only if it matches its master natively
+(size and look); nothing is resized or repainted. Sources are raw Gemini 1024x1024 JPEG frames on white,
+reviewed in the external kit (`phased-handoff/REVIEW-WALK-W1-20261114.md`).
+
+Runtime files are DERIVED by `python scripts/pixel_walk_derive.py <raw> <master> <out>`: exact-grid check
+(refuses off-grid raws), per-block centre median (JPEG noise), border-connected near-white -> transparent, enclosed
+near-white gaps (background between arm and body) -> transparent unless the master uses that colour, rim pass
+(max 2 layers) for light near-neutral outline pixels whose colour is not on the master's own outline. The 64x64
+logical drawing is unchanged. Pivot = measured sole row + 1, x = measured torso centre. Re-running the command
+reproduces the same bytes.
+
+| file | source (2026-11-08-gait/needs-review/) | source sha256 | runtime sha256 | px cleared (enclosed gap + rim) | pivot (x, y) |
+|---|---|---|---|---|---|
+| res-walk-side-0.png | candidates-20261108-res-walk-side-0-raw.jpg | 87e75480c6d19f01… | 729eaff66c18a22cba5ccfccfb15c86ea910f81277338053a349ea4525b8b2c1 | 2 gap + 28 rim | 31.5, 57 |
+| res-walk-side-1.png | candidates-20261108-res-walk-side-1-raw.jpg | 628e41ab2896205c… | 5ee2b66e35d69f646a2abd46e20da843f32e2a1c00237dc4dd9344b042fd673e | 2 gap + 16 rim | 31.5, 57 |
+| res-walk-side-2.png | candidates-20261108-res-walk-side-2-raw.jpg | ab97c1c7c0b6cb37… | 354f169c51d47fd23c5b694f37281b7e5e543c10bd8a69fa4dc294cd0f4db4b7 | 0 gap + 17 rim | 31.5, 57 |
+| res-walk-side-3.png | candidates-20261108-res-walk-side-3-raw.jpg | 55a945b69e1b3b57… | 20163e5200334848731a3b8381bbc225352602d53ec064c457c0212157b31924 | 3 gap + 15 rim | 31.5, 57 |

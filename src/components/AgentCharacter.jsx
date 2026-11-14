@@ -442,7 +442,7 @@ export const CharacterPixelSprite = React.memo(function CharacterPixelSprite({ c
     // Seated back view (R1 option C): face rows become the back of the head; expressions are
     // not visible from behind, live status stays in the overlays.
     if (back && !isMoving) return applyBackView(sprites.idle, style.hair, darken(style.hair, 30))
-    const base = isMoving ? (walkFrame ? sprites.walk2 : sprites.walk1) : sprites.idle
+    const base = isMoving ? (walkFrame % 2 ? sprites.walk2 : sprites.walk1) : sprites.idle
     return applyExpression(base, expression)
   }, [isMoving, walkFrame, sprites, expression, back, style.hair])
 
@@ -943,7 +943,8 @@ function AgentCharacter({ agent }) {
   // Walk animation timer (leg alternation)
   useEffect(() => {
     if (!isWalking) return
-    const iv = reducedMotion ? null : setInterval(() => setWalkFrame((f) => 1 - f), WALK_FRAME_INTERVAL)
+    // 0..3 walk step: Classic alternates legs on step % 2; Pixel walk cycles use all four (AVO-207).
+    const iv = reducedMotion ? null : setInterval(() => setWalkFrame((f) => (f + 1) % 4), WALK_FRAME_INTERVAL)
     return () => { if (iv) clearInterval(iv) }
   }, [isWalking, reducedMotion])
 
@@ -1711,6 +1712,7 @@ function AgentCharacter({ agent }) {
           actor group (rings, labels, badges, bubbles, input) is shared by both appearances. */}
       <CharacterBody appearance={appearance} charId={id} isMoving={isWalking} reducedMotion={reducedMotion}
         seated={seated} seatClipId={`seat-clip-${id}`} behavior={state.behavior} status={state.status || 'idle'}
+        facing={state.facing || 'down'} walkStep={walkFrame}
         classic={(
           <CharacterPixelSprite
             charId={id}
