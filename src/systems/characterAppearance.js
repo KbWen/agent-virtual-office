@@ -35,11 +35,19 @@ export const PIXEL_V1_PACK = Object.freeze({
       views: {
         'back': { file: 'arch-back.png', pivot: { x: 31, y: 56 }, sha256: '339522ca5bd498b4cf88273344b53d07442e497c6f10ed7de953759163fbd817' },
         'pointing-board': { file: 'arch-pointing-board.png', pivot: { x: 31.5, y: 56 }, sha256: '055e340d98d5aa94e8f2e37610451b130446288a03eb80711575badb2363b793' },
+        'walk-side-0': { file: 'arch-walk-side-0.png', pivot: { x: 32, y: 57 }, sha256: 'aef5bb2732bb48e90fce38b0259dd83c4fbedf84400d116cf135ba6540f3ebb3' },
+        'walk-side-1': { file: 'arch-walk-side-1.png', pivot: { x: 32, y: 57 }, sha256: 'f2a3ccc6af53de9d496309e1a4cd7bd8fb71338537a8934ae3a6b5a2b92dd1db' },
+        'walk-side-2': { file: 'arch-walk-side-2.png', pivot: { x: 32, y: 57 }, sha256: 'c2300332facd5b016fd8ccdc911a463ee8499a964e0fffb0d5923867fc76df86' },
+        'walk-side-3': { file: 'arch-walk-side-3.png', pivot: { x: 32, y: 57 }, sha256: '4c5a1287d5782cb6dd56c63837f91244923ad4802bb613ff2a49801c81bc6f85' },
       } },
     dev:      { file: 'dev.png',      pivot: { x: 36, y: 55 }, sha256: 'da81bee1bd1cb480783c878236458f6ded0d8ce88b9b8f81041c9c2cf1d4bd31',
       views: {
         'back': { file: 'dev-back.png', pivot: { x: 36, y: 57 }, sha256: '1e7564273729f2b1c7791741621d82274de681986a6eb64f4423ee65691b316b' },
         'drinking-coffee': { file: 'dev-drinking-coffee.png', pivot: { x: 36, y: 57 }, sha256: 'bbdd786f7f5941e7822ce31a5b816226d2d8a285b33af8e81a3131445cfa9424' },
+        'walk-side-0': { file: 'dev-walk-side-0.png', pivot: { x: 29.5, y: 56 }, sha256: '73a0861b23e6347cb3e5a9357a2629bf9fe8ab17e1476779642205c5a85c0b67' },
+        'walk-side-1': { file: 'dev-walk-side-1.png', pivot: { x: 29.5, y: 56 }, sha256: 'aa18e231a77bb4b343ce65d4b80b504c10ef1161f75ed030c0012f46c8db7de0' },
+        'walk-side-2': { file: 'dev-walk-side-2.png', pivot: { x: 29.5, y: 56 }, sha256: '23c029f38658865b7e0d6cc3992b7a0fdd1892e30b0fd3b1dd0d8ebf7984940e' },
+        'walk-side-3': { file: 'dev-walk-side-3.png', pivot: { x: 29.5, y: 56 }, sha256: '64ee8d5a11885606e1413f0d4c642d023c87078fcce8d8971f59a2022afdadcf' },
       } },
     qa:       { file: 'qa.png',       pivot: { x: 32, y: 56 }, sha256: 'd5f64afbf0a3778e1fe99fd5114fd409bcc60447e0de5f59a995a454f4f854ed',
       views: {
@@ -57,6 +65,8 @@ export const PIXEL_V1_PACK = Object.freeze({
         'reading-book': { file: 'res-reading-book.png', pivot: { x: 32, y: 57 }, sha256: '2bfc9da351fd6268fb77d380388bb1ba4b6bc3309e290b20b1fce473d5e1daf9' },
         // AVO-207 walk cycle (right-facing; mirrored for left). Derived by scripts/pixel_walk_derive.py.
         // pivot y = measured sole row 56 + 1; x = measured torso centre (31.2-31.4 in every frame).
+        // Arch/Dev walk views: pivot y = each frame's sole row + 1, x = the role's mean torso centre
+        // (one value per role). PM/QA/Ops/Designer/Gate cycles are held back (legs do not read as walking).
         'walk-side-0': { file: 'res-walk-side-0.png', pivot: { x: 31.5, y: 57 }, sha256: '729eaff66c18a22cba5ccfccfb15c86ea910f81277338053a349ea4525b8b2c1' },
         'walk-side-1': { file: 'res-walk-side-1.png', pivot: { x: 31.5, y: 57 }, sha256: '5ee2b66e35d69f646a2abd46e20da843f32e2a1c00237dc4dd9344b042fd673e' },
         'walk-side-2': { file: 'res-walk-side-2.png', pivot: { x: 31.5, y: 57 }, sha256: '354f169c51d47fd23c5b694f37281b7e5e543c10bd8a69fa4dc294cd0f4db4b7' },

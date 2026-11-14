@@ -16,7 +16,10 @@ into the 512x512 RGBA runtime file WITHOUT changing the drawing:
   * rim pass (max RIM_LAYERS): light (min channel > LIGHT_MIN), near-neutral pixels on the outside
     edge whose colour is not within PALETTE_TOL of a colour on the role master's OWN outline ->
     alpha 0. This clears the light halo/corner pixels Gemini adds around the silhouette, while a
-    light colour the master itself shows on its outline (silver hair, white sneakers) is kept.
+    light colour the master itself shows on its outline (silver hair, white sneakers) is kept --
+    unless that edge pixel is more than HALO_DELTA brighter than every non-edge figure pixel beside
+    it (outlines are never lighter than what they wrap), which is how the specks that happen to
+    match a master white are cleared (Dev hair, Gate/QA feet, review 2026-11-14)
   * every other logical pixel is copied unchanged, opaque, as an exact 8x8 block
 
 Never crops, recentres, resizes, rescales or repaints the figure: the 64x64 logical drawing is
@@ -43,6 +46,7 @@ GRID = 64
 MAX_BLOCK_SPREAD = 24      # p95 per-block channel spread; JPEG noise on exact-grid art measures 7-11
 BG_MIN, BG_SPREAD = 232, 14
 LIGHT_MIN, NEUTRAL_SPREAD, PALETTE_TOL, RIM_LAYERS = 100, 30, 10, 2
+HALO_DELTA = 12            # an edge pixel this much brighter than all its inner neighbours is halo
 OUT_BLOCK = 8
 
 
@@ -108,8 +112,25 @@ def derive(raw_path, master_path, out_path, review_path=None):
     def in_palette(c, pal=None):
         return any(all(abs(a - b) <= PALETTE_TOL for a, b in zip(c, p)) for p in (palette if pal is None else pal))
 
-    def rim_like(c):
-        return min(c) > LIGHT_MIN and max(c) - min(c) < NEUTRAL_SPREAD and not in_palette(c)
+    def light_neutral(c):
+        return min(c) > LIGHT_MIN and max(c) - min(c) < NEUTRAL_SPREAD
+
+    def lum(c):
+        return sum(c) / 3
+
+    def rim_like(x, y):
+        c = cells[y][x]
+        if not light_neutral(c):
+            return False
+        if not in_palette(c):
+            return True
+        # A master colour is still halo when it sits on the edge clearly brighter than every
+        # figure pixel beside it that is not itself on the edge: pixel-art outlines are never
+        # lighter than the interior they wrap (a white sneaker's edge has white sneaker inside).
+        inner = [cells[ny][nx] for nx, ny in neighbours(x, y)
+                 if 0 <= nx < GRID and 0 <= ny < GRID and (nx, ny) not in outside
+                 and not any(m in outside for m in neighbours(nx, ny))]
+        return all(lum(c) - lum(n) > HALO_DELTA for n in inner)
 
     outside = set()
     stack = [(x, y) for x in range(GRID) for y in (0, GRID - 1)] + [(x, y) for y in range(GRID) for x in (0, GRID - 1)]
@@ -142,7 +163,7 @@ def derive(raw_path, master_path, out_path, review_path=None):
     rim = []
     for _ in range(RIM_LAYERS):
         layer = [(x, y) for y in range(GRID) for x in range(GRID)
-                 if (x, y) not in outside and rim_like(cells[y][x])
+                 if (x, y) not in outside and rim_like(x, y)
                  and any(n in outside for n in neighbours(x, y))]
         if not layer:
             break
@@ -183,7 +204,7 @@ def derive(raw_path, master_path, out_path, review_path=None):
         'recipe': {'grid': GRID, 'max_block_spread': MAX_BLOCK_SPREAD, 'bg_min': BG_MIN, 'bg_spread': BG_SPREAD,
                    'light_min': LIGHT_MIN, 'neutral_spread': NEUTRAL_SPREAD,
                    'rim_palette': 'master outline', 'gap_palette': 'master full', 'palette_tol': PALETTE_TOL,
-                   'rim_layers': RIM_LAYERS},
+                   'rim_layers': RIM_LAYERS, 'halo_delta': HALO_DELTA},
         'block_spread_p95': p95, 'background_px': background, 'enclosed_gaps': [list(h) for h in holes],
         'rim_removed': len(rim), 'rim': rim,
         'head_row': min(rows), 'sole_row': sole, 'sole_cols': [sole_cols[0], sole_cols[-1]],

@@ -146,8 +146,8 @@ describe('appearance store (atomic pack switch)', () => {
     expect(new Set(urls).size).toBe(urls.length)
     expect(urls.filter(u => /pixel-v1\/[a-z]+\.png$/.test(u))).toHaveLength(8)
     expect(urls.filter(u => u.includes('-back.png'))).toHaveLength(8)
-    expect(urls.filter(u => u.includes('-walk-side-'))).toHaveLength(4) // AVO-207: Res only so far
-    expect(urls).toHaveLength(8 + 8 + 8 + 4) // front + back + one signature action per role + Res walk cycle
+    expect(urls.filter(u => u.includes('-walk-side-'))).toHaveLength(3 * 4) // AVO-207: res, arch, dev (pm/qa/ops/designer/gate held back)
+    expect(urls).toHaveLength(8 + 8 + 8 + 3 * 4) // front + back + one signature action per role + 3 walk cycles
   })
 
   it('urls are same-origin relative paths under the pack folder', () => {
@@ -195,14 +195,17 @@ describe('pixelWalkView (AVO-207)', () => {
   })
 
   it('returns null for a role without a cycle and for an incomplete set', () => {
-    expect(pixelWalkView('gate', 0)).toBeNull()
     expect(pixelWalkView('nobody', 0)).toBeNull()
+    for (const role of ['pm', 'qa', 'ops', 'designer', 'gate']) expect(pixelWalkView(role, 0), role).toBeNull()
+    expect(pixelWalkView('res', 0, { roles: { res: {} } })).toBeNull()
     const partial = { roles: { res: { views: { 'walk-side-0': {}, 'walk-side-1': {}, 'walk-side-2': {} } } } }
     expect(pixelWalkView('res', 0, partial)).toBeNull()
   })
 
   it('walk frames are part of the atomic preload', () => {
     const urls = requiredPixelUrls()
-    for (let i = 0; i < 4; i++) expect(urls.some((u) => u.endsWith(`/res-walk-side-${i}.png`))).toBe(true)
+    for (const role of ['res', 'arch', 'dev']) {
+      for (let i = 0; i < 4; i++) expect(urls.some((u) => u.endsWith(`/${role}-walk-side-${i}.png`)), `${role} ${i}`).toBe(true)
+    }
   })
 })

@@ -13,13 +13,14 @@ export function useOfficeAppearance() {
 // Pixel   → the role's front master for every facing (Phase 1: no mirroring, no pasted
 //           classic arms/face, unsupported expressions stay neutral).
 // (Not memoised: `classic` is a fresh element every parent render; PixelBody itself is memoised.)
-// Pixel pose priority: walking -> the role's reviewed side walk cycle when it faces left/right and
-// motion is allowed (AVO-207; mirrored for left), otherwise the front master; stationary doing the
-// role's own signature behavior (work-claiming poses only with a live working status) -> that action,
-// facing the viewer, even at the desk; seated at desk (working) -> back; otherwise front master.
-export function pixelViewFor({ charId, isMoving = false, seated = false, behavior = null, status = 'idle', facing = 'down', walkStep = 0, reducedMotion = false }) {
+// Pixel pose priority: walking -> the role's reviewed side walk cycle when motion is allowed
+// (AVO-207; mirrored for left; walking up/down keeps the last left/right side, owner 2026-11-14),
+// otherwise the front master; stationary doing the role's own signature behavior (work-claiming
+// poses only with a live working status) -> that action, facing the viewer, even at the desk;
+// seated at desk (working) -> back; otherwise front master.
+export function pixelViewFor({ charId, isMoving = false, seated = false, behavior = null, status = 'idle', walkStep = 0, reducedMotion = false }) {
   if (isMoving) {
-    if (reducedMotion || (facing !== 'left' && facing !== 'right')) return 'front'
+    if (reducedMotion) return 'front'
     return pixelWalkView(resolvePixelRole(charId), walkStep) || 'front'
   }
   const action = pixelActionView(resolvePixelRole(charId), behavior, { working: isWorkingStatus(status) })
@@ -31,11 +32,13 @@ export function isWalkView(view) {
   return typeof view === 'string' && view.startsWith('walk-side-')
 }
 
-export function CharacterBody({ appearance, charId, isMoving = false, reducedMotion = false, classic, seated = false, seatClipId = 'seat-clip', behavior = null, status = 'idle', facing = 'down', walkStep = 0 }) {
+export function CharacterBody({ appearance, charId, isMoving = false, reducedMotion = false, classic, seated = false, seatClipId = 'seat-clip', behavior = null, status = 'idle', facing = 'down', sideFacing = 'right', walkStep = 0 }) {
   if (appearance !== 'pixel') return <SeatedFrame seated={seated} clipId={seatClipId}>{classic}</SeatedFrame>
-  const view = pixelViewFor({ charId, isMoving, seated, behavior, status, facing, walkStep, reducedMotion })
-  // Walk frames face right; facing left mirrors them around the foot anchor (local x = 0).
-  const mirrored = isWalkView(view) && facing === 'left'
+  const view = pixelViewFor({ charId, isMoving, seated, behavior, status, walkStep, reducedMotion })
+  // Walk frames face right; facing left mirrors them around the foot anchor (local x = 0). Walking
+  // up/down has no front/back frames, so it keeps the last horizontal side (`sideFacing`).
+  const side = facing === 'left' || facing === 'right' ? facing : sideFacing
+  const mirrored = isWalkView(view) && side === 'left'
   // A standing action pose at the desk is drawn standing (unclipped); only the back view sits.
   return <SeatedFrame seated={seated && view === 'back'} clipId={seatClipId} pixel><PixelBody charId={charId} isMoving={isMoving} reducedMotion={reducedMotion} view={view} mirrored={mirrored} /></SeatedFrame>
 }

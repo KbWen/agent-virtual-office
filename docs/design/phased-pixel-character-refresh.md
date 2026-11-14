@@ -54,10 +54,16 @@ stored with the work-log evidence.
 Spec: `docs/specs/avo-207-pixel-walk-cycles.md`. Pixel only; Classic unchanged.
 
 ```
-facing right, walking      facing left, walking        facing up/down or reduced motion
-[f0][f1][f2][f3] loop      same frames, mirrored        front master (as before)
- 250 ms per frame          around the foot anchor       + existing 1-unit bob (front only)
+facing right, walking      facing left, walking        facing up/down            reduced motion
+[f0][f1][f2][f3] loop      same frames, mirrored        side cycle on the last    front master,
+ 250 ms per frame          around the foot anchor       left/right side           no bob
 ```
+
+- Walking up/down (increment 2, owner 2026-11-14): there are no front/back walk frames, so the
+  role keeps walking with its side cycle on the last left/right side it faced (initially right).
+  A role without an accepted cycle keeps the front master + 1-unit bob for every facing.
+- A cycle is accepted only if the legs visibly swap: the two contact frames (f0, f2) and the two
+  passing frames (f1, f3) must not be near-copies of each other.
 
 - Frames are 64-grid side views drawn at the master's size; each frame's measured sole sits on the
   unchanged world foot anchor (local 0,0), so switching between walking and standing never moves

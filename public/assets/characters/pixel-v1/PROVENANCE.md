@@ -85,3 +85,32 @@ recorded.
 | res-walk-side-1.png | candidates-20261108-res-walk-side-1-raw.jpg | 628e41ab2896205c… | 5ee2b66e35d69f646a2abd46e20da843f32e2a1c00237dc4dd9344b042fd673e | 2 gap + 16 rim | 31.5, 57 |
 | res-walk-side-2.png | candidates-20261108-res-walk-side-2-raw.jpg | ab97c1c7c0b6cb37… | 354f169c51d47fd23c5b694f37281b7e5e543c10bd8a69fa4dc294cd0f4db4b7 | 0 gap + 17 rim | 31.5, 57 |
 | res-walk-side-3.png | candidates-20261108-res-walk-side-3-raw.jpg | 55a945b69e1b3b57… | 20163e5200334848731a3b8381bbc225352602d53ec064c457c0212157b31924 | 3 gap + 15 rim | 31.5, 57 |
+
+### Other roles — derived 2026-11-14 (AVO-207 increment 2)
+
+Sources: accepted W1 frames plus Gemini fix waves 5A/5B (regenerated with one accepted sibling frame attached as
+size/look reference), reviewed in `phased-handoff/REVIEW-FIX-5-20261114.md`. Every set was compared with its master
+and siblings and every derivation checked with `--review`. Recipe change for this batch: an edge pixel that is
+more than `HALO_DELTA` (12) brighter than all its inner neighbours is halo even when its colour is a master
+white (cleared the specks around Dev's hair and Gate/QA feet); Res's four files re-derive byte-identical.
+Pivot y = each frame's measured sole row + 1; pivot x = the role's mean torso centre (rows 30-40) across its
+four frames, rounded to 0.5, one value per role so the body does not jitter sideways. All Dev frames end
+one row higher as drawn, so their pivot y is 56.
+
+Held back (owner review of the live office, 2026-11-14: "the legs do not swap"): QA (f0 and f2 nearly
+identical, 15 px apart in the leg area), Ops (f1 and f3 identical, 0 px) and Designer (f1 and f3 6 px
+apart, smallest stride of any role), PM (all four frames are wide strides with no tucked passing leg and
+both legs the same shade) and Gate (the long coat hides the legs; four near-identical stances). The
+fix-wave reference frame was copied too closely. They keep the
+front master while walking until regenerated frames pass a leg-swap check.
+
+| file | source (under pixel-kit/generated/candidates/) | source sha256 | runtime sha256 | px cleared (enclosed gap + rim) | pivot (x, y) |
+|---|---|---|---|---|---|
+| arch-walk-side-0.png | 2026-11-08-gait/needs-review/candidates-20261108-arch-walk-side-0-raw.jpg | 6eaa49beddb135a4… | aef5bb2732bb48e90fce38b0259dd83c4fbedf84400d116cf135ba6540f3ebb3 | 0 gap + 25 rim | 32, 57 |
+| arch-walk-side-1.png | 2026-11-08-gait/needs-review/candidates-20261108-arch-walk-side-1-raw.jpg | e3a503ea1d1fceab… | f2a3ccc6af53de9d496309e1a4cd7bd8fb71338537a8934ae3a6b5a2b92dd1db | 0 gap + 21 rim | 32, 57 |
+| arch-walk-side-2.png | 2026-11-08-gait/needs-review/candidates-20261108-arch-walk-side-2-raw.jpg | 377a9f2b531a4ffa… | c2300332facd5b016fd8ccdc911a463ee8499a964e0fffb0d5923867fc76df86 | 0 gap + 16 rim | 32, 57 |
+| arch-walk-side-3.png | 2026-11-15-fix-5a/needs-review/candidates-20261114-arch-walk-side-3-raw.jpg | 8500bb4c8d10285f… | 4c5a1287d5782cb6dd56c63837f91244923ad4802bb613ff2a49801c81bc6f85 | 3 gap + 21 rim | 32, 57 |
+| dev-walk-side-0.png | 2026-11-09-gait-3/needs-review/candidates-20261109-dev-walk-side-0-raw.jpg | 122d069bc92daec0… | 73a0861b23e6347cb3e5a9357a2629bf9fe8ab17e1476779642205c5a85c0b67 | 0 gap + 62 rim | 29.5, 56 |
+| dev-walk-side-1.png | 2026-11-09-gait-3/needs-review/candidates-20261109-dev-walk-side-1-raw.jpg | 7b6157e9ebc06d0d… | aa18e231a77bb4b343ce65d4b80b504c10ef1161f75ed030c0012f46c8db7de0 | 3 gap + 52 rim | 29.5, 56 |
+| dev-walk-side-2.png | 2026-11-09-gait-3/needs-review/candidates-20261109-dev-walk-side-2-raw.jpg | 4944ccc6519da690… | 23c029f38658865b7e0d6cc3992b7a0fdd1892e30b0fd3b1dd0d8ebf7984940e | 0 gap + 17 rim | 29.5, 56 |
+| dev-walk-side-3.png | 2026-11-15-fix-5a/needs-review/candidates-20261114-dev-walk-side-3-raw.jpg | dff7856d13e61068… | 64ee8d5a11885606e1413f0d4c642d023c87078fcce8d8971f59a2022afdadcf | 0 gap + 55 rim | 29.5, 56 |

@@ -33,10 +33,10 @@ describe('CharacterBody (Phase-1 Pixel appearance)', () => {
     expect(html).not.toMatch(/scale\(-1/)
   })
 
-  it('bob only while walking and never under reduced motion', () => {
-    expect(svg(<CharacterBody appearance="pixel" charId="pm" isMoving={false} />)).toContain('data-pixel-bob="0"')
-    expect(svg(<CharacterBody appearance="pixel" charId="pm" isMoving />)).toContain('avo-pixel-walk-bob')
-    const rm = svg(<CharacterBody appearance="pixel" charId="pm" isMoving reducedMotion />)
+  it('bob only while walking a front master and never under reduced motion', () => {
+    expect(svg(<CharacterBody appearance="pixel" charId="ops" isMoving={false} />)).toContain('data-pixel-bob="0"')
+    expect(svg(<CharacterBody appearance="pixel" charId="ops" isMoving />)).toContain('avo-pixel-walk-bob')
+    const rm = svg(<CharacterBody appearance="pixel" charId="ops" isMoving reducedMotion />)
     expect(rm).toContain('data-pixel-bob="0"')
     expect(rm).not.toContain('avo-pixel-walk-bob')
   })
@@ -80,11 +80,23 @@ describe('CharacterBody walk cycle (AVO-207)', () => {
     expect(html).not.toContain('avo-pixel-walk-bob')
   })
 
-  it('walking up or down keeps the front master (no side frames for vertical walking)', () => {
+  it('walking up or down reuses the side cycle on the last left/right side (owner 2026-11-14)', () => {
     for (const facing of ['up', 'down']) {
-      const html = walk({ facing, walkStep: 1 })
-      expect(view(html)).toBe('front')
-      expect(html).toContain('avo-pixel-walk-bob')
+      const right = walk({ facing, walkStep: 1 })
+      expect(view(right)).toBe('walk-side-1')
+      expect(right).toContain('data-pixel-mirrored="0"')
+      expect(right).toContain('data-pixel-bob="0"')
+      const left = walk({ facing, sideFacing: 'left', walkStep: 2 })
+      expect(view(left)).toBe('walk-side-2')
+      expect(left).toContain('data-pixel-mirrored="1"')
+    }
+  })
+
+  it('a role whose cycle is held back walks with its front master, as before', () => {
+    for (const charId of ['ops', 'designer', 'qa', 'checker', 'pm', 'gate', 'planner']) {
+      const html = svg(<CharacterBody appearance="pixel" charId={charId} isMoving facing="right" walkStep={1} />)
+      expect(view(html), charId).toBe('front')
+      expect(html, charId).toContain('avo-pixel-walk-bob')
     }
   })
 
@@ -101,10 +113,18 @@ describe('CharacterBody walk cycle (AVO-207)', () => {
     expect(html).not.toMatch(/scale\(-1/)
   })
 
-  it('a role without a reviewed cycle walks with its front master, as before', () => {
-    const html = svg(<CharacterBody appearance="pixel" charId="gate" isMoving facing="right" walkStep={1} />)
-    expect(view(html)).toBe('front')
-    expect(html).toContain('avo-pixel-walk-bob')
+  it('every role with a reviewed cycle (and its aliases) walks with it', () => {
+    for (const charId of ['arch', 'dev', 'res', 'worker', 'feat-x~arch']) {
+      const html = svg(<CharacterBody appearance="pixel" charId={charId} isMoving facing="right" walkStep={1} />)
+      expect(view(html), charId).toBe('walk-side-1')
+      expect(html, charId).toContain('data-pixel-bob="0"')
+    }
+  })
+
+  it('places another role by its own per-frame pivot (Dev 29.5, 56)', () => {
+    const html = svg(<CharacterBody appearance="pixel" charId="dev" isMoving facing="right" walkStep={0} />)
+    expect(html).toContain('x="-25.8125"') // -29.5 * 7/8
+    expect(html).toContain('y="-49"') // -56 * 7/8
   })
 
   it('classic appearance ignores walk steps beyond its own two-frame alternation', () => {

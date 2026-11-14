@@ -129,6 +129,12 @@ const WHITE = '#FFFFFF'
 const MOUTH = '#C08060'
 const BLUSH = '#FFB6C1'
 
+// Idempotent per render (same facing -> same value), so it is safe under React's double render.
+function rememberSideFacing(ref, facing) {
+  if (facing === 'left' || facing === 'right') ref.current = facing
+  return ref.current
+}
+
 // Base character facing down (idle frame 0)
 // Row by row: 0=top of head ... 19=feet
 
@@ -819,6 +825,8 @@ function AgentCharacter({ agent }) {
   const socialTargetRef = useRef(null)   // { targetId, position } captured in doSchedule for social walks; cleared on arrival/abort
   const nudgeCountRef = useRef(0)        // AVO-156 arrival nudge: max ONE aside-step per journey (no cascade); reset at each new walk start
   const [walkFrame, setWalkFrame] = useState(0)
+  // AVO-207: last left/right facing; walking up/down reuses the side walk cycle on that side.
+  const sideFacingRef = useRef('right')
   // AVO-128: name tags are revealed only when an agent is active (working/blocked/
   // planning/done) or hovered, and hidden at rest — at idle, identity rides on the
   // sprite + color + desk position. `hovered` lets a desktop user pull up any name.
@@ -1712,7 +1720,7 @@ function AgentCharacter({ agent }) {
           actor group (rings, labels, badges, bubbles, input) is shared by both appearances. */}
       <CharacterBody appearance={appearance} charId={id} isMoving={isWalking} reducedMotion={reducedMotion}
         seated={seated} seatClipId={`seat-clip-${id}`} behavior={state.behavior} status={state.status || 'idle'}
-        facing={state.facing || 'down'} walkStep={walkFrame}
+        facing={state.facing || 'down'} sideFacing={rememberSideFacing(sideFacingRef, state.facing)} walkStep={walkFrame}
         classic={(
           <CharacterPixelSprite
             charId={id}
