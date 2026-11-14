@@ -95,10 +95,13 @@ export const PixelBody = React.memo(function PixelBody({ charId, isMoving = fals
       <ellipse cx={0} cy={1} rx={10} ry={3} fill="rgba(0,0,0,0.15)" />
       {/* Keeps the classic body's pointer target; the image itself ignores pointer events. */}
       <rect x={-16} y={-40} width={32} height={40} fill="transparent" data-body-hit="1" />
-      <g className={bob ? 'avo-pixel-walk-bob' : undefined} data-pixel-bob={bob ? '1' : '0'} transform={mirrored ? 'scale(-1, 1)' : undefined}>
-        <image href={pixelAssetUrl(role, undefined, undefined, view)} x={place.x} y={place.y} width={place.width} height={place.height}
-          preserveAspectRatio="none" style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
-          aria-hidden="true" />
+      <g className={bob ? 'avo-pixel-walk-bob' : undefined} data-pixel-bob={bob ? '1' : '0'}>
+        {/* Mirror on its own group: a CSS animation transform on the bob group must never drop it. */}
+        <g transform={mirrored ? 'scale(-1, 1)' : undefined}>
+          <image href={pixelAssetUrl(role, undefined, undefined, view)} x={place.x} y={place.y} width={place.width} height={place.height}
+            preserveAspectRatio="none" style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
+            aria-hidden="true" />
+        </g>
       </g>
     </g>
   )

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { CharacterBody } from '../src/components/CharacterBody.jsx'
+import { CharacterPixelSprite } from '../src/components/AgentCharacter.jsx'
 
 const svg = (el) => renderToStaticMarkup(<svg>{el}</svg>)
 const CLASSIC = <g data-body="classic-marker" />
@@ -110,5 +111,23 @@ describe('CharacterBody walk cycle (AVO-207)', () => {
     const html = svg(<CharacterBody appearance="classic" charId="res" isMoving facing="right" walkStep={3} classic={CLASSIC} />)
     expect(html).toContain('classic-marker')
     expect(html).not.toContain('<image')
+  })
+
+  it('walking wins over a seated back view or a signature action pose', () => {
+    const seated = svg(<CharacterBody appearance="pixel" charId="res" isMoving seated facing="right" walkStep={1} status="working" />)
+    expect(view(seated)).toBe('walk-side-1')
+    expect(seated).not.toContain('data-seated')
+    const action = svg(<CharacterBody appearance="pixel" charId="res" isMoving facing="left" walkStep={2} behavior="research" status="working" />)
+    expect(view(action)).toBe('walk-side-2')
+  })
+})
+
+describe('Classic sprite with the 0..3 walk step (AVO-207 W-07)', () => {
+  const sprite = (walkFrame) => renderToStaticMarkup(
+    <svg><CharacterPixelSprite charId="res" expression="normal" isMoving walkFrame={walkFrame} facing="right" /></svg>)
+  it('steps 2 and 3 draw exactly the same legs as steps 0 and 1', () => {
+    expect(sprite(2)).toBe(sprite(0))
+    expect(sprite(3)).toBe(sprite(1))
+    expect(sprite(1)).not.toBe(sprite(0))
   })
 })

@@ -72,6 +72,13 @@ near-white gaps (background between arm and body) -> transparent unless the mast
 logical drawing is unchanged. Pivot = measured sole row + 1, x = measured torso centre. Re-running the command
 reproduces the same bytes.
 
+Measured height (review 2026-11-14): Res's master spans logical rows 14-55 (42 rows, top row is its soft
+outline); all four walk frames span rows 14-56 (43 rows), i.e. 1 row taller as Gemini drew them. Feet are
+anchored per frame (pivot), so on the idle-to-walk switch the head rises 1 logical row (0.875 display
+units). Kept as drawn (no resize); a new role's frames must be within ±1 row of the master or are
+regenerated. Every new role's derivation is checked with `--review <overlay.png>` before its hashes are
+recorded.
+
 | file | source (2026-11-08-gait/needs-review/) | source sha256 | runtime sha256 | px cleared (enclosed gap + rim) | pivot (x, y) |
 |---|---|---|---|---|---|
 | res-walk-side-0.png | candidates-20261108-res-walk-side-0-raw.jpg | 87e75480c6d19f01… | 729eaff66c18a22cba5ccfccfb15c86ea910f81277338053a349ea4525b8b2c1 | 2 gap + 28 rim | 31.5, 57 |

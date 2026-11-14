@@ -4,7 +4,8 @@ Gemini returns walk frames as 1024x1024 JPEG on a white background. This tool tu
 into the 512x512 RGBA runtime file WITHOUT changing the drawing:
 
   * the raw must sit on an exact 64x64 logical grid (16x16 px blocks); otherwise it is REFUSED
-    (p95 of the per-block colour spread above MAX_BLOCK_SPREAD means the art is off-grid)
+    (p95 of the per-block colour spread over the FIGURE's blocks above MAX_BLOCK_SPREAD means the
+    art is off-grid; flat white background blocks are excluded so they cannot dilute the check)
   * each logical pixel = per-channel median of its block's centre (drops JPEG noise; the block
     edges carry the JPEG ringing)
   * background = near-white logical pixels (min channel >= BG_MIN, spread <= BG_SPREAD) that are
@@ -21,7 +22,14 @@ into the 512x512 RGBA runtime file WITHOUT changing the drawing:
 Never crops, recentres, resizes, rescales or repaints the figure: the 64x64 logical drawing is
 the same grid Gemini drew. Prints a JSON report (hashes, removed pixels, measured rows).
 
-Usage: python scripts/pixel_walk_derive.py <raw.jpg|png> <master.png> <out.png>
+Known limits (review finding 2026-11-14): the gap and rim rules decide by colour. A light identity
+colour that drifts more than PALETTE_TOL from the master (eye whites, silver hair, white sneakers)
+could be cleared, and a real background gap that happens to match a near-white master colour is
+kept. Therefore every derivation for a NEW role MUST be reviewed with --review <overlay.png>, which
+marks every cleared pixel that is not border background (magenta = enclosed gap, cyan = rim) on an
+8x enlarged copy, before its hashes are recorded.
+
+Usage: python scripts/pixel_walk_derive.py <raw.jpg|png> <master.png> <out.png> [--review <overlay.png>]
 Requires Pillow.
 """
 import hashlib
@@ -49,17 +57,22 @@ def sample_grid(im):
     b = w // GRID
     m = b // 4
     px = im.load()
-    cells, spreads = [], []
+    cells, figure_spreads = [], []
     for gy in range(GRID):
         row = []
         for gx in range(GRID):
             vals = [px[gx * b + x, gy * b + y] for y in range(m, b - m) for x in range(m, b - m)]
-            row.append(tuple(int(statistics.median(v[i] for v in vals)) for i in range(3)))
-            spreads.append(max(max(v[i] for v in vals) - min(v[i] for v in vals) for i in range(3)))
+            c = tuple(int(statistics.median(v[i] for v in vals)) for i in range(3))
+            row.append(c)
+            spread = max(max(v[i] for v in vals) - min(v[i] for v in vals) for i in range(3))
+            if not (min(c) >= BG_MIN and max(c) - min(c) <= BG_SPREAD and spread <= BG_SPREAD):
+                figure_spreads.append(spread)
         cells.append(row)
-    p95 = sorted(spreads)[int(len(spreads) * 0.95)]
+    if not figure_spreads:
+        raise SystemExit('REFUSED: no figure found (blank canvas)')
+    p95 = sorted(figure_spreads)[int(len(figure_spreads) * 0.95)]
     if p95 > MAX_BLOCK_SPREAD:
-        raise SystemExit(f'REFUSED: not on an exact {GRID}x{GRID} grid (p95 block spread {p95} > {MAX_BLOCK_SPREAD})')
+        raise SystemExit(f'REFUSED: not on an exact {GRID}x{GRID} grid (figure p95 block spread {p95} > {MAX_BLOCK_SPREAD})')
     return cells, p95
 
 
@@ -84,7 +97,7 @@ def neighbours(x, y):
     return ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1))
 
 
-def derive(raw_path, master_path, out_path):
+def derive(raw_path, master_path, out_path, review_path=None):
     cells, p95 = sample_grid(Image.open(raw_path).convert('RGB'))
     palette = master_outline_palette(master_path)
     full_palette = master_full_palette(master_path)
@@ -151,6 +164,16 @@ def derive(raw_path, master_path, out_path):
                 for xx in range(OUT_BLOCK):
                     opx[x * OUT_BLOCK + xx, y * OUT_BLOCK + yy] = c
     out.save(out_path, format='PNG')
+    if review_path:
+        ov = Image.new('RGBA', (size, size), (40, 38, 40, 255))
+        ov.alpha_composite(out)
+        opv = ov.load()
+        for colour, pts in (((255, 0, 255, 255), [tuple(h) for h in holes]), ((0, 220, 255, 255), [(x, y) for x, y, _ in rim])):
+            for x, y in pts:
+                for yy in range(OUT_BLOCK):
+                    for xx in range(OUT_BLOCK):
+                        opv[x * OUT_BLOCK + xx, y * OUT_BLOCK + yy] = colour
+        ov.save(review_path, format='PNG')
     sole = max(rows)
     sole_cols = [x for x in range(GRID) if (x, sole) not in outside]
     return {
@@ -168,6 +191,14 @@ def derive(raw_path, master_path, out_path):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
+    args = sys.argv[1:]
+    review = None
+    if '--review' in args:
+        i = args.index('--review')
+        if i + 1 >= len(args):
+            raise SystemExit(__doc__)
+        review = args[i + 1]
+        del args[i:i + 2]
+    if len(args) != 3:
         raise SystemExit(__doc__)
-    print(json.dumps(derive(*sys.argv[1:4])))
+    print(json.dumps(derive(*args, review_path=review)))
