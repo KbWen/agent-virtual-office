@@ -1,0 +1,87 @@
+---
+status: shipped
+title: Pixel walk cycles (AVO-207 increment 1 — derivation recipe + Res)
+backlog: AVO-207
+classification: feature
+created: 2026-11-14
+parent: docs/specs/phased-pixel-character-refresh.md
+design: docs/design/phased-pixel-character-refresh.md
+---
+
+# Pixel walk cycles
+
+## Goal
+
+In the Pixel appearance, a role that has an accepted 4-frame side walk cycle walks with it instead
+of sliding its front master sideways. This increment ships the shared mechanism, a re-runnable
+derivation recipe for Gemini's raw frames, and the first accepted cycle (Res). Other roles join as
+data-only changes once their frames pass review.
+
+## Owner rules (2026-11-14)
+
+- A character must never change shape or look between frames or versus its master. Looks are
+  secondary to sameness.
+- Raw frames are never resized or repainted to make them fit. A frame that does not match its
+  master natively is regenerated, not adjusted.
+- Same-state before/after visuals are shown to the owner before any look change is committed.
+
+## Scope
+
+1. **Derivation recipe** `scripts/pixel_walk_derive.py <raw> <master> <out>`: input is Gemini's raw
+   1024x1024 JPEG on white, which must sit on an exact 64x64 logical grid (16x16 blocks). Each
+   logical pixel takes the median colour of its block centre (removes JPEG noise without changing
+   the drawing); background = near-white connected to the border; a rim pass of at most 2 layers
+   clears the light JPEG halo on the silhouette while keeping colours present in the role's master.
+   Output: 512x512 RGBA, exact 8x8 blocks, hard alpha. The logical drawing is unchanged: no crop,
+   recentre, resize or repaint. Refuses inputs that are not on an exact grid. Prints a JSON report
+   (input/output sha256, removed pixels, measured head row, sole row, body centre).
+2. **Manifest**: `views['walk-side-0'..'walk-side-3']` per role, each with file, pivot and sha256,
+   recorded in `public/assets/characters/pixel-v1/PROVENANCE.md` with the source raw and its hash.
+   A role uses walk frames only when all four are present.
+3. **Frame selection** (Pixel only): while walking and facing left or right, the role shows
+   `walk-side-<step % 4>`; facing left mirrors the image around the foot anchor. Facing up/down,
+   reduced motion, or no complete cycle → the front master, as today. Walk frames do not use the
+   extra CSS bob (the frames carry their own motion).
+4. **Cadence**: the existing walk timer (`WALK_FRAME_INTERVAL` = 250 ms) advances a 0..3 step;
+   Classic keeps its two-frame alternation (`step % 2`).
+5. **Preload**: walk frames are part of the atomic pack preload (no pop-in mid-walk).
+
+## Non-goals
+
+- No new art in this increment beyond Res's four accepted frames; no up/down walk frames.
+- No change to movement, speed, routes, door claims, facing rules, statuses or overlays.
+- Boss/dog/pet walk frames (separate increments, after their review).
+
+## Acceptance criteria
+
+| AC | Requirement | Verification |
+|---|---|---|
+| W-01 | Recipe is deterministic and refuses off-grid input. | Run twice → identical sha256; an off-grid raw (designer f0) is refused. |
+| W-02 | Derived Res frames keep the drawing: same logical pixels as the raw grid apart from removed background/halo. | Report counts + side-by-side on light and dark floors. |
+| W-03 | Every shipped walk file matches its recorded sha256 and is a 512x512 PNG. | Manifest unit test. |
+| W-04 | Walking right shows walk-side-0..3 in order; left mirrors; up/down shows the front master. | Unit tests on the view selector + live clip. |
+| W-05 | Reduced motion or an incomplete cycle shows the front master while walking. | Unit tests. |
+| W-06 | Feet stay on the unchanged world anchor through the cycle and on the walk/idle switch. | Pivot test + enlarged live capture. |
+| W-07 | Classic appearance is unchanged (two-frame alternation). | Existing tests + code inspection. |
+| W-08 | Owner sees same-state before/after (front-master slide vs walk cycle) before commit. | Clip/screenshots sent; owner go recorded. |
+| W-09 | Build, full test suite and bundle budget pass. | `npm run build`, `npm test`, `node scripts/bundle-budget.mjs`. |
+
+## Increment 2 (2026-11-14/15): all eight roles + vertical walking
+
+Owner-requested after reviewing Gemini fix waves 5A/5B and the live office.
+
+| AC | Requirement | Verification |
+|---|---|---|
+| W-10 | Recipe clears edge pixels that are more than `HALO_DELTA` brighter than all inner neighbours, even when the colour is a master white; Res's four files re-derive byte-identical. | Re-run on Res -> same sha256; overlays for each new role reviewed. |
+| W-11 | All eight roles walk with reviewed cycles: Arch/Dev/Res from single-frame waves, PM from walk sheet 7b, QA/Ops/Designer/Gate from walk sheet 7c (gait fix wave 6 frames rejected). | Manifest + characterBody/characterAppearance tests. |
+| W-12 | Walking up/down uses the side cycle on the last left/right side faced (replaces W-04's "up/down shows the front master" for roles with a cycle); reduced motion still shows the front master. | characterBody tests + live check. |
+| W-13 | A cycle ships only if its legs visibly swap: f0 vs f2 and f1 vs f3 are not near-copies (leg-area difference recorded in PROVENANCE). | Leg-area diff + owner look. |
+| W-14 | PM/QA/Ops/Designer/Gate cycles come from 2x2 walk sheets (7b; 7c redraws PM's sheet per role); because Gemini drew it on a 50 grid, the frames are uniformly scaled (one nearest-neighbour factor, no pixel dropped) to the master's height. Owner-approved exceptions for these sheet roles: no-resizing, and a near/far tone swap on f2/f3 so the far leg and arm are the darker ones (also applied to Arch f2 legs and Dev f2/f3 shoes). | PROVENANCE recipe + before/after GIF approved by owner. |
+
+Boss frames are not wired (no Pixel boss yet) and wait for their own increment: the boss has no
+pixel master, so the gap pass cannot tell his white clipboard paper and collar from background.
+
+## Rollback
+
+Remove the role's `walk-side-*` entries (data) or revert the feature commits; the role falls back
+to the front master while walking. No store migration.

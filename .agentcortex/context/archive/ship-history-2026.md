@@ -76,6 +76,22 @@ Rotated 1 additional entry on 2026-10-07 (SSoT Update Sequence 145 -> 146).
 
 Rotated 1 additional entry on 2026-10-11 (SSoT Update Sequence 147 -> 148).
 
+Rotated 1 additional entry on 2026-11-14 (SSoT Update Sequence 162 -> 163).
+
+Rotated 1 additional entry on 2026-11-14 (SSoT Update Sequence 163 -> 164).
+
+### Ship-chore-release-v1.6.12-2026-10-21 (more agents, and a calmer quiet office) · release v1.6.12
+
+- Cuts merged PR258/259 as v1.6.12 under the established patch-release convention: Antigravity passive observation, separate Gemini CLI project hooks, trusted observed-idle calm and Vite8.2.4 security patch. AVO201/200 remain pending; accepted authenticated Gemini/native Linux live-validation limits remain explicit.
+- This release cut changes only package version, both lock root versions, CHANGELOG and delivery metadata; dependency graph/application code are unchanged. Source features already merged with CI8/8PASS.
+- Validation: full2897PASS/3existing skips; build514383bytes within546154budget; pack-smokePASS; audit0; independent release-notes/version/diff reviewPASS. Final governance evidence is in the release work-log archive.
+- After the release-cut PR is green and merged: annotated v1.6.12 tag at the exact release merge commit, push the tag, then create the latest GitHub Release. Publication is not claimed by this pre-merge metadata checkpoint.
+
+### Ship-hotfix-avo-199-vite-security-2026-10-21
+
+- Owner-approved Vite8.2.1->8.2.4 security patch clears PR259 dependency audit; only existing Vite requirement/package metadata changed, all other locked versions retained. Runtime dependency placement is preserved.
+- Verification: audit0; full2897PASS/3existing skips; build/budget, browser7views45captures0errors and render/panel smoke PASS; independent manifest/lock review PASS. CI final status is tracked on PR259; no merge claim.
+
 ### Ship-chore-release-v1.6.11-2026-10-11 (live status over HTTPS, and the characters get a little more personality) · release v1.6.11
 
 - Cuts the 3 PRs merged since `v1.6.10` (#254, #255, #256) as **v1.6.11** (patch). #254/#255 were done by Gemini (Antigravity); #256 is the post-merge review that fixed their cut-off bubble lines and the lore book's false "100% aligned" claim. The release commit contains no app code: `package.json` 1.6.10 -> 1.6.11, **both** `package-lock.json` root version fields (0 `"version": "1.6.10"` strings left), the CHANGELOG narrative, and this entry.

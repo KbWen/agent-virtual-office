@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import {
   APPEARANCE_STORAGE_KEY, PIXEL_V1_PACK, PIXEL_LOGICAL_SIZE, PIXEL_DISPLAY_SCALE,
   createAppearanceStore, normalizeAppearance, pixelAssetUrl, requiredPixelUrls, pixelBodyPlacement, resolvePixelRole,
+  pixelWalkView, WALK_CYCLE_FRAMES,
 } from './characterAppearance.js'
 
 const ROLES = ['pm', 'arch', 'dev', 'qa', 'ops', 'res', 'gate', 'designer']
@@ -145,7 +146,8 @@ describe('appearance store (atomic pack switch)', () => {
     expect(new Set(urls).size).toBe(urls.length)
     expect(urls.filter(u => /pixel-v1\/[a-z]+\.png$/.test(u))).toHaveLength(8)
     expect(urls.filter(u => u.includes('-back.png'))).toHaveLength(8)
-    expect(urls).toHaveLength(8 + 8 + 8) // front + back + one signature action per role
+    expect(urls.filter(u => u.includes('-walk-side-'))).toHaveLength(8 * 4) // AVO-207: every role has a reviewed cycle
+    expect(urls).toHaveLength(8 + 8 + 8 + 8 * 4) // front + back + one signature action per role + 8 walk cycles
   })
 
   it('urls are same-origin relative paths under the pack folder', () => {
@@ -179,5 +181,30 @@ describe('appearance store (atomic pack switch)', () => {
     await s.init()
     expect(loadImage).not.toHaveBeenCalled()
     expect(s.getSnapshot()).toMatchObject({ active: 'classic', status: 'idle' })
+  })
+})
+
+describe('pixelWalkView (AVO-207)', () => {
+  it('cycles a complete 4-frame set, including negative and non-numeric steps', () => {
+    expect(WALK_CYCLE_FRAMES).toBe(4)
+    expect([0, 1, 2, 3, 4, 7].map((s) => pixelWalkView('res', s))).toEqual(
+      ['walk-side-0', 'walk-side-1', 'walk-side-2', 'walk-side-3', 'walk-side-0', 'walk-side-3'])
+    expect(pixelWalkView('res', -1)).toBe('walk-side-3')
+    expect(pixelWalkView('res', Number.NaN)).toBe('walk-side-0')
+    expect(pixelWalkView('res', undefined)).toBe('walk-side-0')
+  })
+
+  it('returns null for a role without a cycle and for an incomplete set', () => {
+    expect(pixelWalkView('nobody', 0)).toBeNull()
+    expect(pixelWalkView('res', 0, { roles: { res: {} } })).toBeNull()
+    const partial = { roles: { res: { views: { 'walk-side-0': {}, 'walk-side-1': {}, 'walk-side-2': {} } } } }
+    expect(pixelWalkView('res', 0, partial)).toBeNull()
+  })
+
+  it('walk frames are part of the atomic preload', () => {
+    const urls = requiredPixelUrls()
+    for (const role of ['res', 'arch', 'dev', 'pm', 'qa', 'ops', 'designer', 'gate']) {
+      for (let i = 0; i < 4; i++) expect(urls.some((u) => u.endsWith(`/${role}-walk-side-${i}.png`)), `${role} ${i}`).toBe(true)
+    }
   })
 })

@@ -48,3 +48,28 @@ mode is out of Phase 1 (space budget); the preference still applies there.
 
 Same-state Classic vs Pixel captures from the live app are produced for review R1 and
 stored with the work-log evidence.
+
+## Walk cycle (AVO-207)
+
+Spec: `docs/specs/avo-207-pixel-walk-cycles.md`. Pixel only; Classic unchanged.
+
+```
+facing right, walking      facing left, walking        facing up/down            reduced motion
+[f0][f1][f2][f3] loop      same frames, mirrored        side cycle on the last    front master,
+ 250 ms per frame          around the foot anchor       left/right side           no bob
+```
+
+- Walking up/down (increment 2, owner 2026-11-14): there are no front/back walk frames, so the
+  role keeps walking with its side cycle on the last left/right side it faced (initially right).
+  A role without an accepted cycle keeps the front master + 1-unit bob for every facing.
+- A cycle is accepted only if the legs visibly swap: the two contact frames (f0, f2) and the two
+  passing frames (f1, f3) must not be near-copies of each other.
+
+- Frames are 64-grid side views drawn at the master's size; each frame's measured sole sits on the
+  unchanged world foot anchor (local 0,0), so switching between walking and standing never moves
+  the feet.
+- A role uses walk frames only when its four frames are all accepted; otherwise it walks with the
+  front master exactly as in Phase 1.
+- Overlays (name tag, task label, rings, bubbles, hit target) do not mirror or move.
+- Visual acceptance = same-state before/after capture approved by the owner (front-master slide vs
+  walk cycle, both facings, light and dark floor).
