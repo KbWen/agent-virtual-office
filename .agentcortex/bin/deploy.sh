@@ -19,6 +19,13 @@ while [[ $# -gt 0 ]]; do
         --source) ACX_SOURCE="$2"; shift 2 ;;
         --source=*) ACX_SOURCE="${1#--source=}"; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
+        -h|--help)
+            echo "Usage: $0 [--dry-run] [--source <git-url>] [/path/to/your-project]"
+            exit 0 ;;
+        # An unknown flag used to fall through as the target path (--help became a directory).
+        -*) echo "ERROR: Unknown option '$1'." >&2
+            echo "Usage: $0 [--dry-run] [--source <git-url>] [/path/to/your-project]" >&2
+            exit 2 ;;
         *) TARGET="$1"; shift ;;
     esac
 done
@@ -26,7 +33,7 @@ TARGET="${TARGET:-.}"
 TARGET="${TARGET%/}"
 
 MANIFEST_FILE="$TARGET/.agentcortex-manifest"
-ACX_VERSION="1.8.25"
+ACX_VERSION="1.8.39"
 
 # --- Self-deploy guard ---
 TARGET_ABS="$(cd "$TARGET" 2>/dev/null && pwd || echo "$TARGET")"
@@ -45,6 +52,7 @@ COUNT_SKIPPED=0
 COUNT_NEW=0
 COUNT_REMOVED=0
 COUNT_CORE_OVERWRITTEN=0
+COUNT_KEPT=0
 
 # --- SHA256 utility (cross-platform) ---
 compute_sha256() {
@@ -169,7 +177,8 @@ _get_tier_inline() {
 manifest_lookup_hash() {
     local rel_path="$1"
     if [ -f "$MANIFEST_FILE" ]; then
-        awk -v path="$rel_path" '$2 == path { sub(/^sha256:/, "", $3); print $3; exit }' "$MANIFEST_FILE"
+        # sub(/\r$/): a manifest checked out CRLF must not leak a CR into the hash (#202).
+        awk -v path="$rel_path" '{ sub(/\r$/, "") } $2 == path { sub(/^sha256:/, "", $3); print $3; exit }' "$MANIFEST_FILE"
     fi
 }
 
@@ -195,6 +204,40 @@ clean_acx_incoming() {
     if [ "$count" -gt 0 ]; then
         echo "  Cleaned $count old .acx-incoming sidecar(s)"
     fi
+}
+
+# --- Copy the framework version over an existing file ---
+# _cp_framework_version <src> <dst> <src_hash> <do_chmod> <dst_hash_before>
+# Returns 1 when CP_FLAG=-n, or a "no" answer to -i, left dst as it was (#221), so the
+# caller reports and records what was delivered, not what was attempted. Only those
+# two flags can skip, so only they pay for the post-copy hash.
+# Callers test this function, which suspends set -e inside it: failures exit explicitly.
+_cp_framework_version() {
+    local src="$1" dst="$2" src_hash="$3" do_chmod="$4" dst_before="$5" status=0 now
+    cp ${CP_FLAG:+"$CP_FLAG"} "$src" "$dst" || status=$?
+    case "$CP_FLAG" in
+        -n|-i)
+            now="$(compute_sha256_normalized "$dst")"
+            if [ "$now" != "$src_hash" ]; then
+                # coreutils >= 9.2 exits 1 for a skip or a "no" (8.x exits 0). A skip leaves
+                # dst untouched and writable; anything else is a real failure.
+                [ "$status" -eq 0 ] && return 1
+                [ -w "$dst" ] && [ "$now" = "$dst_before" ] && return 1
+                exit "$status"
+            fi
+            ;;
+    esac
+    [ "$status" -eq 0 ] || exit "$status"
+    if [ -n "$do_chmod" ]; then chmod +x "$dst" || exit 1; fi
+    return 0
+}
+
+# _record_kept <tier> <rel> <manifest_hash> [note]
+# The manifest keeps the previous hash so the next deploy still sees the difference.
+_record_kept() {
+    echo "  [KEPT] $2 (existing file kept by CP_FLAG=$CP_FLAG; the framework version was not applied${4:+; $4})"
+    COUNT_KEPT=$((COUNT_KEPT + 1))
+    record_deployed "$1" "$2" "$3"
 }
 
 # --- Smart deploy a single file (internal — called with pre-computed hashes) ---
@@ -242,21 +285,31 @@ _deploy_file_now() {
                 # content that differs from the framework version as user content.
                 [ "$dst_hash" != "$src_hash" ] && locally_modified=true
             fi
-            if $locally_modified && [ "$dst_hash" != "$src_hash" ]; then
-                # A backup MUST always overwrite a stale .acx-local. Unlike
-                # .acx-incoming (cleaned each run by clean_acx_incoming), the
-                # .acx-local backup persists, so a pre-existing one + a user-set
-                # CP_FLAG=-n/-i would make `cp` silently skip — losing the newest
-                # local edits. Remove first so the backup always lands.
-                rm -f "$dst.acx-local"
-                cp ${CP_FLAG:+"$CP_FLAG"} "$dst" "$dst.acx-local"
-                echo "  [OVERWRITE] $rel (core force-updated; your local edits backed up to $rel.acx-local)"
-                COUNT_CORE_OVERWRITTEN=$((COUNT_CORE_OVERWRITTEN + 1))
-            fi
             # Skip cp when src and dst already identical (raw bytes match) — pure no-op.
             if [ "$src_hash" != "$dst_hash" ]; then
-                cp ${CP_FLAG:+"$CP_FLAG"} "$src" "$dst"
-                [ -n "$do_chmod" ] && chmod +x "$dst"
+                local backed_up=false
+                if $locally_modified; then
+                    # A backup MUST always overwrite a stale .acx-local. Unlike
+                    # .acx-incoming (cleaned each run by clean_acx_incoming), the
+                    # .acx-local backup persists, so a pre-existing one + a user-set
+                    # CP_FLAG=-n/-i would make `cp` silently skip — losing the newest
+                    # local edits. Remove first so the backup always lands.
+                    rm -f "$dst.acx-local"
+                    cp ${CP_FLAG:+"$CP_FLAG"} "$dst" "$dst.acx-local"
+                    backed_up=true
+                fi
+                if ! _cp_framework_version "$src" "$dst" "$src_hash" "$do_chmod" "$dst_hash"; then
+                    if $backed_up; then
+                        _record_kept "$tier" "$rel" "${old_manifest_hash:-$src_hash}" "a copy is at $rel.acx-local"
+                    else
+                        _record_kept "$tier" "$rel" "${old_manifest_hash:-$src_hash}"
+                    fi
+                    return 0
+                fi
+                if $backed_up; then
+                    echo "  [OVERWRITE] $rel (core force-updated; your local edits backed up to $rel.acx-local)"
+                    COUNT_CORE_OVERWRITTEN=$((COUNT_CORE_OVERWRITTEN + 1))
+                fi
             fi
             COUNT_UPDATED=$((COUNT_UPDATED + 1))
         else
@@ -283,9 +336,10 @@ _deploy_file_now() {
                 if [ "$dst_hash" = "$old_manifest_hash" ]; then
                     # User didn't modify — safe to update.
                     # Skip cp when src already matches dst (pure no-op copy).
-                    if [ "$src_hash" != "$dst_hash" ]; then
-                        cp ${CP_FLAG:+"$CP_FLAG"} "$src" "$dst"
-                        [ -n "$do_chmod" ] && chmod +x "$dst"
+                    if [ "$src_hash" != "$dst_hash" ] \
+                        && ! _cp_framework_version "$src" "$dst" "$src_hash" "$do_chmod" "$dst_hash"; then
+                        _record_kept "$tier" "$rel" "$old_manifest_hash"
+                        return 0
                     fi
                     COUNT_UPDATED=$((COUNT_UPDATED + 1))
                 else
@@ -322,8 +376,25 @@ _deploy_file_now() {
         else
             # Skip cp when src already matches dst (pure no-op).
             if [ "$src_hash" != "$dst_hash" ]; then
-                cp ${CP_FLAG:+"$CP_FLAG"} "$src" "$dst"
-                [ -n "$do_chmod" ] && chmod +x "$dst"
+                # Core still gets the framework version (ADR-005), but the adopter's
+                # file may be untracked or ignored, so back it up first (#188).
+                # Without a manifest an existing backup may be the only copy of an
+                # earlier original (e.g. an interrupted install), so never replace it.
+                if [ -e "$dst.acx-local" ] || [ -L "$dst.acx-local" ]; then
+                    echo "ERROR: $rel differs from the framework version and $rel.acx-local already exists; it may be your only copy of an earlier version. Move it out of the way and re-run. $rel was left unchanged and the deploy stopped." >&2
+                    exit 1
+                fi
+                # Plain cp: CP_FLAG=-n/-i must not skip or prompt for the backup.
+                if ! cp "$dst" "$dst.acx-local"; then
+                    echo "ERROR: could not back up pre-existing $rel to $rel.acx-local; it was left unchanged and the deploy stopped." >&2
+                    exit 1
+                fi
+                if _cp_framework_version "$src" "$dst" "$src_hash" "$do_chmod" "$dst_hash"; then
+                    echo "  [OVERWRITE] $rel (pre-existing file replaced by the core framework version; previous version backed up to $rel.acx-local)"
+                    COUNT_CORE_OVERWRITTEN=$((COUNT_CORE_OVERWRITTEN + 1))
+                else
+                    echo "  [KEPT] $rel (pre-existing file kept by CP_FLAG=$CP_FLAG; a copy is at $rel.acx-local)"
+                fi
             fi
         fi
     else
@@ -399,6 +470,9 @@ process_queue() {
     declare -A _mfst_hash=()
     if [ -f "$MANIFEST_FILE" ]; then
         while IFS= read -r _mline; do
+            # read -r keeps a trailing CR from a CRLF checkout (Windows autocrlf); strip it
+            # or every stored hash mismatches and unedited files look locally modified (#202).
+            _mline="${_mline%$'\r'}"
             case "$_mline" in
                 core\ *|scaffold\ *|wrapper\ *)
                     _mrel="${_mline#* }"; _mrel="${_mrel%% *}"
@@ -528,7 +602,9 @@ for raw in lines:
     rm -f "$_src_list_tmp" "$_dst_list_tmp"
 
     # --- Second pass: call _deploy_file_now for each queued entry ---
-    while IFS=$'\t' read -r _q_src _q_rel _q_chmod; do
+    # The queue is read on fd 3: on stdin, CP_FLAG=-i would take its answer from
+    # the next queue record and that file would never be deployed (#221).
+    while IFS=$'\t' read -r _q_src _q_rel _q_chmod <&3; do
         _q_dst="$TARGET/$_q_rel"
         local _sh="${_src_hash[$_q_src]:-}"
         # Fallback: if batch hash missed this file (e.g. Python unavailable or path
@@ -539,7 +615,7 @@ for raw in lines:
         [ -z "$_dh" ] && [ -f "$_q_dst" ] && _dh="$(compute_sha256_normalized "$_q_dst")"
         local _omh="${_mfst_hash[$_q_rel]:-}"
         _deploy_file_now "$_q_src" "$_q_rel" "$_q_chmod" "$_sh" "$_dh" "$_omh"
-    done < "$_DEPLOY_QUEUE_TMP"
+    done 3< "$_DEPLOY_QUEUE_TMP"
 }
 
 # ============================================================
@@ -556,7 +632,8 @@ IS_UPDATE=false
 if [ -f "$MANIFEST_FILE" ]; then
     IS_UPDATE=true
     echo "Updating Agentic OS v${ACX_VERSION} (${SOURCE_COMMIT}) in $TARGET..."
-    clean_acx_incoming
+    # A dry run changes nothing: pending sidecars are the adopter's unmerged offers.
+    $DRY_RUN || clean_acx_incoming
 else
     echo "Installing Agentic OS v${ACX_VERSION} (${SOURCE_COMMIT}) to $TARGET..."
 fi
@@ -587,19 +664,26 @@ if [ -d "$TARGET/agentcortex" ] || [ -f "$TARGET/.agentcortex-manifest" ]; then
     _acx_legacy_confirmed=true
 fi
 
+# tools/validate.* are never touched: the public framework never shipped them,
+# and no install marker proves ownership (our own first install writes the
+# manifest), so removing them deleted the project's own files (#220).
+
 # Banner only when actual legacy ARTIFACTS exist — a bare .agentcortex-manifest
 # is the normal installed state, and announcing "Migrating from legacy paths"
 # on every routine update was pure noise (sim finding 2026-06-11). The block
 # still runs for manifest-only targets (its steps are silent no-ops).
 _acx_legacy_artifacts=false
-if [ -d "$TARGET/agentcortex" ] || [ -d "$TARGET/docs/context" ] || \
-   [ -f "$TARGET/tools/validate.sh" ] || [ -f "$TARGET/tools/validate.ps1" ] || \
-   [ -f "$TARGET/tools/validate.cmd" ]; then
+if [ -d "$TARGET/agentcortex" ] || [ -d "$TARGET/docs/context" ]; then
     _acx_legacy_artifacts=true
 fi
 
-if $_acx_legacy_confirmed || [ -f "$TARGET/tools/validate.sh" ] || \
-   [ -f "$TARGET/tools/validate.ps1" ] || [ -f "$TARGET/tools/validate.cmd" ]; then
+if $DRY_RUN; then
+    # A dry run changes nothing: the migration below moves and deletes legacy paths.
+    if $_acx_legacy_artifacts; then
+        echo ""
+        echo "[DRY RUN] Legacy paths found; a real run migrates them first (agentcortex/, docs/context/)."
+    fi
+elif $_acx_legacy_confirmed; then
     if $_acx_legacy_artifacts; then
         echo ""
         echo "Migrating from legacy paths..."
@@ -677,12 +761,6 @@ if $_acx_legacy_confirmed || [ -f "$TARGET/tools/validate.sh" ] || \
         # NOTE: docs/adr/ and docs/specs/ are fixed anchors — do NOT rmdir
     fi
 
-    # tools/validate.* → removed (no longer deployed as wrappers)
-    for ext in sh ps1 cmd; do
-        [ -f "$TARGET/tools/validate.$ext" ] && rm -f "$TARGET/tools/validate.$ext" && echo "  [MIGRATE] removed legacy tools/validate.$ext"
-    done
-    rmdir "$TARGET/tools" 2>/dev/null || true
-
     if $_acx_legacy_artifacts; then
         echo "  Migration complete."
         echo ""
@@ -714,6 +792,17 @@ if [ ! -f "$DOWNSTREAM_CURRENT_STATE_TEMPLATE" ]; then
     exit 1
 fi
 
+# The source repository's own .gitattributes sets repo-wide rules (*.md, *.py, *.json ...).
+# Installed into a product, they rewrite the line endings of the product's own files; the
+# downstream template sets line endings only for what Agentic OS installs (and .githooks/).
+DOWNSTREAM_GITATTRIBUTES_TEMPLATE="$REPO_ROOT/.agentcortex/templates/downstream.gitattributes"
+if [ ! -f "$DOWNSTREAM_GITATTRIBUTES_TEMPLATE" ]; then
+    echo "" >&2
+    echo "ERROR: Missing downstream .gitattributes template: .agentcortex/templates/downstream.gitattributes" >&2
+    echo "Deploy refuses to install the source repository's own repo-wide .gitattributes downstream." >&2
+    exit 1
+fi
+
 # --- Dry-run mode: preview only ---
 if $DRY_RUN; then
     echo ""
@@ -736,7 +825,7 @@ if $DRY_RUN; then
     _dry_count=0
     # Enumerate only the files that are actually deployed (mirrors real deploy logic).
     # Runtime Python tools are a whitelist — NOT all *.py in tools/.
-    _runtime_tools="guard_context_write.py _yaml_loader.py check_command_sync.py check_text_integrity.py check_text_integrity.ps1 text_integrity_baseline.txt sync_skills.sh lint_governed_writes.py check_lifecycle_frontmatter.py check_audit_chain.py check_lesson_chain.py check_ssot_caps.py check_decision_disposition.py check_adr_coverage.py append_chain_entry.py append_lesson.py recover_worklog_lock.py lint_spec_drift.py run_governance_eval.py scan_credentials.py credential_floor.sh credential_floor.ps1 generate_safety_nucleus.py validate_downstream_capabilities.py"
+    _runtime_tools="guard_context_write.py _yaml_loader.py check_command_sync.py check_text_integrity.py check_text_integrity.ps1 text_integrity_baseline.txt sync_skills.sh lint_governed_writes.py check_lifecycle_frontmatter.py check_audit_chain.py check_lesson_chain.py check_ssot_caps.py check_decision_disposition.py record_test_run.py check_adr_coverage.py append_chain_entry.py append_lesson.py recover_worklog_lock.py lint_spec_drift.py run_governance_eval.py scan_credentials.py credential_floor.sh credential_floor.ps1 generate_safety_nucleus.py validate_downstream_capabilities.py"
     _dry_print_file() {
         local src="$1"
         local rel="$2"
@@ -748,7 +837,6 @@ if $DRY_RUN; then
         printf '  %s %-10s %s\n' "$status" "($_TIER)" "$rel"
     }
     for f in "$REPO_ROOT"/AGENTS.md "$REPO_ROOT"/CLAUDE.md "$REPO_ROOT"/GEMINI.md \
-             "$REPO_ROOT"/.gitattributes \
              "$REPO_ROOT"/installers/deploy_brain.sh "$REPO_ROOT"/installers/deploy_brain.ps1 "$REPO_ROOT"/installers/deploy_brain.cmd \
              "$REPO_ROOT"/.antigravity/rules.md "$REPO_ROOT"/codex/rules/default.rules \
              "$REPO_ROOT"/.agent/rules/*.md "$REPO_ROOT"/.agent/config.yaml \
@@ -767,6 +855,7 @@ if $DRY_RUN; then
     done
     # Generated downstream runtime SSoT: source template installs to context/current_state.md.
     _dry_print_file "$DOWNSTREAM_CURRENT_STATE_TEMPLATE" ".agentcortex/context/current_state.md"
+    _dry_print_file "$DOWNSTREAM_GITATTRIBUTES_TEMPLATE" ".gitattributes"
     # Runtime tools (whitelist only — not all *.py)
     for _bname in $_runtime_tools; do
         f="$REPO_ROOT/.agentcortex/tools/$_bname"
@@ -775,6 +864,12 @@ if $DRY_RUN; then
     # ADR-008 portable safety nucleus (core tier; deployed to .agentcortex/AGENTS.safety.md)
     if [ -f "$REPO_ROOT/.agentcortex/AGENTS.safety.md" ]; then
         _dry_print_file "$REPO_ROOT/.agentcortex/AGENTS.safety.md" ".agentcortex/AGENTS.safety.md"
+    fi
+    _dry_print_file "$REPO_ROOT/.githooks/pre-commit.guard-ssot.sample" ".githooks/pre-commit.guard-ssot.sample"
+    if [ -f "$TARGET/.gitignore" ]; then
+        echo "  [UPDATE] (block)    .gitignore -- the Agentic OS managed block is added or refreshed"
+    else
+        echo "  [NEW]    (block)    .gitignore -- created with the Agentic OS managed block"
     fi
     # Skills (summarise counts instead of listing every file)
     _skill_count=0
@@ -785,10 +880,19 @@ if $DRY_RUN; then
     done
     for sf in "$REPO_ROOT"/.agent/skills/*; do [ -f "$sf" ] && _skill_count=$((_skill_count + 1)); done
     [ "$_skill_count" -gt 0 ] && echo "  [NEW]    (mixed)    ... $_skill_count skill files under .agent/skills/ and .agents/skills/"
-    # Docs (summarise)
+    # Docs (summarise) -- same globs as "Deploy: reference docs" below; keep them in step.
     _doc_count=0
-    for df in "$REPO_ROOT"/.agentcortex/docs/*.md "$REPO_ROOT"/.agentcortex/docs/guides/*.md \
-              "$REPO_ROOT"/README.md "$REPO_ROOT"/docs/README_zh-TW.md; do
+    for df in "$REPO_ROOT"/README.md "$REPO_ROOT"/docs/README_zh-TW.md \
+              "$REPO_ROOT"/docs/AGENT_MODEL_GUIDE*.md \
+              "$REPO_ROOT"/.agentcortex/docs/AGENT_PHILOSOPHY*.md \
+              "$REPO_ROOT"/.agentcortex/docs/TESTING_PROTOCOL*.md \
+              "$REPO_ROOT"/.agentcortex/docs/CODEX_PLATFORM_GUIDE*.md \
+              "$REPO_ROOT"/.agentcortex/docs/PROJECT_EXAMPLES*.md \
+              "$REPO_ROOT"/.agentcortex/docs/PROJECT_OVERVIEW*.md \
+              "$REPO_ROOT"/.agentcortex/docs/NONLINEAR_SCENARIOS*.md \
+              "$REPO_ROOT"/.agentcortex/docs/CLAUDE_PLATFORM_GUIDE*.md \
+              "$REPO_ROOT"/.agentcortex/docs/guides/*.md \
+              "$REPO_ROOT"/docs/guides/token-optimization-quickstart*.md; do
         [ -f "$df" ] && _doc_count=$((_doc_count + 1))
     done
     [ "$_doc_count" -gt 0 ] && echo "  [NEW]    (mixed)    ... $_doc_count reference docs under .agentcortex/docs/"
@@ -832,7 +936,17 @@ deploy_file "$REPO_ROOT/CLAUDE.md" "CLAUDE.md"
 deploy_file "$REPO_ROOT/GEMINI.md" "GEMINI.md"
 
 # --- Deploy: .gitattributes (scaffold — user may extend) ---
-deploy_file "$REPO_ROOT/.gitattributes" ".gitattributes"
+# Up to v1.8.28 the installed file set repo-wide rules (*.md text ...). When this run
+# replaces such a file, a clone checked out under it can show line-ending-only changes;
+# the notice after the summary says how to tell and restore them. A kept file (edited,
+# or the product's own) gets no notice. No pipe: pipefail + grep -q can report a match
+# as a failure; [[:space:]] also absorbs a CRLF checkout's CR.
+_ACX_OLD_GITATTRIBUTES_RE='^\*\.md[[:space:]]+text([[:space:]]|$)'
+_acx_old_gitattributes=false
+if $IS_UPDATE && [ -f "$TARGET/.gitattributes" ] && grep -qE "$_ACX_OLD_GITATTRIBUTES_RE" "$TARGET/.gitattributes"; then
+    _acx_old_gitattributes=true
+fi
+deploy_file "$DOWNSTREAM_GITATTRIBUTES_TEMPLATE" ".gitattributes"
 
 # --- Deploy: wrapper scripts (into installers/ — not root) ---
 mkdir -p "$TARGET/installers"
@@ -883,14 +997,15 @@ if [ -d "$REPO_ROOT/.agents/skills" ]; then
         fi
         mkdir -p "$TARGET/.agents/skills/$skill_name"
         # Deploy all files recursively, preserving subdir structure (e.g. agents/openai.yaml)
-        while IFS= read -r -d '' skill_file; do
+        # fd 3, not stdin: the per-file path copies inside this loop (#221).
+        while IFS= read -r -d '' skill_file <&3; do
             rel_to_skill="${skill_file#$skill_dir}"
             # ${path%/*} avoids a $(dirname) subshell
             _parent=".agents/skills/$skill_name/${rel_to_skill%/*}"
             [ "$_parent" = ".agents/skills/$skill_name/$rel_to_skill" ] && _parent=".agents/skills/$skill_name"
             mkdir -p "$TARGET/$_parent"
             deploy_file "$skill_file" ".agents/skills/$skill_name/$rel_to_skill"
-        done < <(find "$skill_dir" -type f -print0)
+        done 3< <(find "$skill_dir" -type f -print0)
     done
 fi
 
@@ -904,7 +1019,10 @@ for _keep_pair in \
     "docs/specs/.gitkeep.md" \
     "docs/adr/.gitkeep.md"; do
     if [ -f "$REPO_ROOT/$_keep_pair" ]; then
-        cp ${CP_FLAG:+"$CP_FLAG"} "$REPO_ROOT/$_keep_pair" "$TARGET/$_keep_pair"
+        # A placeholder kept by CP_FLAG=-n/-i is fine (coreutils >= 9.2 exits 1 for it);
+        # with any other flag a failed copy still stops the deploy.
+        cp ${CP_FLAG:+"$CP_FLAG"} "$REPO_ROOT/$_keep_pair" "$TARGET/$_keep_pair" \
+            || { case "$CP_FLAG" in -n|-i) [ -w "$TARGET/$_keep_pair" ] ;; *) false ;; esac; }
     else
         touch "$TARGET/$_keep_pair"
     fi
@@ -939,6 +1057,7 @@ runtime_tools=(
   check_lesson_chain.py
   check_ssot_caps.py
   check_decision_disposition.py
+  record_test_run.py
   check_adr_coverage.py
   append_chain_entry.py
   append_lesson.py
@@ -1100,8 +1219,10 @@ write_downstream_ignore_block() {
 # Third-party AI Tool Local State
 .openrouter/
 .claude-chat/
-.cursor/
 .antigravity/scratch/
+
+# Framework Tool Bytecode (framework namespace only; project policy untouched)
+.agentcortex/**/__pycache__/
 
 # End Agentic OS Template - Downstream Ignore Defaults
 EOT
@@ -1128,8 +1249,14 @@ strip_managed_ignore_blocks() {
         managed[".claude/settings.local.json"] = 1
         managed[".openrouter/"] = 1
         managed[".claude-chat/"] = 1
+        # Retired from the block (#207: Cursor project rules are meant to be committed);
+        # kept here so blocks written by older versions still strip clean.
         managed[".cursor/"] = 1
         managed[".antigravity/scratch/"] = 1
+        # Add new entries here AND last in the block above: an older deploy.sh
+        # stops stripping at the first entry it does not know, so every block
+        # line after that entry would be left behind outside the markers.
+        managed[".agentcortex/**/__pycache__/"] = 1
         # Legacy paths from older versions (strip during upgrade)
         managed["AGENTS.md"] = 1
         managed["CLAUDE.md"] = 1
@@ -1436,10 +1563,12 @@ echo ""
 echo "Agentic OS v${ACX_VERSION} (${SOURCE_COMMIT}) deployed successfully!"
 echo ""
 if $IS_UPDATE; then
+    _kept_note=""
+    if [ "$COUNT_KEPT" -gt 0 ]; then _kept_note=" / ${COUNT_KEPT} kept by CP_FLAG"; fi
     if [ "$COUNT_CORE_OVERWRITTEN" -gt 0 ]; then
-        echo "Summary: ${COUNT_UPDATED} updated (${COUNT_CORE_OVERWRITTEN} locally-modified core force-updated) / ${COUNT_SKIPPED} skipped / ${COUNT_NEW} new / ${COUNT_REMOVED} removed"
+        echo "Summary: ${COUNT_UPDATED} updated (${COUNT_CORE_OVERWRITTEN} locally-modified core force-updated) / ${COUNT_SKIPPED} skipped${_kept_note} / ${COUNT_NEW} new / ${COUNT_REMOVED} removed"
     else
-        echo "Summary: ${COUNT_UPDATED} updated / ${COUNT_SKIPPED} skipped / ${COUNT_NEW} new / ${COUNT_REMOVED} removed"
+        echo "Summary: ${COUNT_UPDATED} updated / ${COUNT_SKIPPED} skipped${_kept_note} / ${COUNT_NEW} new / ${COUNT_REMOVED} removed"
     fi
 else
     echo "Installed ${TOTAL_DEPLOYED} files."
@@ -1451,6 +1580,26 @@ if [ "$COUNT_SKIPPED" -gt 0 ]; then
     echo ""
     echo "  → Manual merge:  diff each pair, keep your content + adopt framework updates, then re-run deploy."
     echo "  → AI-assisted:   ask your AI agent — \"merge each *.acx-incoming into its target, preserving project-specific content and adopting framework updates, then delete the sidecars\""
+fi
+# An entry file kept as the project's own copy means agents load none of the framework's
+# rules: say so plainly instead of leaving it to the generic merge hint above.
+_acx_entry_pending=""
+for _f in AGENTS.md CLAUDE.md GEMINI.md; do
+    [ -f "$TARGET/$_f.acx-incoming" ] && _acx_entry_pending="$_acx_entry_pending $_f"
+done
+if [ -n "$_acx_entry_pending" ]; then
+    echo ""
+    echo "!! GOVERNANCE IS NOT ACTIVE YET:${_acx_entry_pending} kept your own version."
+    echo "   Agents read these files, so none of the framework's rules apply until each"
+    echo "   <file>.acx-incoming is merged into it. validate.sh fails until then."
+fi
+if $_acx_old_gitattributes && ! grep -qE "$_ACX_OLD_GITATTRIBUTES_RE" "$TARGET/.gitattributes"; then
+    echo ""
+    echo "⚠ .gitattributes no longer sets line endings for your own files (up to v1.8.28 it"
+    echo "  did, for every file). A clone checked out under the old rules can show a file"
+    echo "  as modified once a tool touches it; if 'git diff --ignore-cr-at-eol -- <file>'"
+    echo "  prints nothing, only its line endings differ: 'git checkout -- <file>' restores it."
+    echo "  Clones with core.autocrlf=true (the Git for Windows default) are not affected."
 fi
 if [ "$COUNT_CORE_OVERWRITTEN" -gt 0 ]; then
     echo ""
@@ -1492,6 +1641,12 @@ echo "         Copy-Item .githooks/pre-commit.guard-ssot.sample .githooks/pre-co
 echo "         git config core.hooksPath .githooks"
 echo "      NOTE: core.hooksPath replaces any existing hooks (husky/lefthook/"
 echo "      .git/hooks). Already use one? Integrate - don't overwrite."
+_acx_repo_prefix="$(git -C "$TARGET" rev-parse --show-prefix 2>/dev/null || true)"
+if [ -n "$_acx_repo_prefix" ]; then
+    echo "      This project is the sub-directory ${_acx_repo_prefix%/} of its git repository;"
+    echo "      git resolves core.hooksPath from the repository root, so use instead:"
+    echo "         git config core.hooksPath ${_acx_repo_prefix}.githooks"
+fi
 echo ""
 echo "   3. CI floor - make the checks block every PR, not just local commits:"
 echo "         Add a CI job that runs:  .agentcortex/bin/validate.sh"
@@ -1501,7 +1656,7 @@ echo "         (secret scanning stays in the hook above; per-PR gate/"
 echo "         work-log discipline stays local - work logs are gitignored)."
 echo ""
 echo "Finish setup:"
-echo "   - git add .agentcortex-manifest AGENTS.md CLAUDE.md GEMINI.md .agent/ .agents/ .agentcortex/ .antigravity/ .codex/ codex/ docs/ installers/"
+echo "   - git add .agentcortex-manifest .gitignore .gitattributes .githooks/ AGENTS.md CLAUDE.md GEMINI.md .agent/ .agents/ .agentcortex/ .antigravity/ .codex/ codex/ docs/ installers/"
 echo "     # Also add if present: .claude/ .github/"
 echo "   - Tell AI: 'Please run /bootstrap' to start"
 echo "   - Reference docs live under .agentcortex/docs/"
@@ -1511,6 +1666,6 @@ echo ""
 # (SSoT optimistic locking) is Python-only; absent Python the AI falls back to
 # direct writes. Single-session safe; multi-session loses lock protection.
 if ! command -v python3 >/dev/null 2>&1 && ! command -v python >/dev/null 2>&1; then
-    echo "Note: Python not on PATH — SSoT multi-session locking disabled (single-session OK). Install Python 3.8+ for full safety."
+    echo "Note: Python not on PATH — SSoT multi-session locking disabled (single-session OK). Install Python 3.9+ for full safety."
     echo ""
 fi

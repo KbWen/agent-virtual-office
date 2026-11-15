@@ -46,13 +46,8 @@ When `/review` dispatches a sub-agent for adversarial review (e.g., `acx-reviewe
 **Cross-vendor caveat**: even fresh same-vendor sub-agents share training-data blind spots (Lesson 4faa557a). For `architecture-change` and trust-boundary work, the review MUST add at least one external signal: WebFetch of authoritative published sources, `/ask-openrouter` to a different vendor, OR human review. Single-vendor adversarial roundtables are theatre for these classifications.
 
 **IF `doc-lookup` is active during review:**
-- For each framework API call in the diff, verify it matches official documentation:
-  - Method signatures, parameter order, return types are correct
-  - No deprecated APIs used without explicit migration plan
-  - Config values are valid per official docs (not invented)
-- If `/implement` left `// TODO: verify against official docs` caveat comments, resolve them NOW via WebFetch
-- Check that `package.json` / `pubspec.yaml` / `requirements.txt` pinned version matches the doc version that was consulted
-- Flag any framework API usage that lacks a `Ref:` trace in the Work Log
+Delegate to [doc-lookup](../../.agents/skills/doc-lookup/SKILL.md): Conventions, Doc URL Registry, Fetch Protocol (including Trust Boundary and Failure Handling), and Checklist. Reuse current guidance; for cold, partial, or stale guidance, load applicable sections via the shared phase-entry metadata/cache protocol.
+- Across the full diff, verify API signatures, parameter order, and return types against official docs. Apply the skill Checklist for config, deprecations/migration, pinned versions, and implement TODOs; an unavailable lookup or training-data fallback remains unverified and does not resolve caveats. Flag missing `Ref:` traces in the Work Log (required by this caller even if the skill permits a code comment).
 
 ## Minimum Checks
 
@@ -80,7 +75,7 @@ Plus:
 - Logic correctness
 - Compatibility risks
 - Violation of `.agent/rules/engineering_guardrails.md`
-- Scope enforcement: MUST skip any file with `status: frozen` or `Finalized` metadata. Review scope is limited to current task's changed files only.
+- Scope enforcement: MUST skip any file with `status: frozen`. Review scope is limited to current task's changed files only.
 - External dependency discipline: if dependency manifests changed or repo-external APIs/platform features were used, verify `## External References` cites official sources and that implementation matches them.
 - Known risk traceability: if `## Known Risk` is populated, confirm each listed mitigation is actually present in the code or evidence.
 - Work Log visibility: active Work Logs remain local-only (gitignored) and are NOT mirrored into the repo for review. Review evidence lives in the PR description and the Work Log itself; `/ship` enforces the full completion gate before any SSoT update.
@@ -105,7 +100,7 @@ If the project has no identifiable production logging strategy (no logger framew
 
 For any task that modified user-visible UI, the reviewer MUST:
 
-1. **Design Link Verification**: Confirm `## Design Reference` exists in the Work Log with a valid `Link:`. Missing link on a UI task → **Review verdict = Not Ready**. Route back to `/plan`.
+1. **Design Link Verification**: Confirm `## Design Reference` exists in the Work Log with a valid `Link:`. Missing link on a UI task → **Review verdict = Not Ready**.
 2. **1:1 Fidelity Audit** — compare implementation against DSoT (Stitch, Figma, Pencil, etc.):
    - Layout structure (component hierarchy, positioning, flow)
    - Spacing & sizing (margins, padding, dimensions)
@@ -168,7 +163,9 @@ Output findings using the Red Team Report format defined in the skill file.
 
 ## Burden of Proof Protocol (ALL non-tiny-fix classifications)
 
-> **Core principle**: Every claim of correctness starts as **UNPROVEN**. The reviewer must cite concrete evidence to flip it to PASS. This inverts the default from "find problems to fail" to "find evidence to pass", eliminating confirmation bias.
+> **Core principle**: Every claim of correctness starts as **UNPROVEN**. The reviewer must cite concrete evidence to flip it to PASS.
+
+**Invariants** (`never`, `always`, `unique`, `not reused`): code evidence alone leaves the row `✗ UNPROVEN` — only a test or run that hits the boundary (empty, last/largest, repeat) proves one.
 
 ### For feature / architecture-change (Spec-Based)
 
@@ -183,7 +180,7 @@ Cross-reference implementation against EVERY AC in the referenced `docs/specs/<f
 4. Evidence insufficient or missing → remains `✗ UNPROVEN`.
 5. Partial evidence → `⚠️ PARTIAL (evidence: <citation>, gap: <what's missing>)`.
 
-**Gate rule**: Any AC remaining `✗ UNPROVEN` → STOP. Cannot proceed to `/test` until resolved or explicitly deferred via `[NEEDS_HUMAN]` with user acknowledgment.
+**Gate rule**: Any AC remaining `✗ UNPROVEN` or untagged `⚠️ PARTIAL` → STOP. Cannot proceed to `/test` until resolved or explicitly deferred via `[NEEDS_HUMAN]` with user acknowledgment.
 
 ### For quick-win / hotfix (Behavioral)
 
@@ -206,14 +203,12 @@ These classifications have no formal spec, but the burden of proof still applies
 | AC-3 | [description] | ⚠️ PARTIAL | `src/bar.dart:10` implements, but no test — [NEEDS_HUMAN] |
 ```
 
-After completing the table, emit the Gate Receipt for Work Log `## Gate Evidence`. The verdict is **conditional** — PASS only when all AC rows are either `✅ PROVEN` or explicitly tagged `[NEEDS_HUMAN]`:
-- **If zero `✗ UNPROVEN` rows remain** (or all UNPROVEN are `[NEEDS_HUMAN]`):
+After completing the table and the Self-Check Protocol below, emit the Gate Receipt for Work Log `## Gate Evidence`. The verdict is **conditional** — PASS only when all AC rows are either `✅ PROVEN` or explicitly tagged `[NEEDS_HUMAN]`:
+- **If every row is `✅ PROVEN` or tagged `[NEEDS_HUMAN]`**:
   ```
   - Gate: review | Verdict: PASS | Classification: <classification> | Timestamp: <ISO>
   ```
-- **If any `✗ UNPROVEN` row exists without `[NEEDS_HUMAN]` tag**: the review is incomplete. The receipt MUST be `NOT READY`, not `PASS`. Proceed through the `## Reverse Transition` block below instead of writing a PASS receipt.
-
-The Burden of Proof table stays in the review output for human readability; the receipt goes to Gate Evidence for CI validation.
+- **Otherwise**: the review is incomplete. The receipt MUST be `NOT READY`, not `PASS`. Proceed through the `## Reverse Transition` block below instead of writing a PASS receipt.
 
 ## Self-Check Protocol (Auto — Before Presenting Results)
 
@@ -221,7 +216,7 @@ AI MUST verify its own review before outputting:
 
 1. **Scope check**: List every file changed. Any file NOT in the original plan? Flag it.
 2. **Regression check**: For each changed function/export, state: "Callers: [list]. Breaking change: yes/no."
-3. **Proof completeness check**: Verify the Burden of Proof table has zero `✗ UNPROVEN` rows (or all UNPROVEN rows are explicitly tagged `[NEEDS_HUMAN]`). If any UNPROVEN row lacks a tag, the review is incomplete — do NOT present as ready.
+3. **Proof check**: a Red Team or Security observation of any severity that contradicts a `✅ PROVEN` row reverts it to `✗ UNPROVEN`; any untagged `✗ UNPROVEN` or `⚠️ PARTIAL` row makes the receipt `NOT READY`.
 
 ## Output Format
 
@@ -276,7 +271,7 @@ If verdict = **Not Ready**, the agent MUST execute the reverse transition before
 
 1. Update Work Log `Current Phase: implement` (do NOT leave it as `review`).
 2. Append to `## Phase Summary`: `- review: Not Ready — [blocking issues list] — routed back to implement`.
-3. Record the reverse edge in `## Gate Evidence`: `- Gate: review | Verdict: NOT READY | Transition: REVIEWED→IMPLEMENTING | Timestamp: <ISO>`.
+3. Record the reverse edge in `## Gate Evidence`: `- Gate: review | Verdict: NOT READY | Classification: <classification> | Transition: REVIEWED→IMPLEMENTING | Timestamp: <ISO>`.
 4. State clearly to the user: "Route back to `/implement` to address: [list of blocking issues by severity]."
 
 This ensures the state machine correctly records the remediation loop. Leaving `Current Phase: review` on a Not Ready verdict creates a phantom REVIEWED state that blocks future phase-progression validation.
@@ -295,12 +290,17 @@ Reference: <https://code.claude.com/docs/en/ultrareview>.
 ## Heading-Scoped Read Note
 
 For token budgeting and future automation, `/review` entry reads only:
+- `Phase Verification`
+- `Work Log Compaction Check`
+- `Spec Drift Advisory`
 - `Skill-Aware Review (Pre-Check)`
+- `Adversarial Reviewer Freshness Invariant`
 - `Minimum Checks`
+- `Error Observability Compliance`
 - `Design Compliance Check`
 - `Burden of Proof Protocol`
 - `Security Scan`
 - `Red Team Scan`
 - `Self-Check Protocol`
 
-Read `Output Format`, `Domain Decisions Tag Validation`, and `Phase Summary Update` only when preparing the final review output.
+Read `Output Format`, `Domain Decisions Tag Validation`, `Backlog Finding Registration`, `Phase Summary Update` and (on NOT READY) `Reverse Transition` only when preparing the final review output.

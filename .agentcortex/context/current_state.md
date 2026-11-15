@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-11-15T04:47:45Z
-- **Last Verified**: 2026-11-14
-- **Update Sequence**: 164
+- **Last Updated**: 2026-11-15T05:09:59Z
+- **Last Verified**: 2026-11-15
+- **Update Sequence**: 165
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -157,6 +157,10 @@
 
 ## Ship History
 
+### Ship-chore-upgrade-agentic-os-v1.8.39-2026-11-15
+- Hotfix shipped: governance brain Agentic OS v1.8.25 (f250db1) -> v1.8.39 (21b2a9a, main tip = tag). Deploy 203 updated / 2 skipped / 5 new; git: 75 modified + 5 new, framework paths only; 192 manifest files byte-equal to upstream. Kept team-owned current_state.md, .claude/settings.json and .codex/INSTALL.md (deploy force-overwrite reverted: it removed the AVO native Codex hooks section); product EOL rules re-appended below the new framework-scoped .gitattributes block. Owner request 2026-11-15.
+- Tests: validate fail=0; vitest PASS except the pre-existing Windows tar test (watcher flake passes alone); independent review PASS (no blocking defects).
+
 ### Ship-claude-avo-207-walk-roles-batch-2026-11-14
 - Quick-win shipped: AVO-207 increment 2 -- every Pixel role walks with a reviewed side cycle. Arch/Dev from single-frame waves (near/far tone fix on Arch f2 and Dev f2/f3 shoes; Dev hair specks cleared); PM from walk sheet 7b (rounder face) and QA/Ops/Designer/Gate from walk sheet 7c (PM sheet redrawn per role): 50-grid sheets uniformly scaled to the master height plus a near/far tone swap -- owner-approved exceptions, recipe in PROVENANCE. Walking up/down reuses the side cycle on the last left/right side; recipe halo rule (Res byte-identical). Commit 3035711 + the follow-up commit on this branch (stacked on PR #273). Owner approved each look on the live server.
 - Tests: full suite PASS except the pre-existing Windows tar failure (load-sensitive watcher/hook tests pass alone); new state-matrix test (role x status x behavior x motion: one view by fixed priority; mirror, bob and seat clip only where they belong); build + budget PASS (+1.05%); live: every role cycles walk-side-0..3 (mirrored left) and the action poses/back view show on a staged all-working server.
@@ -196,11 +200,6 @@
 - Release cut: v1.6.13 packages merged AVO206/PR261 and fresh English/Traditional Chinese README scene/postcard screenshots; source 70903f56ea44f2cf7c297741e208daf20891dbbb.
 - Verification:3version fields agree, dependency graph/runtime/older changelog unchanged; actual Live/idle and decoded760x820 Cat preview; build535204<=546154 and clean package4assertionsPASS.
 - Release-cut exact-head CI, merge, annotated tag and GitHub Release are verified externally; no npm-registry publication claim.
-
-### Ship-codex-cozy-scene-interactions-2026-10-24
-- Feature delivered: AVO-206 scene-native gestures and postcard resources; code 5a08b584b0513f6f35351a33653eab469b0d7185.
-- Tests:2972PASS/3existing skips; build535204<=546154;4viewport decoded-image/focus render smoke and panel smoke PASS.
-- Owner authorized verified closeout and normal project launch on2026-10-24; actual painted preview/PNG save proved. Exact-head CI and external merge disposition are recorded in the PR, not inferred here.
 
 ## Spec Index Archive
 

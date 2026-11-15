@@ -80,6 +80,13 @@ Rotated 1 additional entry on 2026-11-14 (SSoT Update Sequence 162 -> 163).
 
 Rotated 1 additional entry on 2026-11-14 (SSoT Update Sequence 163 -> 164).
 
+Rotated 1 additional entry on 2026-11-15 (SSoT Update Sequence 164 -> 165).
+
+### Ship-codex-cozy-scene-interactions-2026-10-24
+- Feature delivered: AVO-206 scene-native gestures and postcard resources; code 5a08b584b0513f6f35351a33653eab469b0d7185.
+- Tests:2972PASS/3existing skips; build535204<=546154;4viewport decoded-image/focus render smoke and panel smoke PASS.
+- Owner authorized verified closeout and normal project launch on2026-10-24; actual painted preview/PNG save proved. Exact-head CI and external merge disposition are recorded in the PR, not inferred here.
+
 ### Ship-chore-release-v1.6.12-2026-10-21 (more agents, and a calmer quiet office) · release v1.6.12
 
 - Cuts merged PR258/259 as v1.6.12 under the established patch-release convention: Antigravity passive observation, separate Gemini CLI project hooks, trusted observed-idle calm and Vite8.2.4 security patch. AVO201/200 remain pending; accepted authenticated Gemini/native Linux live-validation limits remain explicit.
