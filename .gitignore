@@ -126,8 +126,10 @@ office-hook-capture.jsonl
 # Third-party AI Tool Local State
 .openrouter/
 .claude-chat/
-.cursor/
 .antigravity/scratch/
+
+# Framework Tool Bytecode (framework namespace only; project policy untouched)
+.agentcortex/**/__pycache__/
 
 # End Agentic OS Template - Downstream Ignore Defaults
 

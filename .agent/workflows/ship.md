@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Final delivery and archival. Requires TESTED state and handoff gate.
+description: Final delivery and archival. Entry gates vary by classification.
 tasks:
   - ship
 ---
@@ -86,11 +86,11 @@ After evidence is recorded, prompt once per ship (not re-prompted on retry): *"D
 
 **Scope**: This check applies ONLY to `feature` and `architecture-change` classifications. `tiny-fix`, `quick-win`, and `hotfix` are exempt.
 
-Before ship, verify the delivered code meets production observability requirements:
+Before ship, verify the delivered code meets production observability requirements (method: `.agents/skills/production-readiness/SKILL.md`):
 
-1. **Error boundary defined**: all error-handling paths use a production-observable logger (per §5.2a). No debug-only logging as sole error path.
-2. **Log sink documented**: Work Log records where errors are reported (e.g., "Sentry via `Logger.error()`", "stdout → CloudWatch", or "Crashlytics via `FirebaseCrashlytics.recordError()`"). If the project has no production logging infrastructure yet, document that as a Known Risk.
-3. **Rollback telemetry**: rollback plan (per §12.5) includes how operators will know the rollback succeeded (e.g., error rate returns to baseline, health check passes).
+1. **Error boundary defined**: audit every `catch` / error-handling block in changed files — each uses a production-observable logger (per §5.2a), not debug-only (`debugPrint`, `console.log`, `print`) as the sole error path.
+2. **Log sink documented**: Work Log `## Observability` records where errors are reported (e.g., "Sentry via `Logger.error()`", "stdout → CloudWatch", or "Crashlytics via `FirebaseCrashlytics.recordError()`"). If the project has no production logging infrastructure yet, document that as a Known Risk.
+3. **Rollback telemetry**: rollback plan (per §12.5) states how operators detect the rollback is needed AND that it succeeded (alert / dashboard / health check / error rate back to baseline).
 
 This is an advisory check — missing observability readiness produces a warning, not a hard fail. The warning MUST be recorded in the Work Log under `## Known Risk`.
 
@@ -117,7 +117,7 @@ Phase-specific: Evidence = specific commands, outputs, versions; Communication G
 
 **Pre-merge / pre-PR closure (always applies before /ship):**
 1. Re-sync with mainline: `git fetch origin && git merge origin/<main-branch>` (use repo's default branch) — verify no conflicts or behavioral drift
-2. Re-run minimal required tests + critical regression tests after sync
+2. Re-run minimal required tests + critical regression tests after sync (via `record_test_run.py run` if the log records runs; its `check` must then exit 0, else `verdict: fail`); with no test runner, the manual-trace fallback recorded at `/test` stands
 3. Verify documentation, migration scripts, configuration changes are all committed
 4. Select closure option and state it explicitly:
    - **Merge now**: Verification complete, risks acceptable
@@ -126,11 +126,7 @@ Phase-specific: Evidence = specific commands, outputs, versions; Communication G
    - **Archive/Close**: Requirement canceled or strategy changed
 Entering "Merge now" is PROHIBITED if evidence is insufficient.
 
-**Production observability check (always applies for feature / architecture-change):**
-- Audit every `catch` / error-handling block in changed files: Logger MUST be production-observable (`Logger.error()`, crash reporter, structured stdout) — NOT debug-only (`debugPrint`, `console.log`, `print`).
-- Document the error sink in Work Log `## Observability` (e.g., `Sentry via Logger.error()` / `Crashlytics` / `stdout → CloudWatch`). If no production logging infrastructure exists, log this as Known Risk.
-- Rollback plan MUST answer: how operators detect the rollback is needed AND that it succeeded (alert / dashboard / health check).
-- Full body: `.agents/skills/production-readiness/SKILL.md`.
+**Production observability check**: §Observability Readiness Check above (feature / architecture-change; advisory); no separate pass.
 
 ## Entry Conditions (HARD)
 
@@ -178,11 +174,16 @@ Before proceeding with ship, check `docs/reviews/` for any review snapshots that
 
 1. **Ship Guard (§11.1)**: Before writing, check if `current_state.md` has been modified since this task started. If modified by another session, warn user and request confirmation before merging. Use **additive merge**, never full overwrite.
 2. **SSoT Update & Ship History**:
-- Update `.agentcortex/context/current_state.md` Spec Index statuses (mutable snapshot) via `.agentcortex/tools/guard_context_write.py`.
-- Use the helper as documented in `.agentcortex/docs/guides/guarded-context-writes.md`. In Stage 1, missing guard receipts are a validation warning, not a hard runtime block.
+- Update `.agentcortex/context/current_state.md` Spec Index statuses (mutable snapshot). With Python, every SSoT write here goes through the guard, never a direct Edit — edit a copy outside the repo, then:
+
+  ```bash
+  python .agentcortex/tools/guard_context_write.py snapshot --path .agentcortex/context/current_state.md  # prints sha256
+  python .agentcortex/tools/guard_context_write.py write --path .agentcortex/context/current_state.md --lock-key ship-ssot --input <edited-copy> --expected-sha <sha256>
+  ```
+
 - **No-Python fallback** (all SSoT writes here incl. §8 heartbeat): direct write + Drift Log entry (AGENTS.md §Write Isolation).
 - **Spec Index Cap**: on the `check_ssot_caps.py` over-cap WARN, move the oldest `shipped` **index lines** into the single `## Spec Index Archive` section at the bottom of `current_state.md`, keeping cap-many inline (over-folding re-WARNs). Spec bodies stay in `docs/specs/` — moving one makes the entry a phantom and FAILs.
-- MUST add the completion record at the **top** of the `## Ship History` section — immediately after the `## Ship History` header, newest-first, matching the established convention (the most recent ship is the first entry; older entries follow below). Use `.agentcortex/tools/guard_context_write.py --mode replace` (snapshot → insert the entry right after the header → write with `--expected-sha`), or a surgical anchored Edit. **Do NOT use `--mode append`**: it is `O_APPEND` (writes at file-end), which drops the entry at the *bottom* — the oldest position — silently breaking newest-first ordering. See `.agentcortex/docs/guides/guarded-context-writes.md`. **Note**: The Work Log `SSoT Sequence` header field is a bootstrap-time snapshot and is NOT incremented at ship — do not attempt to update it.
+- MUST add the completion record at the **top** of the `## Ship History` section — immediately after the `## Ship History` header, newest-first (the most recent ship is the first entry; older entries follow below): insert it right after the header in the copy and write it with the template above. **Do NOT use `--mode append`**: it is `O_APPEND` (writes at file-end), which drops the entry at the *bottom* — the oldest position — silently breaking newest-first ordering. **Note**: The Work Log `SSoT Sequence` header field is a bootstrap-time snapshot and is NOT incremented at ship — do not attempt to update it.
 - Use the format:
 
   ```markdown
@@ -195,7 +196,7 @@ Before proceeding with ship, check `docs/reviews/` for any review snapshots that
 - If Ship History exceeds 10 entries, archive older entries to `.agentcortex/context/archive/ship-history-YYYY.md` and keep only the latest 10 in `current_state.md`.
 - **Relative-link depth hazard**: content copied from `current_state.md` (depth 2) into `archive/` (depth 3) shifts `../` links one level shallow — broken links are CI-caught; M8 also WARNs. **Strip/convert them to plain text or absolute URLs before committing archived content.**
 2b. **Decision Disposition** (all tiers except `tiny-fix`; skip if `## Decisions` absent/empty): append one marker per entry — `→ promoted: ADR-<id>` (project-wide impact, new precedent, or reversal → author/amend that ADR + its Index line this ship) / `→ consolidated: L2 <domain>` (the ship L2 entry) / `→ local`. `→ local` is illegal for an entry naming an `ADR-<n>` or reversing a durable decision — use promoted/consolidated. Populate step-3 `decisions[]` with each entry's title. Headless: self-mark; `check_decision_disposition` WARNs on unmarked logs and ADR-naming locals.
-3. **Move** (not copy) `.agentcortex/context/work/<worklog-key>.md` to `.agentcortex/context/archive/<worklog-key>-<YYYYMMDD>.md` (the **root** of `archive/`, if task complete) — delete the `work/` original, else the validator WARNs "shipped work logs still in active work/ directory". This is **final archival** of the whole log — distinct from `/handoff §6` compaction, which offloads stale detail of a *still-active* log into the `archive/work/` subdir. The `-<YYYYMMDD>` suffix is required: it prevents a reused branch (e.g. a downstream that does all work on `main`) from overwriting its own prior archive on the next ship. Record the resulting filename in the `INDEX.jsonl` `log` field below.
+3. **Move** (not copy) `.agentcortex/context/work/<worklog-key>.md` to `.agentcortex/context/archive/<worklog-key>-<YYYYMMDD>.md` (the **root** of `archive/`, if task complete) — delete the `work/` original, else the validator WARNs "shipped work logs still in active work/ directory". This is **final archival** of the whole log — distinct from `/handoff §6` compaction, which offloads stale detail of a *still-active* log into the `archive/work/` subdir. Never overwrite an archive: check the target first (`mv` overwrites silently; `mv -n` exits 0 without moving). If it exists — a reused key such as `main`, same day — use `<worklog-key>--2-<YYYYMMDD>.md` (`--3-`, …). Record the resulting filename in the `INDEX.jsonl` `log` field below.
     - Do NOT duplicate `/retro`-promoted Global Lessons during ship. `/retro` owns structured Global Lesson promotion.
     - **Archive Index Update**: After archiving, append a structured record to `.agentcortex/context/archive/INDEX.jsonl`. The archive index is a hash-chained audit log — every append MUST add `prev_sha` (computed by the helper) so the chain stays intact. Use:
       ```bash
@@ -215,7 +216,7 @@ Before proceeding with ship, check `docs/reviews/` for any review snapshots that
    - If Pending features remain, output: "Backlog: [N] features remaining. Next session can run `/spec-intake` §8a to continue."
    - Update `current_state.md` **Active Backlog** field to `docs/specs/_product-backlog.md` (if not already set). This is the only mechanism that persists backlog awareness across sessions via SSoT.
 5. **Raw Intake Cleanup**: If `docs/specs/_product-backlog.md` exists and ALL features from the current intake are `Shipped` or `Cancelled`, delete any remaining `docs/specs/_raw-intake*.md` files. These are temporary artifacts; the structured specs are now the SSoT. Log deletion in Work Log.
-6. Freeze Artifacts: Ensure all produced Specs/ADRs have YAML frontmatter `status: frozen`. If missing, add it before commit.
+6. Freeze Artifacts: Ensure all produced Specs have YAML frontmatter `status: frozen`. If missing, add it before commit.
    - **Skip non-freezable statuses**: Documents with `status: living` (e.g., `_product-backlog.md`) or `status: raw` (e.g., `_raw-intake.md`) MUST NOT be frozen. These are tracking/temporary artifacts, not spec deliverables.
    - **Spec Freshness**: If implementation DIFFERS from any referenced spec's AC, MUST update the spec to match actual behavior before freezing. Append `[Updated: <date>]` to the corresponding Spec Index entry in `current_state.md`.
    - **Shipped Frontmatter** (AC-27): After freezing, set `status: shipped` on all referenced specs that are being completed in this branch. This signals to future `/bootstrap` sessions to prefer Domain Doc L1 over these specs as design authority.

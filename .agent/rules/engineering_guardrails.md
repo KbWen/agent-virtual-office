@@ -7,8 +7,8 @@ Global (applies to all projects using template).
 ## Reading Mode
 
 - **Full Mode** (default for `feature`, `architecture-change`, `hotfix`): Read core sections first, then load conditional sections per the Heading-Scoped Read rules below.
-- **Quick Mode** (for `quick-win`): Do NOT read this file. Essential quick-win rules (Confidence Gate, Bug Fix Protocol, Doc Integrity) are embedded in `bootstrap.md` §1 Classification Tiers. If the task escalates beyond quick-win, switch to Full Mode.
-- **Skip Mode** (for `tiny-fix` ONLY): Do NOT read this file. `AGENTS.md` §Core Directives provides sufficient governance for tiny-fix tasks (scope discipline, evidence requirement, fast-path rules). If the task escalates beyond tiny-fix, switch to Quick or Full Mode and read this file at that point.
+- **Quick Mode** (for `quick-win`): Do NOT read this file (sole exemption: §13, per `bootstrap.md` §0). Essential quick-win rules (Confidence Gate, Bug Fix Protocol, Doc Integrity) are embedded in `bootstrap.md` §1 Classification Tiers. If the task escalates beyond quick-win, switch to Full Mode.
+- **Lite Mode** (for `tiny-fix` ONLY): Do NOT read this file. `AGENTS.md` §Core Directives provides sufficient governance for tiny-fix tasks (scope discipline, evidence requirement, fast-path rules). If the task escalates beyond tiny-fix, switch to Quick or Full Mode and read this file at that point.
 
 ### Heading-Scoped Read (Full Mode Optimization)
 
@@ -101,7 +101,7 @@ Before emitting any verdict (phase pass/fail, classification, completion claim),
 
 - Whenever a Spec is approved or the task transitions to implementation, the Spec MUST be marked as **FROZEN** (e.g., via YAML frontmatter `status: frozen`).
 - **Shipped Status**: After `/ship` delivers a spec's feature, `/ship` sets `status: shipped` on the spec frontmatter. Shipped specs are **historical reference only** — they document past decisions. For current system design, read the corresponding Domain Doc L1 (`docs/architecture/<domain>.md`) instead, when present — `docs/architecture/` is created on demand by `/app-init` (capability-by-presence; absent on a fresh project until the first domain doc is written). Shipped specs MUST NOT be cited as authoritative current design.
-- AI agents MUST NOT modify, review, or suggest refactoring for any document marked as `FROZEN` or `Finalized` during normal tasks.
+- AI agents MUST NOT modify, review, or suggest refactoring for any document marked as `FROZEN` during normal tasks.
 - **Exception (AI-Initiated Unfreeze)**: If the AI discovers that a FROZEN spec must be changed (due to a bug or requirement change), the AI MUST:
   1. **STOP** and surface the issue explicitly: "⚠️ [Filename] is FROZEN but requires update: [Reason]. Approve to unfreeze and continue? (yes/no)"
   2. Only proceed after user responds **YES**.
@@ -196,7 +196,7 @@ To prevent Work Log bloat and premature context compaction, agents MUST NOT past
 ### 5.4 YAGNI — You Aren't Gonna Need It
 
 - Do not introduce abstract base classes, mixins, or utility layers unless there are 3+ concrete use cases already in the codebase.
-- Single-file implementation first; refactor to a shared abstraction only when the second real consumer exists.
+- Single-file implementation first; refactor to a shared abstraction only when the third real consumer exists.
 - Adding a new dependency requires justification in the PR or Work Log: explain why existing code cannot solve the problem.
 
 ## 6. Explainability & Traceability
@@ -214,6 +214,7 @@ To prevent Work Log bloat and premature context compaction, agents MUST NOT past
 
 - **Default**: Conservative, Explainable, Stable.
 - **When Uncertain**: State ambiguity, provide 2-3 options, DEFER high-impact decisions to user.
+- **Standing instructions are not gate answers**: "keep going", "finish this wave" or permission to merge cover execution inside decided scope. They do not answer a decision the governance reserves for the owner — freezing or unfreezing a spec, amending an accepted ADR or a frozen AC, a force push, an owner-decision backlog row. Ask that question explicitly, keep the work a draft until it is answered, and record where it was answered (chat date, PR), not an approval sentence.
 
 ### 8.1 Bug Fix Protocol
 
@@ -391,7 +392,7 @@ Before `/ship` writes to `current_state.md`:
 
 ### 12.1 Read-Before-Write
 Any task that modifies an existing file MUST:
-1. Read the full file first using the Read tool.
+1. Read the full file first.
 2. Record in the Work Log what was found: file purpose, key exports, and any sections that will change.
 Skipping this step is a gate violation — the task cannot proceed to Implement.
 
@@ -399,7 +400,7 @@ Skipping this step is a gate violation — the task cannot proceed to Implement.
 - The project's linter/analyzer MUST produce **zero errors** (warnings are allowed but must be noted).
 - The project's test suite MUST pass with **zero failures**.
 - Red on either = no commit, no ship. No exceptions.
-- Evidence (terminal output) MUST be pasted into the Work Log under "Test Gate Results".
+- Evidence MUST be recorded in the Work Log under "Test Gate Results", truncated per §5.2b.
 - *(Project-specific test commands should be defined in `/app-init` or project README.)*
 
 ### 12.3 Migration Safety
@@ -411,7 +412,7 @@ Schema changes to database tables require ALL of the following:
 
 ### 12.4 No Silent File Shadowing
 Before creating any new file:
-1. Use Glob to check if a file with that name already exists anywhere in the project.
+1. Check whether a file with that name already exists anywhere in the project.
 2. If a match is found, document the conflict in the Work Log and resolve intentionally (rename, merge, or replace with justification).
 Never silently overwrite an existing file.
 
@@ -431,4 +432,4 @@ Acceptable answers: revert commit SHA, feature-flag toggle, migration rollback s
   - **T3 named human observer**: name the consumer + record a 1-line unmeasurable-rationale.
 - External citations (standards, research) are supporting metadata on any tier — never a tier by themselves. No feasible tier → do NOT add the rule; prefer deletion.
 - Governance-rule-introducing specs declare `signal_tier:` in frontmatter (`none` when the spec adds no new rule) — an advisory validator WARN checks presence.
-- Per ADR-011, grandfathering has ENDED for the four phase-entry surfaces (AGENTS.md, engineering_guardrails.md, security_guardrails.md, shared-contracts.md): each directive there carries an explicit tier in the enumeration (`docs/reviews/2026-07-19-phase-entry-directive-enumeration.md`), growth capped by `tests/ci/test_directive_count_ratchet.py`. Elsewhere, rules stay grandfathered — retrofit opportunistically via `docs/guides/delete-bias-workflow.md`.
+- Per ADR-011, grandfathering has ENDED for the four phase-entry surfaces (AGENTS.md, engineering_guardrails.md, security_guardrails.md, shared-contracts.md): each directive there carries an explicit tier in the ADR-011 enumeration, and growth is capped by a ratchet test. Elsewhere, rules stay grandfathered — retrofit opportunistically.

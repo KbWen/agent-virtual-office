@@ -30,7 +30,7 @@ usage: Used by /bootstrap workflow when creating a new Work Log at .agentcortex/
 
 - Agent: `<model-name>`
 - Session: `<YYYY-MM-DD HH:MM UTC>`
-- Platform: `<claude-code | codex | antigravity | api>`
+- Platform: `<claude-code | codex-app | codex-web | gemini-cli | antigravity | api>`
 - Files Read: `<integer>` (optional — running count of file reads across this session for token-budget instrumentation; bootstrap may seed `0`, later phases may increment when material).
 
 ---
@@ -72,7 +72,7 @@ none
 
 > Gate receipts written by each phase. Format: `- Gate: <phase> | Verdict: PASS | Classification: <type> | Timestamp: <ISO>`
 > **Critical**: `|` pipe separators are mandatory. Receipts placed inside markdown code fences are silently masked and NOT counted by validate.sh — always write receipts as plain list lines.
-> Receipt order-of-appearance is authoritative for phase progression; `Timestamp` is provenance metadata only (validators require it to be present and parseable, but do NOT enforce monotonic/chronological ordering).
+> Receipt order-of-appearance is authoritative for phase progression. `Timestamp` is written by the agent that writes the receipt and nothing verifies it: read it from the clock (`date -u +%Y-%m-%dT%H:%M:%SZ`) when the phase ends; never pre-fill or estimate it. Validators check only that it is present and parseable. A receipt records a phase that ran — never add one to satisfy a validator.
 
 none
 

@@ -11,8 +11,12 @@ $ErrorActionPreference = 'Stop'
 # caller's live session, so it is saved here and restored in the matching `finally` at
 # the end of the file -- never set-and-leave, which would mutate console state after exit.
 $acxPreviousOutputEncoding = [Console]::OutputEncoding
+# (#211) Python tools would print in the console code page, which the UTF-8 decoding set
+# below turns into mojibake; make them print UTF-8. Restored in the same `finally`.
+$acxPreviousPythonIoEncoding = $env:PYTHONIOENCODING
 try {
     [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+    $env:PYTHONIOENCODING = 'utf-8'
 
 function Normalize-PathString {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -209,6 +213,19 @@ function Invoke-PythonCheck {
         Add-Result -Level 'FAIL' -Message $Label
     }
     Show-IndentedOutput -Text $output
+}
+
+# Windows PowerShell 5.1 turns a redirected native stderr line into a terminating
+# error under $ErrorActionPreference = 'Stop' (pwsh 7 does not), so a git probe that
+# is expected to fail -- not a repo, no origin remote, an unresolvable SHA, a detached
+# HEAD -- aborted the whole run with no Summary. Probe through this instead: stderr is
+# dropped; stdout and $LASTEXITCODE come back as usual. Quote a `--` argument ('--'): a
+# bare -- is consumed by PowerShell's parameter binder and never reaches $args.
+function Invoke-GitQuiet {
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & git @args 2>$null }
+    finally { $ErrorActionPreference = $previousErrorActionPreference }
 }
 
 $script:PassCount = 0
@@ -478,17 +495,29 @@ if (Test-Path -Path $archiveIndexJsonl -PathType Leaf) {
 # WARN, not FAIL: a genuine historical dangling ref cannot be cleanly removed
 # (append-only chain + git witness forbid entry deletion), so this SURFACES the
 # gap for review rather than blocking. Capability-by-presence; needs Python.
-if ((Test-Path -Path $archiveIndexJsonl -PathType Leaf) -and $script:PythonCommand) {
-    # Pass the path as an argv (sys.argv[1]), NOT interpolated into the Python
-    # source — a repo path containing an apostrophe (e.g. C:\Users\O'Brien\...)
-    # would otherwise produce an unterminated string literal, crash the child,
-    # and (via the empty-output default below) silently mask a dangling ref to
-    # PASS on Windows. Mirror of validate.sh, which already uses argv.
-    $indexRefsOut = (& $script:PythonCommand.Source -c @"
+# The directory is the type: a final log lives in the archive ROOT (/ship §3),
+# while archive/work/ holds /handoff §6 compaction fragments that may share a
+# final log's basename, so a fragment never satisfies an entry. The Python below
+# is byte-identical to validate.sh's (tests/ci/test_archive_name_collisions.py)
+# and prints detail lines, then a final `LEVEL|message` line, or `error`.
+if (Test-Path -Path $archiveIndexJsonl -PathType Leaf) {
+    if ($script:PythonCommand) {
+        # Pass the path as an argv (sys.argv[1]), NOT interpolated into the Python
+        # source — a repo path containing an apostrophe (e.g. C:\Users\O'Brien\...)
+        # would otherwise produce an unterminated string literal, crash the child,
+        # and (via the empty-output default below) silently mask a dangling ref to
+        # PASS on Windows. Mirror of validate.sh, which already uses argv.
+        # Local 'Continue': under 'Stop', Windows PowerShell 5.1 turns a redirected
+        # native stderr line into a terminating error and aborts the whole run.
+        $indexRefsPrevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $indexRefsOut = (& $script:PythonCommand.Source -c @'
 import json, os, sys
 idx = sys.argv[1]
 archive = os.path.dirname(os.path.abspath(idx))
 missing = []
+misplaced = []
 seen = 0
 try:
     with open(idx, encoding='utf-8') as fh:
@@ -498,35 +527,54 @@ try:
                 continue
             try:
                 entry = json.loads(line)
-            except Exception:
+            except ValueError:
                 continue
-            log = entry.get('log')
-            if not log:
+            log = entry.get('log') if isinstance(entry, dict) else None
+            if not isinstance(log, str) or not log:
                 continue
             seen += 1
-            cands = [os.path.join(archive, log), os.path.join(archive, 'work', log)]
-            if not any(os.path.exists(c) for c in cands):
+            if os.path.exists(os.path.join(archive, log)):
+                continue
+            if os.path.exists(os.path.join(archive, 'work', log)):
+                misplaced.append(log)
+            else:
                 missing.append(log)
-except OSError:
+except Exception:
     print('error')
-    raise SystemExit(0)
-print(('missing:' + ','.join(missing)) if missing else ('ok:%d' % seen))
-"@ $archiveIndexJsonl 2>$null | Out-String).Trim()
-    if ($indexRefsOut -like 'missing:*') {
-        $dangling = $indexRefsOut.Substring('missing:'.Length)
-        $danglingCount = @($dangling -split ',' | Where-Object { $_ -ne '' }).Count
-        Write-Output "  INDEX.jsonl references $danglingCount file(s) not present on disk: $dangling"
-        $indexRefsLevel = 'WARN'
-        $indexRefsMsg = "INDEX.jsonl referenced logs missing on disk: $danglingCount (dangling audit reference)"
-    } elseif ($indexRefsOut -like 'ok:*') {
-        $indexRefsLevel = 'PASS'
-        $indexRefsMsg = "INDEX.jsonl referenced logs all present on disk ($($indexRefsOut.Substring('ok:'.Length)) checked)"
+    sys.exit(0)
+verdict = []
+if missing:
+    print('  INDEX.jsonl references %d file(s) not present on disk: %s' % (len(missing), ','.join(missing)))
+    verdict.append('INDEX.jsonl referenced logs missing on disk: %d (dangling audit reference)' % len(missing))
+if misplaced:
+    print('  INDEX.jsonl references %d log(s) found only under archive/work/, the compaction-fragment directory; move each final log to the archive root: %s' % (len(misplaced), ','.join(misplaced)))
+    verdict.append('INDEX.jsonl referenced logs not in the archive root: %d (found only under archive/work/)' % len(misplaced))
+if verdict:
+    print('WARN|' + '; '.join(verdict))
+else:
+    print('PASS|INDEX.jsonl referenced logs all present on disk (%d checked)' % seen)
+'@ $archiveIndexJsonl 2>$null | Out-String).TrimEnd()
+            $indexRefsRc = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $indexRefsPrevEap
+        }
+        $indexRefsLines = @($indexRefsOut -split "`r?`n")
+        # A child that exited nonzero did not finish: it must not supply a verdict.
+        if ($indexRefsRc -eq 0 -and $indexRefsLines[-1] -match '^(PASS|WARN)\|(.*)$') {
+            $indexRefsLevel = $Matches[1]
+            $indexRefsMsg = $Matches[2]
+            if ($indexRefsLines.Count -gt 1) { $indexRefsLines[0..($indexRefsLines.Count - 2)] | ForEach-Object { Write-Output $_ } }
+        } else {
+            # `error` or empty output = the check did not run; never report it as a PASS.
+            $indexRefsLevel = 'WARN'
+            $indexRefsMsg = 'INDEX.jsonl referenced-file check did not run (python error or empty output) -- verify manually'
+        }
+    } elseif ($NoPython) {
+        $indexRefsLevel = 'SKIP'
+        $indexRefsMsg = 'INDEX.jsonl referenced-file check -- python checks disabled (--NoPython)'
     } else {
-        # Empty/unrecognized output = the child could not run (not a clean 'ok').
-        # WARN rather than silently defaulting to PASS, so a check that failed to
-        # execute cannot mask a dangling reference.
-        $indexRefsLevel = 'WARN'
-        $indexRefsMsg = 'INDEX.jsonl referenced-file check did not run (python error or empty output) -- verify manually'
+        $indexRefsLevel = 'SKIP'
+        $indexRefsMsg = 'INDEX.jsonl referenced-file check -- python unavailable'
     }
     Add-Result -Level $indexRefsLevel -Message $indexRefsMsg
 }
@@ -543,17 +591,17 @@ $indexRel = '.agentcortex/context/archive/INDEX.jsonl'
 if (Test-Path -Path $archiveIndexJsonl -PathType Leaf) {
     $gitPresent = [bool](Get-Command git -ErrorAction SilentlyContinue)
     $isRepo = $false
-    if ($gitPresent) { git -C $root rev-parse --git-dir *> $null; $isRepo = ($LASTEXITCODE -eq 0) }
+    if ($gitPresent) { Invoke-GitQuiet -C $root rev-parse --git-dir | Out-Null; $isRepo = ($LASTEXITCODE -eq 0) }
     if (-not $gitPresent -or -not $isRepo) {
         Add-Result -Level 'WARN' -Message 'INDEX.jsonl append-only witness -- git unavailable or not a git repo'
     } else {
-        git -C $root rev-parse --verify -q origin/main *> $null
-        if ($LASTEXITCODE -ne 0) { git -C $root fetch -q --depth=1 origin main *> $null }
-        $witnessBase = (git -C $root merge-base origin/main HEAD 2>$null | Select-Object -First 1)
+        Invoke-GitQuiet -C $root rev-parse --verify -q origin/main | Out-Null
+        if ($LASTEXITCODE -ne 0) { Invoke-GitQuiet -C $root fetch -q --depth=1 origin main | Out-Null }
+        $witnessBase = (Invoke-GitQuiet -C $root merge-base origin/main HEAD | Select-Object -First 1)
         if (-not $witnessBase) {
             Add-Result -Level 'WARN' -Message 'INDEX.jsonl append-only witness -- no merge-base with origin/main (offline, no remote, or unrelated history)'
         } else {
-            git -C $root cat-file -e "${witnessBase}:$indexRel" 2>$null
+            Invoke-GitQuiet -C $root cat-file -e "${witnessBase}:$indexRel" | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 Add-Result -Level 'WARN' -Message 'INDEX.jsonl append-only witness -- not present at merge-base (new log surface)'
             } else {
@@ -639,11 +687,11 @@ if (-not (Test-Path -Path $lifecycleUpdater -PathType Leaf)) {
 # bash check. The validator pair self-excludes.
 $gitPresentMarkers = [bool](Get-Command git -ErrorAction SilentlyContinue)
 $isRepoMarkers = $false
-if ($gitPresentMarkers) { git -C $root rev-parse --git-dir *> $null; $isRepoMarkers = ($LASTEXITCODE -eq 0) }
+if ($gitPresentMarkers) { Invoke-GitQuiet -C $root rev-parse --git-dir | Out-Null; $isRepoMarkers = ($LASTEXITCODE -eq 0) }
 if (-not $gitPresentMarkers -or -not $isRepoMarkers) {
     Add-Result -Level 'WARN' -Message 'merge-conflict marker scan -- git unavailable or not a git repo'
 } else {
-    $conflictMarkerHits = git -C $root grep -I -n -E '^(<<<<<<< |>>>>>>> )' -- . ':(exclude).agentcortex/bin/validate.sh' ':(exclude).agentcortex/bin/validate.ps1' ':(exclude)tests/guard/test_conflict_markers.py' 2>$null
+    $conflictMarkerHits = Invoke-GitQuiet -C $root grep -I -n -E '^(<<<<<<< |>>>>>>> )' '--' . ':(exclude).agentcortex/bin/validate.sh' ':(exclude).agentcortex/bin/validate.ps1' ':(exclude)tests/guard/test_conflict_markers.py' 
     if ($conflictMarkerHits) {
         Add-Result -Level 'FAIL' -Message 'unresolved merge-conflict markers in tracked files'
         Show-IndentedOutput -Text ($conflictMarkerHits | Out-String)
@@ -787,12 +835,12 @@ Test-ContainsLiteral -Path (Join-NormalPath $workflowsDir 'bootstrap.md') -Patte
 # ADR-009: bootstrap MUST ship the kb-consult scope-detected row (§3.6 / §1b knowledge_sources). Structural only; consult quality is honor-system.
 Test-ContainsLiteral -Path (Join-NormalPath $workflowsDir 'bootstrap.md') -Pattern 'kb-consult' -SuccessMessage 'bootstrap ships KB-consult scope-detected row (ADR-009)' -FailureMessage 'bootstrap missing KB-consult scope-detected row (ADR-009)'
 # ADR-007: a present downstream-capabilities.yaml MUST be schema gate-safe (rejected, not clamped).
+# --root: the tool checks the file config.yaml §downstream_capabilities.path names (#190).
 $capValidator = Join-NormalPath $root '.agentcortex/tools/validate_downstream_capabilities.py'
-$capFile = Join-NormalPath $root '.agentcortex/context/private/downstream-capabilities.yaml'
 if (Test-Path $capValidator) {
     # python-present + gate-unsafe -> FAIL (CI always has python); no-python -> WARN
     # (advisory; bootstrap §1b agent-discipline is the runtime guarantee there).
-    Invoke-PythonCheck -Label 'downstream-capabilities gate-safety' -MissingPythonLevel 'WARN' -ScriptPath $capValidator -Arguments @($capFile)
+    Invoke-PythonCheck -Label 'downstream-capabilities gate-safety' -MissingPythonLevel 'WARN' -ScriptPath $capValidator -Arguments @('--root', $root)
 } else {
     Add-Result -Level 'SKIP' -Message 'downstream-capabilities gate-safety -- validator not deployed (safe to ignore)'
 }
@@ -814,6 +862,10 @@ Invoke-PythonCheck -Label 'ssot section caps (ship history + spec index)' -Missi
 # entries missing a ship-time marker). WARN-tier / never-FAIL (tool ALWAYS exits 0);
 # silent no-op until a fork sets document_lifecycle.decision_disposition_since.
 Invoke-PythonCheck -Label 'decision disposition (archived work logs)' -MissingPythonLevel 'WARN' -ScriptPath (Join-NormalPath $root '.agentcortex/tools/check_decision_disposition.py') -Arguments @('--root', $root)
+# ADR-006: test evidence freshness (docs/specs/test-evidence-freshness.md); opt-in by a
+# recorded `Test run:` line. FAIL on a failed run before a PASS receipt, or on code changed
+# after the latest run once a ship receipt exists.
+Invoke-PythonCheck -Label 'test evidence freshness (current-branch work log)' -MissingPythonLevel 'WARN' -ScriptPath (Join-NormalPath $root '.agentcortex/tools/record_test_run.py') -Arguments @('check', '--root', $root)
 # ADR-006: advisory Work Log `## External References` existence check (Spec/ADR
 # referents must exist on disk; PR/Issue referents are format-checked only, no
 # network call). WARN-tier / never-FAIL (tool ALWAYS exits 0); silent no-op when
@@ -1060,7 +1112,6 @@ else {
         '*.acx-incoming',
         '.openrouter/',
         '.claude-chat/',
-        '.cursor/',
         '.antigravity/scratch/',
         '# End Agentic OS Template - Downstream Ignore Defaults'
     )) {
@@ -1216,6 +1267,7 @@ if (Test-Path -Path $worklogDir -PathType Container) {
     $checkpointMissing = 0
     $checkpointViolationList = New-Object System.Collections.Generic.List[string]
     $gateEvidenceMissing = 0
+    $gateEvidenceMissingList = New-Object System.Collections.Generic.List[string]
     $legacyGateEvidenceMissing = 0
     $gateProgressionIllegal = 0
     $phaseSummaryMissing = 0
@@ -1274,9 +1326,9 @@ if (Test-Path -Path $worklogDir -PathType Container) {
         if ($gitAvailable) {
             # Use symbolic-ref --short first: works on empty repos (no commits yet).
             # Fall back to rev-parse --abbrev-ref for detached-HEAD scenarios.
-            $curBranch = & git -C $root symbolic-ref --short HEAD 2>$null
+            $curBranch = Invoke-GitQuiet -C $root symbolic-ref --short HEAD
             if ($LASTEXITCODE -ne 0 -or -not $curBranch) {
-                $curBranch = & git -C $root rev-parse --abbrev-ref HEAD 2>$null
+                $curBranch = Invoke-GitQuiet -C $root rev-parse --abbrev-ref HEAD
             }
             if ($LASTEXITCODE -eq 0 -and $curBranch -and $curBranch -ne 'HEAD') {
                 # F10 (2026-07-11 receipt-integrity audit): apply the canonical
@@ -1375,7 +1427,7 @@ if (Test-Path -Path $worklogDir -PathType Container) {
                         $checkpointMissing++
                         $checkpointViolationList.Add("  invalid Checkpoint SHA value ('$cpVal') in $($wl.Name)")
                     } elseif ($isCurrentBranch) {
-                        & git -C $root rev-parse --verify "$cpVerify^{commit}" 2>$null | Out-Null
+                        Invoke-GitQuiet -C $root rev-parse --verify "$cpVerify^{commit}" | Out-Null
                         if ($LASTEXITCODE -ne 0) {
                             $checkpointMissing++
                             $checkpointViolationList.Add("  unresolvable Checkpoint SHA ('$cpVerify') in $($wl.Name) (git rev-parse --verify failed)")
@@ -1414,7 +1466,7 @@ if (Test-Path -Path $worklogDir -PathType Container) {
                     $checkpointMissing++
                     $checkpointViolationList.Add("  invalid Diff Base SHA value ('$dbVal') in $($wl.Name)")
                 } elseif ($isCurrentBranch) {
-                    & git -C $root rev-parse --verify "$dbVerify^{commit}" 2>$null | Out-Null
+                    Invoke-GitQuiet -C $root rev-parse --verify "$dbVerify^{commit}" | Out-Null
                     if ($LASTEXITCODE -ne 0) {
                         $checkpointMissing++
                         $checkpointViolationList.Add("  unresolvable Diff Base SHA ('$dbVerify') in $($wl.Name) (git rev-parse --verify failed)")
@@ -1430,6 +1482,7 @@ if (Test-Path -Path $worklogDir -PathType Container) {
                 # missing gate evidence cannot legitimately be pre-Runtime-v4 —
                 # deny the legacy WARN downgrade and treat as a FAIL-tier miss.
                 $gateEvidenceMissing++
+                $gateEvidenceMissingList.Add("  $($wl.Name): no ## Gate Evidence section")
             }
         } elseif ($content -notmatch '(?mi)^(`?- )?gate:.*verdict:') {
             if ($isLegacyGateEvidenceLog -and -not $isCurrentBranch) {
@@ -1439,6 +1492,7 @@ if (Test-Path -Path $worklogDir -PathType Container) {
                 # missing gate evidence cannot legitimately be pre-Runtime-v4 —
                 # deny the legacy WARN downgrade and treat as a FAIL-tier miss.
                 $gateEvidenceMissing++
+                $gateEvidenceMissingList.Add("  $($wl.Name): ## Gate Evidence has no receipt line")
             }
         } else {
             # Parse gate receipts: only PASS verdicts are forward transitions;
@@ -1509,6 +1563,7 @@ if (Test-Path -Path $worklogDir -PathType Container) {
             $hasShipReceipt = $false  # H3: track ANY ship receipt regardless of verdict
             $reviewNotReady = $false  # track pending re-review after NOT READY reverse edge
             $hadNotReady = $false  # sticky: a review NOT READY reverse edge occurred (for remediation hint)
+            $nrIndex = 0  # gates recorded after the latest review NOT READY start here
             foreach ($line in $gateLines) {
                 $gm = [regex]::Match($line, '(?i)^(?:`?- )?gate:\s*(\w+)\s*\|')
                 if ($gm.Success) {
@@ -1523,15 +1578,22 @@ if (Test-Path -Path $worklogDir -PathType Container) {
                         # H4: Reclassification reset — one reset per structured drift record
                         if ($gPhase -eq 'bootstrap' -and $gateList.Count -gt 0 -and $reclassifyCount -gt $resetsUsed) {
                             $gateList.Clear()
+                            $nrIndex = 0
                             $resetsUsed++
                         }
                         $gateList.Add($gPhase)
                     } else {
                         # NOT READY / FAIL review: discard preceding implement (reverse-edge pop)
-                        if ($gPhase -eq 'review' -and $gateList.Count -gt 0 -and $gateList[$gateList.Count - 1] -eq 'implement') {
-                            $gateList.RemoveAt($gateList.Count - 1)
+                        if ($gPhase -eq 'review') {
+                            if ($gateList.Count -gt 0 -and $gateList[$gateList.Count - 1] -eq 'implement') {
+                                $gateList.RemoveAt($gateList.Count - 1)
+                            }
+                            # The latest review verdict wins, also after a review PASS. Recorded gates
+                            # are never deleted (that would hide an illegal edge logged before this
+                            # point); the re-review requirement covers the gates recorded after it.
                             $reviewNotReady = $true
                             $hadNotReady = $true  # remember for the re-review remediation hint below
+                            $nrIndex = $gateList.Count
                         }
                     }
                 }
@@ -1563,8 +1625,10 @@ if (Test-Path -Path $worklogDir -PathType Container) {
                 }
             }
             # NOT READY reverse-edge check: re-review was skipped after NOT READY
-            if ($reviewNotReady -and ($gates | Where-Object { $_ -in @('test','handoff','ship') })) {
-                $badNext = ($gates | Where-Object { $_ -in @('test','handoff','ship') } | Select-Object -First 1)
+            # An empty slice needs the guard: $a[4..3] is a DESCENDING range in PowerShell.
+            $afterNotReady = if ($nrIndex -lt $gates.Count) { @($gates[$nrIndex..($gates.Count - 1)]) } else { @() }
+            if ($reviewNotReady -and ($afterNotReady | Where-Object { $_ -in @('test','handoff','ship') })) {
+                $badNext = ($afterNotReady | Where-Object { $_ -in @('test','handoff','ship') } | Select-Object -First 1)
                 Write-Output "  illegal gate progression in $($wl.Name): NOT_READY-review->$badNext (re-review skipped after NOT READY)"
                 $gateProgressionIllegal++
             }
@@ -1624,15 +1688,25 @@ if (Test-Path -Path $worklogDir -PathType Container) {
         if ([string]::IsNullOrEmpty($wlClass)) {
             if ($content -match '(?m)^\|\s*(?:\*\*)?[Cc]lassification(?:\*\*)?\s*\|\s*`?([a-zA-Z][\w-]*)') { $wlClass = $Matches[1].Trim() }
         }
+        # (#233) The template ships this heading with body `none`, so the heading alone
+        # proves nothing: the section counts only when its body (minus blank lines and
+        # the template's `>` guidance) is non-empty and not `none`. Mirrors validate.sh.
+        $tgrRecorded = $false
+        $tgrMatch = [regex]::Match($content, '(?ims)^#+[ \t]+Test Gate Results[^\n]*\n(.*?)(?=^##?[ \t]|^---[ \t]*\r?$|\z)')
+        if ($tgrMatch.Success) {
+            $tgrBody = ($tgrMatch.Groups[1].Value -split "\r?\n" | Where-Object { $_.Trim() -and $_ -notmatch '^\s*>' }) -join ''
+            $tgrNorm = ($tgrBody -replace '[`.\s]', '').ToLowerInvariant()
+            $tgrRecorded = ($tgrNorm.Length -gt 0 -and $tgrNorm -ne 'none')
+        }
         if (($wlClass -eq 'feature' -or $wlClass -eq 'architecture-change') `
             -and ($content -match '(?i)Gate:\s*implement') `
-            -and ($content -notmatch '(?im)^#+\s+Test Gate Results')) {
+            -and (-not $tgrRecorded)) {
             # AC-6: current-branch at handoff/ship → escalate to FAIL; historical → WARN.
             # Use gate-receipt presence only here ($wlPhaseForResume is set later in this loop iteration).
             $atHandoffOrShip = ($content -match '(?i)Gate:\s*(handoff|ship)\s*\|[^|\r\n]*Verdict:\s*PASS')
             if ($isCurrentBranch -and $atHandoffOrShip) {
                 $currentBranchGateFail++
-                $currentBranchGateFailList.Add("  [Test Gate Results absent] $($wl.Name)")
+                $currentBranchGateFailList.Add("  [Test Gate Results absent or empty] $($wl.Name)")
             } else {
                 $testGateResultsMissing++
             }
@@ -1772,6 +1846,9 @@ if (Test-Path -Path $worklogDir -PathType Container) {
     }
     if ($gateEvidenceMissing -gt 0) {
         Add-Result -Level 'FAIL' -Message "work logs missing gate evidence receipts: $gateEvidenceMissing"
+        # #210: name the log and the expected line, not just a count.
+        foreach ($line in $gateEvidenceMissingList) { Write-Output $line }
+        Write-Output '  expected receipt line: - Gate: <phase> | Verdict: PASS | Classification: <tier> | Timestamp: <ISO>'
     } elseif ($worklogs.Count -gt 0 -and $legacyGateEvidenceMissing -eq 0) {
         Add-Result -Level 'PASS' -Message 'all active work logs have gate evidence receipts'
     }
@@ -2046,7 +2123,9 @@ $phaseSummaryViolationList = New-Object System.Collections.Generic.List[string]
 if (Test-Path -Path $archiveDir -PathType Container) {
     # Exclude ship-history-*.md (#171) and global-lessons-archive*.md (#141):
     # neither is a Work Log; neither carries a '## Phase Summary' contract.
-    $archivedLogs = Get-ChildItem -Path $archiveDir -Filter '*.md' -File -Recurse -ErrorAction SilentlyContinue |
+    # Archive root only (no -Recurse): archive/work/ holds /handoff §6 compaction
+    # fragments, which are not Work Logs either (#186).
+    $archivedLogs = Get-ChildItem -Path $archiveDir -Filter '*.md' -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -notlike '.gitkeep*' -and $_.Name -notlike 'ship-history-*' -and $_.Name -notlike 'global-lessons-archive*' }
     foreach ($wl in $archivedLogs) {
         $content = Get-Content -Path $wl.FullName -Raw -Encoding utf8
@@ -2863,6 +2942,11 @@ if ($stWarnCount -gt 0) {
 }
 
 Write-Output ''
+# Brownfield: an unmerged entry-file sidecar is why the AGENTS.md checks above fail.
+$entryPending = @('AGENTS.md', 'CLAUDE.md', 'GEMINI.md') | Where-Object { Test-Path -LiteralPath (Join-NormalPath $root "$_.acx-incoming") -PathType Leaf }
+if (@($entryPending).Count -gt 0) {
+    Write-Output "NOTE: governance is not active: $(@($entryPending) -join ' ') still hold your own version and the framework's is in <file>.acx-incoming. Merge each sidecar into its file, then re-run; AGENTS.md-related FAILs above come from this."
+}
 Write-Output "Summary: pass=$($script:PassCount) warn=$($script:WarnCount) fail=$($script:FailCount) skip=$($script:SkipCount)"
 if ($script:FailCount -gt 0) {
     Write-Output 'Agentic OS integrity check failed'
@@ -2892,4 +2976,5 @@ finally {
     # (#175) Hand the caller's console state back exactly as found. Runs on the `exit 1`
     # path above as well -- PowerShell executes `finally` on exit and preserves the code.
     [Console]::OutputEncoding = $acxPreviousOutputEncoding
+    $env:PYTHONIOENCODING = $acxPreviousPythonIoEncoding
 }
