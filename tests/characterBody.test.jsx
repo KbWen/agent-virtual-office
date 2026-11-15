@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CharacterBody } from '../src/components/CharacterBody.jsx'
+import { CharacterBody, PixelBody } from '../src/components/CharacterBody.jsx'
 import { CharacterPixelSprite } from '../src/components/AgentCharacter.jsx'
 
 const svg = (el) => renderToStaticMarkup(<svg>{el}</svg>)
@@ -33,12 +33,21 @@ describe('CharacterBody (Phase-1 Pixel appearance)', () => {
     expect(html).not.toMatch(/scale\(-1/)
   })
 
-  it('bob only while walking a front master and never under reduced motion', () => {
-    expect(svg(<CharacterBody appearance="pixel" charId="ops" isMoving={false} />)).toContain('data-pixel-bob="0"')
-    expect(svg(<CharacterBody appearance="pixel" charId="ops" isMoving />)).toContain('avo-pixel-walk-bob')
-    const rm = svg(<CharacterBody appearance="pixel" charId="ops" isMoving reducedMotion />)
+  it('no bob when standing, when walking with a cycle, or under reduced motion', () => {
+    // Every pixel-v1 role now has a walk cycle; the front-master bob stays only as the fallback for a
+    // role without one (pixelWalkView returns null, covered in characterAppearance.test.js).
+    expect(svg(<CharacterBody appearance="pixel" charId="gate" isMoving={false} />)).toContain('data-pixel-bob="0"')
+    expect(svg(<CharacterBody appearance="pixel" charId="gate" isMoving />)).not.toContain('avo-pixel-walk-bob')
+    const rm = svg(<CharacterBody appearance="pixel" charId="gate" isMoving reducedMotion />)
     expect(rm).toContain('data-pixel-bob="0"')
     expect(rm).not.toContain('avo-pixel-walk-bob')
+  })
+
+  it('fallback for a role without a cycle: a walking front master bobs, never under reduced motion', () => {
+    // CharacterBody picks 'front' when pixelWalkView is null; PixelBody owns the bob decision.
+    expect(svg(<PixelBody charId="gate" view="front" isMoving />)).toContain('avo-pixel-walk-bob')
+    expect(svg(<PixelBody charId="gate" view="front" isMoving reducedMotion />)).not.toContain('avo-pixel-walk-bob')
+    expect(svg(<PixelBody charId="gate" view="walk-side-1" isMoving />)).not.toContain('avo-pixel-walk-bob')
   })
 
   it('alias and unknown roles resolve explicitly', () => {
@@ -92,14 +101,6 @@ describe('CharacterBody walk cycle (AVO-207)', () => {
     }
   })
 
-  it('a role whose cycle is held back walks with its front master, as before', () => {
-    for (const charId of ['ops', 'designer', 'qa', 'checker', 'pm', 'gate', 'planner']) {
-      const html = svg(<CharacterBody appearance="pixel" charId={charId} isMoving facing="right" walkStep={1} />)
-      expect(view(html), charId).toBe('front')
-      expect(html, charId).toContain('avo-pixel-walk-bob')
-    }
-  })
-
   it('reduced motion walks with the static front master, unmirrored', () => {
     const html = walk({ facing: 'left', walkStep: 3, reducedMotion: true })
     expect(view(html)).toBe('front')
@@ -114,7 +115,7 @@ describe('CharacterBody walk cycle (AVO-207)', () => {
   })
 
   it('every role with a reviewed cycle (and its aliases) walks with it', () => {
-    for (const charId of ['arch', 'dev', 'res', 'worker', 'feat-x~arch']) {
+    for (const charId of ['arch', 'dev', 'res', 'pm', 'qa', 'ops', 'designer', 'gate', 'worker', 'planner', 'checker', 'feat-x~arch']) {
       const html = svg(<CharacterBody appearance="pixel" charId={charId} isMoving facing="right" walkStep={1} />)
       expect(view(html), charId).toBe('walk-side-1')
       expect(html, charId).toContain('data-pixel-bob="0"')

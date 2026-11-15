@@ -66,16 +66,17 @@ data-only changes once their frames pass review.
 | W-08 | Owner sees same-state before/after (front-master slide vs walk cycle) before commit. | Clip/screenshots sent; owner go recorded. |
 | W-09 | Build, full test suite and bundle budget pass. | `npm run build`, `npm test`, `node scripts/bundle-budget.mjs`. |
 
-## Increment 2 (2026-11-14): Arch, Dev + vertical walking
+## Increment 2 (2026-11-14/15): all eight roles + vertical walking
 
 Owner-requested after reviewing Gemini fix waves 5A/5B and the live office.
 
 | AC | Requirement | Verification |
 |---|---|---|
 | W-10 | Recipe clears edge pixels that are more than `HALO_DELTA` brighter than all inner neighbours, even when the colour is a master white; Res's four files re-derive byte-identical. | Re-run on Res -> same sha256; overlays for each new role reviewed. |
-| W-11 | Arch and Dev walk with their reviewed cycles; PM, QA, Ops, Designer and Gate are held back (owner: legs do not read as walking) and keep the front master. | Manifest + characterBody/characterAppearance tests. |
+| W-11 | All eight roles walk with reviewed cycles: Arch/Dev/Res from single-frame waves, PM from walk sheet 7b, QA/Ops/Designer/Gate from walk sheet 7c (gait fix wave 6 frames rejected). | Manifest + characterBody/characterAppearance tests. |
 | W-12 | Walking up/down uses the side cycle on the last left/right side faced (replaces W-04's "up/down shows the front master" for roles with a cycle); reduced motion still shows the front master. | characterBody tests + live check. |
 | W-13 | A cycle ships only if its legs visibly swap: f0 vs f2 and f1 vs f3 are not near-copies (leg-area difference recorded in PROVENANCE). | Leg-area diff + owner look. |
+| W-14 | PM/QA/Ops/Designer/Gate cycles come from 2x2 walk sheets (7b; 7c redraws PM's sheet per role); because Gemini drew it on a 50 grid, the frames are uniformly scaled (one nearest-neighbour factor, no pixel dropped) to the master's height. Owner-approved exceptions for these sheet roles: no-resizing, and a near/far tone swap on f2/f3 so the far leg and arm are the darker ones (also applied to Arch f2 legs and Dev f2/f3 shoes). | PROVENANCE recipe + before/after GIF approved by owner. |
 
 Boss frames are not wired (no Pixel boss yet) and wait for their own increment: the boss has no
 pixel master, so the gap pass cannot tell his white clipboard paper and collar from background.

@@ -87,8 +87,9 @@ describe('Pixel signature action poses', () => {
       for (const [other, b2] of Object.entries(SIGNATURE)) if (other !== role) expect(pixelActionView(role, b2), `${role}/${b2}`).toBe(null)
     }
   })
-  it('pose priority: walking front > own action > seated back > front', () => {
-    expect(pixelViewFor({ charId: 'pm', isMoving: true, seated: true, behavior: 'typing', status: 'working' })).toBe('front')
+  it('pose priority: walking (cycle; front under reduced motion) > own action > seated back > front', () => {
+    expect(pixelViewFor({ charId: 'pm', isMoving: true, seated: true, behavior: 'typing', status: 'working' })).toBe('walk-side-0')
+    expect(pixelViewFor({ charId: 'qa', isMoving: true, seated: true, behavior: 'reading-magnifier', status: 'working', reducedMotion: true })).toBe('front')
     expect(pixelViewFor({ charId: 'pm', seated: true, behavior: 'typing', status: 'working' })).toBe('typing')
     expect(pixelViewFor({ charId: 'pm', seated: true, behavior: 'reading-screen', status: 'working' })).toBe('back')
     expect(pixelViewFor({ charId: 'pm', behavior: 'typing', status: 'planning' })).toBe('typing')

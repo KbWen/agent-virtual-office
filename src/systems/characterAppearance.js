@@ -30,6 +30,10 @@ export const PIXEL_V1_PACK = Object.freeze({
       views: {
         'back': { file: 'pm-back.png', pivot: { x: 31.5, y: 57 }, sha256: 'bfb2fa0fc9d50a2a1e85c7d2e55dc77a55dbaa63517f963e4d38792bdc6a628b' },
         'typing': { file: 'pm-typing.png', pivot: { x: 31.5, y: 56 }, sha256: '2f4bbe71576687343849748c8b0e1fd23f35aaf85b35e2ec23d9c186db21faa1' },
+        'walk-side-0': { file: 'pm-walk-side-0.png', pivot: { x: 31.5, y: 56 }, sha256: '2c69ddd4a263a9c6a75d51d6a489a5cf9f608f80f7f50811111d1dc1ae8e1ecb' },
+        'walk-side-1': { file: 'pm-walk-side-1.png', pivot: { x: 31.5, y: 56 }, sha256: '73622a8ebf80af1e36281d650c0761cc435807c3db0f6403d5471205cd7bf30c' },
+        'walk-side-2': { file: 'pm-walk-side-2.png', pivot: { x: 31.5, y: 57 }, sha256: '77257aa9425db30a603f3aaea0c15a58dc05d0656e5cad6cd358bd63c4e23177' },
+        'walk-side-3': { file: 'pm-walk-side-3.png', pivot: { x: 31.5, y: 57 }, sha256: 'f707aa3bbeb4d680dce8e21092e0d0fd35ab7f59153c5485bc85eaa257d36855' },
       } },
     arch:     { file: 'arch.png',     pivot: { x: 32, y: 56 }, sha256: '4dbbc0792212b9a9e7921a965c6a9b38c4a429d350e3ac566be20c9c14c7442a',
       views: {
@@ -37,27 +41,35 @@ export const PIXEL_V1_PACK = Object.freeze({
         'pointing-board': { file: 'arch-pointing-board.png', pivot: { x: 31.5, y: 56 }, sha256: '055e340d98d5aa94e8f2e37610451b130446288a03eb80711575badb2363b793' },
         'walk-side-0': { file: 'arch-walk-side-0.png', pivot: { x: 32, y: 57 }, sha256: 'aef5bb2732bb48e90fce38b0259dd83c4fbedf84400d116cf135ba6540f3ebb3' },
         'walk-side-1': { file: 'arch-walk-side-1.png', pivot: { x: 32, y: 57 }, sha256: 'f2a3ccc6af53de9d496309e1a4cd7bd8fb71338537a8934ae3a6b5a2b92dd1db' },
-        'walk-side-2': { file: 'arch-walk-side-2.png', pivot: { x: 32, y: 57 }, sha256: 'c2300332facd5b016fd8ccdc911a463ee8499a964e0fffb0d5923867fc76df86' },
+        'walk-side-2': { file: 'arch-walk-side-2.png', pivot: { x: 32, y: 57 }, sha256: 'c582b177439bd9983d8b03c5e6e6bb9b91af974e159a9ac4feac91a74d7e8e17' },
         'walk-side-3': { file: 'arch-walk-side-3.png', pivot: { x: 32, y: 57 }, sha256: '4c5a1287d5782cb6dd56c63837f91244923ad4802bb613ff2a49801c81bc6f85' },
       } },
     dev:      { file: 'dev.png',      pivot: { x: 36, y: 55 }, sha256: 'da81bee1bd1cb480783c878236458f6ded0d8ce88b9b8f81041c9c2cf1d4bd31',
       views: {
         'back': { file: 'dev-back.png', pivot: { x: 36, y: 57 }, sha256: '1e7564273729f2b1c7791741621d82274de681986a6eb64f4423ee65691b316b' },
         'drinking-coffee': { file: 'dev-drinking-coffee.png', pivot: { x: 36, y: 57 }, sha256: 'bbdd786f7f5941e7822ce31a5b816226d2d8a285b33af8e81a3131445cfa9424' },
-        'walk-side-0': { file: 'dev-walk-side-0.png', pivot: { x: 29.5, y: 56 }, sha256: '73a0861b23e6347cb3e5a9357a2629bf9fe8ab17e1476779642205c5a85c0b67' },
-        'walk-side-1': { file: 'dev-walk-side-1.png', pivot: { x: 29.5, y: 56 }, sha256: 'aa18e231a77bb4b343ce65d4b80b504c10ef1161f75ed030c0012f46c8db7de0' },
-        'walk-side-2': { file: 'dev-walk-side-2.png', pivot: { x: 29.5, y: 56 }, sha256: '23c029f38658865b7e0d6cc3992b7a0fdd1892e30b0fd3b1dd0d8ebf7984940e' },
-        'walk-side-3': { file: 'dev-walk-side-3.png', pivot: { x: 29.5, y: 56 }, sha256: '64ee8d5a11885606e1413f0d4c642d023c87078fcce8d8971f59a2022afdadcf' },
+        'walk-side-0': { file: 'dev-walk-side-0.png', pivot: { x: 29.5, y: 56 }, sha256: 'de8671130d0f628a1e8bdddf3485a5aa05158b0fc2e9f07ff0d4b57251f73891' },
+        'walk-side-1': { file: 'dev-walk-side-1.png', pivot: { x: 29.5, y: 56 }, sha256: '78f9afd7a028ea9e52be83177328b1deaa62a806d05566c2138bc6d92d653f27' },
+        'walk-side-2': { file: 'dev-walk-side-2.png', pivot: { x: 29.5, y: 56 }, sha256: '38625cc72f20f0ed507859169c70a8c78df727c98ab1474893ee8cd7106fdbd7' },
+        'walk-side-3': { file: 'dev-walk-side-3.png', pivot: { x: 29.5, y: 56 }, sha256: '73e0d2df38258568f90ba4976a668a40d6334051064bd462481cf4f260978163' },
       } },
     qa:       { file: 'qa.png',       pivot: { x: 32, y: 56 }, sha256: 'd5f64afbf0a3778e1fe99fd5114fd409bcc60447e0de5f59a995a454f4f854ed',
       views: {
         'back': { file: 'qa-back.png', pivot: { x: 32, y: 57 }, sha256: 'b59c17b8fe55ae074a63969fce667fb675280fda9aaa8132566646656446439e' },
         'reading-magnifier': { file: 'qa-reading-magnifier.png', pivot: { x: 31.5, y: 57 }, sha256: '2bfcf0164c8a0a3197d7abfce1d32c04cd3935dc6cc63cb67c29398941ac629d' },
+        'walk-side-0': { file: 'qa-walk-side-0.png', pivot: { x: 31.5, y: 56 }, sha256: '5970e6cda25207d43bfcae1914d72ee6f4eccce2d7a21368048b18c2365d7c51' },
+        'walk-side-1': { file: 'qa-walk-side-1.png', pivot: { x: 31.5, y: 56 }, sha256: '342ad171cd7155e7907169253ca96dbbd43e67e67627940a6a63bc315a53ce35' },
+        'walk-side-2': { file: 'qa-walk-side-2.png', pivot: { x: 31.5, y: 57 }, sha256: '81538249bb04eb4b95459766040b7056f5415ab86fb970b3092d2c31efbb6407' },
+        'walk-side-3': { file: 'qa-walk-side-3.png', pivot: { x: 31.5, y: 57 }, sha256: '5b3325eb3cd3c49b6a14c51e9f24976f18d455771dd4b1e0f97ac2c79ba7efd7' },
       } },
     ops:      { file: 'ops.png',      pivot: { x: 32, y: 56 }, sha256: '4916b663dad415068dfeba8b1ec07b634883b081e37693ce09c1cc7fd17f8db0',
       views: {
         'back': { file: 'ops-back.png', pivot: { x: 32, y: 56 }, sha256: '39a0de129bea2063ede86c6bf23736c654be055ba6624037409d09e8f2eaf615' },
         'control-deploy': { file: 'ops-control-deploy.png', pivot: { x: 32, y: 56 }, sha256: 'e4d620b6c6a48512ac07a00646aad8c894e4db5a6ebf4ea25ef3d1a6a143ef03' },
+        'walk-side-0': { file: 'ops-walk-side-0.png', pivot: { x: 31.5, y: 56 }, sha256: '40ded272e085bad1619ce918a9e8293f0cb54b31c5c915c3e9db0731850fbb0b' },
+        'walk-side-1': { file: 'ops-walk-side-1.png', pivot: { x: 31.5, y: 56 }, sha256: '87dc63710b70cbc04d3dcc367bf542ed8be705a5a51c2490989b06b40e2fd215' },
+        'walk-side-2': { file: 'ops-walk-side-2.png', pivot: { x: 31.5, y: 57 }, sha256: 'c96529eabeae493ebb38ff68553738c6c35405530c01c8ae4f3bdf217e4c39e9' },
+        'walk-side-3': { file: 'ops-walk-side-3.png', pivot: { x: 31.5, y: 57 }, sha256: '48e12bb425f5a925e6b126bbd68cabe076c509e1f83497b33126523f8483a82e' },
       } },
     res:      { file: 'res.png',      pivot: { x: 32, y: 56 }, sha256: 'd638fee5040d840b32097e97e647052cb397e9ea0def93b1b861dca77e68a6f7',
       views: {
@@ -65,8 +77,9 @@ export const PIXEL_V1_PACK = Object.freeze({
         'reading-book': { file: 'res-reading-book.png', pivot: { x: 32, y: 57 }, sha256: '2bfc9da351fd6268fb77d380388bb1ba4b6bc3309e290b20b1fce473d5e1daf9' },
         // AVO-207 walk cycle (right-facing; mirrored for left). Derived by scripts/pixel_walk_derive.py.
         // pivot y = measured sole row 56 + 1; x = measured torso centre (31.2-31.4 in every frame).
-        // Arch/Dev walk views: pivot y = each frame's sole row + 1, x = the role's mean torso centre
-        // (one value per role). PM/QA/Ops/Designer/Gate cycles are held back (legs do not read as walking).
+        // Every role's walk views: pivot y = each frame's sole row + 1, x = the role's mean torso centre
+        // (one value per role). PM/QA/Ops/Designer/Gate frames come from 2x2 walk sheets drawn on a 50 grid,
+        // uniformly scaled to the master's height (owner-approved); see PROVENANCE.md.
         'walk-side-0': { file: 'res-walk-side-0.png', pivot: { x: 31.5, y: 57 }, sha256: '729eaff66c18a22cba5ccfccfb15c86ea910f81277338053a349ea4525b8b2c1' },
         'walk-side-1': { file: 'res-walk-side-1.png', pivot: { x: 31.5, y: 57 }, sha256: '5ee2b66e35d69f646a2abd46e20da843f32e2a1c00237dc4dd9344b042fd673e' },
         'walk-side-2': { file: 'res-walk-side-2.png', pivot: { x: 31.5, y: 57 }, sha256: '354f169c51d47fd23c5b694f37281b7e5e543c10bd8a69fa4dc294cd0f4db4b7' },
@@ -76,11 +89,19 @@ export const PIXEL_V1_PACK = Object.freeze({
       views: {
         'back': { file: 'gate-back.png', pivot: { x: 31.5, y: 57 }, sha256: 'a362fcb49be4987c28398b24e1f6f2ae8a127e532741775299857f1cd0a5c0f4' },
         'control-shield': { file: 'gate-control-shield.png', pivot: { x: 32, y: 57 }, sha256: 'c5ed74774526bb43815ec3e1bda0dd861275d8510af2a4532add9d1387bec256' },
+        'walk-side-0': { file: 'gate-walk-side-0.png', pivot: { x: 31.5, y: 56 }, sha256: 'e22d6944568b326f594dd31efe17b3aae3ba999877ef13f0eef935dee422fdf6' },
+        'walk-side-1': { file: 'gate-walk-side-1.png', pivot: { x: 31.5, y: 56 }, sha256: '513bfc74bea812a94248c26209f40295d980081ddb600cde25eccb668db46643' },
+        'walk-side-2': { file: 'gate-walk-side-2.png', pivot: { x: 31.5, y: 57 }, sha256: '3cf431ae91c743640ba107ff1c136c7b7f7190d46fec5bd7dc7e895cca57bebf' },
+        'walk-side-3': { file: 'gate-walk-side-3.png', pivot: { x: 31.5, y: 57 }, sha256: '7026ff9372f0756a16ed85a6bcefbffcc09394ad20f9e0e82ffd957b820f3de9' },
       } },
     designer: { file: 'designer.png', pivot: { x: 32.5, y: 56 }, sha256: '61a665352ce563ba3a8a6de6cd6db5b6adc71be1873b93f0648059f200ed679c',
       views: {
         'back': { file: 'designer-back.png', pivot: { x: 32, y: 57 }, sha256: '0c172c3685b79d4eeca586aae99919309c7a41334cc108249abb4ec408a900d4' },
         'writing-notes': { file: 'designer-writing-notes.png', pivot: { x: 32.5, y: 57 }, sha256: 'da236a7db6fb46bc8136e596009aa0be8d95e199b6147cd2c57b361d3a5e47dd' },
+        'walk-side-0': { file: 'designer-walk-side-0.png', pivot: { x: 32, y: 56 }, sha256: '5b21df006c54badaac5a7ea729469ba0f63e67620f739c9ded00364f6c67568b' },
+        'walk-side-1': { file: 'designer-walk-side-1.png', pivot: { x: 32, y: 56 }, sha256: 'a98dcfa0d456df5239cd99ae3b3d3805104ace95b8df3fb86f1af1f93c1bf27e' },
+        'walk-side-2': { file: 'designer-walk-side-2.png', pivot: { x: 32, y: 57 }, sha256: 'c8f2b5acb1c084d7e8c2b4d3a1ff787b57bc797299ecfe095ead521834cf143f' },
+        'walk-side-3': { file: 'designer-walk-side-3.png', pivot: { x: 32, y: 57 }, sha256: 'cd6438ff17f17e799dfadf984c31bf4c18224e6aa05a8f5c4f19af9135c1ab13' },
       } },
   }),
   // Lightweight-mode roles reuse the identity the classic palette already maps them to.

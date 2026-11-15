@@ -78,6 +78,15 @@ Rotated 1 additional entry on 2026-10-11 (SSoT Update Sequence 147 -> 148).
 
 Rotated 1 additional entry on 2026-11-14 (SSoT Update Sequence 162 -> 163).
 
+Rotated 1 additional entry on 2026-11-14 (SSoT Update Sequence 163 -> 164).
+
+### Ship-chore-release-v1.6.12-2026-10-21 (more agents, and a calmer quiet office) · release v1.6.12
+
+- Cuts merged PR258/259 as v1.6.12 under the established patch-release convention: Antigravity passive observation, separate Gemini CLI project hooks, trusted observed-idle calm and Vite8.2.4 security patch. AVO201/200 remain pending; accepted authenticated Gemini/native Linux live-validation limits remain explicit.
+- This release cut changes only package version, both lock root versions, CHANGELOG and delivery metadata; dependency graph/application code are unchanged. Source features already merged with CI8/8PASS.
+- Validation: full2897PASS/3existing skips; build514383bytes within546154budget; pack-smokePASS; audit0; independent release-notes/version/diff reviewPASS. Final governance evidence is in the release work-log archive.
+- After the release-cut PR is green and merged: annotated v1.6.12 tag at the exact release merge commit, push the tag, then create the latest GitHub Release. Publication is not claimed by this pre-merge metadata checkpoint.
+
 ### Ship-hotfix-avo-199-vite-security-2026-10-21
 
 - Owner-approved Vite8.2.1->8.2.4 security patch clears PR259 dependency audit; only existing Vite requirement/package metadata changed, all other locked versions retained. Runtime dependency placement is preserved.

@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-11-14T06:38:18Z
+- **Last Updated**: 2026-11-15T04:47:45Z
 - **Last Verified**: 2026-11-14
-- **Update Sequence**: 163
+- **Update Sequence**: 164
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -61,7 +61,7 @@
     - **Session closure** — final retro at `docs/reviews/2026-05-29-session-retro.md` (snapshot, not authoritative). 27 commits ahead of `origin/main`, 0 behind. `main` branch is the canonical state; `_product-backlog.md` lean (14 items: AVO-101..AVO-115 minus done + #20 deferred); `_shipped-log.md` holds 73 prior shipped rows; vitest 960/960; build 887ms clean. All work-log archives in place + INDEX.jsonl up to date. Push to origin pending human confirmation.
   - **Branch status**: All feature branches closed/merged. main is HEAD.
 - **Spec Index**:
-  - [ui-rendering] docs/specs/avo-207-pixel-walk-cycles.md [Shipped] [Updated: 2026-11-14] *(AVO-207 increment 1: Pixel walk cycle for Res (right frames, mirrored left, front master for up/down + reduced motion) and the raw-frame derivation recipe scripts/pixel_walk_derive.py; other roles join as data after review)*
+  - [ui-rendering] docs/specs/avo-207-pixel-walk-cycles.md [Shipped] [Updated: 2026-11-14] *(AVO-207 increments 1-2; increment 2: all eight roles walk -- Arch/Dev single-frame cycles (+ near/far tone fixes), PM/QA/Ops/Designer/Gate from 2x2 walk sheets uniformly scaled to master height; vertical walking reuses the side cycle; halo rule. Increment 1: Pixel walk cycle for Res (right frames, mirrored left, front master for up/down + reduced motion) and the raw-frame derivation recipe scripts/pixel_walk_derive.py; other roles join as data after review)*
   - [ui-rendering] docs/specs/phased-pixel-character-refresh.md [Shipped] [Updated: 2026-11-09] *(AVO-160 [chair back 2026-11-09]: optional Classic/Pixel appearance — 8 masters, atomic preload, seated back view while working, honesty-gated signature poses, visitor routes on shared navigation; gait frames continue in AVO-207)*
   - [hook-integration] docs/specs/signal-lifecycle-compatibility.md [Shipped] [Updated: 2026-10-30] *(Claude/native Codex lifecycle parity, truthful source/subagent retirement, safe installation and privacy; v1.6.14)*
   - [ui-rendering] docs/specs/cozy-interactions.md [Shipped] [Updated: 2026-10-24] *(AVO-206: scene gestures, duration star, decorated postcard and CSP-safe preview/Blob export; owner-authorized agent validation; code 5a08b58)*
@@ -157,6 +157,10 @@
 
 ## Ship History
 
+### Ship-claude-avo-207-walk-roles-batch-2026-11-14
+- Quick-win shipped: AVO-207 increment 2 -- every Pixel role walks with a reviewed side cycle. Arch/Dev from single-frame waves (near/far tone fix on Arch f2 and Dev f2/f3 shoes; Dev hair specks cleared); PM from walk sheet 7b (rounder face) and QA/Ops/Designer/Gate from walk sheet 7c (PM sheet redrawn per role): 50-grid sheets uniformly scaled to the master height plus a near/far tone swap -- owner-approved exceptions, recipe in PROVENANCE. Walking up/down reuses the side cycle on the last left/right side; recipe halo rule (Res byte-identical). Commit 3035711 + the follow-up commit on this branch (stacked on PR #273). Owner approved each look on the live server.
+- Tests: full suite PASS except the pre-existing Windows tar failure (load-sensitive watcher/hook tests pass alone); new state-matrix test (role x status x behavior x motion: one view by fixed priority; mirror, bob and seat clip only where they belong); build + budget PASS (+1.05%); live: every role cycles walk-side-0..3 (mirrored left) and the action poses/back view show on a staged all-working server.
+
 ### Ship-claude-gemini-image-quota-character-actions-23ad2f-2026-11-14
 - Feature shipped: AVO-207 increment 1 — Res walks with a reviewed 4-frame side cycle in the Pixel appearance (mirrored for left; up/down, reduced motion and incomplete sets keep the front master; Classic unchanged) + deterministic raw-frame derivation recipe with a mandatory --review overlay. PR #273 (6b41b58, 9e0484d). Owner approved the same-state before/after.
 - Tests: 3109 PASS / 1 pre-existing Windows tar failure (also on main); build + budget PASS; independent red-team review PASS (M1/L2/L3 fixed, M2/M3 gated by overlay review, L1 recorded).
@@ -197,14 +201,6 @@
 - Feature delivered: AVO-206 scene-native gestures and postcard resources; code 5a08b584b0513f6f35351a33653eab469b0d7185.
 - Tests:2972PASS/3existing skips; build535204<=546154;4viewport decoded-image/focus render smoke and panel smoke PASS.
 - Owner authorized verified closeout and normal project launch on2026-10-24; actual painted preview/PNG save proved. Exact-head CI and external merge disposition are recorded in the PR, not inferred here.
-
-
-### Ship-chore-release-v1.6.12-2026-10-21 (more agents, and a calmer quiet office) · release v1.6.12
-
-- Cuts merged PR258/259 as v1.6.12 under the established patch-release convention: Antigravity passive observation, separate Gemini CLI project hooks, trusted observed-idle calm and Vite8.2.4 security patch. AVO201/200 remain pending; accepted authenticated Gemini/native Linux live-validation limits remain explicit.
-- This release cut changes only package version, both lock root versions, CHANGELOG and delivery metadata; dependency graph/application code are unchanged. Source features already merged with CI8/8PASS.
-- Validation: full2897PASS/3existing skips; build514383bytes within546154budget; pack-smokePASS; audit0; independent release-notes/version/diff reviewPASS. Final governance evidence is in the release work-log archive.
-- After the release-cut PR is green and merged: annotated v1.6.12 tag at the exact release merge commit, push the tag, then create the latest GitHub Release. Publication is not claimed by this pre-merge metadata checkpoint.
 
 ## Spec Index Archive
 
