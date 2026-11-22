@@ -17,6 +17,7 @@ const statusOptions = ['idle', 'working', 'blocked', 'done']
 // "x is not defined" (regression caught only by actually loading the page).
 import { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, attentionStripState, controlPanelPresenceRows, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState, healthDotDetail } from './controlPanelLabels.js'
 import { requestAppearance } from '../systems/characterAppearance'
+import { safeGet, safeSet } from '../utils/safeStorage.js'
 import { useOfficeAppearance } from './CharacterBody.jsx'
 export { taskChipLabel, blockedReasonLabel, blockedReasonGlyph, formatTokens, agentLineLabel, attentionStripState, controlPanelPresenceRows, shouldShowWatchdogDiag, isRafDebugEnabled, healthDotState, healthDotDetail }
 
@@ -160,7 +161,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   }, [showSettings])
   const [showInfo, setShowInfo] = useState(() => {
     if (typeof window === 'undefined') return false
-    return !localStorage.getItem('office-onboarded')
+    return !safeGet('office-onboarded')
   })
   // Notification permission state (#8). Init from current state; refresh after request.
   const [notifyState, setNotifyState] = useState(() => getNotificationState())
@@ -207,7 +208,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
 
   const dismissInfo = () => {
     setShowInfo(false)
-    localStorage.setItem('office-onboarded', '1')
+    safeSet('office-onboarded', '1')
   }
 
   // ─── Panel mode: compact single-line status bar ───
