@@ -98,6 +98,7 @@ windows), AVO-210 (storage unavailable), AVO-212 (worktree agents in list view),
 - Skip Attempt: NO
 - Owner delegated the whole run in chat ("可以喔都交給你了"); before/after shots captured and checked by me instead of a pre-commit owner look (bug fixes; the only new visible element is the small slug text in list rows).
 - Independent review (Sonnet) found 2 minor issues; my own screenshot check found a third (menu under the feed toggle at 640x360). All fixed.
+- First closure write corrupted current_state.md: the rotation cut searched for the text `## Spec Index Archive`, which first occurs inside the Spec Index description, so the cut duplicated ~100 lines and rotated an empty entry. The byte check passed because it compared against my own output. Caught by validate (Spec Index completeness FAIL); rebuilt both files from origin/main with a line-anchored match and verified by `git diff origin/main` (13 lines SSoT, 7 lines archive).
 - Token Leak: NO
 
 ---
