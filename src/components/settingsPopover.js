@@ -1,7 +1,9 @@
 // AVO-208 / AVO-209: pure helpers for the settings popover (kept DOM-framework-free so they are unit-testable).
 
 // Bounded to the viewport (the popover is bottom-anchored above the bar) and scrollable when short.
-export const SETTINGS_POPOVER_STYLE = { maxHeight: 'calc(100dvh - 4.5rem)', overflowY: 'auto' }
+// 6.5rem = bar + gap below the menu (~3rem) + the collapsed Activity Feed toggle at the top-right
+// (top-3 + 40px), so in a short window the menu's top edge stays clear of that toggle's hit area.
+export const SETTINGS_POPOVER_STYLE = { maxHeight: 'calc(100dvh - 6.5rem)', overflowY: 'auto' }
 
 const FOCUSABLE = 'button, [href], input, select, [tabindex]:not([tabindex="-1"])'
 
