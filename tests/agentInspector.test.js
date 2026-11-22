@@ -588,3 +588,68 @@ describe('AgentInspector — planning status', () => {
     expect(markup).toContain('#AABBCC')
   })
 })
+
+// AVO-213 — predictable keyboard focus path. The effects need a real DOM (verified live in a
+// browser); here the markup contract and the focus helpers are pinned with a tiny fake document.
+describe('AgentInspector focus path (AVO-213)', () => {
+  it('renders as a named dialog that can take programmatic focus, plus a close button', async () => {
+    const markup = await renderInspectorWithMocks()
+    expect(markup).toMatch(/role="dialog"[^>]*aria-label="Developer"/)
+    expect(markup).toMatch(/role="dialog"[^>]*tabindex="-1"/i)
+    expect(markup).toContain('aria-label="Close inspector"')
+  })
+
+  function makeDom() {
+    const body = { name: 'body' }
+    const agent = { name: 'agent', attrs: { 'data-agent-id': 'dev' }, getAttribute(k) { return this.attrs[k] ?? null }, focus() { doc.activeElement = this } }
+    const closeBtn = { name: 'close', focus() { doc.activeElement = this } }
+    const dialog = { name: 'dialog', contains(el) { return el === this || el === closeBtn }, focus() { doc.activeElement = this } }
+    const nodes = [body, agent]
+    const doc = {
+      body, documentElement: { name: 'html' }, activeElement: agent,
+      contains: (el) => nodes.includes(el),
+      querySelector: (sel) => (sel === '[data-agent-id="dev"]' ? agent : null),
+    }
+    return { doc, agent, dialog, closeBtn, nodes }
+  }
+
+  it('Enter on an agent: opener is the focused agent and focus moves into the dialog', async () => {
+    const { findInspectorOpener, focusElement } = await import('../src/components/inspectorFocus.js')
+    const { doc, agent, dialog } = makeDom()
+    expect(findInspectorOpener(doc, 'dev')).toBe(agent)
+    focusElement(dialog)
+    expect(dialog.contains(doc.activeElement)).toBe(true)
+  })
+
+  it('Escape / close button: focus returns to the originating agent', async () => {
+    const { findInspectorOpener, focusElement, restoreInspectorFocus } = await import('../src/components/inspectorFocus.js')
+    for (const via of ['dialog', 'closeBtn']) {
+      const { doc, agent, dialog, closeBtn } = makeDom()
+      const opener = findInspectorOpener(doc, 'dev')
+      focusElement(dialog)
+      if (via === 'closeBtn') closeBtn.focus()
+      expect(restoreInspectorFocus(doc, opener, dialog)).toBe(true)
+      expect(doc.activeElement).toBe(agent)
+    }
+  })
+
+  it('does not restore when the opener left the DOM or focus moved elsewhere on purpose', async () => {
+    const { restoreInspectorFocus } = await import('../src/components/inspectorFocus.js')
+    const gone = makeDom()
+    gone.doc.activeElement = gone.doc.body
+    gone.nodes.splice(gone.nodes.indexOf(gone.agent), 1)
+    expect(restoreInspectorFocus(gone.doc, gone.agent, gone.dialog)).toBe(false)
+
+    const moved = makeDom()
+    moved.doc.activeElement = { name: 'other-input' }
+    expect(restoreInspectorFocus(moved.doc, moved.agent, moved.dialog)).toBe(false)
+    expect(moved.doc.activeElement.name).toBe('other-input')
+  })
+
+  it('finds the opener by data-agent-id when the agent is not the active element (mouse open)', async () => {
+    const { findInspectorOpener } = await import('../src/components/inspectorFocus.js')
+    const { doc, agent } = makeDom()
+    doc.activeElement = doc.body
+    expect(findInspectorOpener(doc, 'dev')).toBe(agent)
+  })
+})

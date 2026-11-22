@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { charName, behaviorLabel, t, useLocale } from '../i18n'
 import { formatTimeAgo } from '../utils/formatTime'
 import { useNowTick, NOW_TICK_MS } from '../utils/useNowTick'
 import { buildAgentInspectorMeta, inspectorTaskLabel, placeInspector, stateDurationLabel } from './agentInspectorModel'
 import { CARD } from '../systems/officePalette'
+import { findInspectorOpener, focusElement, restoreInspectorFocus } from './inspectorFocus'
 
 // POINT 2 follow-up: the inspector counter-scales so its small detail fonts (8–9px) stay readable
 // at ANY office scale. Only ONE inspector is ever open and it is clamped inside the viewBox, so it
@@ -59,6 +60,20 @@ export default function AgentInspector() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [selectedAgent, clearSelectedAgent])
+
+  // AVO-213: focus path. On open, remember the opener (the agent <g>) and move focus into the
+  // inspector dialog; on close, give focus back to the opener if it still exists.
+  const dialogRef = useRef(null)
+  useEffect(() => {
+    if (!selectedAgent || typeof document === 'undefined') return
+    const opener = findInspectorOpener(document, selectedAgent)
+    focusElement(dialogRef.current)
+    return () => {
+      // Switching straight to another agent: that agent's own click keeps focus; don't yank it back.
+      if (useOfficeStore.getState().selectedAgent) return
+      restoreInspectorFocus(document, opener, dialogRef.current)
+    }
+  }, [selectedAgent])
 
   // Hooks must be called unconditionally (React Rules of Hooks),
   // so this must appear before the early-return guard.
@@ -131,7 +146,9 @@ export default function AgentInspector() {
 
   return (
     <g
-      style={{ opacity: 1, transition: 'opacity 0.2s' }}
+      ref={dialogRef}
+      role="dialog" aria-label={name} tabIndex={-1}
+      style={{ opacity: 1, transition: 'opacity 0.2s', outline: 'none' }}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Backdrop click to close */}
