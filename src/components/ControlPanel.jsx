@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { SETTINGS_POPOVER_STYLE, isOutsideSettings, focusFirstItem, handleSettingsKey } from './settingsPopover'
 import { useShallow } from 'zustand/react/shallow'
 import { useOfficeStore, STATUS_COLORS } from '../systems/store'
 import { behaviorLabel, charName, t, setLocale, availableLocales, useLocale, eventName } from '../i18n'
@@ -151,10 +152,14 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
   const [showSettings, setShowSettings] = useState(false)
   const cozyEnabled = useCozyInteractions()
   const settingsRef = React.useRef(null)
+  const gearRef = React.useRef(null)
   useEffect(() => {
     if (!showSettings) return
-    const onKey = (e) => { if (e.key === 'Escape') setShowSettings(false) }
-    const onDown = (e) => { if (settingsRef.current && !settingsRef.current.contains(e.target)) setShowSettings(false) }
+    // AVO-208: move focus into the menu on open so Tab continues inside it.
+    focusFirstItem(settingsRef.current)
+    // Esc closes and returns focus to the gear; the gear is not "outside" (its click toggles).
+    const onKey = (e) => { handleSettingsKey(e, () => setShowSettings(false), gearRef.current) }
+    const onDown = (e) => { if (isOutsideSettings(e.target, settingsRef.current, gearRef.current)) setShowSettings(false) }
     document.addEventListener('keydown', onKey)
     document.addEventListener('mousedown', onDown)
     return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onDown) }
@@ -301,11 +306,14 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
       {/* #39 consolidation: ⚙ settings popover — cosmetic toggles + notifications + dev test, grouped
           off the bar. Esc / click-outside close (see effect). */}
       {showSettings && (
+        <div className="absolute bottom-full right-2 mb-2 w-60 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg text-xs z-[60]">
+        {/* AVO-209: the scroll box is an inner element so the triangle pointer (outside its box) is not clipped. */}
         <div
           ref={settingsRef}
           role="menu"
           aria-label={t('aria.settings', 'Settings')}
-          className="absolute bottom-full right-2 mb-2 w-60 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 text-xs z-50"
+          style={SETTINGS_POPOVER_STYLE}
+          className="p-2 rounded-lg"
         >
           {/* AVO-130: controls demoted off the resting bar. Actions (language/view/run/help)
               up top, separated from the cosmetic toggles below by a divider. */}
@@ -414,6 +422,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
             <span>{t('cozy.enable', 'Small interactions')}</span>
             <span>{cozyEnabled ? t('settings.on', 'On') : t('settings.off', 'Off')}</span>
           </button>
+        </div>
           {/* Triangle pointer (right-anchored) */}
           <div className="absolute top-full right-3 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-white dark:border-t-gray-800" />
         </div>
@@ -486,6 +495,7 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
           {/* #39 + AVO-130: ⚙ menu now also holds language, view-mode, run-workflow, and help,
               alongside the cosmetic toggles + notifications + dev test, so the bar stays lean. */}
           <button
+            ref={gearRef}
             onClick={() => setShowSettings((v) => !v)}
             className={`px-2 py-1 rounded border transition-colors ${showSettings ? 'bg-gray-200 border-gray-400 text-gray-700 dark:bg-gray-700 dark:text-gray-200' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
             title={t('aria.settings', 'Settings')}
