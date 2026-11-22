@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-11-22T12:16:18Z
+- **Last Updated**: 2026-11-22T12:35:51Z
 - **Last Verified**: 2026-11-15
-- **Update Sequence**: 166
+- **Update Sequence**: 167
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -157,6 +157,10 @@
 
 ## Ship History
 
+### Ship-chore-release-v1.7.1-2026-11-22
+- Release cut: v1.7.1 packages #274 (every Pixel role walks), #276 (AVO-208/209/210/212/213 settings, storage, list-view and inspector focus fixes) plus housekeeping #271/#272/#275. Three version fields agree; CHANGELOG under-sells (housekeeping separated).
+- Verification: build + bundle budget, pack smoke, vitest and validate before cut; annotated tag + GitHub Release made after the squash merge. No npm publication.
+
 ### Ship-claude-project-sorting-optimization-e0f24e-2026-11-22
 - Quick-win shipped (PR #276): top-ranked P2 review findings AVO-208 (gear toggle + focus), AVO-209 (settings menu bounded and scrollable in short windows, above the Activity Feed), AVO-210 (office loads when localStorage throws; safeStorage helper), AVO-212 (worktree agents and their blockers in list view), AVO-213 (inspector dialog focus path). Implemented by 4 parallel Sonnet subagents in isolated worktrees, merged and reviewed here.
 - Tests: focused 63/63; full 3132 PASS / 5 fail (watcher + codex hook load flakes pass alone 59/59; Windows tar test pre-existing); build + budget PASS (+1.37%); independent review: 2 minor findings fixed (444e15f); headless Chrome checks per item.
@@ -194,11 +198,6 @@
 - Feature shipped: truthful Claude lifecycle/error/subagent ownership and optional native Codex hooks; source d53fdf27938cd3e8e9f050e64f0b6c2e08ca461b; PR265.
 - Tests:3050PASS/3existing skips, build/budget, pack5/5, actual Claude blocked149s/native Codex SSE, independent review and source-head CI8/8PASS.
 - Release metadata: v1.6.14 GitHub distribution; final-head CI, squash merge, annotated tag and latest GitHub Release are verified externally, not assumed here. No npm publication claim.
-
-### Ship-codex-office-marketing-assets-2026-10-24
-- Delivered:2promotional illustrations and2actual UI GIFs, media-kit/exact generation prompts and compact bilingual README references; source e1eb0053c84207c2a8cfc17c610e04a7dd4e30e5.
-- Verification:PNG/GIF types, dimensions, animated frame diversity, byte budgets, local links, unchanged hero/technical suffix/runtime/dependencies and independent visual reviewPASS. Illustrations are labeled; star is long-press only; card clips edited for pacing with no download claim.
-- Source captures, artifact removal and encoding metadata retained; exact-head CI and external merge disposition are verified in the media PR.
 
 ## Spec Index Archive
 

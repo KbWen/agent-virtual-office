@@ -5,6 +5,34 @@ live in `docs/specs/_shipped-log.md`; this file is the high-level story.
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
+## v1.7.1 — 2026-11-22 — The Pixel crew walks, and the small things work again
+
+### Added
+
+- **Everyone walks in the Pixel look.** All eight roles now step through a walk cycle instead of
+  sliding. Facing left mirrors the cycle, and walking up or down keeps the last side view. Reduced
+  motion and the Classic look are unchanged.
+
+### Fixed
+
+- **The Settings gear closes on a second click.** Opening the menu moves keyboard focus into it,
+  and Escape closes it and returns focus to the gear. Escape now closes only the menu, not an agent
+  card that is open underneath it.
+- **Settings fits short windows.** In small windows (for example 640×360) the menu stays on screen
+  and scrolls. It no longer runs off the top or hides under the Activity Feed button.
+- **The office loads when the browser blocks storage.** With cookies or site data blocked, the page
+  used to stay blank. Saved preferences now fall back to their defaults.
+- **List view shows worktree agents.** An agent working in another git worktree now has its own
+  row with the branch name. If it is waiting for your approval, it also appears in "Needs your
+  attention". Before, it vanished from the list.
+- **The agent card works from the keyboard.** Pressing Enter on an agent moves focus into its card.
+  Closing the card returns focus to that agent.
+
+### Housekeeping / not user-facing
+
+- README refreshed for v1.7.0 visuals; backlog triaged from an office audit.
+- Governance tooling upgraded (Agentic OS v1.8.25 → v1.8.39).
+
 ## v1.7.0 — 2026-11-09 — A hand-drawn Pixel look for the office crew
 
 ### Added
