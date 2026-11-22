@@ -54,6 +54,7 @@ function DetailChip({ icon, label, value }) {
 
 function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expanded, onToggle, reducedMotion, dimmed, now }) {
   const name = charName(agent.id)
+  const session = agent.session || null // worktree branch slug — the office shows it as a badge
   const appearance = useOfficeAppearance().active
   const color = presenceColor(status)
   const blocked = status === 'blocked'
@@ -92,6 +93,7 @@ function ChatCard({ agent, ext, status, doneCount, blockedCount, subagents, expa
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="text-base font-semibold text-gray-800 dark:text-gray-100 truncate">{name}</span>
+            {session && <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 truncate shrink min-w-0" data-roster-session={session} title={session}>{session.slice(0, 16)}</span>}
             {since && <span className="ml-auto text-xs text-gray-400 shrink-0 tabular-nums">{since}</span>}
           </div>
           <div className="text-sm text-gray-500 dark:text-gray-400 truncate flex items-center gap-1.5">
@@ -172,10 +174,9 @@ export default function NarrowRoster() {
   // array element-wise, so it short-circuits unless a salience-relevant field actually changed.
   const presenceSig = useOfficeStore(useShallow((s) =>
     Object.values(s.agents)
-      .filter((a) => !a.session)
       .map((a) => {
         const ext = s.externalStatus[a.id]
-        return `${a.id}|${ext?.status || a.status || 'idle'}|${a.behavior || ''}|${a.bubble || ''}|${ext?.task || ''}|${ext?.expiresAt || 0}|${ext?.changedAt || 0}`
+        return `${a.id}|${a.session || ''}|${ext?.status || a.status || 'idle'}|${a.behavior || ''}|${a.bubble || ''}|${ext?.task || ''}|${ext?.expiresAt || 0}|${ext?.changedAt || 0}`
       })
   ))
   const reducedMotion = useOfficeStore((s) => s.reducedMotion)
@@ -208,8 +209,9 @@ export default function NarrowRoster() {
   // PixelOffice uses for its agentList.)
   const rows = useMemo(() => {
     const s = useOfficeStore.getState()
+    // AVO-212: worktree/session agents ('slug~role') are included — a blocked or awaiting-approval
+    // worktree agent must stay visible in the list view, exactly as it is in the office.
     return Object.values(s.agents)
-      .filter((a) => !a.session)
       .map((a) => {
         const ext = s.externalStatus[a.id]
         const status = ext?.status || a.status || 'idle'
@@ -250,7 +252,7 @@ export default function NarrowRoster() {
     return map
   }, [helpers])
   const activeCount = sorted.filter((r) => !isIdleStatus(r.status)).length
-  const blockedNames = sorted.filter((r) => r.status === 'blocked' || r.status === 'awaiting-approval').map((r) => charName(r.id))
+  const blockedNames = sorted.filter((r) => r.status === 'blocked' || r.status === 'awaiting-approval').map((r) => (r.agent.session ? `${charName(r.id)} (${r.agent.session.slice(0, 16)})` : charName(r.id)))
   const team = teamStatus({ blockedNames, activeWorkflow, activeCount })
   const totalDone = Object.values(doneCounts).reduce((a, b) => a + (b || 0), 0)
   const quiet = activeCount === 0
