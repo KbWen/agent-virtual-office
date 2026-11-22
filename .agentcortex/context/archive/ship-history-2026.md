@@ -1163,3 +1163,10 @@ Rotated 1 additional entry on 2026-11-22 (SSoT Update Sequence 165 -> 166).
 - Release cut: v1.6.13 packages merged AVO206/PR261 and fresh English/Traditional Chinese README scene/postcard screenshots; source 70903f56ea44f2cf7c297741e208daf20891dbbb.
 - Verification:3version fields agree, dependency graph/runtime/older changelog unchanged; actual Live/idle and decoded760x820 Cat preview; build535204<=546154 and clean package4assertionsPASS.
 - Release-cut exact-head CI, merge, annotated tag and GitHub Release are verified externally; no npm-registry publication claim.
+
+Rotated 1 additional entry on 2026-11-22 (SSoT Update Sequence 166 -> 167).
+
+### Ship-codex-office-marketing-assets-2026-10-24
+- Delivered:2promotional illustrations and2actual UI GIFs, media-kit/exact generation prompts and compact bilingual README references; source e1eb0053c84207c2a8cfc17c610e04a7dd4e30e5.
+- Verification:PNG/GIF types, dimensions, animated frame diversity, byte budgets, local links, unchanged hero/technical suffix/runtime/dependencies and independent visual reviewPASS. Illustrations are labeled; star is long-press only; card clips edited for pacing with no download claim.
+- Source captures, artifact removal and encoding metadata retained; exact-head CI and external merge disposition are verified in the media PR.
