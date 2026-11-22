@@ -95,6 +95,40 @@ describe('NarrowRoster render order (controlled store, no live poll)', () => {
   })
 })
 
+// AVO-212: worktree/session agents ('slug~role') must appear in the list view with their blockers.
+describe('NarrowRoster worktree/session agents (AVO-212)', () => {
+  const SID = 'feat-x~dev'
+  beforeEach(() => {
+    useOfficeStore.setState((s) => {
+      const agents = {}
+      for (const [id, a] of Object.entries(s.agents)) if (!a.session) agents[id] = { ...a, status: 'idle' }
+      agents[SID] = { ...s.agents.dev, id: SID, session: 'feat-x', status: 'idle' }
+      return {
+        agents,
+        externalStatus: { [SID]: { status: 'awaiting-approval', expiresAt: 300000, changedAt: 0 } },
+        rosterMode: true,
+      }
+    })
+  })
+
+  it('shows an active row (with its worktree identity) for an awaiting-approval session agent', () => {
+    const html = renderToStaticMarkup(React.createElement(NarrowRoster))
+    expect(html).toContain('data-roster-status="awaiting-approval"')
+    expect(html).toContain('data-roster-session="feat-x"')
+    expect(html).not.toContain('data-roster-quiet="1"')
+    // active count header = 1 (only the worktree agent; all static agents idle)
+    expect(html).toMatch(/text-gray-700 dark:text-gray-200">1<\/span> /)
+  })
+
+  it('lists the worktree agent in the waiting-on-you names and pins it to the top', () => {
+    const html = renderToStaticMarkup(React.createElement(NarrowRoster))
+    expect(html).toContain('data-roster-team="blocked"')
+    expect(html).toContain(`${charName(SID)} (feat-x)`)
+    expect(renderedNameOrder()[0]).toBe(charName(SID))
+    expect(renderedRows().length).toBe(9)
+  })
+})
+
 // NOTE: the activity feed + health-dot rendering is verified LIVE in the preview, not via SSR —
 // renderToStaticMarkup reads a one-shot useSyncExternalStore snapshot that doesn't reflect an
 // activityLog replaced late in a test (an SSR artifact, not a runtime bug; the live app updates via

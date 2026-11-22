@@ -12,9 +12,9 @@
   - Task Isolation: `.agentcortex/context/work/<worklog-key>.md`
   - Active Work Log Path: derive <worklog-key> from the raw branch name using filesystem-safe normalization before any gate checks.
   - Workflows & Policies: `.agent/workflows/*.md`, `.agent/rules/*.md`
-- **Last Updated**: 2026-11-15T05:09:59Z
+- **Last Updated**: 2026-11-22T12:16:18Z
 - **Last Verified**: 2026-11-15
-- **Update Sequence**: 165
+- **Update Sequence**: 166
 - **ADR Index**:
   - docs/adr/ADR-001-vnext-self-managed-architecture.md — vNext self-managed AI architecture
   - docs/adr/ADR-002-multi-worktree-session-design.md — multi-worktree session isolation design
@@ -157,6 +157,10 @@
 
 ## Ship History
 
+### Ship-claude-project-sorting-optimization-e0f24e-2026-11-22
+- Quick-win shipped (PR #276): top-ranked P2 review findings AVO-208 (gear toggle + focus), AVO-209 (settings menu bounded and scrollable in short windows, above the Activity Feed), AVO-210 (office loads when localStorage throws; safeStorage helper), AVO-212 (worktree agents and their blockers in list view), AVO-213 (inspector dialog focus path). Implemented by 4 parallel Sonnet subagents in isolated worktrees, merged and reviewed here.
+- Tests: focused 63/63; full 3132 PASS / 5 fail (watcher + codex hook load flakes pass alone 59/59; Windows tar test pre-existing); build + budget PASS (+1.37%); independent review: 2 minor findings fixed (444e15f); headless Chrome checks per item.
+
 ### Ship-chore-upgrade-agentic-os-v1.8.39-2026-11-15
 - Hotfix shipped: governance brain Agentic OS v1.8.25 (f250db1) -> v1.8.39 (21b2a9a, main tip = tag). Deploy 203 updated / 2 skipped / 5 new; git: 75 modified + 5 new, framework paths only; 192 manifest files byte-equal to upstream. Kept team-owned current_state.md, .claude/settings.json and .codex/INSTALL.md (deploy force-overwrite reverted: it removed the AVO native Codex hooks section); product EOL rules re-appended below the new framework-scoped .gitattributes block. Owner request 2026-11-15.
 - Tests: validate fail=0; vitest PASS except the pre-existing Windows tar test (watcher flake passes alone); independent review PASS (no blocking defects).
@@ -195,11 +199,6 @@
 - Delivered:2promotional illustrations and2actual UI GIFs, media-kit/exact generation prompts and compact bilingual README references; source e1eb0053c84207c2a8cfc17c610e04a7dd4e30e5.
 - Verification:PNG/GIF types, dimensions, animated frame diversity, byte budgets, local links, unchanged hero/technical suffix/runtime/dependencies and independent visual reviewPASS. Illustrations are labeled; star is long-press only; card clips edited for pacing with no download claim.
 - Source captures, artifact removal and encoding metadata retained; exact-head CI and external merge disposition are verified in the media PR.
-
-### Ship-codex-release-v1.6.13-2026-10-24
-- Release cut: v1.6.13 packages merged AVO206/PR261 and fresh English/Traditional Chinese README scene/postcard screenshots; source 70903f56ea44f2cf7c297741e208daf20891dbbb.
-- Verification:3version fields agree, dependency graph/runtime/older changelog unchanged; actual Live/idle and decoded760x820 Cat preview; build535204<=546154 and clean package4assertionsPASS.
-- Release-cut exact-head CI, merge, annotated tag and GitHub Release are verified externally; no npm-registry publication claim.
 
 ## Spec Index Archive
 

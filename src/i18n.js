@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react'
 import en from './locales/en.json'
 import zhTW from './locales/zh-TW.json'
 import { rng } from './systems/rng.js'
+import { safeGet, safeSet } from './utils/safeStorage.js'
 
 const LOCALES = { en, 'zh-TW': zhTW }
 
@@ -18,7 +19,7 @@ function detectLang() {
     const params = new URLSearchParams(window.location.search)
     const param = params.get('lang')
     if (param && LOCALES[param]) return param
-    const saved = localStorage.getItem('office-lang')
+    const saved = safeGet('office-lang')
     if (saved && LOCALES[saved]) return saved
     // Check browser language — only map Traditional Chinese variants
     const nav = navigator.language
@@ -39,7 +40,7 @@ export function setLocale(lang) {
   currentLang = lang
   currentLocale = LOCALES[lang]
   if (typeof window !== 'undefined') {
-    localStorage.setItem('office-lang', lang)
+    safeSet('office-lang', lang)
     document.documentElement.lang = lang
     // Persist to ~/.claude/office-lang so hooks can read it
     fetch('/api/lang', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: lang }).catch((err) => console.warn('[Office] Failed to persist language preference:', err))

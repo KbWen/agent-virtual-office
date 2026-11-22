@@ -1156,3 +1156,10 @@ Rotated 1 additional entry on 2026-11-09 (SSoT Update Sequence 161 -> 162).
 - AVO-199: trusted expiring session observation drives transient30s calm; only existing health detail and authorized audio graph change. Empty sprites never prove idle; source/transport validity and lifecycle races fail closed.
 - Owner accepted actual C1-C4 captures and enabling calm; offHours/planningPod flags remain false. PR merge is separate from this delivery checkpoint.
 - Validation:2897PASS/3existing skips; build514383bytes within546154budget; browser7views/45captures/0errors; render/panel smoke PASS; independent review PASS. Review: docs/reviews/2026-10-21-avo-199-review.md.
+
+Rotated 1 additional entry on 2026-11-22 (SSoT Update Sequence 165 -> 166).
+
+### Ship-codex-release-v1.6.13-2026-10-24
+- Release cut: v1.6.13 packages merged AVO206/PR261 and fresh English/Traditional Chinese README scene/postcard screenshots; source 70903f56ea44f2cf7c297741e208daf20891dbbb.
+- Verification:3version fields agree, dependency graph/runtime/older changelog unchanged; actual Live/idle and decoded760x820 Cat preview; build535204<=546154 and clean package4assertionsPASS.
+- Release-cut exact-head CI, merge, annotated tag and GitHub Release are verified externally; no npm-registry publication claim.
