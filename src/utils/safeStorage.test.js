@@ -103,7 +103,7 @@ describe.each(Object.keys(MODES))('office with throwing storage (%s)', (mode) =>
     const { default: ControlPanel } = await import('../components/ControlPanel.jsx')
     let html
     expect(() => { html = renderToString(React.createElement(ControlPanel, { mode: 'full' })) }).not.toThrow()
-    expect(html.length).toBeGreaterThan(0)
+    expect(html).toContain('Got it!') // nothing readable => onboarding card is open, not a blank panel
     // Nothing could be read => not onboarded yet. Dismissing writes 'office-onboarded' through
     // safeSet, which must not throw.
     expect(() => safeSet('office-onboarded', '1')).not.toThrow()

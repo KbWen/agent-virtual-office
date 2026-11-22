@@ -306,10 +306,10 @@ export default function ControlPanel({ platform = 'browser', mode = 'full' }) {
       {/* #39 consolidation: ⚙ settings popover — cosmetic toggles + notifications + dev test, grouped
           off the bar. Esc / click-outside close (see effect). */}
       {showSettings && (
-        <div className="absolute bottom-full right-2 mb-2 w-60 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg text-xs z-[60]">
-        {/* AVO-209: the scroll box is an inner element so the triangle pointer (outside its box) is not clipped. */}
+        <div ref={settingsRef} className="absolute bottom-full right-2 mb-2 w-60 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg text-xs z-[60]">
+        {/* AVO-209: the scroll box is an inner element so the triangle pointer (outside its box) is not clipped.
+            settingsRef sits on this outer wrapper so a mousedown on the pointer still counts as inside. */}
         <div
-          ref={settingsRef}
           role="menu"
           aria-label={t('aria.settings', 'Settings')}
           style={SETTINGS_POPOVER_STYLE}

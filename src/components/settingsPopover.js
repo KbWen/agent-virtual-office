@@ -22,6 +22,9 @@ export function focusFirstItem(menu) {
 // Escape closes the menu and hands focus back to the gear.
 export function handleSettingsKey(e, close, gear) {
   if (e.key !== 'Escape') return false
+  // Settings listens on document, the agent inspector on window: stop here so one Escape closes
+  // only the menu, not an inspector that is open underneath it.
+  if (typeof e.stopPropagation === 'function') e.stopPropagation()
   close()
   if (gear && typeof gear.focus === 'function') gear.focus()
   return true

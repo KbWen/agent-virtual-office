@@ -23,7 +23,9 @@ describe('settings popover (AVO-208/209)', () => {
     const close = vi.fn(), gear = node()
     expect(handleSettingsKey({ key: 'a' }, close, gear)).toBe(false)
     expect(close).not.toHaveBeenCalled()
-    expect(handleSettingsKey({ key: 'Escape' }, close, gear)).toBe(true)
+    const esc = { key: 'Escape', stopPropagation: vi.fn() }
+    expect(handleSettingsKey(esc, close, gear)).toBe(true)
+    expect(esc.stopPropagation).toHaveBeenCalledOnce() // the inspector's window listener must not also close
     expect(close).toHaveBeenCalledOnce()
     expect(gear.focus).toHaveBeenCalledOnce()
   })
